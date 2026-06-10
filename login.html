@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login | Turnly Contractor Portal</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="page">
+    <section class="auth-card">
+      <h1>Turnly Portal Login</h1>
+      <p>Sign in to access your contractor or admin dashboard.</p>
+
+      <form id="loginForm">
+        <label>Email</label>
+        <input type="email" id="email" required />
+
+        <label>Password</label>
+        <input type="password" id="password" required />
+
+        <button type="submit">Sign In</button>
+      </form>
+
+      <p id="message"></p>
+    </section>
+  </main>
+
+  <script src="env.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
