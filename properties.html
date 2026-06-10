@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Manage Properties | Turnly</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="page wide-page">
+    <section class="dashboard-card wide-card">
+      <a href="admin.html" class="secondary-btn">← Back to Dashboard</a>
+
+      <h1>Manage Properties</h1>
+      <p>Add reusable property details for assignment blocks.</p>
+
+      <form id="propertyForm">
+        <label>Property Name</label>
+        <input id="property_name_input" required />
+
+        <label>Address</label>
+        <input id="property_address_input" />
+
+        <label>Default Service Type</label>
+        <input id="property_service_type_input" />
+
+        <label>Default Scope of Work</label>
+        <textarea id="property_scope_input"></textarea>
+
+        <label>Supplies Notes</label>
+        <textarea id="property_supplies_input"></textarea>
+
+        <label>Special Instructions</label>
+        <textarea id="property_instructions_input"></textarea>
+
+        <label>Access Notes</label>
+        <textarea id="property_access_input"></textarea>
+
+        <button type="submit">Save Property</button>
+      </form>
+
+      <p id="propertyMessage"></p>
+
+      <h2>Saved Properties</h2>
+      <div id="propertiesList" class="assignment-list"></div>
+    </section>
+  </main>
+
+  <script src="env.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
