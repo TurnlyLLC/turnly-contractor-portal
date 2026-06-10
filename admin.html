@@ -10,24 +10,46 @@
   <main class="page">
     <section class="dashboard-card">
       <h1>Admin Dashboard</h1>
-      <p>Post assignments, review QA uploads, and manage contractor activity.</p>
+      <p>Create available assignment blocks for contractors.</p>
 
-      <div class="grid">
-        <div class="tile">
-          <h3>Assignment Blocks</h3>
-          <p>Coming in Phase 2.</p>
-        </div>
+      <form id="assignmentForm">
+        <label>Assignment Title</label>
+        <input id="title" required placeholder="Apartment Turnover - Unit 204" />
 
-        <div class="tile">
-          <h3>QA Review</h3>
-          <p>Coming in Phase 5.</p>
-        </div>
+        <label>Property Name</label>
+        <input id="property_name" required placeholder="Vetra Forest Hills" />
 
-        <div class="tile">
-          <h3>Contractors</h3>
-          <p>View contractor profiles and status.</p>
-        </div>
-      </div>
+        <label>Address</label>
+        <input id="address" placeholder="123 Main St, Raleigh, NC" />
+
+        <label>Service Type</label>
+        <input id="service_type" placeholder="Apartment Turnover, Commercial Clean, Daycare Reset" />
+
+        <label>Scope of Work</label>
+        <textarea id="scope" placeholder="Kitchen, bathrooms, floors, trash, final walkthrough"></textarea>
+
+        <label>Pay Amount</label>
+        <input id="pay_amount" type="number" step="0.01" placeholder="75.00" />
+
+        <label>Start Window</label>
+        <input id="start_window" type="datetime-local" />
+
+        <label>End Window</label>
+        <input id="end_window" type="datetime-local" />
+
+        <label>Supplies Notes</label>
+        <textarea id="supplies_notes" placeholder="Supplies on site, bring vacuum, etc."></textarea>
+
+        <label>Special Instructions</label>
+        <textarea id="special_instructions" placeholder="Lockbox code, parking notes, client-specific details"></textarea>
+
+        <button type="submit">Post Assignment</button>
+      </form>
+
+      <p id="message"></p>
+
+      <h2>Posted Assignments</h2>
+      <div id="adminAssignments" class="assignment-list"></div>
 
       <button id="logoutBtn">Sign Out</button>
     </section>
