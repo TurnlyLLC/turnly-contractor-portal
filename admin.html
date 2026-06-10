@@ -7,103 +7,36 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <main class="page wide-page">
-    <section class="dashboard-card wide-card">
+  <main class="page">
+    <section class="dashboard-card">
       <div class="dashboard-header">
         <div>
           <h1>Turnly Admin Dashboard</h1>
-          <p>Manage properties and post available assignment blocks.</p>
+          <p>Manage properties, assignments, and QA workflows.</p>
         </div>
         <button id="logoutBtn" class="small-btn">Sign Out</button>
       </div>
 
-      <div class="admin-grid">
-        <section class="panel">
-          <h2>Manage Properties</h2>
-          <p>Add reusable property details so assignments can be created faster.</p>
+      <div class="grid">
+        <a href="properties.html" class="tile-link">
+          <div class="tile">
+            <h3>Manage Properties</h3>
+            <p>Add and manage saved client/property details.</p>
+          </div>
+        </a>
 
-          <form id="propertyForm">
-            <label>Property Name</label>
-            <input id="property_name_input" required placeholder="Vetra Forest Hills" />
+        <a href="assignments.html" class="tile-link">
+          <div class="tile">
+            <h3>Add Assignments</h3>
+            <p>Create assignment blocks using saved properties.</p>
+          </div>
+        </a>
 
-            <label>Address</label>
-            <input id="property_address_input" placeholder="123 Main St, Raleigh, NC" />
-
-            <label>Default Service Type</label>
-            <input id="property_service_type_input" placeholder="Apartment Turnover, Commercial Clean, Daycare Reset" />
-
-            <label>Default Scope of Work</label>
-            <textarea id="property_scope_input" placeholder="Kitchen, bathrooms, floors, trash, final walkthrough"></textarea>
-
-            <label>Supplies Notes</label>
-            <textarea id="property_supplies_input" placeholder="Supplies on site, bring vacuum, etc."></textarea>
-
-            <label>Special Instructions</label>
-            <textarea id="property_instructions_input" placeholder="Client-specific details"></textarea>
-
-            <label>Access Notes</label>
-            <textarea id="property_access_input" placeholder="Lockbox code, gate code, parking notes, where to enter"></textarea>
-
-            <button type="submit">Save Property</button>
-          </form>
-
-          <p id="propertyMessage"></p>
-
-          <h3>Saved Properties</h3>
-          <div id="propertiesList" class="assignment-list"></div>
-        </section>
-
-        <section class="panel">
-          <h2>Add Assignment Block</h2>
-          <p>Select a property and the saved details will auto-fill.</p>
-
-          <form id="assignmentForm">
-            <label>Select Property</label>
-            <select id="propertySelect" required>
-              <option value="">Choose a property...</option>
-            </select>
-
-            <label>Assignment Title</label>
-            <input id="title" required placeholder="Apartment Turnover - Unit 204" />
-
-            <label>Property Name</label>
-            <input id="property_name" required readonly />
-
-            <label>Address</label>
-            <input id="address" readonly />
-
-            <label>Service Type</label>
-            <input id="service_type" />
-
-            <label>Scope of Work</label>
-            <textarea id="scope"></textarea>
-
-            <label>Pay Amount</label>
-            <input id="pay_amount" type="number" step="0.01" placeholder="75.00" />
-
-            <label>Start Window</label>
-            <input id="start_window" type="datetime-local" />
-
-            <label>End Window</label>
-            <input id="end_window" type="datetime-local" />
-
-            <label>Supplies Notes</label>
-            <textarea id="supplies_notes"></textarea>
-
-            <label>Special Instructions</label>
-            <textarea id="special_instructions"></textarea>
-
-            <button type="submit">Post Assignment</button>
-          </form>
-
-          <p id="message"></p>
-        </section>
+        <div class="tile">
+          <h3>QA Review</h3>
+          <p>Coming in Phase 5.</p>
+        </div>
       </div>
-
-      <section class="panel full-width">
-        <h2>Posted Assignments</h2>
-        <div id="adminAssignments" class="assignment-list"></div>
-      </section>
     </section>
   </main>
 
