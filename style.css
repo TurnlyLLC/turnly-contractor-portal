@@ -258,6 +258,65 @@ textarea {
   padding: 24px;
 }
 
+.panel-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.checklist-builder {
+  display: grid;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.checklist-item {
+  background: #f8fbf7;
+  border: 1px solid #dfeade;
+  border-radius: 16px;
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.checklist-item-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(130px, 0.8fr) minmax(180px, 1.4fr);
+}
+
+.checklist-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.checklist-flags label {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.remove-checklist-item {
+  justify-self: flex-end;
+}
+
+.property-card h3 {
+  margin-bottom: 6px;
+}
+
+.property-card .checklist-summary {
+  border-top: 1px solid #dfeade;
+  margin-top: 14px;
+  padding-top: 14px;
+}
+
+.checklist-summary ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+
 .full-width {
   margin-top: 24px;
 }
@@ -292,6 +351,14 @@ input[readonly] {
   .assignment-card-header {
     flex-direction: column;
     gap: 4px;
+  }
+
+  .checklist-item-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .panel-header {
+    flex-direction: column;
   }
 }
 .tile-link {
