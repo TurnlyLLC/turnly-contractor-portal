@@ -8,12 +8,39 @@ const supabase = createClient(
 const loginForm = document.getElementById("loginForm");
 const logoutBtn = document.getElementById("logoutBtn");
 const message = document.getElementById("message");
+const claimMessage = document.getElementById("claimMessage");
 const assignmentForm = document.getElementById("assignmentForm");
 const adminAssignments = document.getElementById("adminAssignments");
 const contractorAssignments = document.getElementById("contractorAssignments");
+const myAssignments = document.getElementById("myAssignments");
 
-function showMessage(text) {
-  if (message) message.textContent = text;
+function showMessage(text, target = message) {
+  if (target) target.textContent = text;
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function formatDateTime(value) {
+  return value ? new Date(value).toLocaleString() : "Not set";
+}
+
+function formatMoney(value) {
+  return value ? "$" + Number(value).toFixed(2) : "Not listed";
+}
+
+function shortId(value) {
+  return value ? value.slice(0, 8) + "..." : "";
+}
+
+function statusClass(status) {
+  return "status-" + String(status || "unknown").toLowerCase().replace(/[^a-z0-9]+/g, "-");
 }
 
 async function getCurrentUser() {
@@ -92,43 +119,43 @@ if (assignmentForm) {
 
     if (!profile || profile.role !== "admin") {
       window.location.href = "contractor.html";
-    }
-
-    loadAdminAssignments();
-
-    assignmentForm.addEventListener("submit", async (e) => {
-      e.preventDefault();
-
-      showMessage("Posting assignment...");
-
-      const assignment = {
-        title: document.getElementById("title").value,
-        property_name: document.getElementById("property_name").value,
-        address: document.getElementById("address").value,
-        service_type: document.getElementById("service_type").value,
-        scope: document.getElementById("scope").value,
-        pay_amount: document.getElementById("pay_amount").value || null,
-        start_window: document.getElementById("start_window").value || null,
-        end_window: document.getElementById("end_window").value || null,
-        supplies_notes: document.getElementById("supplies_notes").value,
-        special_instructions: document.getElementById("special_instructions").value,
-        status: "open",
-        created_by: user.id
-      };
-
-      const { error } = await supabase
-        .from("assignment_blocks")
-        .insert([assignment]);
-
-      if (error) {
-        showMessage("Error: " + error.message);
-        return;
-      }
-
-      showMessage("Assignment posted successfully.");
-      assignmentForm.reset();
+    } else {
       loadAdminAssignments();
-    });
+
+      assignmentForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+
+        showMessage("Posting assignment...");
+
+        const assignment = {
+          title: document.getElementById("title").value,
+          property_name: document.getElementById("property_name").value,
+          address: document.getElementById("address").value,
+          service_type: document.getElementById("service_type").value,
+          scope: document.getElementById("scope").value,
+          pay_amount: document.getElementById("pay_amount").value || null,
+          start_window: document.getElementById("start_window").value || null,
+          end_window: document.getElementById("end_window").value || null,
+          supplies_notes: document.getElementById("supplies_notes").value,
+          special_instructions: document.getElementById("special_instructions").value,
+          status: "open",
+          created_by: user.id
+        };
+
+        const { error } = await supabase
+          .from("assignment_blocks")
+          .insert([assignment]);
+
+        if (error) {
+          showMessage("Error: " + error.message);
+          return;
+        }
+
+        showMessage("Assignment posted successfully.");
+        assignmentForm.reset();
+        loadAdminAssignments();
+      });
+    }
   }
 }
 
@@ -141,14 +168,21 @@ async function loadAdminAssignments() {
     .order("created_at", { ascending: false });
 
   if (error) {
-    adminAssignments.innerHTML = `<p>${error.message}</p>`;
+    adminAssignments.innerHTML = `<p>${escapeHtml(error.message)}</p>`;
     return;
   }
 
-  adminAssignments.innerHTML = data.map(renderAssignmentCard).join("");
+  if (!data.length) {
+    adminAssignments.innerHTML = "<p>No assignments have been posted yet.</p>";
+    return;
+  }
+
+  adminAssignments.innerHTML = data
+    .map((item) => renderAssignmentCard(item, { mode: "admin" }))
+    .join("");
 }
 
-if (contractorAssignments) {
+if (contractorAssignments || myAssignments) {
   const user = await requireLogin();
 
   if (user) {
@@ -156,10 +190,27 @@ if (contractorAssignments) {
 
     if (!profile) {
       window.location.href = "login.html";
-    }
+    } else {
+      await loadContractorDashboard(user);
 
-    loadContractorAssignments();
+      if (contractorAssignments) {
+        contractorAssignments.addEventListener("click", async (e) => {
+          const button = e.target.closest("[data-claim-assignment-id]");
+          if (!button) return;
+
+          button.disabled = true;
+          await claimAssignment(button.dataset.claimAssignmentId, user);
+        });
+      }
+    }
   }
+}
+
+async function loadContractorDashboard(user) {
+  await Promise.all([
+    loadContractorAssignments(),
+    loadMyAssignments(user)
+  ]);
 }
 
 async function loadContractorAssignments() {
@@ -169,37 +220,112 @@ async function loadContractorAssignments() {
     .from("assignment_blocks")
     .select("*")
     .eq("status", "open")
+    .is("claimed_by", null)
     .order("start_window", { ascending: true });
 
   if (error) {
-    contractorAssignments.innerHTML = `<p>${error.message}</p>`;
+    contractorAssignments.innerHTML = `<p>${escapeHtml(error.message)}</p>`;
     return;
   }
 
   if (!data.length) {
-    contractorAssignments.innerHTML = `<p>No open assignments available right now.</p>`;
+    contractorAssignments.innerHTML = "<p>No open assignments available right now.</p>";
     return;
   }
 
-  contractorAssignments.innerHTML = data.map(renderAssignmentCard).join("");
+  contractorAssignments.innerHTML = data
+    .map((item) => renderAssignmentCard(item, { mode: "contractor-open" }))
+    .join("");
 }
 
-function renderAssignmentCard(item) {
-  const start = item.start_window ? new Date(item.start_window).toLocaleString() : "Not set";
-  const end = item.end_window ? new Date(item.end_window).toLocaleString() : "Not set";
+async function loadMyAssignments(user) {
+  if (!myAssignments) return;
+
+  const { data, error } = await supabase
+    .from("assignment_blocks")
+    .select("*")
+    .eq("claimed_by", user.id)
+    .order("start_window", { ascending: true });
+
+  if (error) {
+    myAssignments.innerHTML = `<p>${escapeHtml(error.message)}</p>`;
+    return;
+  }
+
+  if (!data.length) {
+    myAssignments.innerHTML = "<p>You have not claimed any assignments yet.</p>";
+    return;
+  }
+
+  myAssignments.innerHTML = data
+    .map((item) => renderAssignmentCard(item, { mode: "contractor-claimed" }))
+    .join("");
+}
+
+async function claimAssignment(assignmentId, user) {
+  showMessage("Claiming assignment...", claimMessage);
+
+  const { data, error } = await supabase
+    .from("assignment_blocks")
+    .update({
+      status: "claimed",
+      claimed_by: user.id,
+      claimed_at: new Date().toISOString()
+    })
+    .eq("id", assignmentId)
+    .eq("status", "open")
+    .is("claimed_by", null)
+    .select("*")
+    .maybeSingle();
+
+  if (error) {
+    showMessage("Error: " + error.message, claimMessage);
+    await loadContractorDashboard(user);
+    return;
+  }
+
+  if (!data) {
+    showMessage("That assignment was already claimed by another contractor.", claimMessage);
+    await loadContractorDashboard(user);
+    return;
+  }
+
+  showMessage("Assignment claimed. It is now listed under My Assignments.", claimMessage);
+  await loadContractorDashboard(user);
+}
+
+function renderAssignmentCard(item, options = {}) {
+  const mode = options.mode || "read";
+  const start = formatDateTime(item.start_window);
+  const end = formatDateTime(item.end_window);
+  const status = escapeHtml(item.status || "unknown");
+  const claimedAt = item.claimed_at ? formatDateTime(item.claimed_at) : "";
+  const claimant = item.claimed_by
+    ? `Contractor ${escapeHtml(shortId(item.claimed_by))}${claimedAt ? " on " + escapeHtml(claimedAt) : ""}`
+    : "Not claimed yet";
+  const claimButton = mode === "contractor-open" && item.id
+    ? `<button type="button" class="claim-btn" data-claim-assignment-id="${escapeHtml(item.id)}">Claim Assignment</button>`
+    : "";
+  const claimedInfo = mode === "admin" || mode === "contractor-claimed"
+    ? `<p><strong>Claimed By:</strong> ${claimant}</p>`
+    : "";
 
   return `
     <div class="assignment-card">
-      <h3>${item.title}</h3>
-      <p><strong>Property:</strong> ${item.property_name || ""}</p>
-      <p><strong>Address:</strong> ${item.address || ""}</p>
-      <p><strong>Service:</strong> ${item.service_type || ""}</p>
-      <p><strong>Pay:</strong> ${item.pay_amount ? "$" + item.pay_amount : "Not listed"}</p>
-      <p><strong>Window:</strong> ${start} - ${end}</p>
-      <p><strong>Scope:</strong> ${item.scope || ""}</p>
-      <p><strong>Supplies:</strong> ${item.supplies_notes || ""}</p>
-      <p><strong>Instructions:</strong> ${item.special_instructions || ""}</p>
-      <p><strong>Status:</strong> ${item.status}</p>
+      <div class="assignment-card-header">
+        <h3>${escapeHtml(item.title)}</h3>
+        <span class="status-badge ${statusClass(item.status)}">${status}</span>
+      </div>
+      <p><strong>Property:</strong> ${escapeHtml(item.property_name)}</p>
+      <p><strong>Address:</strong> ${escapeHtml(item.address)}</p>
+      <p><strong>Service:</strong> ${escapeHtml(item.service_type)}</p>
+      <p><strong>Pay:</strong> ${escapeHtml(formatMoney(item.pay_amount))}</p>
+      <p><strong>Window:</strong> ${escapeHtml(start)} - ${escapeHtml(end)}</p>
+      <p><strong>Scope:</strong> ${escapeHtml(item.scope)}</p>
+      <p><strong>Supplies:</strong> ${escapeHtml(item.supplies_notes)}</p>
+      <p><strong>Instructions:</strong> ${escapeHtml(item.special_instructions)}</p>
+      ${claimedInfo}
+      ${claimButton ? `<div class="assignment-actions">${claimButton}</div>` : ""}
     </div>
   `;
 }
