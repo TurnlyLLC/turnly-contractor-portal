@@ -5,10 +5,51 @@
   margin-top: 18px;
 }
 
+.property-entry-panel,
+.current-properties-panel {
+  border-radius: 8px;
+}
+
+.property-form-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.property-form-grid label {
+  margin-top: 0;
+}
+
+.property-form-grid .span-two {
+  grid-column: 1 / -1;
+}
+
+.compact-property-list {
+  display: grid;
+  gap: 0;
+}
+
+.compact-property-list .assignment-card {
+  border-radius: 0;
+  border-width: 0 0 1px;
+  box-shadow: none;
+  margin: 0;
+  padding: 18px 0;
+}
+
+.compact-property-list .assignment-card:first-child {
+  padding-top: 0;
+}
+
+.compact-property-list .assignment-card:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
 .checklist-summary {
   background: #f8fbf7;
   border: 1px solid #dfeade;
-  border-radius: 16px;
+  border-radius: 8px;
   margin-top: 8px;
   padding: 16px;
 }
@@ -16,4 +57,10 @@
 .checklist-summary ul {
   margin: 8px 0 0;
   padding-left: 20px;
+}
+
+@media (max-width: 760px) {
+  .property-form-grid {
+    grid-template-columns: 1fr;
+  }
 }
