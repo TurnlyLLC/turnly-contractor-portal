@@ -15,6 +15,17 @@ const claimedAdminAssignments = document.getElementById("claimedAdminAssignments
 const contractorDashboard = document.getElementById("contractorDashboard");
 const contractorAssignments = document.getElementById("contractorAssignments");
 const myAssignments = document.getElementById("myAssignments");
+const propertyForm = document.getElementById("propertyForm");
+const propertyMessage = document.getElementById("propertyMessage");
+const propertyIdInput = document.getElementById("property_id_input");
+const resetPropertyFormBtn = document.getElementById("resetPropertyFormBtn");
+const addChecklistItemBtn = document.getElementById("addChecklistItemBtn");
+const checklistBuilder = document.getElementById("checklistBuilder");
+const propertiesList = document.getElementById("propertiesList");
+const propertySelect = document.getElementById("propertySelect");
+
+let checklistDraft = [];
+let savedProperties = [];
 
 function showMessage(text, target = message) {
   if (target) target.textContent = text;
@@ -42,15 +53,15 @@ function shortId(value) {
 }
 
 function formatClaimant(item) {
+  if (item.claimed_by_name) {
+    return escapeHtml(item.claimed_by_name);
+  }
+
   if (item.claimed_by_email) {
     return escapeHtml(item.claimed_by_email);
   }
 
-  if (item.claimed_by) {
-    return "Contractor ID " + escapeHtml(shortId(item.claimed_by));
-  }
-
-  return "Not claimed yet";
+  return item.claimed_by ? "Contractor name not captured yet" : "Not claimed yet";
 }
 
 function statusClass(status) {
@@ -82,6 +93,42 @@ async function getProfile(userId) {
 
   if (error) return null;
   return data;
+}
+
+async function getContractorName(user) {
+  const metadata = user.user_metadata || {};
+  const metadataName = metadata.full_name || metadata.name || metadata.display_name;
+
+  const { data } = await supabase
+    .from("profiles")
+    .select("full_name")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  return (
+    data?.full_name ||
+    metadataName ||
+    user.email?.split("@")[0] ||
+    "Contractor"
+  );
+}
+
+function getEmptyChecklistItem() {
+  return {
+    category: "",
+    task: "",
+    required: true,
+    media_required: "none",
+    notes: ""
+  };
+}
+
+function normalizeChecklistItems(items) {
+  return Array.isArray(items) ? items : [];
+}
+
+function showPropertyMessage(text) {
+  showMessage(text, propertyMessage);
 }
 
 if (loginForm) {
@@ -134,7 +181,14 @@ if (assignmentForm) {
     if (!profile || profile.role !== "admin") {
       window.location.href = "contractor.html";
     } else {
+      loadPropertyOptions();
       loadAdminAssignments();
+
+      if (propertySelect) {
+        propertySelect.addEventListener("change", () => {
+          fillAssignmentFromProperty(propertySelect.value);
+        });
+      }
 
       assignmentForm.addEventListener("submit", async (e) => {
         e.preventDefault();
@@ -171,6 +225,278 @@ if (assignmentForm) {
       });
     }
   }
+}
+
+if (propertyForm) {
+  const user = await requireLogin();
+
+  if (user) {
+    const profile = await getProfile(user.id);
+
+    if (!profile || profile.role !== "admin") {
+      window.location.href = "contractor.html";
+    } else {
+      resetPropertyForm();
+      loadProperties();
+
+      addChecklistItemBtn?.addEventListener("click", () => {
+        checklistDraft.push(getEmptyChecklistItem());
+        renderChecklistBuilder();
+      });
+
+      resetPropertyFormBtn?.addEventListener("click", () => {
+        resetPropertyForm();
+      });
+
+      checklistBuilder?.addEventListener("input", updateChecklistDraftFromForm);
+      checklistBuilder?.addEventListener("change", updateChecklistDraftFromForm);
+      checklistBuilder?.addEventListener("click", (e) => {
+        const button = e.target.closest("[data-remove-checklist-index]");
+        if (!button) return;
+
+        updateChecklistDraftFromForm();
+        checklistDraft.splice(Number(button.dataset.removeChecklistIndex), 1);
+        renderChecklistBuilder();
+      });
+
+      propertiesList?.addEventListener("click", (e) => {
+        const button = e.target.closest("[data-edit-property-id]");
+        if (!button) return;
+
+        const property = savedProperties.find((item) => item.id === button.dataset.editPropertyId);
+        if (property) populatePropertyForm(property);
+      });
+
+      propertyForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        await saveProperty(user);
+      });
+    }
+  }
+}
+
+function renderChecklistBuilder() {
+  if (!checklistBuilder) return;
+
+  if (!checklistDraft.length) {
+    checklistDraft = [getEmptyChecklistItem()];
+  }
+
+  checklistBuilder.innerHTML = checklistDraft.map((item, index) => `
+    <div class="checklist-item">
+      <div class="checklist-item-grid">
+        <div>
+          <label>Area / Category</label>
+          <input data-checklist-index="${index}" data-checklist-field="category" value="${escapeHtml(item.category)}" placeholder="Kitchen, Bathroom, Floors" />
+        </div>
+        <div>
+          <label>Checklist Task</label>
+          <input data-checklist-index="${index}" data-checklist-field="task" value="${escapeHtml(item.task)}" placeholder="Wipe counters and appliance fronts" />
+        </div>
+      </div>
+
+      <div class="checklist-item-grid">
+        <div>
+          <label>Media Requirement</label>
+          <select data-checklist-index="${index}" data-checklist-field="media_required">
+            <option value="none" ${item.media_required === "none" ? "selected" : ""}>No media required</option>
+            <option value="photo" ${item.media_required === "photo" ? "selected" : ""}>Photo required</option>
+            <option value="video" ${item.media_required === "video" ? "selected" : ""}>Video required</option>
+            <option value="before_after" ${item.media_required === "before_after" ? "selected" : ""}>Before and after media</option>
+          </select>
+        </div>
+        <div>
+          <label>Task Notes</label>
+          <input data-checklist-index="${index}" data-checklist-field="notes" value="${escapeHtml(item.notes)}" placeholder="Use stainless cleaner, check under sink, etc." />
+        </div>
+      </div>
+
+      <div class="checklist-flags">
+        <label>
+          <input type="checkbox" data-checklist-index="${index}" data-checklist-field="required" ${item.required ? "checked" : ""} />
+          Required task
+        </label>
+      </div>
+
+      <button type="button" class="secondary-btn small-btn remove-checklist-item" data-remove-checklist-index="${index}">Remove</button>
+    </div>
+  `).join("");
+}
+
+function updateChecklistDraftFromForm() {
+  if (!checklistBuilder) return;
+
+  const nextItems = checklistDraft.map((item) => ({ ...item }));
+
+  checklistBuilder.querySelectorAll("[data-checklist-index]").forEach((input) => {
+    const index = Number(input.dataset.checklistIndex);
+    const field = input.dataset.checklistField;
+
+    if (!nextItems[index]) {
+      nextItems[index] = getEmptyChecklistItem();
+    }
+
+    nextItems[index][field] = input.type === "checkbox" ? input.checked : input.value;
+  });
+
+  checklistDraft = nextItems;
+}
+
+function getChecklistForSave() {
+  updateChecklistDraftFromForm();
+
+  return checklistDraft
+    .map((item) => ({
+      category: item.category.trim(),
+      task: item.task.trim(),
+      required: Boolean(item.required),
+      media_required: item.media_required || "none",
+      notes: item.notes.trim()
+    }))
+    .filter((item) => item.category || item.task || item.notes);
+}
+
+async function saveProperty(user) {
+  showPropertyMessage("Saving property...");
+
+  const payload = {
+    name: document.getElementById("property_name_input").value.trim(),
+    address: document.getElementById("property_address_input").value.trim(),
+    default_service_type: document.getElementById("property_service_type_input").value.trim(),
+    default_scope: document.getElementById("property_scope_input").value.trim(),
+    supplies_notes: document.getElementById("property_supplies_input").value.trim(),
+    special_instructions: document.getElementById("property_instructions_input").value.trim(),
+    access_notes: document.getElementById("property_access_input").value.trim(),
+    checklist_items: getChecklistForSave()
+  };
+
+  if (!payload.name) {
+    showPropertyMessage("Property name is required.");
+    return;
+  }
+
+  const propertyId = propertyIdInput?.value;
+  const query = propertyId
+    ? supabase.from("properties").update(payload).eq("id", propertyId)
+    : supabase.from("properties").insert([{ ...payload, created_by: user.id }]);
+
+  const { error } = await query;
+
+  if (error) {
+    showPropertyMessage("Error: " + error.message);
+    return;
+  }
+
+  showPropertyMessage(propertyId ? "Property updated." : "Property saved.");
+  resetPropertyForm();
+  await loadProperties();
+}
+
+async function loadProperties() {
+  if (!propertiesList && !propertySelect) return;
+
+  const { data, error } = await supabase
+    .from("properties")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    if (propertiesList) propertiesList.innerHTML = `<p>${escapeHtml(error.message)}</p>`;
+    if (propertySelect) propertySelect.innerHTML = `<option value="">Choose a property...</option>`;
+    return;
+  }
+
+  savedProperties = data || [];
+
+  if (propertiesList) {
+    propertiesList.innerHTML = savedProperties.length
+      ? savedProperties.map(renderPropertyCard).join("")
+      : "<p>No properties saved yet.</p>";
+  }
+
+  if (propertySelect) {
+    renderPropertyOptions();
+  }
+}
+
+async function loadPropertyOptions() {
+  await loadProperties();
+}
+
+function renderPropertyOptions() {
+  if (!propertySelect) return;
+
+  propertySelect.innerHTML = [
+    `<option value="">Choose a property...</option>`,
+    ...savedProperties.map((property) => (
+      `<option value="${escapeHtml(property.id)}">${escapeHtml(property.name)}</option>`
+    ))
+  ].join("");
+}
+
+function fillAssignmentFromProperty(propertyId) {
+  const property = savedProperties.find((item) => item.id === propertyId);
+  if (!property) return;
+
+  document.getElementById("property_name").value = property.name || "";
+  document.getElementById("address").value = property.address || "";
+  document.getElementById("service_type").value = property.default_service_type || "";
+  document.getElementById("scope").value = property.default_scope || "";
+  document.getElementById("supplies_notes").value = property.supplies_notes || "";
+  document.getElementById("special_instructions").value = property.special_instructions || "";
+}
+
+function renderPropertyCard(property) {
+  const checklistItems = normalizeChecklistItems(property.checklist_items);
+  const checklistPreview = checklistItems.slice(0, 5).map((item) => (
+    `<li>${escapeHtml(item.category || "General")}: ${escapeHtml(item.task || "Untitled task")}</li>`
+  )).join("");
+  const extraCount = checklistItems.length > 5
+    ? `<p>${checklistItems.length - 5} more checklist item(s)</p>`
+    : "";
+
+  return `
+    <div class="assignment-card property-card">
+      <div class="assignment-card-header">
+        <div>
+          <h3>${escapeHtml(property.name)}</h3>
+          <p>${escapeHtml(property.address)}</p>
+        </div>
+        <button type="button" class="secondary-btn small-btn" data-edit-property-id="${escapeHtml(property.id)}">Edit</button>
+      </div>
+      <p><strong>Default Service:</strong> ${escapeHtml(property.default_service_type || "Not set")}</p>
+      <p><strong>Access Notes:</strong> ${escapeHtml(property.access_notes || "None")}</p>
+      <div class="checklist-summary">
+        <strong>Checklist:</strong>
+        ${checklistItems.length ? `<ul>${checklistPreview}</ul>${extraCount}` : "<p>No checklist items yet.</p>"}
+      </div>
+    </div>
+  `;
+}
+
+function populatePropertyForm(property) {
+  propertyIdInput.value = property.id || "";
+  document.getElementById("property_name_input").value = property.name || "";
+  document.getElementById("property_address_input").value = property.address || "";
+  document.getElementById("property_service_type_input").value = property.default_service_type || "";
+  document.getElementById("property_scope_input").value = property.default_scope || "";
+  document.getElementById("property_supplies_input").value = property.supplies_notes || "";
+  document.getElementById("property_instructions_input").value = property.special_instructions || "";
+  document.getElementById("property_access_input").value = property.access_notes || "";
+  checklistDraft = normalizeChecklistItems(property.checklist_items).map((item) => ({
+    ...getEmptyChecklistItem(),
+    ...item
+  }));
+  renderChecklistBuilder();
+  showPropertyMessage("Editing " + property.name + ".");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function resetPropertyForm() {
+  propertyForm?.reset();
+  if (propertyIdInput) propertyIdInput.value = "";
+  checklistDraft = [getEmptyChecklistItem()];
+  renderChecklistBuilder();
 }
 
 if (claimedAdminAssignments) {
@@ -319,19 +645,27 @@ async function loadMyAssignments(user) {
 async function claimAssignment(assignmentId, user) {
   showMessage("Claiming assignment...", claimMessage);
 
-  const { data, error } = await supabase
-    .from("assignment_blocks")
-    .update({
-      status: "claimed",
-      claimed_by: user.id,
-      claimed_by_email: user.email || null,
-      claimed_at: new Date().toISOString()
-    })
-    .eq("id", assignmentId)
-    .eq("status", "open")
-    .is("claimed_by", null)
-    .select("*")
-    .maybeSingle();
+  const contractorName = await getContractorName(user);
+  const claimPayload = {
+    status: "claimed",
+    claimed_by: user.id,
+    claimed_by_name: contractorName,
+    claimed_by_email: user.email || null,
+    claimed_at: new Date().toISOString()
+  };
+
+  let { data, error } = await claimOpenAssignment(assignmentId, claimPayload);
+
+  if (
+    error &&
+    (error.message.includes("claimed_by_name") || error.message.includes("claimed_by_email"))
+  ) {
+    ({ data, error } = await claimOpenAssignment(assignmentId, {
+      status: claimPayload.status,
+      claimed_by: claimPayload.claimed_by,
+      claimed_at: claimPayload.claimed_at
+    }));
+  }
 
   if (error) {
     showMessage("Error: " + error.message, claimMessage);
@@ -347,6 +681,17 @@ async function claimAssignment(assignmentId, user) {
 
   showMessage("Assignment claimed. It is now listed under My Assignments.", claimMessage);
   await loadContractorDashboard(user);
+}
+
+async function claimOpenAssignment(assignmentId, payload) {
+  return supabase
+    .from("assignment_blocks")
+    .update(payload)
+    .eq("id", assignmentId)
+    .eq("status", "open")
+    .is("claimed_by", null)
+    .select("*")
+    .maybeSingle();
 }
 
 function renderAssignmentCard(item, options = {}) {
