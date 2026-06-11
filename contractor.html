@@ -7,28 +7,30 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <main class="page wide-page">
-    <section class="dashboard-card wide-card">
+  <main class="page">
+    <section class="dashboard-card" id="contractorDashboard">
       <div class="dashboard-header">
         <div>
           <h1>Contractor Dashboard</h1>
-          <p>Claim available Turnly assignments and track the jobs assigned to you.</p>
+          <p>View available Turnly work and track the assignments you have claimed.</p>
         </div>
         <button id="logoutBtn" class="small-btn">Sign Out</button>
       </div>
 
-      <p id="claimMessage" class="status-message"></p>
+      <div class="grid">
+        <a href="contractor-available.html" class="tile-link">
+          <div class="tile">
+            <h3>Available Assignments</h3>
+            <p>Review open work blocks and claim the jobs you want.</p>
+          </div>
+        </a>
 
-      <div class="dashboard-section">
-        <h2>Available Assignments</h2>
-        <p>Open work blocks that are ready to claim.</p>
-        <div id="contractorAssignments" class="assignment-list"></div>
-      </div>
-
-      <div class="dashboard-section">
-        <h2>My Assignments</h2>
-        <p>Jobs you have already claimed.</p>
-        <div id="myAssignments" class="assignment-list"></div>
+        <a href="contractor-my-assignments.html" class="tile-link">
+          <div class="tile">
+            <h3>My Assignments</h3>
+            <p>See the jobs you have claimed and what is coming up.</p>
+          </div>
+        </a>
       </div>
     </section>
   </main>
