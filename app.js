@@ -11,6 +11,8 @@ const message = document.getElementById("message");
 const claimMessage = document.getElementById("claimMessage");
 const assignmentForm = document.getElementById("assignmentForm");
 const adminAssignments = document.getElementById("adminAssignments");
+const claimedAdminAssignments = document.getElementById("claimedAdminAssignments");
+const contractorDashboard = document.getElementById("contractorDashboard");
 const contractorAssignments = document.getElementById("contractorAssignments");
 const myAssignments = document.getElementById("myAssignments");
 
@@ -37,6 +39,18 @@ function formatMoney(value) {
 
 function shortId(value) {
   return value ? value.slice(0, 8) + "..." : "";
+}
+
+function formatClaimant(item) {
+  if (item.claimed_by_email) {
+    return escapeHtml(item.claimed_by_email);
+  }
+
+  if (item.claimed_by) {
+    return "Contractor ID " + escapeHtml(shortId(item.claimed_by));
+  }
+
+  return "Not claimed yet";
 }
 
 function statusClass(status) {
@@ -159,6 +173,20 @@ if (assignmentForm) {
   }
 }
 
+if (claimedAdminAssignments) {
+  const user = await requireLogin();
+
+  if (user) {
+    const profile = await getProfile(user.id);
+
+    if (!profile || profile.role !== "admin") {
+      window.location.href = "contractor.html";
+    } else {
+      loadClaimedAdminAssignments();
+    }
+  }
+}
+
 async function loadAdminAssignments() {
   if (!adminAssignments) return;
 
@@ -182,7 +210,31 @@ async function loadAdminAssignments() {
     .join("");
 }
 
-if (contractorAssignments || myAssignments) {
+async function loadClaimedAdminAssignments() {
+  if (!claimedAdminAssignments) return;
+
+  const { data, error } = await supabase
+    .from("assignment_blocks")
+    .select("*")
+    .not("claimed_by", "is", null)
+    .order("claimed_at", { ascending: false });
+
+  if (error) {
+    claimedAdminAssignments.innerHTML = `<p>${escapeHtml(error.message)}</p>`;
+    return;
+  }
+
+  if (!data.length) {
+    claimedAdminAssignments.innerHTML = "<p>No assignments have been claimed yet.</p>";
+    return;
+  }
+
+  claimedAdminAssignments.innerHTML = data
+    .map((item) => renderAssignmentCard(item, { mode: "admin" }))
+    .join("");
+}
+
+if (contractorDashboard || contractorAssignments || myAssignments) {
   const user = await requireLogin();
 
   if (user) {
@@ -190,6 +242,8 @@ if (contractorAssignments || myAssignments) {
 
     if (!profile) {
       window.location.href = "login.html";
+    } else if (profile.role === "admin") {
+      window.location.href = "admin.html";
     } else {
       await loadContractorDashboard(user);
 
@@ -270,6 +324,7 @@ async function claimAssignment(assignmentId, user) {
     .update({
       status: "claimed",
       claimed_by: user.id,
+      claimed_by_email: user.email || null,
       claimed_at: new Date().toISOString()
     })
     .eq("id", assignmentId)
@@ -300,9 +355,7 @@ function renderAssignmentCard(item, options = {}) {
   const end = formatDateTime(item.end_window);
   const status = escapeHtml(item.status || "unknown");
   const claimedAt = item.claimed_at ? formatDateTime(item.claimed_at) : "";
-  const claimant = item.claimed_by
-    ? `Contractor ${escapeHtml(shortId(item.claimed_by))}${claimedAt ? " on " + escapeHtml(claimedAt) : ""}`
-    : "Not claimed yet";
+  const claimant = `${formatClaimant(item)}${claimedAt ? " on " + escapeHtml(claimedAt) : ""}`;
   const claimButton = mode === "contractor-open" && item.id
     ? `<button type="button" class="claim-btn" data-claim-assignment-id="${escapeHtml(item.id)}">Claim Assignment</button>`
     : "";
