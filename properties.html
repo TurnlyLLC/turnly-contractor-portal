@@ -11,35 +11,62 @@
     <section class="dashboard-card wide-card">
       <a href="admin.html" class="secondary-btn">← Back to Dashboard</a>
 
-      <h1>Manage Properties</h1>
-      <p>Add reusable property details for assignment blocks.</p>
+      <div class="dashboard-header">
+        <div>
+          <h1>Manage Properties</h1>
+          <p>Add reusable property details and build property-specific task checklists.</p>
+        </div>
+      </div>
 
       <form id="propertyForm">
-        <label>Property Name</label>
-        <input id="property_name_input" required />
+        <input id="property_id_input" type="hidden" />
 
-        <label>Address</label>
-        <input id="property_address_input" />
+        <div class="admin-grid">
+          <div class="panel">
+            <h2>Property Details</h2>
 
-        <label>Default Service Type</label>
-        <input id="property_service_type_input" />
+            <label>Property Name</label>
+            <input id="property_name_input" required />
 
-        <label>Default Scope of Work</label>
-        <textarea id="property_scope_input"></textarea>
+            <label>Address</label>
+            <input id="property_address_input" />
 
-        <label>Supplies Notes</label>
-        <textarea id="property_supplies_input"></textarea>
+            <label>Default Service Type</label>
+            <input id="property_service_type_input" />
 
-        <label>Special Instructions</label>
-        <textarea id="property_instructions_input"></textarea>
+            <label>Default Scope of Work</label>
+            <textarea id="property_scope_input"></textarea>
 
-        <label>Access Notes</label>
-        <textarea id="property_access_input"></textarea>
+            <label>Supplies Notes</label>
+            <textarea id="property_supplies_input"></textarea>
 
-        <button type="submit">Save Property</button>
+            <label>Special Instructions</label>
+            <textarea id="property_instructions_input"></textarea>
+
+            <label>Access Notes</label>
+            <textarea id="property_access_input"></textarea>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <h2>Property Checklist</h2>
+                <p>Build the exact cleaning checklist contractors should follow for this property.</p>
+              </div>
+              <button id="addChecklistItemBtn" type="button" class="small-btn">Add Item</button>
+            </div>
+
+            <div id="checklistBuilder" class="checklist-builder"></div>
+          </div>
+        </div>
+
+        <div class="button-row">
+          <button type="submit">Save Property</button>
+          <button id="resetPropertyFormBtn" type="button" class="secondary-btn">New Property</button>
+        </div>
       </form>
 
-      <p id="propertyMessage"></p>
+      <p id="propertyMessage" class="status-message"></p>
 
       <h2>Saved Properties</h2>
       <div id="propertiesList" class="assignment-list"></div>
