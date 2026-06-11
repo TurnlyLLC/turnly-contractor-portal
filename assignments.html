@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Add Assignments | Turnly</title>
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="property-workflows.css" />
 </head>
 <body>
   <main class="page wide-page">
@@ -14,11 +15,24 @@
       <h1>Add Assignment Block</h1>
       <p>Select a saved property to auto-fill assignment details.</p>
 
+      <div class="panel">
+        <div class="panel-header">
+          <div>
+            <h2>Recurring Assignment Queue</h2>
+            <p>Generate open assignments for properties with recurring schedules due now.</p>
+          </div>
+          <button id="generateRecurringAssignmentsBtn" type="button" class="small-btn">Generate Due Assignments</button>
+        </div>
+        <p id="recurringMessage" class="status-message"></p>
+      </div>
+
       <form id="assignmentForm">
         <label>Select Property</label>
-        <select id="propertySelect">
+        <select id="propertySelect" required>
           <option value="">Choose a property...</option>
         </select>
+
+        <input id="property_id" type="hidden" />
 
         <label>Assignment Title</label>
         <input id="title" required placeholder="Apartment Turnover - Unit 204" />
@@ -50,6 +64,8 @@
         <label>Special Instructions</label>
         <textarea id="special_instructions"></textarea>
 
+        <div id="assignmentChecklistPreview" class="checklist-summary"></div>
+
         <button type="submit">Post Assignment</button>
       </form>
 
@@ -62,5 +78,6 @@
 
   <script src="env.js"></script>
   <script type="module" src="app.js"></script>
+  <script type="module" src="property-workflows.js"></script>
 </body>
 </html>
