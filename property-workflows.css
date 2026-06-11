@@ -1,0 +1,19 @@
+.recurring-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  margin-top: 18px;
+}
+
+.checklist-summary {
+  background: #f8fbf7;
+  border: 1px solid #dfeade;
+  border-radius: 16px;
+  margin-top: 8px;
+  padding: 16px;
+}
+
+.checklist-summary ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
