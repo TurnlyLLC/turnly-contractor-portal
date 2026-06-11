@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Available Assignments | Turnly</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="page wide-page">
+    <section class="dashboard-card wide-card">
+      <div class="dashboard-header">
+        <div>
+          <a href="contractor.html" class="secondary-btn">Back to Dashboard</a>
+          <h1>Available Assignments</h1>
+          <p>Open Turnly work blocks that are ready to claim.</p>
+        </div>
+        <button id="logoutBtn" class="small-btn">Sign Out</button>
+      </div>
+
+      <p id="claimMessage" class="status-message"></p>
+      <div id="contractorAssignments" class="assignment-list"></div>
+    </section>
+  </main>
+
+  <script src="env.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
