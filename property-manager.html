@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Property Manager Portal | Turnly</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="admin-dashboard.css" />
+</head>
+<body class="admin-command-body">
+  <main class="admin-command">
+    <aside class="command-sidebar">
+      <div class="command-brand">
+        <div class="brand-mark">T</div>
+        <span>TURNLY</span>
+      </div>
+
+      <nav class="command-nav" aria-label="Property manager navigation">
+        <a class="nav-link active" href="property-manager.html"><span>⌂</span>Dashboard</a>
+        <a class="nav-link" href="#properties"><span>▤</span>Properties</a>
+        <a class="nav-link" href="#reports"><span>◫</span>Cleaning Reports</a>
+        <a class="nav-link" href="#invoices"><span>▥</span>Invoices</a>
+        <a class="nav-link" href="#feedback"><span>□</span>Feedback</a>
+      </nav>
+
+      <button id="managerLogoutBtn" class="admin-user-card" type="button">
+        <span class="avatar">PM</span>
+        <span>
+          <strong id="managerUserName">Property Manager</strong>
+          <small>Property Manager</small>
+        </span>
+        <span class="chevron">⌄</span>
+      </button>
+    </aside>
+
+    <section class="command-main wip-main">
+      <header class="command-header">
+        <div>
+          <h1>Property Manager Portal</h1>
+          <p>Property details, cleaning reports, invoices, and service feedback.</p>
+        </div>
+      </header>
+
+      <section class="panel-card wip-panel">
+        <p class="wip-kicker">Client Operations</p>
+        <h2>Work in progress</h2>
+        <p>This role now has a dedicated portal route. The property manager workflows can be expanded here next.</p>
+      </section>
+    </section>
+  </main>
+
+  <script src="env.js"></script>
+  <script type="module" src="property-manager.js"></script>
+</body>
+</html>
