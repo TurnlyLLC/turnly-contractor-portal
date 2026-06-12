@@ -3,13 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Contractors | Turnly</title>
+  <title>Recent Activity | Turnly</title>
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="admin-dashboard.css" />
-  <link rel="stylesheet" href="property-workflows.css" />
 </head>
-<body class="admin-command-body property-command-body assignment-command-body">
-  <main class="admin-command property-command assignment-command">
+<body class="admin-command-body">
+  <main class="admin-command">
     <aside class="command-sidebar">
       <div class="command-brand">
         <div class="brand-mark">T</div>
@@ -17,7 +16,7 @@
       </div>
 
       <nav class="command-nav" aria-label="Admin navigation">
-        <a class="nav-link" href="admin.html"><span>⌂</span>Dashboard</a>
+        <a class="nav-link active" href="admin.html"><span>⌂</span>Dashboard</a>
 
         <p>Sales</p>
         <a class="nav-link" href="leads.html"><span>◇</span>Leads</a>
@@ -27,7 +26,7 @@
         <p>Operations</p>
         <a class="nav-link" href="properties.html"><span>▤</span>Properties</a>
         <a class="nav-link" href="assignments.html"><span>◫</span>Assignments</a>
-        <a class="nav-link active" href="claimed-assignments.html"><span>♙</span>Contractors</a>
+        <a class="nav-link" href="claimed-assignments.html"><span>♙</span>Contractors</a>
         <a class="nav-link" href="checklists.html"><span>☑</span>Checklists</a>
 
         <p>Quality</p>
@@ -52,28 +51,21 @@
       </button>
     </aside>
 
-    <section class="command-main assignment-main">
+    <section class="command-main wip-main">
       <header class="command-header">
         <div>
-          <h1>Contractors</h1>
-          <p>Review claimed jobs and the contractor attached to each block.</p>
+          <h1>Recent Activity</h1>
+          <p>Command center updates</p>
         </div>
-
         <div class="command-tools">
           <a class="secondary-command-btn" href="admin.html">Back</a>
-          <a class="secondary-command-btn" href="assignments.html">Assignments</a>
         </div>
       </header>
 
-      <section class="panel-card assignment-posted-card">
-        <div class="panel-heading">
-          <div>
-            <h2>Claimed Assignments</h2>
-            <p>Contractor ownership by assignment block.</p>
-          </div>
-        </div>
-
-        <div id="claimedAdminAssignments" class="assignment-list command-assignment-list"></div>
+      <section class="panel-card wip-panel">
+        <p class="wip-kicker">Dashboard</p>
+        <h2>Work in progress</h2>
+        <p>This page is being built for the Turnly admin portal.</p>
       </section>
     </section>
   </main>
