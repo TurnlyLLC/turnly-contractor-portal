@@ -364,19 +364,34 @@
   grid-template-columns: repeat(5, minmax(150px, 1fr));
 }
 
+.pipeline-message {
+  color: var(--admin-muted);
+  font-size: 12px;
+  margin: -4px 0 12px;
+  min-height: 18px;
+}
+
 .pipeline-column {
   border: 1px solid var(--admin-border);
   border-radius: 8px;
   border-top-width: 3px;
   display: grid;
   gap: 10px;
+  grid-template-rows: auto 1fr auto;
   padding: 14px 10px 12px;
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
 }
 
 .pipeline-column.green { border-top-color: var(--admin-green); }
 .pipeline-column.blue { border-top-color: var(--admin-blue); }
 .pipeline-column.yellow { border-top-color: var(--admin-yellow); }
 .pipeline-column.violet { border-top-color: var(--admin-violet); }
+
+.pipeline-column.is-over {
+  background: rgba(31, 226, 138, 0.08);
+  border-color: rgba(31, 226, 138, 0.55);
+  transform: translateY(-2px);
+}
 
 .pipeline-column header {
   display: flex;
@@ -385,6 +400,12 @@
 
 .pipeline-column header strong {
   color: var(--admin-green);
+}
+
+.pipeline-dropzone {
+  display: grid;
+  gap: 10px;
+  min-height: 300px;
 }
 
 .pipeline-item {
@@ -415,6 +436,10 @@
   margin-bottom: 8px;
 }
 
+.pipeline-item span {
+  padding-right: 64px;
+}
+
 .pipeline-item em {
   background: rgba(31, 226, 138, 0.13);
   border-radius: 999px;
@@ -425,6 +450,50 @@
   padding: 4px 8px;
   position: absolute;
   right: 10px;
+}
+
+.draggable-property {
+  cursor: grab;
+  transition: opacity 160ms ease, transform 160ms ease, border-color 160ms ease;
+}
+
+.draggable-property:active {
+  cursor: grabbing;
+}
+
+.draggable-property.is-dragging {
+  border-color: rgba(31, 226, 138, 0.45);
+  opacity: 0.55;
+  transform: scale(0.98);
+}
+
+.pipeline-empty {
+  align-items: center;
+  border: 1px dashed rgba(154, 170, 188, 0.28);
+  border-radius: 7px;
+  color: var(--admin-muted);
+  display: flex;
+  font-size: 12px;
+  justify-content: center;
+  min-height: 84px;
+  padding: 12px;
+  text-align: center;
+}
+
+.move-next-btn {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  color: #d8e2ee;
+  cursor: pointer;
+  font-size: 11px;
+  margin-top: 10px;
+  padding: 5px 8px;
+}
+
+.move-next-btn:hover {
+  border-color: rgba(31, 226, 138, 0.35);
+  color: var(--admin-green);
 }
 
 .pipeline-add,

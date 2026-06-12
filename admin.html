@@ -76,31 +76,31 @@
         <article class="metric-card green">
           <span class="metric-icon">⌁</span>
           <p>New Leads</p>
-          <strong>12</strong>
+          <strong data-pipeline-metric="new_leads">0</strong>
           <small>↗ 20% from last 7 days</small>
         </article>
         <article class="metric-card blue">
           <span class="metric-icon">◎</span>
           <p>Walkthroughs</p>
-          <strong>6</strong>
+          <strong data-pipeline-metric="walkthrough">0</strong>
           <small>↗ 15% from last 7 days</small>
         </article>
         <article class="metric-card yellow">
           <span class="metric-icon">▣</span>
           <p>Quotes Sent</p>
-          <strong>8</strong>
+          <strong data-pipeline-metric="quote_sent">0</strong>
           <small>↗ 33% from last 7 days</small>
         </article>
         <article class="metric-card violet">
           <span class="metric-icon">⌘</span>
           <p>Contract Out</p>
-          <strong>3</strong>
+          <strong data-pipeline-metric="contract_out">0</strong>
           <small>↗ 50% from last 7 days</small>
         </article>
         <article class="metric-card green">
           <span class="metric-icon">⌂</span>
           <p>Active Properties</p>
-          <strong>21</strong>
+          <strong data-pipeline-metric="active">0</strong>
           <small>↗ 5% from last 7 days</small>
         </article>
         <article class="metric-card revenue">
@@ -121,44 +121,35 @@
             </div>
           </div>
 
-          <div class="pipeline-board">
-            <article class="pipeline-column green">
-              <header><span>New Leads</span><strong>12</strong></header>
-              <div class="pipeline-item"><strong>SECU - Raleigh Branch</strong><small>Raleigh, NC</small><span>4,200 sqft</span><em>New</em></div>
-              <div class="pipeline-item"><strong>Medical Office Bldg</strong><small>Cary, NC</small><span>3,100 sqft</span><em>New</em></div>
-              <div class="pipeline-item"><strong>KinderCare - Apex</strong><small>Apex, NC</small><span>5,400 sqft</span><em>New</em></div>
+          <p id="pipelineMessage" class="pipeline-message" aria-live="polite"></p>
+          <div id="propertyPipeline" class="pipeline-board" aria-label="Property pipeline">
+            <article class="pipeline-column green" data-pipeline-stage="new_leads">
+              <header><span>New Leads</span><strong data-stage-count="new_leads">0</strong></header>
+              <div class="pipeline-dropzone" data-stage-dropzone="new_leads"></div>
               <a href="properties.html" class="pipeline-add">+ Add Lead</a>
             </article>
 
-            <article class="pipeline-column blue">
-              <header><span>Walkthrough</span><strong>6</strong></header>
-              <div class="pipeline-item"><strong>Church at North Hills</strong><small>Raleigh, NC</small><span>8,900 sqft <b>May 22</b></span></div>
-              <div class="pipeline-item"><strong>Durham Retail Center</strong><small>Durham, NC</small><span>6,200 sqft <b>May 23</b></span></div>
-              <div class="pipeline-item"><strong>Vetra Office Park</strong><small>Raleigh, NC</small><span>4,700 sqft <b>May 24</b></span></div>
+            <article class="pipeline-column blue" data-pipeline-stage="walkthrough">
+              <header><span>Walkthrough</span><strong data-stage-count="walkthrough">0</strong></header>
+              <div class="pipeline-dropzone" data-stage-dropzone="walkthrough"></div>
               <a href="properties.html" class="pipeline-add">+ Add Walkthrough</a>
             </article>
 
-            <article class="pipeline-column yellow">
-              <header><span>Quote Sent</span><strong>8</strong></header>
-              <div class="pipeline-item"><strong>Bank of America</strong><small>Durham, NC</small><span>3,800 sqft <b>$1,250/mo</b></span></div>
-              <div class="pipeline-item"><strong>Spec Suite 302</strong><small>Raleigh, NC</small><span>2,100 sqft <b>$875/mo</b></span></div>
-              <div class="pipeline-item"><strong>Daycare - Cary</strong><small>Cary, NC</small><span>6,000 sqft <b>$1,450/mo</b></span></div>
+            <article class="pipeline-column yellow" data-pipeline-stage="quote_sent">
+              <header><span>Quote Sent</span><strong data-stage-count="quote_sent">0</strong></header>
+              <div class="pipeline-dropzone" data-stage-dropzone="quote_sent"></div>
               <a href="assignments.html" class="pipeline-add">+ Add Quote</a>
             </article>
 
-            <article class="pipeline-column violet">
-              <header><span>Contract Out</span><strong>3</strong></header>
-              <div class="pipeline-item"><strong>Dental Office - Wake</strong><small>Raleigh, NC</small><span>2,400 sqft <b>Sent 5/18</b></span></div>
-              <div class="pipeline-item"><strong>Retail Store - Brier Creek</strong><small>Raleigh, NC</small><span>3,000 sqft <b>Sent 5/20</b></span></div>
-              <div class="pipeline-item"><strong>Fitness Studio - Cary</strong><small>Cary, NC</small><span>2,800 sqft <b>Sent 5/21</b></span></div>
-              <a href="#" class="pipeline-add">+ Add Contract</a>
+            <article class="pipeline-column violet" data-pipeline-stage="contract_out">
+              <header><span>Contract Out</span><strong data-stage-count="contract_out">0</strong></header>
+              <div class="pipeline-dropzone" data-stage-dropzone="contract_out"></div>
+              <a href="properties.html" class="pipeline-add">+ Add Contract</a>
             </article>
 
-            <article class="pipeline-column green">
-              <header><span>Active</span><strong>21</strong></header>
-              <div class="pipeline-item"><strong>SECU - Raleigh Branch</strong><small>Raleigh, NC</small><span>4,200 sqft</span><em>Active</em></div>
-              <div class="pipeline-item"><strong>Vetra Forest Hills</strong><small>Raleigh, NC</small><span>3,200 sqft</span><em>Active</em></div>
-              <div class="pipeline-item"><strong>KinderCare - Cary</strong><small>Cary, NC</small><span>6,400 sqft</span><em>Active</em></div>
+            <article class="pipeline-column green" data-pipeline-stage="active">
+              <header><span>Active</span><strong data-stage-count="active">0</strong></header>
+              <div class="pipeline-dropzone" data-stage-dropzone="active"></div>
               <a href="properties.html" class="pipeline-add">+ Add Property</a>
             </article>
           </div>
@@ -270,5 +261,6 @@
 
   <script src="env.js"></script>
   <script type="module" src="app.js"></script>
+  <script type="module" src="admin-pipeline.js"></script>
 </body>
 </html>
