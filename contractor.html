@@ -8,8 +8,6 @@
   <style>
     :root {
       --portal-bg: #020b12;
-      --portal-panel: rgba(9, 23, 34, 0.9);
-      --portal-panel-soft: rgba(13, 31, 45, 0.82);
       --portal-line: rgba(150, 170, 188, 0.16);
       --portal-text: #f7fbff;
       --portal-muted: #98a8b7;
@@ -17,6 +15,7 @@
       --portal-cyan: #14d8e7;
       --portal-gold: #f3c800;
       --portal-red: #ff6048;
+      --portal-card: rgba(9, 23, 34, 0.9);
     }
 
     * { box-sizing: border-box; }
@@ -34,9 +33,7 @@
     .contractor-portal-body p,
     .contractor-portal-body h1,
     .contractor-portal-body h2,
-    .contractor-portal-body h3 {
-      margin: 0;
-    }
+    .contractor-portal-body h3 { margin: 0; }
 
     .contractor-portal-body p { color: var(--portal-muted); }
 
@@ -198,12 +195,15 @@
       gap: 16px;
     }
 
-    .timeoff-btn {
+    .timeoff-btn,
+    .add-assignment-btn,
+    .modal-primary-btn {
       align-items: center;
-      background: transparent;
-      border: 1px solid var(--portal-green);
+      background: linear-gradient(135deg, var(--portal-green), #24d676);
+      border: 0;
       border-radius: 999px;
-      color: var(--portal-green);
+      color: #03140b;
+      cursor: pointer;
       display: inline-flex;
       font-size: 13px;
       font-weight: 800;
@@ -211,10 +211,20 @@
       min-height: 40px;
       padding: 0 18px;
       text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .timeoff-btn {
+      background: transparent;
+      border: 1px solid var(--portal-green);
+      color: var(--portal-green);
     }
 
     .icon-btn,
-    .profile-btn {
+    .profile-btn,
+    .modal-close-btn,
+    .modal-secondary-btn,
+    .region-chip {
       background: transparent;
       border: 0;
       color: var(--portal-text);
@@ -270,7 +280,8 @@
 
     .panel,
     .stats-strip,
-    .leaderboard-banner {
+    .leaderboard-banner,
+    .assignment-modal-panel {
       background: linear-gradient(145deg, rgba(14, 31, 45, 0.9), rgba(6, 18, 29, 0.95));
       border: 1px solid var(--portal-line);
       border-radius: 8px;
@@ -353,126 +364,138 @@
 
     .panel-heading h2 { color: var(--portal-text); font-size: 16px; }
     .panel-heading a { color: #c8d3dd; font-size: 12px; text-decoration: none; }
-    .schedule-title { align-items: center; display: flex; gap: 18px; }
-    .schedule-title span { color: var(--portal-green); font-size: 12px; font-weight: 800; }
 
-    .segmented { display: flex; gap: 10px; }
-    .segmented button,
-    .segmented a {
-      align-items: center;
+    .assignments-heading {
+      align-items: flex-start;
+      display: flex;
+      gap: 18px;
+      justify-content: space-between;
+      margin-bottom: 18px;
+    }
+
+    .assignments-heading h2 { color: var(--portal-text); font-size: 18px; }
+    .assignments-heading p { font-size: 13px; margin-top: 6px; }
+    .assignment-count { color: var(--portal-green); font-size: 12px; font-weight: 800; margin-left: 12px; }
+
+    .region-filter-bar {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 16px;
+      overflow-x: auto;
+      padding-bottom: 3px;
+    }
+
+    .region-chip {
       background: rgba(255, 255, 255, 0.05);
-      border: 0;
-      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 999px;
       color: #dce6ee;
-      display: inline-flex;
+      flex: 0 0 auto;
       font-size: 12px;
       font-weight: 800;
-      min-height: 32px;
-      padding: 0 16px;
-      text-decoration: none;
+      min-height: 34px;
+      padding: 0 14px;
     }
 
-    .segmented .active { background: rgba(24, 231, 124, 0.14); color: var(--portal-green); }
-
-    .timeline { display: grid; gap: 8px; position: relative; }
-    .timeline::before {
-      background: linear-gradient(var(--portal-green) 0 36%, var(--portal-gold) 36% 58%, #8b98a5 58%);
-      bottom: 54px;
-      content: "";
-      left: 8px;
-      position: absolute;
-      top: 30px;
-      width: 1px;
+    .region-chip.active {
+      background: rgba(24, 231, 124, 0.14);
+      border-color: rgba(24, 231, 124, 0.5);
+      color: var(--portal-green);
     }
 
-    .schedule-row {
+    .assignment-scroll {
       display: grid;
-      gap: 20px;
-      grid-template-columns: 88px minmax(0, 1fr);
-      position: relative;
+      gap: 12px;
+      max-height: 536px;
+      overflow-y: auto;
+      padding-right: 8px;
+      scrollbar-color: rgba(24, 231, 124, 0.7) rgba(255, 255, 255, 0.06);
+      scrollbar-width: thin;
     }
 
-    .time-slot {
-      color: #dce6ee;
-      display: grid;
-      gap: 5px;
-      grid-template-columns: 18px 1fr;
-      padding-top: 20px;
-    }
+    .assignment-scroll::-webkit-scrollbar { width: 8px; }
+    .assignment-scroll::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.06); border-radius: 999px; }
+    .assignment-scroll::-webkit-scrollbar-thumb { background: rgba(24, 231, 124, 0.72); border-radius: 999px; }
 
-    .time-slot::before {
-      background: #071721;
-      border: 2px solid #8d9aa6;
-      border-radius: 50%;
-      content: "";
-      height: 17px;
-      position: relative;
-      width: 17px;
-      z-index: 1;
-    }
-
-    .schedule-row.done .time-slot::before { border-color: var(--portal-green); box-shadow: inset 0 0 0 3px #071721; }
-    .schedule-row.current .time-slot::before { border-color: var(--portal-gold); }
-    .time-slot strong { font-size: 13px; }
-    .time-slot span { color: #b8c4cf; font-size: 12px; grid-column: 2; }
-
-    .job-card {
+    .assignment-card {
       align-items: center;
       background: rgba(255, 255, 255, 0.035);
       border: 1px solid rgba(255, 255, 255, 0.07);
       border-radius: 8px;
       display: grid;
       gap: 18px;
-      grid-template-columns: 144px minmax(0, 1fr) 180px;
-      min-height: 110px;
-      padding: 12px 18px;
+      grid-template-columns: 116px minmax(0, 1fr) 170px;
+      min-height: 116px;
+      padding: 14px 16px;
     }
 
-    .job-card img {
-      aspect-ratio: 1.55;
+    .assignment-card[hidden] { display: none; }
+
+    .assignment-card img {
       border-radius: 6px;
-      display: block;
       height: 86px;
       object-fit: cover;
-      width: 144px;
+      width: 116px;
     }
 
-    .job-copy h3 { color: var(--portal-text); font-size: 16px; margin-bottom: 9px; }
-    .job-copy p { font-size: 12px; }
-    .job-meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
-    .job-meta span:first-child { background: rgba(24, 231, 124, 0.12); border-radius: 4px; color: var(--portal-green); font-size: 11px; font-weight: 800; padding: 4px 7px; text-transform: uppercase; }
-    .job-meta span:last-child { color: #bcc8d2; font-size: 12px; }
+    .assignment-copy { min-width: 0; }
+    .assignment-copy h3 { color: var(--portal-text); font-size: 16px; margin-bottom: 8px; }
+    .assignment-copy p { font-size: 12px; overflow-wrap: anywhere; }
 
-    .job-actions { align-items: center; display: grid; gap: 10px; justify-items: end; }
-    .job-status { border-radius: 8px; font-size: 12px; font-weight: 800; min-width: 88px; padding: 9px 12px; text-align: center; }
-    .job-status.done { background: rgba(24, 231, 124, 0.16); color: var(--portal-green); }
-    .job-status.progress { background: rgba(243, 200, 0, 0.16); color: var(--portal-gold); }
-    .job-status.scheduled { background: rgba(255, 255, 255, 0.06); color: var(--portal-text); }
+    .assignment-meta {
+      align-items: center;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
 
-    .job-actions a,
-    .job-actions button {
+    .assignment-meta span {
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 999px;
+      color: #c7d3dc;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 5px 8px;
+    }
+
+    .assignment-meta .region-badge {
+      background: rgba(24, 231, 124, 0.12);
+      color: var(--portal-green);
+      text-transform: uppercase;
+    }
+
+    .assignment-actions {
+      align-items: stretch;
+      display: grid;
+      gap: 10px;
+      justify-items: stretch;
+    }
+
+    .assignment-pay { color: var(--portal-text); font-size: 21px; font-weight: 800; text-align: right; }
+    .assignment-window { color: var(--portal-muted); font-size: 12px; text-align: right; }
+
+    .claim-assignment-btn {
+      background: linear-gradient(135deg, var(--portal-green), #24d676);
+      border: 0;
       border-radius: 6px;
+      color: #03140b;
+      cursor: pointer;
       font-size: 12px;
       font-weight: 800;
       min-height: 34px;
-      text-align: center;
-      text-decoration: none;
-      width: 170px;
     }
 
-    .job-actions button { background: linear-gradient(135deg, var(--portal-green), #24d676); color: #03140b; padding: 0 14px; }
-    .job-actions a { align-items: center; border: 1px solid rgba(255, 255, 255, 0.28); color: var(--portal-text); display: inline-flex; justify-content: center; }
-
-    .add-job-link {
-      align-items: center;
-      color: var(--portal-green);
-      display: inline-flex;
+    .empty-assignments {
+      border: 1px dashed rgba(255, 255, 255, 0.16);
+      border-radius: 8px;
+      color: var(--portal-muted);
       font-size: 13px;
-      font-weight: 700;
-      gap: 10px;
-      margin-top: 18px;
-      text-decoration: none;
+      padding: 24px;
+      text-align: center;
     }
+
+    .empty-assignments[hidden] { display: none; }
 
     .lower-grid { display: grid; gap: 16px; grid-template-columns: 0.9fr 1.35fr; }
     .tool-grid { display: grid; gap: 18px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -553,6 +576,90 @@
     .message-list time { color: var(--portal-muted); font-size: 12px; }
     .message-list b { align-items: center; background: var(--portal-green); border-radius: 50%; color: #04140b; display: flex; font-size: 10px; height: 20px; justify-content: center; width: 20px; }
 
+    .assignment-modal[hidden] { display: none; }
+
+    .assignment-modal {
+      align-items: center;
+      background: rgba(1, 8, 13, 0.72);
+      bottom: 0;
+      display: flex;
+      justify-content: center;
+      left: 0;
+      padding: 22px;
+      position: fixed;
+      right: 0;
+      top: 0;
+      z-index: 20;
+    }
+
+    .assignment-modal-panel {
+      max-height: min(780px, calc(100vh - 44px));
+      max-width: 760px;
+      overflow-y: auto;
+      padding: 24px;
+      width: min(760px, 100%);
+    }
+
+    .modal-header {
+      align-items: flex-start;
+      display: flex;
+      gap: 16px;
+      justify-content: space-between;
+      margin-bottom: 18px;
+    }
+
+    .modal-header h2 { color: var(--portal-text); font-size: 22px; }
+    .modal-header p { font-size: 13px; margin-top: 6px; }
+
+    .modal-close-btn {
+      border: 1px solid var(--portal-line);
+      border-radius: 8px;
+      min-height: 36px;
+      padding: 0 12px;
+    }
+
+    .assignment-modal form { display: grid; gap: 14px; margin: 0; }
+
+    .form-grid {
+      display: grid;
+      gap: 14px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .form-grid .span-two { grid-column: 1 / -1; }
+    .assignment-modal label { color: #d9e4ec; display: grid; font-size: 12px; font-weight: 800; gap: 7px; }
+
+    .assignment-modal input,
+    .assignment-modal select,
+    .assignment-modal textarea {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--portal-line);
+      border-radius: 8px;
+      color: var(--portal-text);
+      font: inherit;
+      min-height: 42px;
+      padding: 10px 12px;
+      width: 100%;
+    }
+
+    .assignment-modal textarea { min-height: 82px; resize: vertical; }
+    .assignment-modal option { color: #07131d; }
+
+    .modal-actions {
+      align-items: center;
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+      margin-top: 6px;
+    }
+
+    .modal-secondary-btn {
+      border: 1px solid var(--portal-line);
+      border-radius: 999px;
+      min-height: 40px;
+      padding: 0 18px;
+    }
+
     @media (max-width: 1240px) {
       .contractor-shell { grid-template-columns: 92px minmax(0, 1fr); }
       .contractor-brand span:last-child,
@@ -575,14 +682,15 @@
       .nav-link { flex: 0 0 48px; }
       .support-card { display: none; }
       .topbar,
-      .topbar-actions { align-items: flex-start; flex-wrap: wrap; }
+      .topbar-actions,
+      .assignments-heading { align-items: flex-start; flex-wrap: wrap; }
       .side-stack,
       .lower-grid { grid-template-columns: 1fr; }
-      .job-card { grid-template-columns: 112px minmax(0, 1fr); }
-      .job-card img { height: 72px; width: 112px; }
-      .job-actions { grid-column: 1 / -1; justify-items: stretch; }
-      .job-actions a,
-      .job-actions button { width: 100%; }
+      .assignment-card { grid-template-columns: 112px minmax(0, 1fr); }
+      .assignment-card img { height: 72px; width: 112px; }
+      .assignment-actions { grid-column: 1 / -1; }
+      .assignment-pay,
+      .assignment-window { text-align: left; }
     }
 
     @media (max-width: 700px) {
@@ -590,21 +698,18 @@
       .stats-strip { grid-template-columns: 1fr; padding: 4px 14px; }
       .stat-card { border-top: 1px solid var(--portal-line) !important; padding: 16px 0; }
       .stat-card:first-child { border-top: 0 !important; }
-      .schedule-row { grid-template-columns: 1fr; }
-      .timeline::before,
-      .time-slot::before { display: none; }
-      .time-slot { grid-template-columns: 1fr; padding-top: 8px; }
-      .time-slot span { grid-column: 1; }
-      .job-card,
+      .assignment-card,
       .qa-summary,
       .leaderboard-banner,
       .upcoming-list div,
       .message-list article,
-      .progress-grid { grid-template-columns: 1fr; }
-      .job-card img { height: auto; width: 100%; }
+      .progress-grid,
+      .form-grid { grid-template-columns: 1fr; }
+      .assignment-card img { height: 150px; width: 100%; }
       .progress-grid > div + div { border-left: 0; border-top: 1px solid var(--portal-line); padding-left: 0; padding-top: 16px; }
       .tool-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .segmented { flex-wrap: wrap; }
+      .modal-actions { align-items: stretch; flex-direction: column-reverse; }
+      .modal-actions button { justify-content: center; width: 100%; }
     }
   </style>
 </head>
@@ -621,7 +726,7 @@
 
         <div class="nav-label">Work</div>
         <a class="nav-link" href="contractor-my-assignments.html"><span class="ico">C</span><span>My Schedule</span></a>
-        <a class="nav-link" href="contractor-available.html"><span class="ico">A</span><span>Assignments</span></a>
+        <a class="nav-link" href="#availableAssignments"><span class="ico">A</span><span>Assignments</span></a>
         <a class="nav-link" href="#qa-reviews"><span class="ico">Q</span><span>QA Reviews</span></a>
         <a class="nav-link" href="#messages"><span class="ico">M</span><span>Messages</span><span class="nav-pill">2</span></a>
 
@@ -668,8 +773,8 @@
 
       <section class="stats-strip" aria-label="Contractor performance summary">
         <article class="stat-card">
-          <span class="stat-icon green">C</span>
-          <div><p>Today's Jobs</p><strong>3</strong><small class="good">2 Completed</small></div>
+          <span class="stat-icon green">A</span>
+          <div><p>Available Jobs</p><strong id="availableJobTotal">8</strong><small class="good">Across 5 regions</small></div>
         </article>
         <article class="stat-card">
           <span class="stat-icon cyan">T</span>
@@ -691,42 +796,74 @@
 
       <div class="dashboard-grid">
         <div class="main-stack">
-          <section class="panel schedule-panel">
-            <div class="panel-heading">
-              <div class="schedule-title"><h2>Today's Schedule</h2><span>May 22, 2025</span></div>
-              <div class="segmented"><button class="active" type="button">Day</button><button type="button">Week</button><a href="#map">View Map</a></div>
+          <section class="panel" id="availableAssignments">
+            <div class="assignments-heading">
+              <div>
+                <h2>Available Assignments <span id="visibleAssignmentCount" class="assignment-count">8 showing</span></h2>
+                <p>Scroll open jobs by region and add new work as it comes in.</p>
+              </div>
+              <button id="openAssignmentModal" class="add-assignment-btn" type="button"><span>+</span> Add Assignment</button>
             </div>
 
-            <div class="timeline">
-              <article class="schedule-row done">
-                <div class="time-slot"><strong>8:00 AM</strong><span>10:00 AM</span></div>
-                <div class="job-card">
-                  <img src="https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&amp;fit=crop&amp;w=420&amp;q=80" alt="SECU Raleigh Branch exterior" />
-                  <div class="job-copy"><h3>SECU - Raleigh Branch</h3><p>123 Main St, Raleigh, NC 27601</p><div class="job-meta"><span>Standard Clean</span><span>2,400 sqft</span></div></div>
-                  <div class="job-actions"><span class="job-status done">Completed</span><a href="contractor-my-assignments.html">View Details</a></div>
-                </div>
-              </article>
-
-              <article class="schedule-row current">
-                <div class="time-slot"><strong>10:30 AM</strong><span>12:30 PM</span></div>
-                <div class="job-card">
-                  <img src="https://images.unsplash.com/photo-1507692049790-de58290a4334?auto=format&amp;fit=crop&amp;w=420&amp;q=80" alt="Church at North Hills exterior" />
-                  <div class="job-copy"><h3>Church at North Hills</h3><p>200 Saint Albans Dr, Raleigh, NC 27609</p><div class="job-meta"><span>Standard Clean</span><span>8,900 sqft</span></div></div>
-                  <div class="job-actions"><span class="job-status progress">In Progress</span><button type="button">Start Job</button></div>
-                </div>
-              </article>
-
-              <article class="schedule-row">
-                <div class="time-slot"><strong>1:00 PM</strong><span>2:30 PM</span></div>
-                <div class="job-card">
-                  <img src="https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&amp;fit=crop&amp;w=420&amp;q=80" alt="Vetra Forest Hills office exterior" />
-                  <div class="job-copy"><h3>Vetra Forest Hills</h3><p>2501 Blue Ridge Rd, Raleigh, NC 27607</p><div class="job-meta"><span>Standard Clean</span><span>3,200 sqft</span></div></div>
-                  <div class="job-actions"><span class="job-status scheduled">Scheduled</span><a href="contractor-my-assignments.html">View Details</a></div>
-                </div>
-              </article>
+            <div class="region-filter-bar" aria-label="Filter assignments by region">
+              <button class="region-chip active" type="button" data-region-filter="all">All Regions</button>
+              <button class="region-chip" type="button" data-region-filter="raleigh">Raleigh</button>
+              <button class="region-chip" type="button" data-region-filter="durham">Durham</button>
+              <button class="region-chip" type="button" data-region-filter="cary">Cary</button>
+              <button class="region-chip" type="button" data-region-filter="apex">Apex</button>
+              <button class="region-chip" type="button" data-region-filter="chapel-hill">Chapel Hill</button>
             </div>
 
-            <a class="add-job-link" href="contractor-available.html"><span>+</span><span>Add Job</span></a>
+            <div id="assignmentBoard" class="assignment-scroll" aria-live="polite">
+              <article class="assignment-card" data-region="raleigh">
+                <img src="https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&amp;fit=crop&amp;w=320&amp;q=80" alt="SECU Raleigh Branch exterior" />
+                <div class="assignment-copy"><h3>SECU - Raleigh Branch</h3><p>123 Main St, Raleigh, NC 27601</p><div class="assignment-meta"><span class="region-badge">Raleigh</span><span>Standard Clean</span><span>2,400 sq ft</span></div></div>
+                <div class="assignment-actions"><span class="assignment-pay">$185</span><span class="assignment-window">Today, 8:00 AM</span><button class="claim-assignment-btn" type="button">Claim Job</button></div>
+              </article>
+
+              <article class="assignment-card" data-region="raleigh">
+                <img src="https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&amp;fit=crop&amp;w=320&amp;q=80" alt="Vetra Forest Hills office exterior" />
+                <div class="assignment-copy"><h3>Vetra Forest Hills</h3><p>2501 Blue Ridge Rd, Raleigh, NC 27607</p><div class="assignment-meta"><span class="region-badge">Raleigh</span><span>Deep Clean</span><span>3,200 sq ft</span></div></div>
+                <div class="assignment-actions"><span class="assignment-pay">$240</span><span class="assignment-window">Today, 1:00 PM</span><button class="claim-assignment-btn" type="button">Claim Job</button></div>
+              </article>
+
+              <article class="assignment-card" data-region="durham">
+                <img src="https://images.unsplash.com/photo-1497366412874-3415097a27e7?auto=format&amp;fit=crop&amp;w=320&amp;q=80" alt="Downtown Durham office building" />
+                <div class="assignment-copy"><h3>Durham Innovation Center</h3><p>318 Blackwell St, Durham, NC 27701</p><div class="assignment-meta"><span class="region-badge">Durham</span><span>Office Reset</span><span>5,100 sq ft</span></div></div>
+                <div class="assignment-actions"><span class="assignment-pay">$315</span><span class="assignment-window">May 23, 7:30 AM</span><button class="claim-assignment-btn" type="button">Claim Job</button></div>
+              </article>
+
+              <article class="assignment-card" data-region="durham">
+                <img src="https://images.unsplash.com/photo-1524758631624-e2822e304c36?auto=format&amp;fit=crop&amp;w=320&amp;q=80" alt="Modern workspace in Durham" />
+                <div class="assignment-copy"><h3>Research Triangle Suites</h3><p>4919 Emperor Blvd, Durham, NC 27703</p><div class="assignment-meta"><span class="region-badge">Durham</span><span>Standard Clean</span><span>1,900 sq ft</span></div></div>
+                <div class="assignment-actions"><span class="assignment-pay">$165</span><span class="assignment-window">May 24, 10:00 AM</span><button class="claim-assignment-btn" type="button">Claim Job</button></div>
+              </article>
+
+              <article class="assignment-card" data-region="cary">
+                <img src="https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&amp;fit=crop&amp;w=320&amp;q=80" alt="KinderCare Cary building" />
+                <div class="assignment-copy"><h3>KinderCare - Cary</h3><p>875 Walnut St, Cary, NC 27511</p><div class="assignment-meta"><span class="region-badge">Cary</span><span>Daycare Clean</span><span>4,400 sq ft</span></div></div>
+                <div class="assignment-actions"><span class="assignment-pay">$290</span><span class="assignment-window">May 23, 9:00 AM</span><button class="claim-assignment-btn" type="button">Claim Job</button></div>
+              </article>
+
+              <article class="assignment-card" data-region="cary">
+                <img src="https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&amp;fit=crop&amp;w=320&amp;q=80" alt="Bank branch exterior" />
+                <div class="assignment-copy"><h3>Bank of America</h3><p>1001 High House Rd, Cary, NC 27513</p><div class="assignment-meta"><span class="region-badge">Cary</span><span>Lobby Clean</span><span>2,100 sq ft</span></div></div>
+                <div class="assignment-actions"><span class="assignment-pay">$175</span><span class="assignment-window">May 26, 8:00 AM</span><button class="claim-assignment-btn" type="button">Claim Job</button></div>
+              </article>
+
+              <article class="assignment-card" data-region="apex">
+                <img src="https://images.unsplash.com/photo-1518005020951-eccb494ad742?auto=format&amp;fit=crop&amp;w=320&amp;q=80" alt="Apex daycare property exterior" />
+                <div class="assignment-copy"><h3>Daycare - Apex</h3><p>1551 Apex Peakway, Apex, NC 27502</p><div class="assignment-meta"><span class="region-badge">Apex</span><span>Sanitize</span><span>3,600 sq ft</span></div></div>
+                <div class="assignment-actions"><span class="assignment-pay">$260</span><span class="assignment-window">May 27, 1:00 PM</span><button class="claim-assignment-btn" type="button">Claim Job</button></div>
+              </article>
+
+              <article class="assignment-card" data-region="chapel-hill">
+                <img src="https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&amp;fit=crop&amp;w=320&amp;q=80" alt="Chapel Hill medical office" />
+                <div class="assignment-copy"><h3>Chapel Hill Medical Office</h3><p>2100 Erwin Rd, Chapel Hill, NC 27514</p><div class="assignment-meta"><span class="region-badge">Chapel Hill</span><span>Medical Clean</span><span>2,800 sq ft</span></div></div>
+                <div class="assignment-actions"><span class="assignment-pay">$225</span><span class="assignment-window">May 28, 6:30 AM</span><button class="claim-assignment-btn" type="button">Claim Job</button></div>
+              </article>
+            </div>
+            <p id="emptyAssignments" class="empty-assignments" hidden>No assignments are available for this region yet.</p>
           </section>
 
           <div class="lower-grid">
@@ -788,6 +925,193 @@
     </main>
   </div>
 
+  <div id="assignmentModal" class="assignment-modal" hidden aria-hidden="true">
+    <section class="assignment-modal-panel" role="dialog" aria-modal="true" aria-labelledby="assignmentModalTitle">
+      <div class="modal-header">
+        <div>
+          <h2 id="assignmentModalTitle">Add Assignment</h2>
+          <p>Add a regional assignment to the available jobs board.</p>
+        </div>
+        <button class="modal-close-btn" type="button" data-close-assignment-modal>Close</button>
+      </div>
+
+      <form id="portalAssignmentForm">
+        <div class="form-grid">
+          <label>Region
+            <select id="newAssignmentRegion" required>
+              <option value="raleigh">Raleigh</option>
+              <option value="durham">Durham</option>
+              <option value="cary">Cary</option>
+              <option value="apex">Apex</option>
+              <option value="chapel-hill">Chapel Hill</option>
+            </select>
+          </label>
+          <label>Pay Amount
+            <input id="newAssignmentPay" type="number" min="0" step="5" placeholder="185" required />
+          </label>
+          <label class="span-two">Assignment Title
+            <input id="newAssignmentTitle" placeholder="Property or client name" required />
+          </label>
+          <label class="span-two">Address
+            <input id="newAssignmentAddress" placeholder="Street, city, state ZIP" required />
+          </label>
+          <label>Service Type
+            <input id="newAssignmentService" placeholder="Standard Clean" required />
+          </label>
+          <label>Square Feet
+            <input id="newAssignmentSqft" type="number" min="0" step="100" placeholder="2400" />
+          </label>
+          <label>Work Date
+            <input id="newAssignmentDate" type="date" required />
+          </label>
+          <label>Start Time
+            <input id="newAssignmentTime" type="time" required />
+          </label>
+          <label class="span-two">Notes
+            <textarea id="newAssignmentNotes" placeholder="Access notes, supplies, or special instructions"></textarea>
+          </label>
+        </div>
+        <div class="modal-actions">
+          <button class="modal-secondary-btn" type="button" data-close-assignment-modal>Cancel</button>
+          <button class="modal-primary-btn" type="submit">Add Assignment</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
+  <script>
+    const regionLabels = {
+      all: "All Regions",
+      raleigh: "Raleigh",
+      durham: "Durham",
+      cary: "Cary",
+      apex: "Apex",
+      "chapel-hill": "Chapel Hill"
+    };
+
+    const assignmentBoard = document.getElementById("assignmentBoard");
+    const emptyAssignments = document.getElementById("emptyAssignments");
+    const visibleAssignmentCount = document.getElementById("visibleAssignmentCount");
+    const availableJobTotal = document.getElementById("availableJobTotal");
+    const regionButtons = Array.from(document.querySelectorAll("[data-region-filter]"));
+    const assignmentModal = document.getElementById("assignmentModal");
+    const assignmentForm = document.getElementById("portalAssignmentForm");
+    const openAssignmentModal = document.getElementById("openAssignmentModal");
+    const closeAssignmentModalButtons = Array.from(document.querySelectorAll("[data-close-assignment-modal]"));
+
+    function escapeHtml(value) {
+      return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function formatShortDate(value) {
+      if (!value) return "Open date";
+      const date = new Date(value + "T00:00:00");
+      return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    }
+
+    function formatTime(value) {
+      if (!value) return "Open time";
+      const [hours, minutes] = value.split(":");
+      const date = new Date();
+      date.setHours(Number(hours || 0), Number(minutes || 0));
+      return date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    }
+
+    function getAssignmentCards() {
+      return Array.from(assignmentBoard.querySelectorAll(".assignment-card"));
+    }
+
+    function updateAssignmentCounts(activeRegion) {
+      const cards = getAssignmentCards();
+      const visibleCards = cards.filter((card) => !card.hidden);
+      visibleAssignmentCount.textContent = `${visibleCards.length} showing`;
+      availableJobTotal.textContent = cards.length;
+      emptyAssignments.hidden = visibleCards.length > 0;
+      regionButtons.forEach((button) => {
+        const region = button.dataset.regionFilter;
+        const count = region === "all" ? cards.length : cards.filter((card) => card.dataset.region === region).length;
+        button.textContent = `${regionLabels[region]} (${count})`;
+        button.classList.toggle("active", region === activeRegion);
+      });
+    }
+
+    function filterAssignments(region) {
+      getAssignmentCards().forEach((card) => {
+        card.hidden = region !== "all" && card.dataset.region !== region;
+      });
+      updateAssignmentCounts(region);
+    }
+
+    function openModal() {
+      assignmentModal.hidden = false;
+      assignmentModal.setAttribute("aria-hidden", "false");
+      document.getElementById("newAssignmentTitle").focus();
+    }
+
+    function closeModal() {
+      assignmentModal.hidden = true;
+      assignmentModal.setAttribute("aria-hidden", "true");
+    }
+
+    regionButtons.forEach((button) => {
+      button.addEventListener("click", () => filterAssignments(button.dataset.regionFilter));
+    });
+
+    openAssignmentModal.addEventListener("click", openModal);
+    closeAssignmentModalButtons.forEach((button) => button.addEventListener("click", closeModal));
+    assignmentModal.addEventListener("click", (event) => {
+      if (event.target === assignmentModal) closeModal();
+    });
+    window.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !assignmentModal.hidden) closeModal();
+    });
+
+    assignmentForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const region = document.getElementById("newAssignmentRegion").value;
+      const title = document.getElementById("newAssignmentTitle").value;
+      const address = document.getElementById("newAssignmentAddress").value;
+      const service = document.getElementById("newAssignmentService").value;
+      const sqft = document.getElementById("newAssignmentSqft").value;
+      const pay = document.getElementById("newAssignmentPay").value;
+      const date = document.getElementById("newAssignmentDate").value;
+      const time = document.getElementById("newAssignmentTime").value;
+      const notes = document.getElementById("newAssignmentNotes").value;
+
+      const card = document.createElement("article");
+      card.className = "assignment-card";
+      card.dataset.region = region;
+      card.innerHTML = `
+        <img src="https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&amp;fit=crop&amp;w=320&amp;q=80" alt="${escapeHtml(title)}" />
+        <div class="assignment-copy">
+          <h3>${escapeHtml(title)}</h3>
+          <p>${escapeHtml(address)}</p>
+          <div class="assignment-meta">
+            <span class="region-badge">${escapeHtml(regionLabels[region])}</span>
+            <span>${escapeHtml(service)}</span>
+            <span>${escapeHtml(sqft || "TBD")} sq ft</span>
+            ${notes ? `<span>${escapeHtml(notes)}</span>` : ""}
+          </div>
+        </div>
+        <div class="assignment-actions">
+          <span class="assignment-pay">$${escapeHtml(pay)}</span>
+          <span class="assignment-window">${escapeHtml(formatShortDate(date))}, ${escapeHtml(formatTime(time))}</span>
+          <button class="claim-assignment-btn" type="button">Claim Job</button>
+        </div>
+      `;
+      assignmentBoard.prepend(card);
+      assignmentForm.reset();
+      closeModal();
+      filterAssignments(region);
+    });
+
+    filterAssignments("all");
+  </script>
   <script src="env.js"></script>
   <script type="module" src="app.js"></script>
 </body>
