@@ -194,6 +194,7 @@ async function saveProperty(event) {
   const payload = {
     name: document.getElementById("property_name_input").value.trim(),
     address: document.getElementById("property_address_input").value.trim(),
+    pipeline_stage: existingProperty?.pipeline_stage || "new_leads",
     default_service_type: document.getElementById("property_service_type_input").value.trim(),
     checklist_template_id: selectedTemplate?.id || null,
     checklist_items: selectedTemplate
@@ -221,6 +222,7 @@ async function saveProperty(event) {
   let result = await writeProperty(propertyId, payload, user.id);
 
   if (result.error && isMissingColumnError(result.error, [
+    "pipeline_stage",
     "checklist_template_id",
     "recurring_enabled",
     "recurring_frequency",
@@ -233,6 +235,7 @@ async function saveProperty(event) {
   ])) {
     const legacyPayload = { ...payload };
     [
+      "pipeline_stage",
       "checklist_template_id",
       "recurring_enabled",
       "recurring_frequency",
