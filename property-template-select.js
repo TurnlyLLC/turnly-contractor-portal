@@ -14,6 +14,8 @@ const clientNameInput = document.getElementById("property_client_name_input");
 const clientEmailInput = document.getElementById("property_client_email_input");
 const logoutBtn = document.getElementById("logoutBtn");
 
+const PROPERTIES_TABLE = "portal_properties";
+
 let currentUser = null;
 let templates = [];
 let clients = [];
@@ -197,7 +199,7 @@ function renderTemplateOptions(selectedTemplateId = templateSelect?.value) {
 
 async function loadProperties() {
   const { data, error } = await supabase
-    .from("properties")
+    .from(PROPERTIES_TABLE)
     .select("*")
     .order("created_at", { ascending: false });
 
@@ -352,10 +354,10 @@ async function resolveClientId(existingProperty) {
 
 function writeProperty(propertyId, payload, userId) {
   if (propertyId) {
-    return supabase.from("properties").update(payload).eq("id", propertyId);
+    return supabase.from(PROPERTIES_TABLE).update(payload).eq("id", propertyId);
   }
 
-  return supabase.from("properties").insert([{ ...payload, created_by: userId }]);
+  return supabase.from(PROPERTIES_TABLE).insert([{ ...payload, created_by: userId }]);
 }
 
 async function saveProperty(event) {

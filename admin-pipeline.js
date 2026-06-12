@@ -13,6 +13,8 @@ const stages = [
   { id: "active", label: "Active", badge: "Active" }
 ];
 
+const PROPERTIES_TABLE = "portal_properties";
+
 let properties = [];
 let draggedPropertyId = null;
 
@@ -58,7 +60,7 @@ async function loadPipelineProperties() {
   showPipelineMessage("Loading properties...");
 
   const { data, error } = await supabase
-    .from("properties")
+    .from(PROPERTIES_TABLE)
     .select("*")
     .order("created_at", { ascending: false });
 
@@ -133,7 +135,7 @@ async function updatePropertyStage(propertyId, nextStageId) {
   showPipelineMessage(`Moving ${property.name || "property"} to ${getStage(nextStage).label}...`);
 
   const { error } = await supabase
-    .from("properties")
+    .from(PROPERTIES_TABLE)
     .update({ pipeline_stage: nextStage })
     .eq("id", propertyId);
 
