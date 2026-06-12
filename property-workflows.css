@@ -5,9 +5,25 @@
   margin-top: 18px;
 }
 
-.property-entry-panel,
+.property-command {
+  grid-template-columns: 272px minmax(0, 1fr);
+}
+
+.property-main {
+  display: grid;
+  gap: 16px;
+}
+
+.property-command-form {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+}
+
+.property-form-card,
+.property-recurring-card,
 .current-properties-panel {
-  border-radius: 8px;
+  border-radius: 12px;
 }
 
 .property-form-grid {
@@ -16,34 +32,173 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.property-form-grid label {
-  margin-top: 0;
+.property-form-grid label,
+.property-recurring-card label {
+  color: #d8e2ee;
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  margin: 0 0 7px;
 }
 
 .property-form-grid .span-two {
   grid-column: 1 / -1;
 }
 
+.property-command input,
+.property-command select,
+.property-command textarea {
+  background: rgba(8, 19, 33, 0.82);
+  border: 1px solid rgba(144, 164, 183, 0.22);
+  border-radius: 8px;
+  color: var(--admin-text);
+  font-size: 14px;
+  outline: 0;
+  padding: 12px;
+  width: 100%;
+}
+
+.property-command textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.property-command input:focus,
+.property-command select:focus,
+.property-command textarea:focus {
+  border-color: rgba(31, 226, 138, 0.55);
+  box-shadow: 0 0 0 3px rgba(31, 226, 138, 0.12);
+}
+
+.property-command option {
+  background: #101b2a;
+  color: var(--admin-text);
+}
+
+.property-command input::placeholder,
+.property-command textarea::placeholder {
+  color: rgba(154, 170, 188, 0.72);
+}
+
+.secondary-command-btn {
+  align-items: center;
+  background: rgba(23, 35, 52, 0.92);
+  border: 1px solid var(--admin-border);
+  border-radius: 9px;
+  color: #d8e2ee;
+  display: flex;
+  font-weight: 800;
+  height: 46px;
+  justify-content: center;
+  padding: 0 18px;
+  text-decoration: none;
+}
+
+.property-command .panel-heading {
+  margin-bottom: 16px;
+}
+
+.property-command .panel-heading p {
+  color: var(--admin-muted);
+  font-size: 13px;
+  margin: 5px 0 0;
+}
+
+.property-command .panel-heading button {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 7px;
+  color: #d8e2ee;
+  font-size: 12px;
+  padding: 8px 12px;
+}
+
+.toggle-row {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+  color: #d8e2ee;
+  display: flex;
+  gap: 10px;
+  padding: 12px;
+}
+
+.toggle-row input {
+  accent-color: var(--admin-green);
+  width: auto;
+}
+
+.property-save-row {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: flex-start;
+}
+
+.property-save-row .new-btn {
+  border: 0;
+  min-width: 160px;
+}
+
+.property-command .status-message {
+  color: var(--admin-green);
+  font-size: 13px;
+  margin: 0;
+  min-height: 20px;
+}
+
+.property-command .status-message.error {
+  color: var(--admin-red);
+}
+
 .compact-property-list {
   display: grid;
-  gap: 0;
-}
-
-.compact-property-list .assignment-card {
-  border-radius: 0;
-  border-width: 0 0 1px;
-  box-shadow: none;
+  gap: 10px;
   margin: 0;
-  padding: 18px 0;
 }
 
-.compact-property-list .assignment-card:first-child {
-  padding-top: 0;
+.property-command .assignment-card {
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.045);
+  border-radius: 8px;
+  box-shadow: none;
+  color: #d8e2ee;
+  margin: 0;
+  padding: 16px;
 }
 
-.compact-property-list .assignment-card:last-child {
-  border-bottom: 0;
-  padding-bottom: 0;
+.property-command .assignment-card h3 {
+  color: var(--admin-text);
+  margin-bottom: 6px;
+}
+
+.property-command .assignment-card p {
+  color: var(--admin-muted);
+  margin: 7px 0;
+}
+
+.property-command .assignment-card strong {
+  color: #d8e2ee;
+}
+
+.property-command .secondary-btn,
+.property-command .small-btn {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  color: #d8e2ee;
+  padding: 8px 12px;
+}
+
+.client-pill {
+  background: rgba(50, 170, 255, 0.12);
+  border-radius: 999px;
+  color: var(--admin-blue);
+  display: inline-block;
+  font-size: 11px;
+  margin-top: 8px;
+  padding: 5px 8px;
 }
 
 .checklist-summary {
@@ -59,8 +214,23 @@
   padding-left: 20px;
 }
 
+@media (max-width: 900px) {
+  .property-command {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 760px) {
   .property-form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .property-form-grid .span-two {
+    grid-column: auto;
+  }
+
+  .property-save-row {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
