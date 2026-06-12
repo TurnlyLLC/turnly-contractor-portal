@@ -128,6 +128,10 @@ function getClientNameById(clientId) {
   return client ? getClientDisplayName(client) : "Admin account";
 }
 
+function getPropertyDisplayName(property) {
+  return property?.name || property?.property_name || "Untitled Property";
+}
+
 async function loadClients() {
   if (!clientSelect) return;
 
@@ -219,12 +223,13 @@ function renderPropertyCard(property) {
   const recurringLabel = property.recurring_enabled
     ? `${property.recurring_frequency || "weekly"}${property.recurring_next_due_at ? " starting " + new Date(property.recurring_next_due_at).toLocaleString() : ""}`
     : "Off";
+  const propertyName = getPropertyDisplayName(property);
 
   return `
     <div class="assignment-card property-card">
       <div class="assignment-card-header">
         <div>
-          <h3>${escapeHtml(property.name || "Untitled Property")}</h3>
+          <h3>${escapeHtml(propertyName)}</h3>
           <p>${escapeHtml(property.address || "Address not set")}</p>
           <span class="client-pill">${escapeHtml(getClientNameById(property.client_id))}</span>
         </div>
@@ -249,7 +254,7 @@ function setInputValue(id, value) {
 
 function fillPropertyOnEdit(property) {
   setInputValue("property_id_input", property.id);
-  setInputValue("property_name_input", property.name);
+  setInputValue("property_name_input", getPropertyDisplayName(property));
   setInputValue("property_address_input", property.address);
   setInputValue("property_service_type_input", property.default_service_type);
   setInputValue("property_scope_input", property.default_scope);
@@ -271,7 +276,7 @@ function fillPropertyOnEdit(property) {
   const recurringEnabledInput = document.getElementById("recurring_enabled_input");
   if (recurringEnabledInput) recurringEnabledInput.checked = Boolean(property.recurring_enabled);
 
-  showMessage("Editing " + (property.name || "property") + ".");
+  showMessage("Editing " + getPropertyDisplayName(property) + ".");
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -368,6 +373,7 @@ async function saveProperty(event) {
   const recurringStartTime = getInputValue("recurring_start_time_input") || null;
   const firstDue = recurringEnabled ? combineDateAndTime(recurringStartDate, recurringStartTime) : null;
   const clientId = await resolveClientId(existingProperty);
+  const propertyName = getInputValue("property_name_input");
 
   if (!clientId) return;
 
@@ -378,7 +384,8 @@ async function saveProperty(event) {
 
   const payload = {
     client_id: clientId,
-    name: getInputValue("property_name_input"),
+    property_name: propertyName,
+    name: propertyName,
     address: getInputValue("property_address_input"),
     pipeline_stage: existingProperty?.pipeline_stage || "new_leads",
     default_service_type: getInputValue("property_service_type_input"),
@@ -400,7 +407,7 @@ async function saveProperty(event) {
     recurring_next_due_at: firstDue ? firstDue.toISOString() : null
   };
 
-  if (!payload.name) {
+  if (!propertyName) {
     showMessage("Property name is required.", { error: true });
     return;
   }
