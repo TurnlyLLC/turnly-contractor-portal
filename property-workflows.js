@@ -6,10 +6,12 @@ const supabase = createClient(
 );
 
 let workflowProperties = [];
+let checklistTemplates = [];
 
 const propertyForm = document.getElementById("propertyForm");
 const propertiesList = document.getElementById("propertiesList");
 const propertySelect = document.getElementById("propertySelect");
+const propertyChecklistTemplateSelect = document.getElementById("property_checklist_template_input");
 const assignmentForm = document.getElementById("assignmentForm");
 const adminAssignments = document.getElementById("adminAssignments");
 const message = document.getElementById("message");
@@ -17,6 +19,8 @@ const propertyMessage = document.getElementById("propertyMessage");
 const recurringMessage = document.getElementById("recurringMessage");
 const checklistPreview = document.getElementById("assignmentChecklistPreview");
 const generateRecurringAssignmentsBtn = document.getElementById("generateRecurringAssignmentsBtn");
+
+const PROPERTIES_TABLE = "portal_properties";
 
 function showMessage(target, text) {
   if (target) target.textContent = text;
@@ -33,6 +37,34 @@ function escapeHtml(value) {
 
 function normalizeChecklistItems(items) {
   return Array.isArray(items) ? items : [];
+}
+
+function normalizeTemplateSections(sections) {
+  return Array.isArray(sections) ? sections : [];
+}
+
+function flattenTemplateSections(sections) {
+  return normalizeTemplateSections(sections).flatMap((section) => {
+    const sectionItems = normalizeChecklistItems(section.items).map((item) => ({
+      category: section.title || "General",
+      task: item.label || item.task || "",
+      required: true,
+      media_required: item.type === "photo" ? "photo" : "none",
+      notes: item.type && item.type !== "checklist" ? `Response type: ${item.type}` : ""
+    }));
+
+    const roomItems = normalizeChecklistItems(section.rooms).flatMap((room) => (
+      normalizeChecklistItems(room.items).map((item) => ({
+        category: room.title || section.title || "General",
+        task: item.label || item.task || "",
+        required: true,
+        media_required: item.type === "photo" ? "photo" : "none",
+        notes: item.type && item.type !== "checklist" ? `Response type: ${item.type}` : ""
+      }))
+    ));
+
+    return [...sectionItems, ...roomItems];
+  }).filter((item) => item.task);
 }
 
 function pad(value) {
@@ -134,9 +166,41 @@ async function getCurrentUser() {
   return data.user;
 }
 
+async function loadChecklistTemplates() {
+  if (!propertyChecklistTemplateSelect) return [];
+
+  const { data, error } = await supabase
+    .from("checklist_templates")
+    .select("*")
+    .order("updated_at", { ascending: false });
+
+  if (error) {
+    propertyChecklistTemplateSelect.innerHTML = `<option value="">Run checklist template migration first</option>`;
+    return [];
+  }
+
+  checklistTemplates = data || [];
+  renderTemplateOptions();
+  return checklistTemplates;
+}
+
+function renderTemplateOptions() {
+  if (!propertyChecklistTemplateSelect) return;
+  const currentValue = propertyChecklistTemplateSelect.value;
+
+  propertyChecklistTemplateSelect.innerHTML = [
+    `<option value="">No checklist template selected</option>`,
+    ...checklistTemplates.map((template) => (
+      `<option value="${escapeHtml(template.id)}">${escapeHtml(template.name)}</option>`
+    ))
+  ].join("");
+
+  if (currentValue) propertyChecklistTemplateSelect.value = currentValue;
+}
+
 async function loadWorkflowProperties() {
   const { data, error } = await supabase
-    .from("properties")
+    .from(PROPERTIES_TABLE)
     .select("*")
     .order("created_at", { ascending: false });
 
@@ -163,13 +227,7 @@ function renderCurrentProperties() {
 }
 
 function renderPropertyCard(property) {
-  const checklistItems = normalizeChecklistItems(property.checklist_items);
-  const checklistPreviewItems = checklistItems.slice(0, 5).map((item) => (
-    `<li>${escapeHtml(item.category || "General")}: ${escapeHtml(item.task || "Untitled task")}</li>`
-  )).join("");
-  const moreItems = checklistItems.length > 5
-    ? `<p>${checklistItems.length - 5} more checklist item(s)</p>`
-    : "";
+  const template = checklistTemplates.find((item) => item.id === property.checklist_template_id);
   const recurringLabel = property.recurring_enabled
     ? `${property.recurring_frequency || "weekly"}${property.recurring_next_due_at ? " starting " + new Date(property.recurring_next_due_at).toLocaleString() : ""}`
     : "Off";
@@ -185,11 +243,8 @@ function renderPropertyCard(property) {
       </div>
       <p><strong>Default Service:</strong> ${escapeHtml(property.default_service_type || "Not set")}</p>
       <p><strong>Access Notes:</strong> ${escapeHtml(property.access_notes || "None")}</p>
+      <p><strong>Checklist Template:</strong> ${escapeHtml(template?.name || "None selected")}</p>
       <p><strong>Recurring:</strong> ${escapeHtml(recurringLabel)}</p>
-      <div class="checklist-summary">
-        <strong>Checklist:</strong>
-        ${checklistItems.length ? `<ul>${checklistPreviewItems}</ul>${moreItems}` : "<p>No checklist items yet.</p>"}
-      </div>
     </div>
   `;
 }
@@ -226,6 +281,7 @@ function fillRecurringFields(property) {
 
   const enabledInput = document.getElementById("recurring_enabled_input");
   if (enabledInput) enabledInput.checked = Boolean(property.recurring_enabled);
+  if (propertyChecklistTemplateSelect) propertyChecklistTemplateSelect.value = property.checklist_template_id || "";
 }
 
 function resetPropertyEditor() {
@@ -239,6 +295,7 @@ function resetPropertyEditor() {
   if (propertyIdInput) propertyIdInput.value = "";
   if (recurringEnabledInput) recurringEnabledInput.checked = false;
   if (recurringFrequencyInput) recurringFrequencyInput.value = "weekly";
+  if (propertyChecklistTemplateSelect) propertyChecklistTemplateSelect.value = "";
 }
 
 function renderAssignmentChecklistPreview(property) {
@@ -314,6 +371,10 @@ async function saveProperty(event) {
   const recurringStartDate = document.getElementById("recurring_start_date_input")?.value || null;
   const recurringStartTime = document.getElementById("recurring_start_time_input")?.value || null;
   const firstDue = recurringEnabled ? combineDateAndTime(recurringStartDate, recurringStartTime) : null;
+  const propertyId = document.getElementById("property_id_input")?.value;
+  const existingProperty = workflowProperties.find((property) => property.id === propertyId);
+  const selectedTemplateId = propertyChecklistTemplateSelect?.value || null;
+  const selectedTemplate = checklistTemplates.find((template) => template.id === selectedTemplateId);
 
   if (recurringEnabled && !recurringStartDate) {
     showMessage(propertyMessage, "First assignment date is required for recurring assignments.");
@@ -328,7 +389,10 @@ async function saveProperty(event) {
     supplies_notes: document.getElementById("property_supplies_input").value.trim(),
     special_instructions: document.getElementById("property_instructions_input").value.trim(),
     access_notes: document.getElementById("property_access_input").value.trim(),
-    checklist_items: getChecklistFromForm(),
+    checklist_template_id: selectedTemplateId,
+    checklist_items: selectedTemplate
+      ? flattenTemplateSections(selectedTemplate.sections)
+      : normalizeChecklistItems(existingProperty?.checklist_items),
     recurring_enabled: recurringEnabled,
     recurring_frequency: document.getElementById("recurring_frequency_input")?.value || "weekly",
     recurring_start_date: recurringStartDate,
@@ -344,10 +408,10 @@ async function saveProperty(event) {
     return;
   }
 
-  const propertyId = document.getElementById("property_id_input")?.value;
   let result = await writeProperty(propertyId, payload, user.id);
 
   if (result.error && isMissingColumnError(result.error, [
+    "checklist_template_id",
     "recurring_enabled",
     "recurring_frequency",
     "recurring_start_date",
@@ -359,6 +423,7 @@ async function saveProperty(event) {
   ])) {
     const legacyPayload = { ...payload };
     [
+      "checklist_template_id",
       "recurring_enabled",
       "recurring_frequency",
       "recurring_start_date",
@@ -391,10 +456,10 @@ async function saveProperty(event) {
 
 function writeProperty(propertyId, payload, userId) {
   if (propertyId) {
-    return supabase.from("properties").update(payload).eq("id", propertyId);
+    return supabase.from(PROPERTIES_TABLE).update(payload).eq("id", propertyId);
   }
 
-  return supabase.from("properties").insert([{ ...payload, created_by: userId }]);
+  return supabase.from(PROPERTIES_TABLE).insert([{ ...payload, created_by: userId }]);
 }
 
 async function insertAssignment(assignment) {
@@ -403,9 +468,9 @@ async function insertAssignment(assignment) {
   if (!result.error) return result;
 
   const propertyColumns = [
-    "property_id",
+    "portal_property_id",
     "property_checklist_items",
-    "recurring_property_id",
+    "recurring_portal_property_id",
     "recurring_due_at",
     "assignment_source"
   ];
@@ -424,8 +489,8 @@ function buildAssignmentFromProperty(property, dueDate, user) {
   const endWindow = getWindowEnd(dueDate, property.recurring_end_time);
 
   return {
-    property_id: property.id,
-    recurring_property_id: property.id,
+    portal_property_id: property.id,
+    recurring_portal_property_id: property.id,
     recurring_due_at: dueDate.toISOString(),
     assignment_source: "recurring",
     title: property.recurring_assignment_title || `${property.default_service_type || "Cleaning"} - ${property.name}`,
@@ -461,7 +526,7 @@ async function createAssignment(event) {
   showMessage(message, "Posting assignment...");
 
   const assignment = {
-    property_id: selectedProperty.id,
+    portal_property_id: selectedProperty.id,
     title: document.getElementById("title").value,
     property_name: document.getElementById("property_name").value,
     address: document.getElementById("address").value,
@@ -494,7 +559,7 @@ async function recurringAssignmentExists(propertyId, dueDate) {
   const { data, error } = await supabase
     .from("assignment_blocks")
     .select("id")
-    .eq("recurring_property_id", propertyId)
+    .eq("recurring_portal_property_id", propertyId)
     .eq("recurring_due_at", dueDate.toISOString())
     .limit(1);
 
@@ -510,7 +575,7 @@ async function updateRecurringProperty(propertyId, nextDueAt, generatedAssignmen
     payload.recurring_last_generated_at = new Date().toISOString();
   }
 
-  return supabase.from("properties").update(payload).eq("id", propertyId);
+  return supabase.from(PROPERTIES_TABLE).update(payload).eq("id", propertyId);
 }
 
 async function generateDueRecurringAssignments(options = {}) {
@@ -647,6 +712,7 @@ function renderAssignmentCard(item) {
 }
 
 async function initPropertyPage() {
+  await loadChecklistTemplates();
   await loadWorkflowProperties();
   propertyForm?.addEventListener("submit", saveProperty, true);
 
