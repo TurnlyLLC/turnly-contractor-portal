@@ -607,13 +607,176 @@ button.secondary-command-btn {
   padding-left: 20px;
 }
 
+.assignment-main {
+  display: grid;
+  gap: 16px;
+}
+
+.assignment-command-grid {
+  align-items: start;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+}
+
+.assignment-builder-card,
+.assignment-queue-card,
+.assignment-posted-card {
+  border-radius: 8px;
+}
+
+.assignment-builder-card {
+  display: grid;
+  gap: 16px;
+}
+
+.assignment-builder-card.panel-card {
+  padding: 18px;
+}
+
+.assignment-form-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.assignment-form-grid label {
+  color: #d8e2ee;
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  margin: 0 0 7px;
+}
+
+.assignment-form-grid .span-two {
+  grid-column: 1 / -1;
+}
+
+.assignment-checklist-preview {
+  color: var(--admin-muted);
+  margin-top: 0;
+}
+
+.assignment-checklist-preview strong {
+  color: var(--admin-text);
+}
+
+.assignment-submit-row {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
+.assignment-submit-row .new-btn {
+  min-width: 170px;
+}
+
+.assignment-side-stack {
+  display: grid;
+  gap: 16px;
+  position: sticky;
+  top: 18px;
+}
+
+.assignment-queue-card {
+  display: grid;
+  gap: 12px;
+}
+
+.assignment-queue-card .wide-action {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #d8e2ee;
+  margin: 0;
+}
+
+.assignment-queue-card .status-message {
+  margin: 0;
+}
+
+.command-assignment-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  max-height: 690px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.assignment-command .assignment-card {
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+  box-shadow: none;
+  color: #d8e2ee;
+  margin: 0;
+  padding: 14px;
+}
+
+.assignment-command .assignment-card-header {
+  align-items: start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.assignment-command .assignment-card h3 {
+  color: var(--admin-text);
+  font-size: 14px;
+  line-height: 1.35;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.assignment-command .assignment-card p {
+  color: var(--admin-muted);
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 7px 0;
+  overflow-wrap: anywhere;
+}
+
+.assignment-command .assignment-card strong {
+  color: #d8e2ee;
+}
+
+.assignment-command .status-badge {
+  border-radius: 999px;
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 6px 8px;
+}
+
+.assignment-command .status-open {
+  background: rgba(31, 226, 138, 0.13);
+  color: var(--admin-green);
+}
+
+.assignment-command .status-claimed {
+  background: rgba(50, 170, 255, 0.13);
+  color: var(--admin-blue);
+}
+
+.assignment-command .status-unknown {
+  background: rgba(154, 170, 188, 0.14);
+  color: var(--admin-muted);
+}
+
 @media (max-width: 1280px) {
   .pipeline-command-grid {
     grid-template-columns: 1fr;
   }
 
-  .property-detail-panel {
+  .property-detail-panel,
+  .assignment-side-stack {
     position: static;
+  }
+}
+
+@media (max-width: 1180px) {
+  .assignment-command-grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -638,15 +801,18 @@ button.secondary-command-btn {
   }
 
   .property-form-grid,
+  .assignment-form-grid,
   .property-detail-grid {
     grid-template-columns: 1fr;
   }
 
-  .property-form-grid .span-two {
+  .property-form-grid .span-two,
+  .assignment-form-grid .span-two {
     grid-column: auto;
   }
 
   .property-save-row,
+  .assignment-submit-row,
   .property-detail-actions {
     align-items: stretch;
     flex-direction: column;
