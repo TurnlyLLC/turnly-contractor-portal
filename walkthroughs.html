@@ -6,8 +6,9 @@
   <title>Walkthroughs | Turnly</title>
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="admin-dashboard.css" />
+  <link rel="stylesheet" href="sales-workflows.css" />
 </head>
-<body class="admin-command-body">
+<body class="admin-command-body sales-command-body" data-sales-stage="walkthrough">
   <main class="admin-command">
     <aside class="command-sidebar">
       <div class="command-brand">
@@ -51,26 +52,169 @@
       </button>
     </aside>
 
-    <section class="command-main wip-main">
+    <section class="command-main sales-main">
       <header class="command-header">
         <div>
           <h1>Walkthroughs</h1>
-          <p>Sales pipeline workspace</p>
+          <p>Schedule site visits, capture notes, and move ready opportunities to quote.</p>
         </div>
         <div class="command-tools">
           <a class="secondary-command-btn" href="admin.html">Back</a>
+          <button id="openSalesModalBtn" class="new-btn" type="button">+ New Walkthrough</button>
         </div>
       </header>
 
-      <section class="panel-card wip-panel">
-        <p class="wip-kicker">Sales</p>
-        <h2>Work in progress</h2>
-        <p>This page is being built for the Turnly admin portal.</p>
+      <section class="sales-metric-grid" aria-label="Walkthrough metrics">
+        <article class="metric-card blue">
+          <span class="metric-icon">⌑</span>
+          <p>Walkthroughs</p>
+          <strong id="stageCount">0</strong>
+          <small id="stageTrend">Loading pipeline</small>
+        </article>
+        <article class="metric-card green">
+          <span class="metric-icon">◇</span>
+          <p>New Leads</p>
+          <strong id="leadCount">0</strong>
+          <small>Waiting to qualify</small>
+        </article>
+        <article class="metric-card yellow">
+          <span class="metric-icon">□</span>
+          <p>Quotes Sent</p>
+          <strong id="quoteCount">0</strong>
+          <small>Ready for follow-up</small>
+        </article>
+        <article class="metric-card revenue">
+          <span class="metric-icon">▤</span>
+          <p>Total Pipeline</p>
+          <strong id="pipelineCount">0</strong>
+          <small>All tracked properties</small>
+        </article>
+      </section>
+
+      <section class="sales-workspace">
+        <section class="panel-card sales-list-panel">
+          <div class="panel-heading sales-panel-heading">
+            <div>
+              <h2>Walkthrough Board</h2>
+              <p id="salesSummary">Loading walkthroughs...</p>
+            </div>
+            <label class="sales-search">
+              <span>⌕</span>
+              <input id="salesSearchInput" type="search" placeholder="Search walkthroughs..." />
+            </label>
+          </div>
+
+          <div id="salesItems" class="sales-items" aria-live="polite"></div>
+        </section>
+
+        <aside id="salesDetailPanel" class="panel-card sales-detail-panel" aria-live="polite"></aside>
       </section>
     </section>
   </main>
 
+  <div id="salesModal" class="property-modal sales-modal" hidden>
+    <div class="property-modal-backdrop" data-close-sales-modal></div>
+
+    <section class="property-modal-panel sales-modal-panel" role="dialog" aria-modal="true" aria-labelledby="salesModalTitle">
+      <form id="salesForm" class="sales-form">
+        <input id="sales_id_input" type="hidden" />
+
+        <div class="property-modal-header">
+          <div>
+            <p>Sales Pipeline</p>
+            <h2 id="salesModalTitle">New Walkthrough</h2>
+          </div>
+          <button id="closeSalesModalBtn" type="button" class="property-modal-close" aria-label="Close sales form">Close</button>
+        </div>
+
+        <section class="sales-form-card">
+          <div class="panel-heading">
+            <h2>Opportunity Details</h2>
+            <button id="resetSalesFormBtn" type="button">Clear</button>
+          </div>
+
+          <div class="sales-form-grid">
+            <div>
+              <label>Property / Lead Name</label>
+              <input id="sales_property_name_input" required />
+            </div>
+            <div>
+              <label>Pipeline Stage</label>
+              <select id="sales_pipeline_stage_input">
+                <option value="new_leads">New Leads</option>
+                <option value="walkthrough">Walkthrough</option>
+                <option value="quote_sent">Quote Sent</option>
+                <option value="contract_out">Contract Out</option>
+                <option value="active">Active</option>
+              </select>
+            </div>
+            <div class="span-two">
+              <label>Address</label>
+              <input id="sales_address_input" />
+            </div>
+            <div>
+              <label>Client / Property Manager</label>
+              <select id="sales_client_id_input">
+                <option value="">Loading clients...</option>
+              </select>
+            </div>
+            <div>
+              <label>Add New Client</label>
+              <input id="sales_client_name_input" placeholder="Client or property manager name" />
+            </div>
+            <div>
+              <label>Client Email</label>
+              <input id="sales_client_email_input" type="email" placeholder="name@example.com" />
+            </div>
+            <div>
+              <label>Lead Source</label>
+              <input id="sales_lead_source_input" placeholder="Referral, website, outbound..." />
+            </div>
+            <div>
+              <label>Service Interest</label>
+              <input id="sales_service_type_input" placeholder="Turnover cleaning, recurring cleaning..." />
+            </div>
+            <div>
+              <label>Walkthrough Date</label>
+              <input id="sales_walkthrough_date_input" type="date" />
+            </div>
+            <div>
+              <label>Walkthrough Time</label>
+              <input id="sales_walkthrough_time_input" type="time" />
+            </div>
+            <div>
+              <label>Quote Amount</label>
+              <input id="sales_quote_amount_input" type="number" step="0.01" />
+            </div>
+            <div>
+              <label>Quote Sent Date</label>
+              <input id="sales_quote_sent_date_input" type="date" />
+            </div>
+            <div class="span-two">
+              <label>Scope / Lead Notes</label>
+              <textarea id="sales_scope_input"></textarea>
+            </div>
+            <div>
+              <label>Walkthrough Notes</label>
+              <textarea id="sales_walkthrough_notes_input"></textarea>
+            </div>
+            <div>
+              <label>Quote Notes</label>
+              <textarea id="sales_quote_notes_input"></textarea>
+            </div>
+          </div>
+        </section>
+
+        <section class="property-save-row">
+          <button type="button" class="secondary-command-btn" data-close-sales-modal>Cancel</button>
+          <button type="submit" class="new-btn">Save</button>
+          <p id="salesMessage" class="status-message"></p>
+        </section>
+      </form>
+    </section>
+  </div>
+
   <script src="env.js"></script>
-  <script type="module" src="app.js"></script>
+  <script type="module" src="sales-workflows.js"></script>
 </body>
 </html>
