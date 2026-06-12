@@ -56,22 +56,52 @@
       <header class="command-header">
         <div>
           <h1>Manage Properties</h1>
-          <p>Add property details, assign the client, attach templates, and set recurring work.</p>
+          <p>Manage pipeline stages, property details, client records, and recurring work.</p>
         </div>
 
         <div class="command-tools">
           <a class="secondary-command-btn" href="admin.html">Back</a>
-          <a class="new-btn" href="assignments.html">+ New Assignment</a>
+          <a class="secondary-command-btn" href="assignments.html">Assignments</a>
+          <button id="openPropertyModalBtn" class="new-btn" type="button">+ Add Property</button>
         </div>
       </header>
 
+      <section class="pipeline-command-grid">
+        <section class="panel-card property-pipeline-panel">
+          <div class="panel-heading">
+            <div>
+              <h2>Property Pipeline</h2>
+              <p id="pipelineSummary">Loading properties...</p>
+            </div>
+          </div>
+
+          <div id="propertiesList" class="property-stage-grid" aria-label="Property pipeline"></div>
+        </section>
+
+        <aside id="propertyDetailPanel" class="panel-card property-detail-panel" aria-live="polite"></aside>
+      </section>
+    </section>
+  </main>
+
+  <div id="propertyModal" class="property-modal" hidden>
+    <div class="property-modal-backdrop" data-close-property-modal></div>
+
+    <section class="property-modal-panel" role="dialog" aria-modal="true" aria-labelledby="propertyModalTitle">
       <form id="propertyForm" class="property-command-form">
         <input id="property_id_input" type="hidden" />
 
-        <section class="panel-card property-form-card">
+        <div class="property-modal-header">
+          <div>
+            <p>Property</p>
+            <h2 id="propertyModalTitle">Add Property</h2>
+          </div>
+          <button id="closePropertyModalBtn" type="button" class="property-modal-close" aria-label="Close property form">Close</button>
+        </div>
+
+        <section class="property-form-card">
           <div class="panel-heading">
             <h2>Property Entry</h2>
-            <button id="resetPropertyFormBtn" type="button">New Property</button>
+            <button id="resetPropertyFormBtn" type="button">Clear</button>
           </div>
 
           <div class="property-form-grid">
@@ -83,6 +113,17 @@
             <div>
               <label>Address</label>
               <input id="property_address_input" />
+            </div>
+
+            <div>
+              <label>Pipeline Stage</label>
+              <select id="property_pipeline_stage_input">
+                <option value="new_leads">New Leads</option>
+                <option value="walkthrough">Walkthrough</option>
+                <option value="quote_sent">Quote Sent</option>
+                <option value="contract_out">Contract Out</option>
+                <option value="active">Active</option>
+              </select>
             </div>
 
             <div>
@@ -136,7 +177,7 @@
           </div>
         </section>
 
-        <section class="panel-card property-recurring-card">
+        <section class="property-recurring-card">
           <div class="panel-heading">
             <h2>Recurring Assignments</h2>
           </div>
@@ -184,22 +225,13 @@
         </section>
 
         <section class="property-save-row">
+          <button type="button" class="secondary-command-btn" data-close-property-modal>Cancel</button>
           <button type="submit" class="new-btn">Save Property</button>
           <p id="propertyMessage" class="status-message"></p>
         </section>
       </form>
-
-      <section class="panel-card current-properties-panel">
-        <div class="panel-heading">
-          <div>
-            <h2>Current Properties</h2>
-            <p>Open a property to update details or recurring assignment rules.</p>
-          </div>
-        </div>
-        <div id="propertiesList" class="assignment-list compact-property-list"></div>
-      </section>
     </section>
-  </main>
+  </div>
 
   <script src="env.js"></script>
   <script type="module" src="property-template-select.js"></script>
