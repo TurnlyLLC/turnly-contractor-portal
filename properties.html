@@ -15,49 +15,58 @@
       <div class="dashboard-header">
         <div>
           <h1>Manage Properties</h1>
-          <p>Add reusable property details and build property-specific task checklists.</p>
+          <p>Add reusable property details, attach checklist templates, and set recurring assignment rules.</p>
         </div>
       </div>
 
       <form id="propertyForm">
         <input id="property_id_input" type="hidden" />
 
-        <div class="admin-grid">
-          <div class="panel">
-            <h2>Property Details</h2>
+        <div class="panel property-entry-panel">
+          <h2>Property Entry</h2>
 
-            <label>Property Name</label>
-            <input id="property_name_input" required />
-
-            <label>Address</label>
-            <input id="property_address_input" />
-
-            <label>Default Service Type</label>
-            <input id="property_service_type_input" />
-
-            <label>Default Scope of Work</label>
-            <textarea id="property_scope_input"></textarea>
-
-            <label>Supplies Notes</label>
-            <textarea id="property_supplies_input"></textarea>
-
-            <label>Special Instructions</label>
-            <textarea id="property_instructions_input"></textarea>
-
-            <label>Access Notes</label>
-            <textarea id="property_access_input"></textarea>
-          </div>
-
-          <div class="panel">
-            <div class="panel-header">
-              <div>
-                <h2>Property Checklist</h2>
-                <p>Build the exact cleaning checklist contractors should follow for this property.</p>
-              </div>
-              <button id="addChecklistItemBtn" type="button" class="small-btn">Add Item</button>
+          <div class="property-form-grid">
+            <div>
+              <label>Property Name</label>
+              <input id="property_name_input" required />
             </div>
 
-            <div id="checklistBuilder" class="checklist-builder"></div>
+            <div>
+              <label>Address</label>
+              <input id="property_address_input" />
+            </div>
+
+            <div>
+              <label>Default Service Type</label>
+              <input id="property_service_type_input" />
+            </div>
+
+            <div>
+              <label>Checklist Template</label>
+              <select id="property_checklist_template_input">
+                <option value="">No checklist template selected</option>
+              </select>
+            </div>
+
+            <div class="span-two">
+              <label>Default Scope of Work</label>
+              <textarea id="property_scope_input"></textarea>
+            </div>
+
+            <div>
+              <label>Supplies Notes</label>
+              <textarea id="property_supplies_input"></textarea>
+            </div>
+
+            <div>
+              <label>Special Instructions</label>
+              <textarea id="property_instructions_input"></textarea>
+            </div>
+
+            <div class="span-two">
+              <label>Access Notes</label>
+              <textarea id="property_access_input"></textarea>
+            </div>
           </div>
         </div>
 
@@ -116,13 +125,21 @@
 
       <p id="propertyMessage" class="status-message"></p>
 
-      <h2>Current Properties</h2>
-      <div id="propertiesList" class="assignment-list"></div>
+      <div class="panel current-properties-panel">
+        <div class="panel-header">
+          <div>
+            <h2>Current Properties</h2>
+            <p>Open a property to update details or recurring assignment rules.</p>
+          </div>
+        </div>
+        <div id="propertiesList" class="assignment-list compact-property-list"></div>
+      </div>
     </section>
   </main>
 
   <script src="env.js"></script>
   <script type="module" src="app.js"></script>
   <script type="module" src="property-workflows.js"></script>
+  <script type="module" src="property-template-select.js"></script>
 </body>
 </html>
