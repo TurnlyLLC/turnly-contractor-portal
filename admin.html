@@ -3,53 +3,267 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Admin Dashboard | Turnly</title>
+  <title>Command Center | Turnly</title>
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="admin-dashboard.css" />
 </head>
-<body>
-  <main class="page">
-    <section class="dashboard-card">
-      <div class="dashboard-header">
-        <div>
-          <h1>Turnly Admin Dashboard</h1>
-          <p>Manage properties, assignments, and QA workflows.</p>
-        </div>
-        <button id="logoutBtn" class="small-btn">Sign Out</button>
+<body class="admin-command-body">
+  <main class="admin-command">
+    <aside class="command-sidebar">
+      <div class="command-brand">
+        <div class="brand-mark">T</div>
+        <span>TURNLY</span>
       </div>
 
-      <div class="grid">
-        <a href="properties.html" class="tile-link">
-          <div class="tile">
-            <h3>Manage Properties</h3>
-            <p>Add and manage saved client/property details.</p>
-          </div>
-        </a>
+      <nav class="command-nav" aria-label="Admin navigation">
+        <a class="nav-link active" href="admin.html"><span>⌂</span>Dashboard</a>
 
-        <a href="assignments.html" class="tile-link">
-          <div class="tile">
-            <h3>Add Assignments</h3>
-            <p>Create assignment blocks using saved properties.</p>
-          </div>
-        </a>
+        <p>Sales</p>
+        <a class="nav-link" href="#"><span>◇</span>Leads</a>
+        <a class="nav-link" href="#"><span>⌑</span>Walkthroughs</a>
+        <a class="nav-link" href="#"><span>□</span>Quotes</a>
 
-        <a href="checklists.html" class="tile-link">
-          <div class="tile">
-            <h3>Checklist Templates</h3>
-            <p>Create and manage standardized cleaning checklists.</p>
-          </div>
-        </a>
+        <p>Operations</p>
+        <a class="nav-link" href="properties.html"><span>▤</span>Properties</a>
+        <a class="nav-link" href="assignments.html"><span>◫</span>Assignments</a>
+        <a class="nav-link" href="claimed-assignments.html"><span>♙</span>Contractors</a>
+        <a class="nav-link" href="checklists.html"><span>☑</span>Checklists</a>
 
-        <a href="claimed-assignments.html" class="tile-link">
-          <div class="tile">
-            <h3>Claimed Assignments</h3>
-            <p>See which contractor claimed each active job.</p>
-          </div>
-        </a>
+        <p>Quality</p>
+        <a class="nav-link" href="#"><span>▣</span>QA Reviews</a>
+        <a class="nav-link" href="#"><span>▻</span>Videos</a>
 
-        <div class="tile">
-          <h3>QA Review</h3>
-          <p>Coming in Phase 5.</p>
+        <p>Finance</p>
+        <a class="nav-link" href="#"><span>▥</span>Invoices</a>
+        <a class="nav-link" href="#"><span>◇</span>Revenue</a>
+
+        <p>Settings</p>
+        <a class="nav-link" href="#"><span>⚙</span>Settings</a>
+      </nav>
+
+      <button id="logoutBtn" class="admin-user-card" type="button">
+        <span class="avatar">RA</span>
+        <span>
+          <strong>Ryan Admin</strong>
+          <small>Admin</small>
+        </span>
+        <span class="chevron">⌄</span>
+      </button>
+    </aside>
+
+    <section class="command-main">
+      <header class="command-header">
+        <div>
+          <h1>Command Center</h1>
+          <p>Overview of your business operations</p>
         </div>
+
+        <div class="command-tools">
+          <label class="command-search">
+            <span>⌕</span>
+            <input type="search" placeholder="Search anything..." />
+            <kbd>⌘ K</kbd>
+          </label>
+          <button class="notification-btn" type="button" aria-label="Notifications">
+            ♧
+            <span>3</span>
+          </button>
+          <a class="new-btn" href="assignments.html">+ New</a>
+        </div>
+      </header>
+
+      <section class="metric-grid" aria-label="Business metrics">
+        <article class="metric-card green">
+          <span class="metric-icon">⌁</span>
+          <p>New Leads</p>
+          <strong>12</strong>
+          <small>↗ 20% from last 7 days</small>
+        </article>
+        <article class="metric-card blue">
+          <span class="metric-icon">◎</span>
+          <p>Walkthroughs</p>
+          <strong>6</strong>
+          <small>↗ 15% from last 7 days</small>
+        </article>
+        <article class="metric-card yellow">
+          <span class="metric-icon">▣</span>
+          <p>Quotes Sent</p>
+          <strong>8</strong>
+          <small>↗ 33% from last 7 days</small>
+        </article>
+        <article class="metric-card violet">
+          <span class="metric-icon">⌘</span>
+          <p>Contract Out</p>
+          <strong>3</strong>
+          <small>↗ 50% from last 7 days</small>
+        </article>
+        <article class="metric-card green">
+          <span class="metric-icon">⌂</span>
+          <p>Active Properties</p>
+          <strong>21</strong>
+          <small>↗ 5% from last 7 days</small>
+        </article>
+        <article class="metric-card revenue">
+          <span class="metric-icon">⌃</span>
+          <p>Revenue (MTD)</p>
+          <strong>$18,450</strong>
+          <small>↗ 12% from last month</small>
+        </article>
+      </section>
+
+      <div class="command-grid">
+        <section class="panel-card pipeline-card">
+          <div class="panel-heading">
+            <h2>Property Pipeline <span>ⓘ</span></h2>
+            <div>
+              <a href="properties.html">View All</a>
+              <button type="button" aria-label="More actions">⋮</button>
+            </div>
+          </div>
+
+          <div class="pipeline-board">
+            <article class="pipeline-column green">
+              <header><span>New Leads</span><strong>12</strong></header>
+              <div class="pipeline-item"><strong>SECU - Raleigh Branch</strong><small>Raleigh, NC</small><span>4,200 sqft</span><em>New</em></div>
+              <div class="pipeline-item"><strong>Medical Office Bldg</strong><small>Cary, NC</small><span>3,100 sqft</span><em>New</em></div>
+              <div class="pipeline-item"><strong>KinderCare - Apex</strong><small>Apex, NC</small><span>5,400 sqft</span><em>New</em></div>
+              <a href="properties.html" class="pipeline-add">+ Add Lead</a>
+            </article>
+
+            <article class="pipeline-column blue">
+              <header><span>Walkthrough</span><strong>6</strong></header>
+              <div class="pipeline-item"><strong>Church at North Hills</strong><small>Raleigh, NC</small><span>8,900 sqft <b>May 22</b></span></div>
+              <div class="pipeline-item"><strong>Durham Retail Center</strong><small>Durham, NC</small><span>6,200 sqft <b>May 23</b></span></div>
+              <div class="pipeline-item"><strong>Vetra Office Park</strong><small>Raleigh, NC</small><span>4,700 sqft <b>May 24</b></span></div>
+              <a href="properties.html" class="pipeline-add">+ Add Walkthrough</a>
+            </article>
+
+            <article class="pipeline-column yellow">
+              <header><span>Quote Sent</span><strong>8</strong></header>
+              <div class="pipeline-item"><strong>Bank of America</strong><small>Durham, NC</small><span>3,800 sqft <b>$1,250/mo</b></span></div>
+              <div class="pipeline-item"><strong>Spec Suite 302</strong><small>Raleigh, NC</small><span>2,100 sqft <b>$875/mo</b></span></div>
+              <div class="pipeline-item"><strong>Daycare - Cary</strong><small>Cary, NC</small><span>6,000 sqft <b>$1,450/mo</b></span></div>
+              <a href="assignments.html" class="pipeline-add">+ Add Quote</a>
+            </article>
+
+            <article class="pipeline-column violet">
+              <header><span>Contract Out</span><strong>3</strong></header>
+              <div class="pipeline-item"><strong>Dental Office - Wake</strong><small>Raleigh, NC</small><span>2,400 sqft <b>Sent 5/18</b></span></div>
+              <div class="pipeline-item"><strong>Retail Store - Brier Creek</strong><small>Raleigh, NC</small><span>3,000 sqft <b>Sent 5/20</b></span></div>
+              <div class="pipeline-item"><strong>Fitness Studio - Cary</strong><small>Cary, NC</small><span>2,800 sqft <b>Sent 5/21</b></span></div>
+              <a href="#" class="pipeline-add">+ Add Contract</a>
+            </article>
+
+            <article class="pipeline-column green">
+              <header><span>Active</span><strong>21</strong></header>
+              <div class="pipeline-item"><strong>SECU - Raleigh Branch</strong><small>Raleigh, NC</small><span>4,200 sqft</span><em>Active</em></div>
+              <div class="pipeline-item"><strong>Vetra Forest Hills</strong><small>Raleigh, NC</small><span>3,200 sqft</span><em>Active</em></div>
+              <div class="pipeline-item"><strong>KinderCare - Cary</strong><small>Cary, NC</small><span>6,400 sqft</span><em>Active</em></div>
+              <a href="properties.html" class="pipeline-add">+ Add Property</a>
+            </article>
+          </div>
+        </section>
+
+        <aside class="right-stack">
+          <section class="panel-card schedule-card">
+            <div class="panel-heading">
+              <h2>Today's Schedule <span>May 22, 2025</span></h2>
+            </div>
+            <div class="schedule-list">
+              <div><span class="dot green"></span><time>8:00 AM</time><strong>SECU - Raleigh Branch</strong><small>Sarah J.</small><em>In Progress</em></div>
+              <div><span class="dot yellow"></span><time>10:00 AM</time><strong>Church at North Hills</strong><small>Mike B.</small><em>Scheduled</em></div>
+              <div><span class="dot yellow"></span><time>1:00 PM</time><strong>Vetra Forest Hills</strong><small>Alex W.</small><em>Scheduled</em></div>
+              <div><span class="dot red"></span><time>3:30 PM</time><strong>KinderCare - Cary</strong><small>John S.</small><em class="danger">QA Pending</em></div>
+              <div><span class="dot yellow"></span><time>5:00 PM</time><strong>Bank of America</strong><small>Sarah J.</small><em>Scheduled</em></div>
+            </div>
+            <a href="assignments.html" class="wide-action">View Calendar</a>
+          </section>
+
+          <section class="panel-card contractors-card">
+            <div class="panel-heading">
+              <h2>Top Contractors</h2>
+              <a href="claimed-assignments.html">View All</a>
+            </div>
+            <div class="contractor-row"><span>SJ</span><p><strong>Sarah Johnson</strong><small>24 Properties</small></p><em>98%</em></div>
+            <div class="contractor-row"><span>MB</span><p><strong>Mike Brown</strong><small>18 Properties</small></p><em>96%</em></div>
+            <div class="contractor-row"><span>AW</span><p><strong>Alex White</strong><small>15 Properties</small></p><em>94%</em></div>
+            <div class="contractor-row"><span>JS</span><p><strong>John Smith</strong><small>12 Properties</small></p><em>92%</em></div>
+          </section>
+        </aside>
+
+        <section class="panel-card activity-card">
+          <div class="panel-heading">
+            <h2>Recent Activity</h2>
+            <a href="#">View All</a>
+          </div>
+          <div class="activity-list">
+            <div><span class="green">⌁</span><p><strong>New lead added</strong><small>SECU - Raleigh Branch</small></p><time>2m ago</time></div>
+            <div><span class="violet">□</span><p><strong>Quote sent</strong><small>Bank of America</small></p><time>1h ago</time></div>
+            <div><span class="green">▤</span><p><strong>Contract signed</strong><small>Dental Office - Wake</small></p><time>3h ago</time></div>
+            <div><span class="yellow">▣</span><p><strong>QA review completed</strong><small>Vetra Forest Hills</small></p><time>5h ago</time></div>
+            <div><span class="green">$</span><p><strong>Payment received</strong><small>KinderCare - Cary</small></p><time>1d ago</time></div>
+          </div>
+        </section>
+
+        <section class="panel-card assignments-overview">
+          <div class="panel-heading">
+            <h2>Assignments Overview</h2>
+            <a href="assignments.html">View Board</a>
+          </div>
+          <table>
+            <thead><tr><th>Property</th><th>Contractor</th><th>Status</th><th>Time</th></tr></thead>
+            <tbody>
+              <tr><td>SECU - Raleigh Branch</td><td>Sarah Johnson</td><td><span class="status green"></span>In Progress</td><td>8:00 AM</td></tr>
+              <tr><td>Church at North Hills</td><td>Mike Brown</td><td><span class="status yellow"></span>Scheduled</td><td>10:00 AM</td></tr>
+              <tr><td>Vetra Forest Hills</td><td>Alex White</td><td><span class="status green"></span>Complete</td><td>1:00 PM</td></tr>
+              <tr><td>KinderCare - Cary</td><td>John Smith</td><td><span class="status red"></span>QA Pending</td><td>3:30 PM</td></tr>
+              <tr><td>Bank of America</td><td>Sarah Johnson</td><td><span class="status yellow"></span>Scheduled</td><td>5:00 PM</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section class="panel-card map-card">
+          <div class="panel-heading">
+            <h2>Properties Map</h2>
+            <a href="properties.html">View Map</a>
+          </div>
+          <div class="map-visual">
+            <span class="pin p1"></span>
+            <span class="pin p2"></span>
+            <span class="pin p3"></span>
+            <span class="pin p4"></span>
+            <span class="pin p5"></span>
+            <span class="map-city">Raleigh</span>
+          </div>
+        </section>
+
+        <aside class="right-stack lower">
+          <section class="panel-card qa-card">
+            <div class="panel-heading">
+              <h2>QA Reviews</h2>
+              <a href="#">View All</a>
+            </div>
+            <div class="qa-content">
+              <div class="donut"><span>4<small>Pending</small></span></div>
+              <div class="qa-legend">
+                <p><span class="yellow"></span>4 Pending</p>
+                <p><span class="green"></span>2 Approved</p>
+                <p><span class="red"></span>1 Issues Found</p>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel-card revenue-card">
+            <div class="panel-heading">
+              <h2>Revenue (MTD)</h2>
+              <a href="#">View Report</a>
+            </div>
+            <strong>$18,450</strong>
+            <p>↗ 12% from last month</p>
+            <div class="sparkline"></div>
+            <div class="chart-labels"><span>May 1</span><span>May 22</span></div>
+          </section>
+        </aside>
       </div>
     </section>
   </main>
