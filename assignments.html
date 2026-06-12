@@ -5,74 +5,169 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Add Assignments | Turnly</title>
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="admin-dashboard.css" />
   <link rel="stylesheet" href="property-workflows.css" />
 </head>
-<body>
-  <main class="page wide-page">
-    <section class="dashboard-card wide-card">
-      <a href="admin.html" class="secondary-btn">← Back to Dashboard</a>
-
-      <h1>Add Assignment Block</h1>
-      <p>Select a saved property to auto-fill assignment details.</p>
-
-      <div class="panel">
-        <div class="panel-header">
-          <div>
-            <h2>Recurring Assignment Queue</h2>
-            <p>Generate open assignments for properties with recurring schedules due now.</p>
-          </div>
-          <button id="generateRecurringAssignmentsBtn" type="button" class="small-btn">Generate Due Assignments</button>
-        </div>
-        <p id="recurringMessage" class="status-message"></p>
+<body class="admin-command-body property-command-body assignment-command-body">
+  <main class="admin-command property-command assignment-command">
+    <aside class="command-sidebar">
+      <div class="command-brand">
+        <div class="brand-mark">T</div>
+        <span>TURNLY</span>
       </div>
 
-      <form id="assignmentForm">
-        <label>Select Property</label>
-        <select id="propertySelect" required>
-          <option value="">Choose a property...</option>
-        </select>
+      <nav class="command-nav" aria-label="Admin navigation">
+        <a class="nav-link" href="admin.html"><span>⌂</span>Dashboard</a>
 
-        <input id="property_id" type="hidden" />
+        <p>Sales</p>
+        <a class="nav-link" href="#"><span>◇</span>Leads</a>
+        <a class="nav-link" href="#"><span>⌑</span>Walkthroughs</a>
+        <a class="nav-link" href="#"><span>□</span>Quotes</a>
 
-        <label>Assignment Title</label>
-        <input id="title" required placeholder="Apartment Turnover - Unit 204" />
+        <p>Operations</p>
+        <a class="nav-link" href="properties.html"><span>▤</span>Properties</a>
+        <a class="nav-link active" href="assignments.html"><span>◫</span>Assignments</a>
+        <a class="nav-link" href="claimed-assignments.html"><span>♙</span>Contractors</a>
+        <a class="nav-link" href="checklists.html"><span>☑</span>Checklists</a>
 
-        <label>Property Name</label>
-        <input id="property_name" required />
+        <p>Quality</p>
+        <a class="nav-link" href="#"><span>▣</span>QA Reviews</a>
+        <a class="nav-link" href="#"><span>▻</span>Videos</a>
 
-        <label>Address</label>
-        <input id="address" />
+        <p>Finance</p>
+        <a class="nav-link" href="#"><span>▥</span>Invoices</a>
+        <a class="nav-link" href="#"><span>◇</span>Revenue</a>
 
-        <label>Service Type</label>
-        <input id="service_type" />
+        <p>Settings</p>
+        <a class="nav-link" href="#"><span>⚙</span>Settings</a>
+      </nav>
 
-        <label>Scope of Work</label>
-        <textarea id="scope"></textarea>
+      <button id="logoutBtn" class="admin-user-card" type="button">
+        <span class="avatar">RA</span>
+        <span>
+          <strong>Ryan Admin</strong>
+          <small>Admin</small>
+        </span>
+        <span class="chevron">⌄</span>
+      </button>
+    </aside>
 
-        <label>Pay Amount</label>
-        <input id="pay_amount" type="number" step="0.01" />
+    <section class="command-main assignment-main">
+      <header class="command-header">
+        <div>
+          <h1>Add Assignments</h1>
+          <p>Create property-based jobs, review checklist scope, and open recurring work.</p>
+        </div>
 
-        <label>Start Window</label>
-        <input id="start_window" type="datetime-local" />
+        <div class="command-tools">
+          <a class="secondary-command-btn" href="admin.html">Back</a>
+          <a class="secondary-command-btn" href="properties.html">Properties</a>
+        </div>
+      </header>
 
-        <label>End Window</label>
-        <input id="end_window" type="datetime-local" />
+      <section class="assignment-command-grid">
+        <form id="assignmentForm" class="panel-card assignment-builder-card">
+          <div class="panel-heading">
+            <div>
+              <h2>Assignment Builder</h2>
+              <p>Select a property to auto-fill job details.</p>
+            </div>
+          </div>
 
-        <label>Supplies Notes</label>
-        <textarea id="supplies_notes"></textarea>
+          <div class="assignment-form-grid">
+            <div class="span-two">
+              <label>Select Property</label>
+              <select id="propertySelect" required>
+                <option value="">Choose a property...</option>
+              </select>
+            </div>
 
-        <label>Special Instructions</label>
-        <textarea id="special_instructions"></textarea>
+            <input id="property_id" type="hidden" />
 
-        <div id="assignmentChecklistPreview" class="checklist-summary"></div>
+            <div>
+              <label>Assignment Title</label>
+              <input id="title" required placeholder="Apartment Turnover - Unit 204" />
+            </div>
 
-        <button type="submit">Post Assignment</button>
-      </form>
+            <div>
+              <label>Property Name</label>
+              <input id="property_name" required />
+            </div>
 
-      <p id="message"></p>
+            <div class="span-two">
+              <label>Address</label>
+              <input id="address" />
+            </div>
 
-      <h2>Posted Assignments</h2>
-      <div id="adminAssignments" class="assignment-list"></div>
+            <div>
+              <label>Service Type</label>
+              <input id="service_type" />
+            </div>
+
+            <div>
+              <label>Pay Amount</label>
+              <input id="pay_amount" type="number" step="0.01" />
+            </div>
+
+            <div>
+              <label>Start Window</label>
+              <input id="start_window" type="datetime-local" />
+            </div>
+
+            <div>
+              <label>End Window</label>
+              <input id="end_window" type="datetime-local" />
+            </div>
+
+            <div class="span-two">
+              <label>Scope of Work</label>
+              <textarea id="scope"></textarea>
+            </div>
+
+            <div>
+              <label>Supplies Notes</label>
+              <textarea id="supplies_notes"></textarea>
+            </div>
+
+            <div>
+              <label>Special Instructions</label>
+              <textarea id="special_instructions"></textarea>
+            </div>
+          </div>
+
+          <div id="assignmentChecklistPreview" class="checklist-summary assignment-checklist-preview"></div>
+
+          <div class="assignment-submit-row">
+            <button type="submit" class="new-btn">Post Assignment</button>
+            <p id="message" class="status-message"></p>
+          </div>
+        </form>
+
+        <aside class="assignment-side-stack">
+          <section class="panel-card assignment-queue-card">
+            <div class="panel-heading">
+              <div>
+                <h2>Recurring Queue</h2>
+                <p>Open due recurring assignments.</p>
+              </div>
+            </div>
+
+            <button id="generateRecurringAssignmentsBtn" type="button" class="wide-action">Generate Due Assignments</button>
+            <p id="recurringMessage" class="status-message"></p>
+          </section>
+
+          <section class="panel-card assignment-posted-card">
+            <div class="panel-heading">
+              <div>
+                <h2>Posted Assignments</h2>
+                <p>Recently opened assignment blocks.</p>
+              </div>
+            </div>
+
+            <div id="adminAssignments" class="assignment-list command-assignment-list"></div>
+          </section>
+        </aside>
+      </section>
     </section>
   </main>
 
