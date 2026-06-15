@@ -8,61 +8,22 @@
   <link rel="stylesheet" href="portal-public.css" />
 </head>
 <body class="public-portal-body">
-  <div class="public-shell">
-    <header class="public-nav">
-      <a class="public-brand" href="index.html" aria-label="Turnly home">
-        <span class="public-brand-mark">T</span>
-        <span>
-          <strong>TURNLY</strong>
-          <small>Portal Access</small>
-        </span>
+  <main class="public-shell portal-entry-main">
+    <section class="portal-choice-grid" aria-label="Portal choices">
+      <a class="portal-choice-card contractor" href="contractor-login.html">
+        <span class="choice-icon">C</span>
+        <small>Contractor Portal</small>
+        <strong>Access assignments, claimed jobs, and field work.</strong>
+        <em>Continue as Contractor</em>
       </a>
-    </header>
 
-    <main class="portal-entry-main">
-      <section class="portal-entry-hero">
-        <p class="public-kicker">Turnly Operations Portal</p>
-        <h1>Choose your portal.</h1>
-        <p>
-          Turnly connects field teams and property managers through one operations
-          system for assignments, property visibility, QA, and service updates.
-        </p>
-      </section>
-
-      <section class="portal-choice-grid" aria-label="Portal choices">
-        <a class="portal-choice-card contractor" href="contractor-login.html">
-          <span class="choice-icon">C</span>
-          <small>Contractor Portal</small>
-          <strong>Access assignments, claimed jobs, and field work.</strong>
-          <em>Continue as Contractor</em>
-        </a>
-
-        <a class="portal-choice-card property-manager" href="property-manager-login.html">
-          <span class="choice-icon">P</span>
-          <small>Property Manager Portal</small>
-          <strong>View properties, service history, reports, and feedback.</strong>
-          <em>Continue as Property Manager</em>
-        </a>
-      </section>
-
-      <section class="portal-entry-status" aria-label="Portal status">
-        <div>
-          <span>01</span>
-          <strong>Secure Auth</strong>
-          <small>Email and password access through Supabase.</small>
-        </div>
-        <div>
-          <span>02</span>
-          <strong>Role Routing</strong>
-          <small>Each account lands in the dashboard matching its role.</small>
-        </div>
-        <div>
-          <span>03</span>
-          <strong>Operations Ready</strong>
-          <small>Built around Turnly assignments, properties, and QA.</small>
-        </div>
-      </section>
-    </main>
-  </div>
+      <a class="portal-choice-card property-manager" href="property-manager-login.html">
+        <span class="choice-icon">P</span>
+        <small>Property Manager Portal</small>
+        <strong>View properties, service history, reports, and feedback.</strong>
+        <em>Continue as Property Manager</em>
+      </a>
+    </section>
+  </main>
 </body>
 </html>
