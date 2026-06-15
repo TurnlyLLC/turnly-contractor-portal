@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Verifying Account | Turnly Portal</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="portal-public.css" />
+</head>
+<body class="public-portal-body">
+  <div class="public-shell">
+    <header class="public-nav">
+      <a class="public-brand" href="index.html" aria-label="Turnly home">
+        <span class="public-brand-mark">T</span>
+        <span>
+          <strong>TURNLY</strong>
+          <small>Account Verification</small>
+        </span>
+      </a>
+
+      <nav class="public-nav-actions" aria-label="Verification navigation">
+        <a href="index.html">Portal Home</a>
+      </nav>
+    </header>
+
+    <main class="role-auth-layout">
+      <section class="role-auth-intro">
+        <p class="public-kicker">Secure Access</p>
+        <h1>Verifying your Turnly account.</h1>
+        <p>
+          We are confirming your email with Supabase and preparing the correct
+          portal for your account.
+        </p>
+      </section>
+
+      <section class="role-auth-card" aria-live="polite">
+        <div class="public-panel-heading">
+          <div>
+            <span>Verification</span>
+            <strong id="callbackTitle">Checking your link...</strong>
+          </div>
+          <small>Supabase Auth</small>
+        </div>
+
+        <p id="callbackMessage" class="signup-message">
+          Hold tight while we finish signing you in.
+        </p>
+
+        <a id="callbackAction" class="public-btn primary full" href="index.html" hidden>
+          Return To Portal Home
+        </a>
+      </section>
+    </main>
+  </div>
+
+  <script src="env.js"></script>
+  <script type="module" src="auth-callback.js"></script>
+</body>
+</html>
