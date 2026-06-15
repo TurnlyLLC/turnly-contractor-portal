@@ -5,6 +5,26 @@ const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
   ? createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY)
   : null;
 
+const allowedRoles = new Set(["admin", "property_manager"]);
+const roleDashboards = {
+  admin: "admin.html",
+  contractor: "contractor.html",
+  sales: "sales.html",
+  sales_team: "sales.html",
+  property_manager: "property-manager.html"
+};
+
+function normalizePortalRole(role) {
+  return String(role || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+}
+
+function getPortalHome(role) {
+  return roleDashboards[normalizePortalRole(role)] || null;
+}
+
 function getName(user, profile) {
   return profile?.full_name ||
     user?.user_metadata?.full_name ||
@@ -29,8 +49,15 @@ async function requireManagerAccess() {
     .eq("id", user.id)
     .maybeSingle();
 
-  if (!profile || !["admin", "property_manager"].includes(profile.role)) {
+  const role = normalizePortalRole(profile?.role);
+
+  if (!profile) {
     window.location.href = "login.html";
+    return;
+  }
+
+  if (!allowedRoles.has(role)) {
+    window.location.href = getPortalHome(role) || "login.html";
     return;
   }
 
