@@ -21,6 +21,12 @@ const portalByRole = {
   sales_team: "sales.html"
 };
 
+function authCallbackUrl(role = pageRole) {
+  const url = new URL("auth-callback.html", window.location.origin);
+  url.searchParams.set("portal", normalizeRole(role));
+  return url.toString();
+}
+
 function normalizeRole(role) {
   return String(role || "contractor")
     .trim()
@@ -199,7 +205,7 @@ signupForm?.addEventListener("submit", async (event) => {
     email,
     password,
     options: {
-      emailRedirectTo: `${window.location.origin}/${pageHome}`,
+      emailRedirectTo: authCallbackUrl(pageRole),
       data: {
         first_name: firstName,
         last_name: lastName,
@@ -229,6 +235,6 @@ signupForm?.addEventListener("submit", async (event) => {
   const accessNote = pageRole === "contractor"
     ? "A Turnly admin must approve the contractor account before dashboard data is visible."
     : "A Turnly admin must link this account to a property before dashboard data is visible.";
-  showMessage(`Account created. Check your email to confirm it, then log in. ${accessNote}`, "success");
+  showMessage(`Account created. Check your email to verify it. The verification link will sign you in automatically. ${accessNote}`, "success");
   setFormLoading(signupForm, false, "Creating Account...", `Create ${pageLabel} Account`);
 });
