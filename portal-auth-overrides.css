@@ -1,0 +1,7 @@
+.public-form.auth-panel {
+  display: none;
+}
+
+.public-form.auth-panel.active {
+  display: grid;
+}
