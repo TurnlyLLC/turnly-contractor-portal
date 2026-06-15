@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Property Manager Access | Turnly Portal</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="portal-public.css" />
+</head>
+<body class="public-portal-body" data-auth-role="property_manager" data-auth-home="property-manager.html" data-auth-label="Property Manager">
+  <div class="public-shell">
+    <header class="public-nav">
+      <a class="public-brand" href="index.html" aria-label="Turnly home">
+        <span class="public-brand-mark">T</span>
+        <span>
+          <strong>TURNLY</strong>
+          <small>Property Manager Portal</small>
+        </span>
+      </a>
+
+      <nav class="public-nav-actions" aria-label="Property manager access navigation">
+        <a href="index.html">Portal Home</a>
+      </nav>
+    </header>
+
+    <main class="role-auth-layout">
+      <section class="role-auth-intro">
+        <p class="public-kicker">Property Manager Access</p>
+        <h1>Properties, reports, invoices, and feedback.</h1>
+        <p>
+          Sign in or create a property manager account to review property service
+          details, recent cleaners, weekly reports, and issue follow-up.
+        </p>
+      </section>
+
+      <section class="role-auth-card" aria-label="Property manager authentication">
+        <div class="auth-mode-tabs" role="tablist" aria-label="Property manager account mode">
+          <button class="active" type="button" data-auth-mode="login">Log In</button>
+          <button type="button" data-auth-mode="signup">Sign Up</button>
+        </div>
+
+        <form id="loginForm" class="public-form auth-panel active" data-auth-panel="login">
+          <div class="public-form-grid">
+            <label class="span-two">
+              Email
+              <input type="email" id="loginEmail" autocomplete="email" required />
+            </label>
+            <label class="span-two">
+              Password
+              <input type="password" id="loginPassword" autocomplete="current-password" required />
+            </label>
+          </div>
+          <button class="public-btn primary full" type="submit">Log In</button>
+        </form>
+
+        <form id="signupForm" class="public-form auth-panel" data-auth-panel="signup">
+          <div class="public-form-grid">
+            <label>
+              First Name
+              <input type="text" id="firstName" autocomplete="given-name" required />
+            </label>
+            <label>
+              Last Name
+              <input type="text" id="lastName" autocomplete="family-name" required />
+            </label>
+            <label class="span-two">
+              Email
+              <input type="email" id="signupEmail" autocomplete="email" required />
+            </label>
+            <label class="span-two">
+              Phone Number
+              <input type="tel" id="phone" autocomplete="tel" required />
+            </label>
+            <label>
+              Password
+              <input type="password" id="signupPassword" autocomplete="new-password" minlength="6" required />
+            </label>
+            <label>
+              Verify Password
+              <input type="password" id="verifyPassword" autocomplete="new-password" minlength="6" required />
+            </label>
+          </div>
+          <button class="public-btn primary full" type="submit">Create Property Manager Account</button>
+        </form>
+
+        <p id="authMessage" class="signup-message" aria-live="polite"></p>
+      </section>
+    </main>
+  </div>
+
+  <script src="env.js"></script>
+  <script type="module" src="portal-auth.js"></script>
+</body>
+</html>
