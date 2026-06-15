@@ -21,6 +21,7 @@ const portalByRole = {
 
 let pendingProfiles = [];
 let properties = [];
+let isLegacyAccessSchema = false;
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -125,6 +126,10 @@ function isPending(profile) {
 }
 
 function getPendingReason(profile) {
+  if (profile.access_schema_missing) {
+    return "Profile created. Approval migration is still needed.";
+  }
+
   if (profile.role === "property_manager") {
     return "Waiting for a linked property.";
   }
@@ -150,7 +155,10 @@ function getPropertyOptions(selectedPropertyId = "") {
 function renderRequest(profile) {
   const name = getProfileName(profile);
   const isPropertyManager = profile.role === "property_manager";
-  const propertyControl = isPropertyManager
+  const isLegacyRequest = Boolean(profile.access_schema_missing);
+  const propertyControl = isLegacyRequest
+    ? `<span class="account-request-meta">Run the account-access migration before approving.</span>`
+    : isPropertyManager
     ? `<select data-account-property-select="${escapeHtml(profile.id)}" aria-label="Property for ${escapeHtml(name)}" ${properties.length ? "" : "disabled"}>
         ${getPropertyOptions(profile.property_manager_property_id)}
       </select>`
@@ -172,8 +180,8 @@ function renderRequest(profile) {
       </div>
       <div class="account-request-actions">
         ${propertyControl}
-        <button class="approve-account-btn" type="button" data-approve-account-id="${escapeHtml(profile.id)}">
-          ${isPropertyManager ? "Link & Approve" : "Approve"}
+        <button class="approve-account-btn" type="button" data-approve-account-id="${escapeHtml(profile.id)}" ${isLegacyRequest ? "disabled" : ""}>
+          ${isLegacyRequest ? "Migration Needed" : isPropertyManager ? "Link & Approve" : "Approve"}
         </button>
       </div>
     </article>
@@ -195,7 +203,9 @@ async function loadRequests() {
 
   showMessage("Loading account requests...");
 
-  const [{ data: propertyData, error: propertyError }, { data: profileData, error: profileError }] = await Promise.all([
+  isLegacyAccessSchema = false;
+
+  const [{ data: propertyData, error: propertyError }, profileResult] = await Promise.all([
     supabase
       .from(PROPERTIES_TABLE)
       .select("id, name, address")
@@ -208,21 +218,37 @@ async function loadRequests() {
       .order("email", { ascending: true })
   ]);
 
+  let profileData = profileResult.data || [];
+  let profileError = profileResult.error;
+
+  if (profileError && isMissingColumnError(profileError)) {
+    isLegacyAccessSchema = true;
+    const fallback = await supabase
+      .from("profiles")
+      .select("id, email, role, full_name")
+      .in("role", ["contractor", "property_manager"])
+      .order("role", { ascending: true })
+      .order("email", { ascending: true });
+
+    profileData = fallback.data || [];
+    profileError = fallback.error;
+  }
+
   if (profileError) {
     pendingProfiles = [];
     renderRequests();
-    showMessage(
-      isMissingColumnError(profileError)
-        ? "Run the latest Supabase account-access migration before approving accounts."
-        : "Error loading account requests: " + profileError.message
-    );
+    showMessage("Error loading account requests: " + profileError.message);
     return;
   }
 
   properties = propertyError ? [] : (propertyData || []);
   pendingProfiles = (profileData || [])
-    .map((profile) => ({ ...profile, role: normalizeRole(profile.role) }))
-    .filter(isPending)
+    .map((profile) => ({
+      ...profile,
+      role: normalizeRole(profile.role),
+      access_schema_missing: isLegacyAccessSchema
+    }))
+    .filter((profile) => isLegacyAccessSchema || isPending(profile))
     .sort((a, b) => getProfileName(a).localeCompare(getProfileName(b)));
 
   renderRequests();
@@ -233,7 +259,9 @@ async function loadRequests() {
   }
 
   showMessage(
-    pendingProfiles.length
+    isLegacyAccessSchema
+      ? "Profile rows are being created. Run the account-access Supabase migration to enable approvals and property linking."
+      : pendingProfiles.length
       ? "Approve contractors directly, or link property managers to a property."
       : "All account requests are handled."
   );
@@ -242,6 +270,11 @@ async function loadRequests() {
 async function approveRequest(profileId) {
   const profile = pendingProfiles.find((item) => item.id === profileId);
   if (!profile || !list) return;
+
+  if (profile.access_schema_missing) {
+    showMessage("Run the account-access Supabase migration before approving accounts.");
+    return;
+  }
 
   const button = list.querySelector(`[data-approve-account-id="${profileId}"]`);
   if (button) button.disabled = true;
