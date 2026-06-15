@@ -8,15 +8,27 @@ const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
 const loginForm = document.getElementById("loginForm");
 const message = document.getElementById("message");
 
+const roleDashboards = {
+  admin: "admin.html",
+  contractor: "contractor.html",
+  sales: "sales.html",
+  sales_team: "sales.html",
+  property_manager: "property-manager.html"
+};
+
 function showMessage(text) {
   if (message) message.textContent = text;
 }
 
+function normalizePortalRole(role) {
+  return String(role || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+}
+
 function getPortalHome(role) {
-  if (role === "admin") return "admin.html";
-  if (role === "sales" || role === "sales_team") return "sales.html";
-  if (role === "property_manager") return "property-manager.html";
-  return "contractor.html";
+  return roleDashboards[normalizePortalRole(role)] || null;
 }
 
 async function getProfile(userId) {
@@ -60,5 +72,13 @@ loginForm?.addEventListener("submit", async (event) => {
     return;
   }
 
-  window.location.href = getPortalHome(profile.role);
+  const portalHome = getPortalHome(profile.role);
+
+  if (!portalHome) {
+    showMessage("Login successful, but this account role is not configured.");
+    await supabase.auth.signOut();
+    return;
+  }
+
+  window.location.href = portalHome;
 });
