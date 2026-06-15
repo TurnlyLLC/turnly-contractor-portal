@@ -8,6 +8,7 @@ const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
 const pageRole = document.body.dataset.authRole || "contractor";
 const pageHome = document.body.dataset.authHome || "contractor.html";
 const pageLabel = document.body.dataset.authLabel || "Portal";
+const isPropertyManagerPortal = pageRole === "property_manager";
 const loginForm = document.getElementById("loginForm");
 const signupForm = document.getElementById("signupForm");
 const authMessage = document.getElementById("authMessage");
@@ -19,6 +20,13 @@ const portalByRole = {
   sales: "sales.html",
   sales_team: "sales.html"
 };
+
+function normalizeRole(role) {
+  return String(role || "contractor")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+}
 
 function value(id) {
   return document.getElementById(id)?.value.trim() || "";
@@ -47,7 +55,9 @@ function showMode(mode) {
   });
 
   document.querySelectorAll("[data-auth-panel]").forEach((panel) => {
-    panel.classList.toggle("active", panel.dataset.authPanel === mode);
+    const isActive = panel.dataset.authPanel === mode;
+    panel.classList.toggle("active", isActive);
+    panel.setAttribute("aria-hidden", String(!isActive));
   });
 
   showMessage("");
@@ -56,12 +66,29 @@ function showMode(mode) {
 async function getProfile(userId) {
   const { data, error } = await supabase
     .from("profiles")
+    .select("role, contractor_approved, property_manager_property_id")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (!error) {
+    return data ? { ...data, role: normalizeRole(data.role) } : null;
+  }
+
+  const fallback = await supabase
+    .from("profiles")
     .select("role")
     .eq("id", userId)
     .maybeSingle();
 
-  if (error) return null;
-  return data;
+  if (fallback.error || !fallback.data) return null;
+
+  return {
+    ...fallback.data,
+    role: normalizeRole(fallback.data.role),
+    contractor_approved: false,
+    property_manager_property_id: null,
+    access_setup_error: true
+  };
 }
 
 async function waitForProfile(userId) {
@@ -77,6 +104,27 @@ async function waitForProfile(userId) {
 document.querySelectorAll("[data-auth-mode]").forEach((button) => {
   button.addEventListener("click", () => showMode(button.dataset.authMode));
 });
+
+showMode("login");
+
+async function routeAuthenticatedUser(user, fallbackRole = pageRole) {
+  const profile = await getProfile(user.id);
+  const role = normalizeRole(profile?.role || user.user_metadata?.role || fallbackRole);
+
+  if (isPropertyManagerPortal && role !== "property_manager") {
+    await supabase.auth.signOut();
+    showMessage("This account must use the Contractor Portal login.", "error");
+    return;
+  }
+
+  if (!isPropertyManagerPortal && role === "property_manager") {
+    await supabase.auth.signOut();
+    showMessage("Property manager accounts must use the Property Manager Portal login.", "error");
+    return;
+  }
+
+  window.location.href = portalByRole[role] || pageHome;
+}
 
 loginForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -100,10 +148,7 @@ loginForm?.addEventListener("submit", async (event) => {
     return;
   }
 
-  const profile = await getProfile(data.user.id);
-  const role = profile?.role || data.user.user_metadata?.role || pageRole;
-
-  window.location.href = portalByRole[role] || pageHome;
+  await routeAuthenticatedUser(data.user);
 });
 
 signupForm?.addEventListener("submit", async (event) => {
@@ -150,7 +195,8 @@ signupForm?.addEventListener("submit", async (event) => {
         last_name: lastName,
         full_name: fullName,
         phone,
-        role: pageRole
+        role: pageRole,
+        contractor_approved: pageRole !== "contractor"
       }
     }
   });
@@ -162,12 +208,14 @@ signupForm?.addEventListener("submit", async (event) => {
   }
 
   if (data?.session && data?.user) {
-    const profile = await waitForProfile(data.user.id);
-    const role = profile?.role || data.user.user_metadata?.role || pageRole;
-    window.location.href = portalByRole[role] || pageHome;
+    await waitForProfile(data.user.id);
+    await routeAuthenticatedUser(data.user, pageRole);
     return;
   }
 
-  showMessage("Account created. Check your email to confirm it, then log in.", "success");
+  const accessNote = pageRole === "contractor"
+    ? "A Turnly admin must approve the contractor account before dashboard data is visible."
+    : "A Turnly admin must link this account to a property before dashboard data is visible.";
+  showMessage(`Account created. Check your email to confirm it, then log in. ${accessNote}`, "success");
   setFormLoading(signupForm, false, "Creating Account...", `Create ${pageLabel} Account`);
 });
