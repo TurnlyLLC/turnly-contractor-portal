@@ -5,3 +5,29 @@
 .public-form.auth-panel.active {
   display: grid;
 }
+
+.auth-inline-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  margin: 10px 0 0;
+  padding: 0 14px;
+  border: 1px solid rgba(18, 214, 135, 0.65);
+  border-radius: 8px;
+  background: rgba(18, 214, 135, 0.1);
+  color: #12d687;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+}
+
+.auth-inline-action:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.auth-resend-note {
+  display: block;
+  margin-top: 8px;
+}

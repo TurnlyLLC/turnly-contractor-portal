@@ -13,6 +13,10 @@ const loginForm = document.getElementById("loginForm");
 const signupForm = document.getElementById("signupForm");
 const authMessage = document.getElementById("authMessage");
 
+let pendingVerificationEmail = "";
+let pendingVerificationRole = pageRole;
+let pendingVerificationAccessNote = "";
+
 const portalByRole = {
   admin: "admin.html",
   contractor: "contractor.html",
@@ -38,14 +42,50 @@ function value(id) {
   return document.getElementById(id)?.value.trim() || "";
 }
 
-function showMessage(text, tone = "") {
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function setMessageTone(tone = "") {
   if (!authMessage) return;
-  authMessage.textContent = text;
   if (tone) {
     authMessage.dataset.tone = tone;
   } else {
     delete authMessage.dataset.tone;
   }
+}
+
+function clearPendingVerification() {
+  pendingVerificationEmail = "";
+  pendingVerificationRole = pageRole;
+  pendingVerificationAccessNote = "";
+}
+
+function showMessage(text, tone = "") {
+  if (!authMessage) return;
+  authMessage.textContent = text;
+  setMessageTone(tone);
+}
+
+function showVerificationPrompt(email, accessNote, prefix = "Account created. We sent a verification email to") {
+  pendingVerificationEmail = email;
+  pendingVerificationRole = pageRole;
+  pendingVerificationAccessNote = accessNote;
+
+  if (!authMessage) return;
+
+  authMessage.innerHTML = `
+    ${escapeHtml(prefix)} <strong>${escapeHtml(email)}</strong>.
+    Check spam or promotions if it is not in the inbox.
+    <button class="auth-inline-action" type="button" data-resend-verification>Resend verification email</button>
+    <span class="auth-resend-note">${escapeHtml(accessNote)}</span>
+  `;
+  setMessageTone("success");
 }
 
 function setFormLoading(form, isLoading, loadingText, readyText) {
@@ -56,6 +96,8 @@ function setFormLoading(form, isLoading, loadingText, readyText) {
 }
 
 function showMode(mode) {
+  clearPendingVerification();
+
   document.querySelectorAll("[data-auth-mode]").forEach((button) => {
     button.classList.toggle("active", button.dataset.authMode === mode);
   });
@@ -111,6 +153,38 @@ document.querySelectorAll("[data-auth-mode]").forEach((button) => {
   button.addEventListener("click", () => showMode(button.dataset.authMode));
 });
 
+authMessage?.addEventListener("click", async (event) => {
+  const button = event.target?.closest("[data-resend-verification]");
+  if (!button) return;
+
+  if (!supabase || !pendingVerificationEmail) {
+    showMessage("Unable to resend verification right now. Please try signing up again.", "error");
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = "Sending...";
+
+  const { error } = await supabase.auth.resend({
+    type: "signup",
+    email: pendingVerificationEmail,
+    options: {
+      emailRedirectTo: authCallbackUrl(pendingVerificationRole)
+    }
+  });
+
+  if (error) {
+    showMessage(`Unable to resend verification email: ${error.message}`, "error");
+    return;
+  }
+
+  showVerificationPrompt(
+    pendingVerificationEmail,
+    pendingVerificationAccessNote,
+    "We sent another verification email to"
+  );
+});
+
 showMode("login");
 
 async function routeAuthenticatedUser(user, fallbackRole = pageRole) {
@@ -145,14 +219,28 @@ loginForm?.addEventListener("submit", async (event) => {
   setFormLoading(loginForm, true, "Logging In...", "Log In");
   showMessage("Logging in...");
 
+  const email = value("loginEmail").toLowerCase();
   const { data, error } = await supabase.auth.signInWithPassword({
-    email: value("loginEmail").toLowerCase(),
+    email,
     password: document.getElementById("loginPassword")?.value || ""
   });
 
   if (error) {
-    showMessage(error.message, "error");
     setFormLoading(loginForm, false, "Logging In...", "Log In");
+
+    if (/email not confirmed/i.test(error.message)) {
+      const accessNote = pageRole === "contractor"
+        ? "After verifying, a Turnly admin must approve the contractor account before dashboard data is visible."
+        : "After verifying, a Turnly admin must link this account to a property before dashboard data is visible.";
+      showVerificationPrompt(
+        email,
+        accessNote,
+        "This account still needs email verification. Send another verification email to"
+      );
+      return;
+    }
+
+    showMessage(error.message, "error");
     return;
   }
 
@@ -223,6 +311,15 @@ signupForm?.addEventListener("submit", async (event) => {
     return;
   }
 
+  if (data?.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+    showMessage(
+      "That email already has a Turnly account. Use Log In instead. If the email was never verified, logging in will let you resend the verification email.",
+      "error"
+    );
+    setFormLoading(signupForm, false, "Creating Account...", `Create ${pageLabel} Account`);
+    return;
+  }
+
   if (data?.session && data?.user) {
     await waitForProfile(data.user.id);
     const didRoute = await routeAuthenticatedUser(data.user, pageRole);
@@ -235,6 +332,6 @@ signupForm?.addEventListener("submit", async (event) => {
   const accessNote = pageRole === "contractor"
     ? "A Turnly admin must approve the contractor account before dashboard data is visible."
     : "A Turnly admin must link this account to a property before dashboard data is visible.";
-  showMessage(`Account created. Check your email to verify it. The verification link will sign you in automatically. ${accessNote}`, "success");
+  showVerificationPrompt(email, accessNote);
   setFormLoading(signupForm, false, "Creating Account...", `Create ${pageLabel} Account`);
 });
