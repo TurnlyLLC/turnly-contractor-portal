@@ -112,15 +112,16 @@ async function routeAuthenticatedUser(user, fallbackRole = pageRole) {
   const role = normalizeRole(profile?.role || user.user_metadata?.role || fallbackRole);
 
   if (isPropertyManagerPortal && role !== "property_manager") {
-    await supabase.auth.signOut();
-    showMessage("This account must use the Contractor Portal login.", "error");
-    return false;
+    const target = portalByRole[role] || "contractor.html";
+    showMessage("Taking you to the correct portal...");
+    window.location.href = target;
+    return true;
   }
 
   if (!isPropertyManagerPortal && role === "property_manager") {
-    await supabase.auth.signOut();
-    showMessage("Property manager accounts must use the Property Manager Portal login.", "error");
-    return false;
+    showMessage("Taking you to the Property Manager Portal...");
+    window.location.href = portalByRole.property_manager;
+    return true;
   }
 
   window.location.href = portalByRole[role] || pageHome;
