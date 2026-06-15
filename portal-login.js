@@ -8,27 +8,22 @@ const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
 const loginForm = document.getElementById("loginForm");
 const message = document.getElementById("message");
 
-const roleDashboards = {
-  admin: "admin.html",
-  contractor: "contractor.html",
-  sales: "sales.html",
-  sales_team: "sales.html",
-  property_manager: "property-manager.html"
-};
-
 function showMessage(text) {
   if (message) message.textContent = text;
 }
 
-function normalizePortalRole(role) {
-  return String(role || "")
+function normalizeRole(role) {
+  return String(role || "contractor")
     .trim()
     .toLowerCase()
     .replace(/[\s-]+/g, "_");
 }
 
 function getPortalHome(role) {
-  return roleDashboards[normalizePortalRole(role)] || null;
+  if (role === "admin") return "admin.html";
+  if (role === "sales" || role === "sales_team") return "sales.html";
+  if (role === "property_manager") return "property-manager.html";
+  return "contractor.html";
 }
 
 async function getProfile(userId) {
@@ -66,19 +61,14 @@ loginForm?.addEventListener("submit", async (event) => {
   }
 
   const profile = await getProfile(data.user.id);
+  const metadataRole = normalizeRole(data.user.user_metadata?.role);
+  const role = normalizeRole(profile?.role || metadataRole);
 
-  if (!profile) {
-    showMessage("Login successful, but no profile role found.");
-    return;
-  }
-
-  const portalHome = getPortalHome(profile.role);
-
-  if (!portalHome) {
-    showMessage("Login successful, but this account role is not configured.");
+  if (role === "property_manager") {
     await supabase.auth.signOut();
+    showMessage("Property manager accounts must use the Property Manager Portal login.");
     return;
   }
 
-  window.location.href = portalHome;
+  window.location.href = getPortalHome(role);
 });
