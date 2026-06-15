@@ -126,19 +126,19 @@
             <article class="pipeline-column green" data-pipeline-stage="new_leads">
               <header><span>New Leads</span><strong data-stage-count="new_leads">0</strong></header>
               <div class="pipeline-dropzone" data-stage-dropzone="new_leads"></div>
-              <a href="properties.html" class="pipeline-add">+ Add Lead</a>
+              <a href="leads.html" class="pipeline-add">+ Add Lead</a>
             </article>
 
             <article class="pipeline-column blue" data-pipeline-stage="walkthrough">
               <header><span>Walkthrough</span><strong data-stage-count="walkthrough">0</strong></header>
               <div class="pipeline-dropzone" data-stage-dropzone="walkthrough"></div>
-              <a href="properties.html" class="pipeline-add">+ Add Walkthrough</a>
+              <a href="walkthroughs.html" class="pipeline-add">+ Add Walkthrough</a>
             </article>
 
             <article class="pipeline-column yellow" data-pipeline-stage="quote_sent">
               <header><span>Quote Sent</span><strong data-stage-count="quote_sent">0</strong></header>
               <div class="pipeline-dropzone" data-stage-dropzone="quote_sent"></div>
-              <a href="assignments.html" class="pipeline-add">+ Add Quote</a>
+              <a href="quotes.html" class="pipeline-add">+ Add Quote</a>
             </article>
 
             <article class="pipeline-column violet" data-pipeline-stage="contract_out">
@@ -168,6 +168,15 @@
               <div><span class="dot yellow"></span><time>5:00 PM</time><strong>Bank of America</strong><small>Sarah J.</small><em>Scheduled</em></div>
             </div>
             <a href="assignments.html" class="wide-action">View Calendar</a>
+          </section>
+
+          <section class="panel-card account-requests-card">
+            <div class="panel-heading">
+              <h2>Account Requests <span data-account-request-count>0 Pending</span></h2>
+              <button id="refreshAccountRequestsBtn" type="button">Refresh</button>
+            </div>
+            <p id="accountApprovalsMessage" class="pipeline-message" aria-live="polite"></p>
+            <div id="accountApprovalsList" class="account-request-list"></div>
           </section>
 
           <section class="panel-card contractors-card">
