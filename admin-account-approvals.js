@@ -68,11 +68,14 @@ function getInitials(name) {
 }
 
 function isMissingColumnError(error) {
-  const text = String(error?.message || "");
+  const text = String(error?.message || "").toLowerCase();
   return [
     "contractor_approved",
     "property_manager_property_id",
-    "schema cache"
+    "first_name",
+    "last_name",
+    "schema cache",
+    "could not find"
   ].some((part) => text.includes(part));
 }
 
@@ -212,7 +215,7 @@ async function loadRequests() {
       .order("name", { ascending: true }),
     supabase
       .from("profiles")
-      .select("id, first_name, last_name, full_name, email, phone, role, contractor_approved, property_manager_property_id")
+      .select("id, full_name, email, phone, role, contractor_approved, property_manager_property_id")
       .in("role", ["contractor", "property_manager"])
       .order("role", { ascending: true })
       .order("email", { ascending: true })
