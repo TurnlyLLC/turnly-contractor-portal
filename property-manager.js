@@ -5,7 +5,8 @@ const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
   ? createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY)
   : null;
 
-const allowedRoles = new Set(["admin", "property_manager"]);
+const managerMain = document.querySelector(".command-main");
+
 const roleDashboards = {
   admin: "admin.html",
   contractor: "contractor.html",
@@ -14,7 +15,7 @@ const roleDashboards = {
   property_manager: "property-manager.html"
 };
 
-function normalizePortalRole(role) {
+function normalizeRole(role) {
   return String(role || "")
     .trim()
     .toLowerCase()
@@ -22,7 +23,7 @@ function normalizePortalRole(role) {
 }
 
 function getPortalHome(role) {
-  return roleDashboards[normalizePortalRole(role)] || null;
+  return roleDashboards[normalizeRole(role)] || "contractor.html";
 }
 
 function getName(user, profile) {
@@ -32,43 +33,100 @@ function getName(user, profile) {
     "Property Manager";
 }
 
+function renderLockedState(title, body) {
+  if (!managerMain) return;
+  managerMain.innerHTML = `
+    <header class="command-header">
+      <div>
+        <h1>${title}</h1>
+        <p>${body}</p>
+      </div>
+    </header>
+    <section class="panel-card wip-panel">
+      <p class="wip-kicker">Account Access</p>
+      <h2>${title}</h2>
+      <p>${body}</p>
+    </section>
+  `;
+}
+
 async function requireManagerAccess() {
-  if (!supabase) return;
+  if (!supabase) {
+    renderLockedState("Configuration needed", "Supabase configuration is missing for this deployment.");
+    return;
+  }
 
   const { data: userData } = await supabase.auth.getUser();
   const user = userData?.user || null;
 
   if (!user) {
-    window.location.href = "login.html";
+    window.location.href = "property-manager-login.html";
     return;
   }
 
-  const { data: profile } = await supabase
+  let { data: profile, error } = await supabase
     .from("profiles")
-    .select("role, full_name")
+    .select("role, full_name, property_manager_property_id")
     .eq("id", user.id)
     .maybeSingle();
 
-  const role = normalizePortalRole(profile?.role);
+  if (error) {
+    const fallback = await supabase
+      .from("profiles")
+      .select("role, full_name")
+      .eq("id", user.id)
+      .maybeSingle();
+    profile = fallback.data ? { ...fallback.data, property_manager_property_id: null, access_setup_error: true } : null;
+  }
+
+  const role = normalizeRole(profile?.role);
 
   if (!profile) {
-    window.location.href = "login.html";
+    window.location.href = "property-manager-login.html";
     return;
   }
 
-  if (!allowedRoles.has(role)) {
-    window.location.href = getPortalHome(role) || "login.html";
+  if (role !== "property_manager") {
+    window.location.href = getPortalHome(role);
     return;
   }
 
   const name = getName(user, profile);
   const nameElement = document.getElementById("managerUserName");
   if (nameElement) nameElement.textContent = name;
+
+  if (!profile.property_manager_property_id) {
+    const setupText = profile.access_setup_error
+      ? "The account is signed in, but the latest Supabase account-access migration still needs to be applied before property linking can be checked."
+      : "A Turnly admin must link this property manager account to a specific property before any property data is visible.";
+    renderLockedState("Property link required", setupText);
+    return;
+  }
+
+  const { data: property, error: propertyError } = await supabase
+    .from("portal_properties")
+    .select("id, name")
+    .eq("id", profile.property_manager_property_id)
+    .maybeSingle();
+
+  if (propertyError || !property) {
+    renderLockedState("Property access unavailable", "This account has a property link, but the linked property could not be loaded.");
+    return;
+  }
+
+  const panel = document.querySelector(".wip-panel");
+  if (panel) {
+    panel.innerHTML = `
+      <p class="wip-kicker">Linked Property</p>
+      <h2>${property.name || "Property account linked"}</h2>
+      <p>Your property manager account is linked and ready for property-specific workflows.</p>
+    `;
+  }
 }
 
 document.getElementById("managerLogoutBtn")?.addEventListener("click", async () => {
   await supabase?.auth.signOut();
-  window.location.href = "login.html";
+  window.location.href = "property-manager-login.html";
 });
 
 await requireManagerAccess();
