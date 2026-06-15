@@ -6,6 +6,13 @@
   <title>Sales Pipeline | Turnly</title>
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="sales-portal.css" />
+  <style>
+    @media (min-width: 1121px) {
+      .sales-stats {
+        grid-template-columns: repeat(4, minmax(150px, 1fr));
+      }
+    }
+  </style>
 </head>
 <body class="sales-portal-body">
   <main class="sales-portal">
@@ -22,18 +29,10 @@
         <p>Sales</p>
         <a href="sales.html" class="sales-nav-link"><span>⌂</span>Dashboard</a>
         <a href="#leads" class="sales-nav-link active" data-sales-view="leads"><span>♧</span>Leads</a>
-        <a href="#companies" class="sales-nav-link"><span>▦</span>Companies</a>
-        <a href="#contacts" class="sales-nav-link"><span>▣</span>Contacts</a>
         <a href="#pipeline" class="sales-nav-link soft-active" data-sales-view="pipeline"><span>♕</span>Pipeline</a>
         <a href="#tasks" class="sales-nav-link"><span>☑</span>Tasks</a>
         <a href="#calendar" class="sales-nav-link"><span>▤</span>Calendar</a>
         <a href="#reports" class="sales-nav-link"><span>◫</span>Reports</a>
-
-        <p>Tools</p>
-        <a href="#email" class="sales-nav-link"><span>✉</span>Email Sequences</a>
-        <a href="#templates" class="sales-nav-link"><span>▤</span>Templates</a>
-        <a href="#documents" class="sales-nav-link"><span>□</span>Documents</a>
-        <a href="#imports" class="sales-nav-link"><span>⇧</span>Imports</a>
 
         <p>Settings</p>
         <a href="#team" class="sales-nav-link"><span>♙</span>Team</a>
@@ -66,7 +65,6 @@
             <span>⌕</span>
             <input id="salesSearchInput" type="search" placeholder="Search leads, companies, contacts..." />
           </label>
-          <button id="salesAddLeadBtn" class="sales-add-btn" type="button"><span>+</span>Add Lead</button>
           <button class="sales-bell" type="button" aria-label="Notifications">♧<span>3</span></button>
           <div class="sales-profile-chip">
             <span class="sales-avatar photo">RA</span>
@@ -84,31 +82,21 @@
           <span>♧</span>
           <p>Total Leads</p>
           <strong id="salesTotalLeads">0</strong>
-          <small>↗ pipeline total</small>
         </article>
         <article class="sales-stat blue">
           <span>◎</span>
           <p>New Leads (30 Days)</p>
           <strong id="salesNew30">0</strong>
-          <small>↗ last 30 days</small>
-        </article>
-        <article class="sales-stat yellow">
-          <span>☆</span>
-          <p>Qualified</p>
-          <strong id="salesQualified">0</strong>
-          <small>↗ qualified opportunities</small>
         </article>
         <article class="sales-stat violet">
           <span>▤</span>
           <p>Quoted</p>
           <strong id="salesQuoted">0</strong>
-          <small>↗ quote sent</small>
         </article>
         <article class="sales-stat green">
           <span>♕</span>
           <p>Won</p>
           <strong id="salesWon">0</strong>
-          <small>↗ closed won</small>
         </article>
       </section>
 
@@ -157,7 +145,6 @@
               <button type="button" data-sales-tab="overdue">Overdue</button>
               <span></span>
               <button id="salesImportBtn" type="button">⇧ Import Leads</button>
-              <button id="salesExportBtn" type="button">⇩ Export</button>
               <button class="sales-icon-btn" type="button" aria-label="More actions">⋮</button>
             </div>
 
@@ -200,17 +187,6 @@
             </div>
             <p>Total Pipeline Value</p>
             <strong id="salesPipelineValue">$0</strong>
-            <small>↗ active opportunity value</small>
-            <div class="sales-area-chart">
-              <span>$3M</span>
-              <span>$2M</span>
-              <span>$1M</span>
-              <svg viewBox="0 0 360 130" role="img" aria-label="Pipeline value chart">
-                <path d="M0,102 C28,65 38,72 55,88 C80,112 94,47 132,55 C164,61 169,24 205,37 C235,49 235,83 272,69 C302,58 306,32 340,24 C350,22 356,15 360,12 L360,130 L0,130 Z"></path>
-                <polyline points="0,102 55,88 95,62 132,55 170,34 205,37 246,75 272,69 315,36 340,24 360,12"></polyline>
-              </svg>
-              <div><span>Apr 23</span><span>Apr 30</span><span>May 7</span><span>May 14</span><span>May 21</span></div>
-            </div>
           </section>
 
           <section class="sales-panel sales-source-card">
