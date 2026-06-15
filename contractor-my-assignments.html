@@ -5,21 +5,49 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>My Assignments | Turnly</title>
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="admin-dashboard.css" />
   <link rel="stylesheet" href="access-notice.css" />
 </head>
-<body>
-  <main class="page wide-page">
-    <section class="dashboard-card wide-card">
-      <div class="dashboard-header">
+<body class="admin-command-body">
+  <main class="admin-command">
+    <aside class="command-sidebar">
+      <div class="command-brand">
+        <div class="brand-mark">T</div>
+        <span>TURNLY</span>
+      </div>
+
+      <nav class="command-nav" aria-label="Contractor navigation">
+        <p>Work</p>
+        <a class="nav-link" href="contractor.html"><span>⌂</span>Dashboard</a>
+        <a class="nav-link" href="contractor-available.html"><span>▦</span>Available</a>
+        <a class="nav-link active" href="contractor-my-assignments.html"><span>✓</span>My Assignments</a>
+      </nav>
+
+      <button id="logoutBtn" class="admin-user-card" type="button">
+        <span class="avatar">CO</span>
+        <span>
+          <strong>Contractor</strong>
+          <small>Sign Out</small>
+        </span>
+        <span class="chevron">⌄</span>
+      </button>
+    </aside>
+
+    <section class="command-main wip-main">
+      <header class="command-header">
         <div>
-          <a href="contractor.html" class="secondary-btn">Back to Dashboard</a>
           <h1>My Assignments</h1>
           <p>Jobs you have claimed from the Turnly assignment board.</p>
         </div>
-        <button id="logoutBtn" class="small-btn">Sign Out</button>
-      </div>
+        <a href="contractor.html" class="secondary-command-btn">Back to Dashboard</a>
+      </header>
 
-      <div id="myAssignments" class="assignment-list"></div>
+      <section class="panel-card">
+        <div class="panel-heading">
+          <h2>Claimed Work</h2>
+        </div>
+        <div id="myAssignments" class="assignment-list"></div>
+      </section>
     </section>
   </main>
 
