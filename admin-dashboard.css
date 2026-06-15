@@ -631,6 +631,103 @@ th {
   padding: 4px 8px;
 }
 
+.account-request-list {
+  display: grid;
+  gap: 10px;
+}
+
+.account-request-row {
+  border: 1px solid rgba(144, 164, 183, 0.12);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+
+.account-request-person {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 38px 1fr auto;
+}
+
+.account-request-avatar {
+  align-items: center;
+  background: rgba(31, 226, 138, 0.15);
+  border-radius: 50%;
+  color: var(--admin-green);
+  display: flex;
+  font-size: 12px;
+  font-weight: 900;
+  height: 38px;
+  justify-content: center;
+  width: 38px;
+}
+
+.account-request-person strong,
+.account-request-person small {
+  display: block;
+}
+
+.account-request-person small,
+.account-request-meta {
+  color: var(--admin-muted);
+  font-size: 12px;
+}
+
+.account-request-role {
+  border: 1px solid rgba(31, 226, 138, 0.3);
+  border-radius: 999px;
+  color: var(--admin-green);
+  font-size: 11px;
+  font-weight: 800;
+  padding: 5px 8px;
+}
+
+.account-request-meta {
+  display: grid;
+  gap: 5px;
+}
+
+.account-request-actions {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.account-request-actions select {
+  background: rgba(7, 17, 31, 0.82);
+  border: 1px solid var(--admin-border);
+  border-radius: 7px;
+  color: var(--admin-text);
+  min-height: 38px;
+  padding: 0 10px;
+}
+
+.approve-account-btn {
+  background: var(--admin-green);
+  border: 0;
+  border-radius: 7px;
+  color: #061321;
+  cursor: pointer;
+  font-weight: 900;
+  min-height: 38px;
+  padding: 0 12px;
+}
+
+.approve-account-btn:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.account-request-empty {
+  border: 1px dashed rgba(154, 170, 188, 0.26);
+  border-radius: 8px;
+  color: var(--admin-muted);
+  padding: 18px;
+  text-align: center;
+}
+
 .activity-card {
   grid-column: 1;
 }
@@ -882,6 +979,11 @@ th {
   .metric-grid,
   .pipeline-board,
   .wip-mini-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .account-request-actions,
+  .account-request-person {
     grid-template-columns: 1fr;
   }
 }
