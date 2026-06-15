@@ -114,16 +114,17 @@ async function routeAuthenticatedUser(user, fallbackRole = pageRole) {
   if (isPropertyManagerPortal && role !== "property_manager") {
     await supabase.auth.signOut();
     showMessage("This account must use the Contractor Portal login.", "error");
-    return;
+    return false;
   }
 
   if (!isPropertyManagerPortal && role === "property_manager") {
     await supabase.auth.signOut();
     showMessage("Property manager accounts must use the Property Manager Portal login.", "error");
-    return;
+    return false;
   }
 
   window.location.href = portalByRole[role] || pageHome;
+  return true;
 }
 
 loginForm?.addEventListener("submit", async (event) => {
@@ -148,7 +149,15 @@ loginForm?.addEventListener("submit", async (event) => {
     return;
   }
 
-  await routeAuthenticatedUser(data.user);
+  try {
+    const didRoute = await routeAuthenticatedUser(data.user);
+    if (!didRoute) {
+      setFormLoading(loginForm, false, "Logging In...", "Log In");
+    }
+  } catch (routeError) {
+    showMessage(routeError?.message || "Unable to finish login. Please try again.", "error");
+    setFormLoading(loginForm, false, "Logging In...", "Log In");
+  }
 });
 
 signupForm?.addEventListener("submit", async (event) => {
@@ -209,7 +218,10 @@ signupForm?.addEventListener("submit", async (event) => {
 
   if (data?.session && data?.user) {
     await waitForProfile(data.user.id);
-    await routeAuthenticatedUser(data.user, pageRole);
+    const didRoute = await routeAuthenticatedUser(data.user, pageRole);
+    if (!didRoute) {
+      setFormLoading(signupForm, false, "Creating Account...", `Create ${pageLabel} Account`);
+    }
     return;
   }
 
