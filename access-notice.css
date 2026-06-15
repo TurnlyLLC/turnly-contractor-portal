@@ -1,17 +1,17 @@
 .access-notice {
-  background: #fff8e7;
-  border: 1px solid #efd48f;
-  border-radius: 16px;
+  background: rgba(255, 213, 40, 0.12);
+  border: 1px solid rgba(255, 213, 40, 0.3);
+  border-radius: 10px;
   grid-column: 1 / -1;
   padding: 22px;
 }
 
 .access-notice h2 {
-  color: #6d4a00;
+  color: var(--admin-yellow);
   margin-bottom: 8px;
 }
 
 .access-notice p {
-  color: #6f5a2a;
+  color: #d8c983;
   margin: 0;
 }
