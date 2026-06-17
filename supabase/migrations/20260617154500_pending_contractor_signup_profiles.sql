@@ -30,15 +30,17 @@ security definer
 set search_path = public
 as $$
 declare
-  profile_role text;
-  profile_status text;
+  normalized_role text;
+  profile_role public.profiles.role%type;
+  profile_status public.profiles.status%type;
   profile_name text;
 begin
-  profile_role := lower(regexp_replace(coalesce(nullif(new.raw_user_meta_data->>'role', ''), 'contractor'), '[\s-]+', '_', 'g'));
+  normalized_role := lower(regexp_replace(coalesce(nullif(new.raw_user_meta_data->>'role', ''), 'contractor'), '[\s-]+', '_', 'g'));
+  profile_role := normalized_role;
   profile_status := coalesce(
     nullif(new.raw_user_meta_data->>'status', ''),
     case
-      when profile_role in ('contractor', 'property_manager') then 'pending'
+      when normalized_role in ('contractor', 'property_manager') then 'pending'
       else 'active'
     end
   );
@@ -71,7 +73,7 @@ begin
     nullif(new.raw_user_meta_data->>'phone', ''),
     profile_role,
     profile_status,
-    profile_status in ('active', 'approved', 'enabled')
+    profile_status::text in ('active', 'approved', 'enabled')
   )
   on conflict (id) do update
   set
