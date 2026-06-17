@@ -21,7 +21,7 @@ const portalByRole = {
 
 let pendingProfiles = [];
 let properties = [];
-let isLegacyAccessSchema = false;
+let isStatusFallbackSchema = false;
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -41,6 +41,17 @@ function normalizeRole(role) {
     .trim()
     .toLowerCase()
     .replace(/[\s-]+/g, "_");
+}
+
+function normalizeStatus(status) {
+  return String(status || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+}
+
+function isApprovedStatus(status) {
+  return ["active", "approved", "enabled"].includes(normalizeStatus(status));
 }
 
 function getPortalHome(role) {
@@ -117,8 +128,12 @@ async function requireAdmin() {
 }
 
 function isPending(profile) {
+  if (profile.uses_status_fallback) {
+    return !isApprovedStatus(profile.status);
+  }
+
   if (profile.role === "contractor") {
-    return profile.contractor_approved !== true;
+    return profile.contractor_approved !== true && !isApprovedStatus(profile.status);
   }
 
   if (profile.role === "property_manager") {
@@ -129,8 +144,12 @@ function isPending(profile) {
 }
 
 function getPendingReason(profile) {
-  if (profile.access_schema_missing) {
-    return "Profile created. Approval migration is still needed.";
+  if (profile.uses_status_fallback) {
+    if (profile.role === "property_manager") {
+      return "Waiting for admin approval. Property linking still needs the account-access migration.";
+    }
+
+    return "Waiting for contractor approval.";
   }
 
   if (profile.role === "property_manager") {
@@ -158,9 +177,9 @@ function getPropertyOptions(selectedPropertyId = "") {
 function renderRequest(profile) {
   const name = getProfileName(profile);
   const isPropertyManager = profile.role === "property_manager";
-  const isLegacyRequest = Boolean(profile.access_schema_missing);
-  const propertyControl = isLegacyRequest
-    ? `<span class="account-request-meta">Run the account-access migration before approving.</span>`
+  const usesStatusFallback = Boolean(profile.uses_status_fallback);
+  const propertyControl = usesStatusFallback
+    ? `<span class="account-request-meta">Approving will mark this profile active.${isPropertyManager ? " Run the property-link migration to assign a specific property." : ""}</span>`
     : isPropertyManager
     ? `<select data-account-property-select="${escapeHtml(profile.id)}" aria-label="Property for ${escapeHtml(name)}" ${properties.length ? "" : "disabled"}>
         ${getPropertyOptions(profile.property_manager_property_id)}
@@ -179,12 +198,13 @@ function renderRequest(profile) {
       </div>
       <div class="account-request-meta">
         <span>${escapeHtml(getPendingReason(profile))}</span>
+        ${profile.status ? `<span>Status: ${escapeHtml(profile.status)}</span>` : ""}
         ${profile.phone ? `<span>${escapeHtml(profile.phone)}</span>` : ""}
       </div>
       <div class="account-request-actions">
         ${propertyControl}
-        <button class="approve-account-btn" type="button" data-approve-account-id="${escapeHtml(profile.id)}" ${isLegacyRequest ? "disabled" : ""}>
-          ${isLegacyRequest ? "Migration Needed" : isPropertyManager ? "Link & Approve" : "Approve"}
+        <button class="approve-account-btn" type="button" data-approve-account-id="${escapeHtml(profile.id)}">
+          ${isPropertyManager && !usesStatusFallback ? "Link & Approve" : "Approve"}
         </button>
       </div>
     </article>
@@ -201,12 +221,24 @@ function renderRequests() {
     : `<div class="account-request-empty">No account requests are waiting right now.</div>`;
 }
 
+function normalizeProfile(profile) {
+  return {
+    ...profile,
+    role: normalizeRole(profile.role),
+    uses_status_fallback: isStatusFallbackSchema
+  };
+}
+
+function isAccountRequestRole(profile) {
+  return ["contractor", "property_manager"].includes(profile.role);
+}
+
 async function loadRequests() {
   if (!list) return;
 
   showMessage("Loading account requests...");
 
-  isLegacyAccessSchema = false;
+  isStatusFallbackSchema = false;
 
   const [{ data: propertyData, error: propertyError }, profileResult] = await Promise.all([
     supabase
@@ -215,8 +247,7 @@ async function loadRequests() {
       .order("name", { ascending: true }),
     supabase
       .from("profiles")
-      .select("id, full_name, email, phone, role, contractor_approved, property_manager_property_id")
-      .in("role", ["contractor", "property_manager"])
+      .select("id, full_name, email, phone, role, status, contractor_approved, property_manager_property_id")
       .order("role", { ascending: true })
       .order("email", { ascending: true })
   ]);
@@ -225,11 +256,10 @@ async function loadRequests() {
   let profileError = profileResult.error;
 
   if (profileError && isMissingColumnError(profileError)) {
-    isLegacyAccessSchema = true;
+    isStatusFallbackSchema = true;
     const fallback = await supabase
       .from("profiles")
-      .select("id, email, role, full_name")
-      .in("role", ["contractor", "property_manager"])
+      .select("id, email, role, full_name, phone, status")
       .order("role", { ascending: true })
       .order("email", { ascending: true });
 
@@ -246,12 +276,9 @@ async function loadRequests() {
 
   properties = propertyError ? [] : (propertyData || []);
   pendingProfiles = (profileData || [])
-    .map((profile) => ({
-      ...profile,
-      role: normalizeRole(profile.role),
-      access_schema_missing: isLegacyAccessSchema
-    }))
-    .filter((profile) => isLegacyAccessSchema || isPending(profile))
+    .map(normalizeProfile)
+    .filter(isAccountRequestRole)
+    .filter(isPending)
     .sort((a, b) => getProfileName(a).localeCompare(getProfileName(b)));
 
   renderRequests();
@@ -262,8 +289,10 @@ async function loadRequests() {
   }
 
   showMessage(
-    isLegacyAccessSchema
-      ? "Profile rows are being created. Run the account-access Supabase migration to enable approvals and property linking."
+    isStatusFallbackSchema
+      ? pendingProfiles.length
+        ? "Approve contractors using profile status. Run the account-access migration when you need property-manager property linking."
+        : "No pending status-based account requests were found. If a contractor is still blocked, the admin profile may need the account-access RLS policy migration."
       : pendingProfiles.length
       ? "Approve contractors directly, or link property managers to a property."
       : "All account requests are handled."
@@ -274,24 +303,23 @@ async function approveRequest(profileId) {
   const profile = pendingProfiles.find((item) => item.id === profileId);
   if (!profile || !list) return;
 
-  if (profile.access_schema_missing) {
-    showMessage("Run the account-access Supabase migration before approving accounts.");
-    return;
-  }
-
   const button = list.querySelector(`[data-approve-account-id="${profileId}"]`);
   if (button) button.disabled = true;
 
-  const payload = profile.role === "property_manager"
+  const payload = profile.uses_status_fallback
+    ? { status: "active" }
+    : profile.role === "property_manager"
     ? {
         property_manager_property_id: list.querySelector(`[data-account-property-select="${profileId}"]`)?.value || null,
-        contractor_approved: true
+        contractor_approved: true,
+        status: "active"
       }
     : {
-        contractor_approved: true
+        contractor_approved: true,
+        status: "active"
       };
 
-  if (profile.role === "property_manager" && !payload.property_manager_property_id) {
+  if (!profile.uses_status_fallback && profile.role === "property_manager" && !payload.property_manager_property_id) {
     showMessage("Choose a property before approving this property manager.");
     if (button) button.disabled = false;
     return;
@@ -299,10 +327,18 @@ async function approveRequest(profileId) {
 
   showMessage(`Approving ${getProfileName(profile)}...`);
 
-  const { error } = await supabase
+  let { error } = await supabase
     .from("profiles")
     .update(payload)
     .eq("id", profileId);
+
+  if (error && isMissingColumnError(error)) {
+    const retry = await supabase
+      .from("profiles")
+      .update({ status: "active" })
+      .eq("id", profileId);
+    error = retry.error;
+  }
 
   if (error) {
     showMessage("Error approving account: " + error.message);
