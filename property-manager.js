@@ -22,6 +22,17 @@ function normalizeRole(role) {
     .replace(/[\s-]+/g, "_");
 }
 
+function normalizeStatus(status) {
+  return String(status || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+}
+
+function isActiveProfile(profile) {
+  return ["active", "approved", "enabled"].includes(normalizeStatus(profile?.status));
+}
+
 function getPortalHome(role) {
   return roleDashboards[normalizeRole(role)] || "contractor.html";
 }
@@ -66,14 +77,14 @@ async function requireManagerAccess() {
 
   let { data: profile, error } = await supabase
     .from("profiles")
-    .select("role, full_name, property_manager_property_id")
+    .select("role, full_name, status, property_manager_property_id")
     .eq("id", user.id)
     .maybeSingle();
 
   if (error) {
     const fallback = await supabase
       .from("profiles")
-      .select("role, full_name")
+      .select("role, full_name, status")
       .eq("id", user.id)
       .maybeSingle();
     profile = fallback.data ? { ...fallback.data, property_manager_property_id: null, access_setup_error: true } : null;
@@ -95,9 +106,14 @@ async function requireManagerAccess() {
   const nameElement = document.getElementById("managerUserName");
   if (nameElement) nameElement.textContent = name;
 
+  if (!isActiveProfile(profile)) {
+    renderLockedState("Approval pending", "A Turnly admin must approve this property manager account before property data is visible.");
+    return;
+  }
+
   if (!profile.property_manager_property_id) {
     const setupText = profile.access_setup_error
-      ? "The account is signed in, but the latest Supabase account-access migration still needs to be applied before property linking can be checked."
+      ? "This account is approved, but the account-access migration is still needed before a property can be linked."
       : "A Turnly admin must link this property manager account to a specific property before any property data is visible.";
     renderLockedState("Property link required", setupText);
     return;
