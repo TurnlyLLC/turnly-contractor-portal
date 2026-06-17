@@ -52,7 +52,7 @@ function getAuthError() {
 async function getProfile(userId) {
   const { data, error } = await supabase
     .from("profiles")
-    .select("role, contractor_approved, property_manager_property_id")
+    .select("role, status, contractor_approved, property_manager_property_id")
     .eq("id", userId)
     .maybeSingle();
 
@@ -62,7 +62,7 @@ async function getProfile(userId) {
 
   const fallback = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, status")
     .eq("id", userId)
     .maybeSingle();
 
