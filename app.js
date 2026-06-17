@@ -26,6 +26,10 @@ const propertySelect = document.getElementById("propertySelect");
 
 let checklistDraft = [];
 let savedProperties = [];
+let currentMyAssignmentById = new Map();
+let pendingStartAssignment = null;
+let pendingStartUser = null;
+let pendingStartPosition = null;
 
 function showMessage(text, target = message) {
   if (target) target.textContent = text;
@@ -46,6 +50,24 @@ function escapeHtml(value) {
 
 function formatDateTime(value) {
   return value ? new Date(value).toLocaleString() : "Not set";
+}
+
+function formatTimeOnly(value) {
+  return value
+    ? new Date(value).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+    : "Not set";
+}
+
+function formatRelativeStart(value) {
+  if (!value) return "Start time not recorded";
+
+  const minutes = Math.max(0, Math.round((Date.now() - new Date(value).getTime()) / 60000));
+  if (minutes < 1) return "Started just now";
+  if (minutes < 60) return `Started ${minutes} min ago`;
+
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return `Started ${hours} hr${hours === 1 ? "" : "s"}${remainingMinutes ? ` ${remainingMinutes} min` : ""} ago`;
 }
 
 function formatMoney(value) {
@@ -70,6 +92,20 @@ function formatClaimant(item) {
 
 function statusClass(status) {
   return "status-" + String(status || "unknown").toLowerCase().replace(/[^a-z0-9]+/g, "-");
+}
+
+function isMissingStartColumnError(error) {
+  const text = String(error?.message || "").toLowerCase();
+  return [
+    "started_at",
+    "started_by",
+    "start_latitude",
+    "start_longitude",
+    "start_location_accuracy",
+    "start_notes",
+    "schema cache",
+    "could not find"
+  ].some((part) => text.includes(part));
 }
 
 function getMapsUrl(address) {
@@ -509,6 +545,196 @@ function resetPropertyForm() {
   renderChecklistBuilder();
 }
 
+function ensureStartJobModal() {
+  let modal = document.getElementById("startJobModal");
+  if (modal) return modal;
+
+  document.body.insertAdjacentHTML("beforeend", `
+    <div id="startJobModal" class="start-job-modal" role="dialog" aria-modal="true" aria-labelledby="startJobTitle" hidden>
+      <div class="start-job-panel">
+        <div class="start-job-header">
+          <div>
+            <p class="wip-kicker">Start Job</p>
+            <h2 id="startJobTitle">Confirm job start</h2>
+          </div>
+          <button type="button" class="secondary-btn small-btn" data-close-start-job>Cancel</button>
+        </div>
+
+        <div id="startJobSummary" class="start-job-summary"></div>
+
+        <div class="start-job-checklist">
+          <label class="start-job-confirm">
+            <input id="startJobOnsite" type="checkbox" />
+            I am on site and ready to begin this job.
+          </label>
+
+          <label>
+            Start note
+            <textarea id="startJobNotes" rows="3" placeholder="Gate code used, supply issue, site condition, etc."></textarea>
+          </label>
+
+          <div class="start-location-row">
+            <button type="button" class="secondary-btn" id="startJobLocationBtn">Use Current Location</button>
+            <p id="startJobLocationStatus">Location is optional.</p>
+          </div>
+        </div>
+
+        <p id="startJobModalMessage" class="status-message" aria-live="polite"></p>
+
+        <div class="start-job-actions">
+          <button type="button" class="secondary-btn" data-close-start-job>Not Yet</button>
+          <button type="button" class="primary-btn" id="confirmStartJobBtn">Start Job</button>
+        </div>
+      </div>
+    </div>
+  `);
+
+  modal = document.getElementById("startJobModal");
+  modal.querySelectorAll("[data-close-start-job]").forEach((button) => {
+    button.addEventListener("click", closeStartJobModal);
+  });
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) closeStartJobModal();
+  });
+  document.getElementById("startJobLocationBtn")?.addEventListener("click", captureStartLocation);
+  document.getElementById("confirmStartJobBtn")?.addEventListener("click", confirmStartJobFromModal);
+
+  return modal;
+}
+
+function openStartJobModal(assignmentId, user) {
+  const assignment = currentMyAssignmentById.get(assignmentId);
+  if (!assignment) {
+    showMessage("Unable to find that claimed job. Refreshing assignments...", getAssignmentMessageTarget());
+    loadMyAssignments(user);
+    return;
+  }
+
+  pendingStartAssignment = assignment;
+  pendingStartUser = user;
+  pendingStartPosition = null;
+
+  const modal = ensureStartJobModal();
+  const summary = document.getElementById("startJobSummary");
+  const locationStatus = document.getElementById("startJobLocationStatus");
+  const modalMessage = document.getElementById("startJobModalMessage");
+  const onsiteCheckbox = document.getElementById("startJobOnsite");
+  const notesInput = document.getElementById("startJobNotes");
+  const mapUrl = getMapsUrl(assignment.address);
+
+  if (summary) {
+    summary.innerHTML = `
+      <div>
+        <span>Property</span>
+        <strong>${escapeHtml(assignment.property_name || assignment.title || "Assignment")}</strong>
+      </div>
+      <div>
+        <span>Address</span>
+        <strong>${escapeHtml(assignment.address || "Address not set")}</strong>
+      </div>
+      <div>
+        <span>Window</span>
+        <strong>${escapeHtml(formatTimeOnly(assignment.start_window))} - ${escapeHtml(formatTimeOnly(assignment.end_window))}</strong>
+      </div>
+      <div>
+        <span>Service</span>
+        <strong>${escapeHtml(assignment.service_type || "Service not set")}</strong>
+      </div>
+      ${assignment.special_instructions ? `
+        <div class="span-two">
+          <span>Instructions</span>
+          <strong>${escapeHtml(assignment.special_instructions)}</strong>
+        </div>
+      ` : ""}
+      ${mapUrl ? `<a class="secondary-btn small-btn span-two" href="${mapUrl}" target="_blank" rel="noopener">Open Map</a>` : ""}
+    `;
+  }
+
+  if (locationStatus) locationStatus.textContent = "Location is optional.";
+  if (modalMessage) modalMessage.textContent = "";
+  if (onsiteCheckbox) onsiteCheckbox.checked = false;
+  if (notesInput) notesInput.value = "";
+
+  modal.hidden = false;
+  document.body.classList.add("modal-open");
+  onsiteCheckbox?.focus();
+}
+
+function closeStartJobModal() {
+  const modal = document.getElementById("startJobModal");
+  if (modal) modal.hidden = true;
+  document.body.classList.remove("modal-open");
+  pendingStartAssignment = null;
+  pendingStartUser = null;
+  pendingStartPosition = null;
+}
+
+async function captureStartLocation() {
+  const locationButton = document.getElementById("startJobLocationBtn");
+  const locationStatus = document.getElementById("startJobLocationStatus");
+
+  if (!navigator.geolocation) {
+    if (locationStatus) locationStatus.textContent = "Location is not available on this device.";
+    return;
+  }
+
+  if (locationButton) locationButton.disabled = true;
+  if (locationStatus) locationStatus.textContent = "Getting current location...";
+
+  try {
+    const position = await new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 12000
+      });
+    });
+
+    pendingStartPosition = {
+      latitude: position.coords.latitude,
+      longitude: position.coords.longitude,
+      accuracy: position.coords.accuracy
+    };
+
+    if (locationStatus) {
+      locationStatus.textContent = `Location captured (${Math.round(position.coords.accuracy)}m accuracy).`;
+    }
+  } catch (error) {
+    pendingStartPosition = null;
+    if (locationStatus) {
+      locationStatus.textContent = error?.message || "Location was not shared.";
+    }
+  } finally {
+    if (locationButton) locationButton.disabled = false;
+  }
+}
+
+async function confirmStartJobFromModal() {
+  const modalMessage = document.getElementById("startJobModalMessage");
+  const onsiteCheckbox = document.getElementById("startJobOnsite");
+  const confirmButton = document.getElementById("confirmStartJobBtn");
+  const notes = document.getElementById("startJobNotes")?.value.trim() || "";
+
+  if (!pendingStartAssignment || !pendingStartUser) {
+    showMessage("Unable to start this job. Refresh the assignment list and try again.", modalMessage);
+    return;
+  }
+
+  if (!onsiteCheckbox?.checked) {
+    showMessage("Confirm that you are on site before starting the job.", modalMessage);
+    return;
+  }
+
+  if (confirmButton) confirmButton.disabled = true;
+  const didStart = await startAssignment(pendingStartAssignment.id, pendingStartUser, {
+    notes,
+    position: pendingStartPosition
+  });
+  if (confirmButton) confirmButton.disabled = false;
+
+  if (didStart) closeStartJobModal();
+}
+
 if (claimedAdminAssignments) {
   const user = await requireLogin();
 
@@ -598,8 +824,7 @@ if (contractorDashboard || contractorAssignments || myAssignments) {
           const button = e.target.closest("[data-start-assignment-id]");
           if (!button) return;
 
-          button.disabled = true;
-          await startAssignment(button.dataset.startAssignmentId, user);
+          openStartJobModal(button.dataset.startAssignmentId, user);
         });
       }
     }
@@ -651,6 +876,8 @@ async function loadMyAssignments(user) {
     myAssignments.innerHTML = `<p>${escapeHtml(error.message)}</p>`;
     return;
   }
+
+  currentMyAssignmentById = new Map((data || []).map((item) => [item.id, item]));
 
   if (!data.length) {
     myAssignments.innerHTML = "<p>You have not claimed any assignments yet.</p>";
@@ -715,33 +942,65 @@ async function claimOpenAssignment(assignmentId, payload) {
     .maybeSingle();
 }
 
-async function startAssignment(assignmentId, user) {
+async function startAssignment(assignmentId, user, details = {}) {
   const target = getAssignmentMessageTarget();
   showMessage("Starting job...", target);
 
-  const { data, error } = await supabase
-    .from("assignment_blocks")
-    .update({ status: "in_progress" })
-    .eq("id", assignmentId)
-    .eq("claimed_by", user.id)
-    .in("status", ["claimed", "scheduled"])
-    .select("*")
-    .maybeSingle();
+  const startPayload = {
+    status: "in_progress",
+    started_at: new Date().toISOString(),
+    started_by: user.id
+  };
+
+  if (details.notes) {
+    startPayload.start_notes = details.notes;
+  }
+
+  if (details.position) {
+    startPayload.start_latitude = details.position.latitude;
+    startPayload.start_longitude = details.position.longitude;
+    startPayload.start_location_accuracy = details.position.accuracy;
+  }
+
+  let { data, error } = await startClaimedAssignment(assignmentId, user, startPayload);
+  let usedLegacyStart = false;
+
+  if (error && isMissingStartColumnError(error)) {
+    usedLegacyStart = true;
+    ({ data, error } = await startClaimedAssignment(assignmentId, user, { status: "in_progress" }));
+  }
 
   if (error) {
     showMessage("Error: " + error.message, target);
     await loadMyAssignments(user);
-    return;
+    return false;
   }
 
   if (!data) {
     showMessage("This job could not be started from its current status.", target);
     await loadMyAssignments(user);
-    return;
+    return false;
   }
 
-  showMessage("Job started.", target);
+  showMessage(
+    usedLegacyStart
+      ? "Job started. Run the start-job migration to record start time and location."
+      : "Job started. The active job details are now open in My Assignments.",
+    target
+  );
   await loadMyAssignments(user);
+  return true;
+}
+
+async function startClaimedAssignment(assignmentId, user, payload) {
+  return supabase
+    .from("assignment_blocks")
+    .update(payload)
+    .eq("id", assignmentId)
+    .eq("claimed_by", user.id)
+    .in("status", ["claimed", "scheduled"])
+    .select("*")
+    .maybeSingle();
 }
 
 function renderAssignmentCard(item, options = {}) {
@@ -752,6 +1011,7 @@ function renderAssignmentCard(item, options = {}) {
   const status = escapeHtml(item.status || "unknown").replace(/_/g, " ");
   const claimedAt = item.claimed_at ? formatDateTime(item.claimed_at) : "";
   const claimant = `${formatClaimant(item)}${claimedAt ? " on " + escapeHtml(claimedAt) : ""}`;
+  const startedAt = item.started_at ? formatDateTime(item.started_at) : "";
   const mapUrl = getMapsUrl(item.address);
   const claimButton = mode === "contractor-open" && item.id
     ? `<button type="button" class="claim-btn" data-claim-assignment-id="${escapeHtml(item.id)}">Claim Job</button>`
@@ -765,6 +1025,31 @@ function renderAssignmentCard(item, options = {}) {
   const actions = [startButton, claimButton, mapLink].filter(Boolean).join("");
   const claimedInfo = mode === "admin" || mode === "contractor-claimed"
     ? `<p><strong>Claimed By:</strong> ${claimant}</p>`
+    : "";
+  const startLocationLink = item.start_latitude && item.start_longitude
+    ? `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${item.start_latitude},${item.start_longitude}`)}" target="_blank" rel="noopener">View captured point</a>`
+    : "";
+  const startedInfo = startedAt
+    ? `
+      <p><strong>Started:</strong> ${escapeHtml(startedAt)}</p>
+      ${item.start_notes ? `<p><strong>Start Note:</strong> ${escapeHtml(item.start_notes)}</p>` : ""}
+      ${startLocationLink ? `<p><strong>Start Location:</strong> ${startLocationLink}${item.start_location_accuracy ? ` (${Math.round(Number(item.start_location_accuracy))}m accuracy)` : ""}</p>` : ""}
+    `
+    : "";
+  const activeJobPanel = mode === "contractor-claimed" && normalizedStatus === "in_progress"
+    ? `
+      <div class="active-job-panel">
+        <div class="active-job-status">
+          <span>Active Job</span>
+          <strong>${escapeHtml(formatRelativeStart(item.started_at))}</strong>
+        </div>
+        <ol>
+          <li>Capture the site condition before work begins.</li>
+          <li>Complete the listed scope and property instructions.</li>
+          <li>Keep notes for blocked areas, damages, or missing supplies.</li>
+        </ol>
+      </div>
+    `
     : "";
 
   return `
@@ -782,6 +1067,8 @@ function renderAssignmentCard(item, options = {}) {
       <p><strong>Supplies:</strong> ${escapeHtml(item.supplies_notes)}</p>
       <p><strong>Instructions:</strong> ${escapeHtml(item.special_instructions)}</p>
       ${claimedInfo}
+      ${startedInfo}
+      ${activeJobPanel}
       ${actions ? `<div class="assignment-actions">${actions}</div>` : ""}
     </div>
   `;
