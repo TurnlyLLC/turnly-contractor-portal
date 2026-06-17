@@ -37,28 +37,47 @@
       <header class="command-header">
         <div>
           <h1>Contractor Dashboard</h1>
-          <p>View available Turnly work and track the assignments you have claimed.</p>
+          <p>Open jobs, claimed work, and start actions for the field.</p>
         </div>
       </header>
 
-      <section class="panel-card wip-panel">
-        <p class="wip-kicker">Contractor Workspace</p>
-        <h2>Manage your Turnly assignments</h2>
-        <p>Review open work blocks, claim available jobs, and keep claimed work organized from one place.</p>
+      <section class="panel-card wip-panel contractor-hero-panel">
+        <p class="wip-kicker">Field Workspace</p>
+        <h2>Today's work</h2>
+        <p>Review open jobs, claim the right assignment, and start claimed work from the same screen.</p>
 
         <div class="wip-mini-grid">
           <a href="contractor-available.html" class="tile-link wip-mini-card">
             <span>Open Work</span>
-            <strong>Available Assignments</strong>
-            <p>Review open work blocks and claim the jobs you want.</p>
+            <strong>Available Jobs</strong>
+            <p>Review open blocks ready to claim.</p>
           </a>
 
           <a href="contractor-my-assignments.html" class="tile-link wip-mini-card">
             <span>Claimed Work</span>
-            <strong>My Assignments</strong>
-            <p>See the jobs you have claimed and what is coming up.</p>
+            <strong>My Jobs</strong>
+            <p>Check claimed assignments and start on site.</p>
           </a>
         </div>
+      </section>
+
+      <section class="contractor-work-grid" aria-label="Contractor work dashboard">
+        <section class="panel-card contractor-work-panel">
+          <div class="panel-heading">
+            <h2>Available Jobs</h2>
+            <a href="contractor-available.html">View All</a>
+          </div>
+          <p id="claimMessage" class="status-message" aria-live="polite"></p>
+          <div id="contractorAssignments" class="assignment-list"></div>
+        </section>
+
+        <section class="panel-card contractor-work-panel">
+          <div class="panel-heading">
+            <h2>My Jobs</h2>
+            <a href="contractor-my-assignments.html">View All</a>
+          </div>
+          <div id="myAssignments" class="assignment-list"></div>
+        </section>
       </section>
     </section>
   </main>

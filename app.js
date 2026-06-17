@@ -31,6 +31,10 @@ function showMessage(text, target = message) {
   if (target) target.textContent = text;
 }
 
+function getAssignmentMessageTarget() {
+  return claimMessage || message;
+}
+
 function escapeHtml(value) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -66,6 +70,12 @@ function formatClaimant(item) {
 
 function statusClass(status) {
   return "status-" + String(status || "unknown").toLowerCase().replace(/[^a-z0-9]+/g, "-");
+}
+
+function getMapsUrl(address) {
+  return address
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`
+    : "";
 }
 
 async function getCurrentUser() {
@@ -582,6 +592,16 @@ if (contractorDashboard || contractorAssignments || myAssignments) {
           await claimAssignment(button.dataset.claimAssignmentId, user);
         });
       }
+
+      if (myAssignments) {
+        myAssignments.addEventListener("click", async (e) => {
+          const button = e.target.closest("[data-start-assignment-id]");
+          if (!button) return;
+
+          button.disabled = true;
+          await startAssignment(button.dataset.startAssignmentId, user);
+        });
+      }
     }
   }
 }
@@ -643,7 +663,8 @@ async function loadMyAssignments(user) {
 }
 
 async function claimAssignment(assignmentId, user) {
-  showMessage("Claiming assignment...", claimMessage);
+  const target = getAssignmentMessageTarget();
+  showMessage("Claiming assignment...", target);
 
   const contractorName = await getContractorName(user);
   const claimPayload = {
@@ -668,18 +689,18 @@ async function claimAssignment(assignmentId, user) {
   }
 
   if (error) {
-    showMessage("Error: " + error.message, claimMessage);
+    showMessage("Error: " + error.message, target);
     await loadContractorDashboard(user);
     return;
   }
 
   if (!data) {
-    showMessage("That assignment was already claimed by another contractor.", claimMessage);
+    showMessage("That assignment was already claimed by another contractor.", target);
     await loadContractorDashboard(user);
     return;
   }
 
-  showMessage("Assignment claimed. It is now listed under My Assignments.", claimMessage);
+  showMessage("Assignment claimed. It is now listed under My Assignments.", target);
   await loadContractorDashboard(user);
 }
 
@@ -694,16 +715,54 @@ async function claimOpenAssignment(assignmentId, payload) {
     .maybeSingle();
 }
 
+async function startAssignment(assignmentId, user) {
+  const target = getAssignmentMessageTarget();
+  showMessage("Starting job...", target);
+
+  const { data, error } = await supabase
+    .from("assignment_blocks")
+    .update({ status: "in_progress" })
+    .eq("id", assignmentId)
+    .eq("claimed_by", user.id)
+    .in("status", ["claimed", "scheduled"])
+    .select("*")
+    .maybeSingle();
+
+  if (error) {
+    showMessage("Error: " + error.message, target);
+    await loadMyAssignments(user);
+    return;
+  }
+
+  if (!data) {
+    showMessage("This job could not be started from its current status.", target);
+    await loadMyAssignments(user);
+    return;
+  }
+
+  showMessage("Job started.", target);
+  await loadMyAssignments(user);
+}
+
 function renderAssignmentCard(item, options = {}) {
   const mode = options.mode || "read";
   const start = formatDateTime(item.start_window);
   const end = formatDateTime(item.end_window);
-  const status = escapeHtml(item.status || "unknown");
+  const normalizedStatus = String(item.status || "unknown").toLowerCase();
+  const status = escapeHtml(item.status || "unknown").replace(/_/g, " ");
   const claimedAt = item.claimed_at ? formatDateTime(item.claimed_at) : "";
   const claimant = `${formatClaimant(item)}${claimedAt ? " on " + escapeHtml(claimedAt) : ""}`;
+  const mapUrl = getMapsUrl(item.address);
   const claimButton = mode === "contractor-open" && item.id
-    ? `<button type="button" class="claim-btn" data-claim-assignment-id="${escapeHtml(item.id)}">Claim Assignment</button>`
+    ? `<button type="button" class="claim-btn" data-claim-assignment-id="${escapeHtml(item.id)}">Claim Job</button>`
     : "";
+  const startButton = mode === "contractor-claimed" && item.id && ["claimed", "scheduled"].includes(normalizedStatus)
+    ? `<button type="button" class="claim-btn start-job-btn" data-start-assignment-id="${escapeHtml(item.id)}">Start Job</button>`
+    : "";
+  const mapLink = mapUrl && (mode === "contractor-open" || mode === "contractor-claimed")
+    ? `<a class="secondary-btn small-btn assignment-map-link" href="${mapUrl}" target="_blank" rel="noopener">Open Map</a>`
+    : "";
+  const actions = [startButton, claimButton, mapLink].filter(Boolean).join("");
   const claimedInfo = mode === "admin" || mode === "contractor-claimed"
     ? `<p><strong>Claimed By:</strong> ${claimant}</p>`
     : "";
@@ -723,7 +782,7 @@ function renderAssignmentCard(item, options = {}) {
       <p><strong>Supplies:</strong> ${escapeHtml(item.supplies_notes)}</p>
       <p><strong>Instructions:</strong> ${escapeHtml(item.special_instructions)}</p>
       ${claimedInfo}
-      ${claimButton ? `<div class="assignment-actions">${claimButton}</div>` : ""}
+      ${actions ? `<div class="assignment-actions">${actions}</div>` : ""}
     </div>
   `;
 }
