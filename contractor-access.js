@@ -112,6 +112,7 @@ if (!supabase) {
       );
     } else {
       await import("./app.js?v=20260617f");
+      await import("./contractor-job-flow.js?v=20260617f");
     }
   }
 }
