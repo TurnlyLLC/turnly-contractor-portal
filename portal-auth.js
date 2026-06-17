@@ -51,6 +51,11 @@ function escapeHtml(value) {
     .replace(/'/g, "&#039;");
 }
 
+function getInitialStatus(role = pageRole) {
+  const normalizedRole = normalizeRole(role);
+  return ["contractor", "property_manager"].includes(normalizedRole) ? "pending" : "active";
+}
+
 function setMessageTone(tone = "") {
   if (!authMessage) return;
   if (tone) {
@@ -114,7 +119,7 @@ function showMode(mode) {
 async function getProfile(userId) {
   const { data, error } = await supabase
     .from("profiles")
-    .select("role, contractor_approved, property_manager_property_id")
+    .select("role, status, contractor_approved, property_manager_property_id")
     .eq("id", userId)
     .maybeSingle();
 
@@ -124,7 +129,7 @@ async function getProfile(userId) {
 
   const fallback = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, status")
     .eq("id", userId)
     .maybeSingle();
 
@@ -135,7 +140,7 @@ async function getProfile(userId) {
     role: normalizeRole(fallback.data.role),
     contractor_approved: false,
     property_manager_property_id: null,
-    access_setup_error: true
+    access_setup_error: !fallback.data.status
   };
 }
 
@@ -300,6 +305,7 @@ signupForm?.addEventListener("submit", async (event) => {
         full_name: fullName,
         phone,
         role: pageRole,
+        status: getInitialStatus(pageRole),
         contractor_approved: pageRole !== "contractor"
       }
     }
