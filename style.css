@@ -18,6 +18,7 @@
 
 html {
   min-height: 100%;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
@@ -28,6 +29,7 @@ body {
     linear-gradient(135deg, #07111f 0%, #0b1524 48%, #0b1725 100%);
   color: var(--admin-text);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  overflow-x: hidden;
 }
 
 a {
@@ -116,7 +118,7 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 42px;
+  min-height: 44px;
   border: 1px solid rgba(144, 164, 183, 0.18);
   border-radius: 8px;
   background: rgba(23, 35, 52, 0.92);
@@ -322,9 +324,46 @@ input[readonly] {
   color: var(--admin-blue);
 }
 
+.status-in-progress {
+  background: rgba(255, 213, 40, 0.14);
+  color: var(--admin-yellow);
+}
+
 .status-unknown {
   background: rgba(154, 170, 188, 0.14);
   color: var(--admin-muted);
+}
+
+.assignment-map-link {
+  background: rgba(13, 31, 50, 0.92);
+  border-color: rgba(50, 170, 255, 0.35);
+  color: #aee3ff;
+}
+
+.start-job-btn {
+  background: var(--admin-green);
+  color: #061321;
+}
+
+.contractor-work-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.contractor-work-panel {
+  align-content: start;
+  display: grid;
+}
+
+.contractor-work-panel .assignment-list {
+  max-height: 580px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.contractor-hero-panel {
+  min-height: auto;
 }
 
 .dashboard-header {
@@ -448,5 +487,445 @@ input[readonly] {
 
   .dashboard-header h1 {
     font-size: 26px;
+  }
+}
+
+@media (max-width: 900px) {
+  body.admin-command-body .admin-command {
+    display: block;
+    min-height: 100vh;
+  }
+
+  body.admin-command-body .command-sidebar {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    height: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--admin-border);
+    padding: 12px;
+    gap: 12px;
+    background: rgba(6, 16, 29, 0.97);
+    backdrop-filter: blur(10px);
+  }
+
+  body.admin-command-body .command-brand {
+    font-size: 20px;
+    letter-spacing: 3px;
+  }
+
+  body.admin-command-body .command-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow-x: auto;
+    margin: 0 -2px;
+    padding: 0 2px 6px;
+    scrollbar-width: none;
+  }
+
+  body.admin-command-body .command-nav::-webkit-scrollbar,
+  body.sales-portal-body .sales-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  body.admin-command-body .command-nav p {
+    display: none;
+  }
+
+  body.admin-command-body .nav-link {
+    flex: 0 0 auto;
+    min-height: 44px;
+    padding: 10px 12px;
+    white-space: nowrap;
+  }
+
+  body.admin-command-body .nav-link.active {
+    border-right: 0;
+    box-shadow: inset 0 -2px 0 var(--admin-green);
+  }
+
+  body.admin-command-body .admin-user-card {
+    display: flex;
+    width: 100%;
+    min-height: 48px;
+    margin-top: 0;
+    padding: 10px 12px;
+  }
+
+  body.admin-command-body .admin-user-card .chevron {
+    margin-left: auto;
+  }
+
+  body.admin-command-body .command-main {
+    padding: 16px 12px 84px;
+  }
+
+  body.admin-command-body .command-header,
+  body.admin-command-body .command-tools,
+  body.admin-command-body .panel-heading {
+    gap: 12px;
+  }
+
+  body.admin-command-body .command-header h1 {
+    font-size: 24px;
+  }
+
+  body.admin-command-body .command-header p,
+  body.admin-command-body .wip-panel p,
+  .assignment-card p {
+    font-size: 14px;
+  }
+
+  body.admin-command-body .secondary-command-btn,
+  body.admin-command-body .new-btn,
+  .assignment-actions > a,
+  .assignment-actions > button {
+    width: 100%;
+    min-height: 48px;
+  }
+
+  body.admin-command-body .panel-card {
+    padding: 14px;
+  }
+
+  body.admin-command-body .wip-panel {
+    min-height: auto;
+    padding: 18px;
+  }
+
+  body.admin-command-body .wip-panel h2 {
+    font-size: 24px;
+  }
+
+  body.admin-command-body .metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  body.admin-command-body .pipeline-board {
+    display: flex;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    scroll-snap-type: x mandatory;
+  }
+
+  body.admin-command-body .pipeline-column {
+    flex: 0 0 min(86vw, 320px);
+    scroll-snap-align: start;
+  }
+
+  body.admin-command-body .schedule-list div {
+    align-items: start;
+    grid-template-columns: 10px 58px 1fr;
+  }
+
+  body.admin-command-body .schedule-list em {
+    grid-column: 3;
+    justify-self: start;
+  }
+
+  body.admin-command-body .assignments-overview,
+  body.admin-command-body .sales-table-wrap {
+    overflow-x: auto;
+  }
+
+  body.admin-command-body .assignments-overview table {
+    min-width: 580px;
+  }
+
+  body.admin-command-body .account-request-actions,
+  body.admin-command-body .account-request-person,
+  body.admin-command-body .qa-content,
+  .contractor-work-grid {
+    grid-template-columns: 1fr;
+  }
+
+  body.admin-command-body .account-request-actions button,
+  body.admin-command-body .account-request-actions select {
+    width: 100%;
+  }
+
+  .assignment-card {
+    padding: 14px;
+  }
+
+  .assignment-card h3 {
+    font-size: 18px;
+    margin-bottom: 4px;
+  }
+
+  .assignment-card p {
+    overflow-wrap: anywhere;
+  }
+
+  .assignment-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    justify-content: stretch;
+  }
+
+  .contractor-work-panel .assignment-list {
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
+  }
+}
+
+@media (max-width: 760px) {
+  body.sales-portal-body .sales-portal {
+    display: block;
+  }
+
+  body.sales-portal-body .sales-sidebar {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    height: auto;
+    display: grid;
+    gap: 12px;
+    grid-template-rows: auto auto auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--sales-line);
+    padding: 12px;
+    background: rgba(3, 12, 22, 0.97);
+    backdrop-filter: blur(10px);
+  }
+
+  body.sales-portal-body .sales-brand {
+    padding: 0 0 10px;
+  }
+
+  body.sales-portal-body .sales-brand strong {
+    font-size: 20px;
+  }
+
+  body.sales-portal-body .sales-brand span {
+    font-size: 10px;
+  }
+
+  body.sales-portal-body .sales-nav {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 0 0 6px;
+    scrollbar-width: none;
+  }
+
+  body.sales-portal-body .sales-nav p,
+  body.sales-portal-body .sales-collapse-btn,
+  body.sales-portal-body .sales-profile-chip,
+  body.sales-portal-body .sales-bell {
+    display: none;
+  }
+
+  body.sales-portal-body .sales-nav-link {
+    flex: 0 0 auto;
+    min-height: 44px;
+    white-space: nowrap;
+  }
+
+  body.sales-portal-body .sales-user-card {
+    min-height: 48px;
+  }
+
+  body.sales-portal-body .sales-main {
+    padding: 16px 12px 84px;
+  }
+
+  body.sales-portal-body .sales-topbar h1 {
+    font-size: 23px;
+  }
+
+  body.sales-portal-body .sales-top-actions,
+  body.sales-portal-body .sales-filter-row,
+  body.sales-portal-body .sales-board-toolbar,
+  body.sales-portal-body .sales-table-tabs,
+  body.sales-portal-body .sales-table-summary {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  body.sales-portal-body .sales-add-btn,
+  body.sales-portal-body .sales-filter-row button,
+  body.sales-portal-body .sales-filter-row select,
+  body.sales-portal-body .sales-table-tabs button,
+  body.sales-portal-body .sales-table-summary button {
+    width: 100%;
+    min-height: 46px;
+    justify-content: center;
+  }
+
+  body.sales-portal-body .sales-stats,
+  body.sales-portal-body .sales-right-rail,
+  body.sales-portal-body .sales-source-content,
+  body.sales-portal-body .sales-modal-grid {
+    grid-template-columns: 1fr;
+  }
+
+  body.sales-portal-body .sales-stat {
+    grid-template-columns: 40px 1fr;
+    padding: 14px;
+  }
+
+  body.sales-portal-body .sales-board {
+    display: flex;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    scroll-snap-type: x mandatory;
+  }
+
+  body.sales-portal-body .sales-stage-column {
+    flex: 0 0 min(84vw, 320px);
+    min-width: 0;
+    scroll-snap-align: start;
+  }
+
+  body.sales-portal-body .sales-team-head {
+    display: none;
+  }
+
+  body.sales-portal-body .sales-team-row {
+    grid-template-columns: 1fr auto;
+  }
+
+  body.sales-portal-body .sales-modal {
+    padding: 12px;
+  }
+
+  body.sales-portal-body .sales-modal-panel {
+    width: 100%;
+    max-height: calc(100vh - 24px);
+  }
+
+  body.sales-portal-body .sales-modal-grid .span-two {
+    grid-column: span 1;
+  }
+}
+
+@media (max-width: 720px) {
+  body.public-portal-body .public-shell {
+    width: min(calc(100% - 24px), 1480px);
+  }
+
+  body.public-portal-body .public-nav {
+    min-height: auto;
+    padding: 16px 0 12px;
+  }
+
+  body.public-portal-body .public-nav-actions,
+  body.public-portal-body .hero-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  body.public-portal-body .public-nav-actions a,
+  body.public-portal-body .public-btn,
+  body.public-portal-body .portal-choice-card em {
+    width: 100%;
+    min-height: 48px;
+    justify-content: center;
+    text-align: center;
+  }
+
+  body.public-portal-body .portal-entry-main,
+  body.public-portal-body .landing-main,
+  body.public-portal-body .signup-layout,
+  body.public-portal-body .role-auth-layout {
+    padding: 12px 0 28px;
+  }
+
+  body.public-portal-body .role-auth-intro {
+    min-height: auto;
+  }
+
+  body.public-portal-body .role-auth-card,
+  body.public-portal-body .signup-card,
+  body.public-portal-body .portal-choice-card {
+    padding: 18px;
+  }
+
+  body.public-portal-body .hero-copy h1,
+  body.public-portal-body .signup-intro h1,
+  body.public-portal-body .portal-entry-hero h1,
+  body.public-portal-body .role-auth-intro h1 {
+    font-size: clamp(32px, 10vw, 42px);
+    line-height: 1.04;
+  }
+
+  body.public-portal-body .portal-choice-card strong {
+    font-size: 24px;
+  }
+
+  body.public-portal-body .auth-mode-tabs button,
+  body.public-portal-body .public-form input,
+  body.public-portal-body .public-form select {
+    min-height: 48px;
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 640px) {
+  input,
+  select,
+  textarea {
+    min-height: 46px;
+    font-size: 16px;
+  }
+
+  .page,
+  .landing-page {
+    align-items: flex-start;
+    min-height: auto;
+    padding: 12px;
+  }
+
+  .hero-card,
+  .auth-card,
+  .dashboard-card {
+    border-radius: 10px;
+    padding: 18px;
+  }
+
+  .button-row,
+  .template-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .primary-btn,
+  .secondary-btn,
+  .button-row > a,
+  .button-row > button {
+    width: 100%;
+    min-height: 48px;
+  }
+
+  .feature-grid,
+  .grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  body.admin-command-body .metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  body.admin-command-body .command-brand span,
+  body.sales-portal-body .sales-brand span,
+  body.public-portal-body .public-brand small {
+    letter-spacing: 0.08em;
+  }
+
+  body.public-portal-body .public-brand strong {
+    font-size: 20px;
+  }
+
+  body.admin-command-body .avatar,
+  body.sales-portal-body .sales-avatar {
+    height: 36px;
+    width: 36px;
   }
 }
