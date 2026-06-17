@@ -54,6 +54,10 @@ function isApprovedStatus(status) {
   return ["active", "approved", "enabled"].includes(normalizeStatus(status));
 }
 
+function isPendingStatus(status) {
+  return normalizeStatus(status) === "pending";
+}
+
 function getPortalHome(role) {
   return portalByRole[normalizeRole(role)] || "contractor.html";
 }
@@ -128,15 +132,15 @@ async function requireAdmin() {
 }
 
 function isPending(profile) {
-  if (profile.uses_status_fallback) {
+  if (profile.role === "contractor") {
     return !isApprovedStatus(profile.status);
   }
 
-  if (profile.role === "contractor") {
-    return profile.contractor_approved !== true && !isApprovedStatus(profile.status);
-  }
-
   if (profile.role === "property_manager") {
+    if (profile.uses_status_fallback) {
+      return !isApprovedStatus(profile.status);
+    }
+
     return !profile.property_manager_property_id;
   }
 
@@ -144,19 +148,17 @@ function isPending(profile) {
 }
 
 function getPendingReason(profile) {
+  if (profile.role === "contractor") {
+    return isPendingStatus(profile.status)
+      ? "Status is pending. Approve to mark this contractor active."
+      : "Status is not active yet. Approve to activate this contractor.";
+  }
+
   if (profile.uses_status_fallback) {
-    if (profile.role === "property_manager") {
-      return "Waiting for admin approval. Property linking still needs the account-access migration.";
-    }
-
-    return "Waiting for contractor approval.";
+    return "Waiting for admin approval. Property linking still needs the account-access migration.";
   }
 
-  if (profile.role === "property_manager") {
-    return "Waiting for a linked property.";
-  }
-
-  return "Waiting for contractor approval.";
+  return "Waiting for a linked property.";
 }
 
 function getPropertyOptions(selectedPropertyId = "") {
@@ -184,7 +186,7 @@ function renderRequest(profile) {
     ? `<select data-account-property-select="${escapeHtml(profile.id)}" aria-label="Property for ${escapeHtml(name)}" ${properties.length ? "" : "disabled"}>
         ${getPropertyOptions(profile.property_manager_property_id)}
       </select>`
-    : `<span class="account-request-meta">Approve this contractor for assignment access.</span>`;
+    : `<span class="account-request-meta">Approving will change status from pending to active.</span>`;
 
   return `
     <article class="account-request-row">
@@ -291,10 +293,10 @@ async function loadRequests() {
   showMessage(
     isStatusFallbackSchema
       ? pendingProfiles.length
-        ? "Approve contractors using profile status. Run the account-access migration when you need property-manager property linking."
+        ? "Approve pending contractor profiles by changing profile status to active. Run the account-access migration when you need property-manager property linking."
         : "No pending status-based account requests were found. If a contractor is still blocked, the admin profile may need the account-access RLS policy migration."
       : pendingProfiles.length
-      ? "Approve contractors directly, or link property managers to a property."
+      ? "Approve pending contractors directly, or link property managers to a property."
       : "All account requests are handled."
   );
 }
