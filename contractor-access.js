@@ -20,6 +20,18 @@ function normalizeRole(role) {
     .replace(/[\s-]+/g, "_");
 }
 
+function normalizeStatus(status) {
+  return String(status || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+}
+
+function isActiveProfile(profile) {
+  return profile?.contractor_approved === true ||
+    ["active", "approved", "enabled"].includes(normalizeStatus(profile?.status));
+}
+
 function getPortalHome(role) {
   return roleDashboards[normalizeRole(role)] || "contractor.html";
 }
@@ -43,7 +55,7 @@ function renderNotice(title, body) {
 async function getProfile(userId) {
   const { data, error } = await supabase
     .from("profiles")
-    .select("role, contractor_approved")
+    .select("role, status, contractor_approved")
     .eq("id", userId)
     .maybeSingle();
 
@@ -53,7 +65,7 @@ async function getProfile(userId) {
 
   const fallback = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, status")
     .eq("id", userId)
     .maybeSingle();
 
@@ -63,7 +75,7 @@ async function getProfile(userId) {
     ...fallback.data,
     role: normalizeRole(fallback.data.role),
     contractor_approved: false,
-    access_setup_error: true
+    access_setup_error: !fallback.data.status
   };
 }
 
@@ -90,9 +102,9 @@ if (!supabase) {
       window.location.href = "property-manager-login.html";
     } else if (role !== "contractor") {
       window.location.href = getPortalHome(role);
-    } else if (profile.contractor_approved !== true) {
+    } else if (!isActiveProfile(profile)) {
       const setupNote = profile.access_setup_error
-        ? " The latest account-access Supabase migration still needs to be applied."
+        ? " Ask Turnly to finish the account-access setup if this does not appear in the admin requests panel."
         : "";
       renderNotice(
         "Approval pending",
