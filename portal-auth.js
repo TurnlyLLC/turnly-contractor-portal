@@ -154,6 +154,27 @@ async function waitForProfile(userId) {
   return null;
 }
 
+async function syncSignupProfile(user, details) {
+  if (!user?.id || !supabase) return;
+
+  const role = normalizeRole(details.role);
+  const status = getInitialStatus(role);
+  const { error } = await supabase
+    .from("profiles")
+    .upsert({
+      id: user.id,
+      email: details.email,
+      full_name: details.fullName,
+      phone: details.phone,
+      role,
+      status
+    }, { onConflict: "id" });
+
+  if (error) {
+    console.warn("Profile sync after signup skipped:", error.message);
+  }
+}
+
 document.querySelectorAll("[data-auth-mode]").forEach((button) => {
   button.addEventListener("click", () => showMode(button.dataset.authMode));
 });
@@ -275,6 +296,8 @@ signupForm?.addEventListener("submit", async (event) => {
   const password = document.getElementById("signupPassword")?.value || "";
   const verifyPassword = document.getElementById("verifyPassword")?.value || "";
   const fullName = `${firstName} ${lastName}`.trim();
+  const normalizedSignupRole = normalizeRole(pageRole);
+  const initialStatus = getInitialStatus(normalizedSignupRole);
 
   if (!firstName || !lastName || !email || !phone || !password || !verifyPassword) {
     showMessage("Fill out every field to create the account.", "error");
@@ -298,15 +321,15 @@ signupForm?.addEventListener("submit", async (event) => {
     email,
     password,
     options: {
-      emailRedirectTo: authCallbackUrl(pageRole),
+      emailRedirectTo: authCallbackUrl(normalizedSignupRole),
       data: {
         first_name: firstName,
         last_name: lastName,
         full_name: fullName,
         phone,
-        role: pageRole,
-        status: getInitialStatus(pageRole),
-        contractor_approved: pageRole !== "contractor"
+        role: normalizedSignupRole,
+        status: initialStatus,
+        contractor_approved: initialStatus === "active"
       }
     }
   });
@@ -327,8 +350,14 @@ signupForm?.addEventListener("submit", async (event) => {
   }
 
   if (data?.session && data?.user) {
+    await syncSignupProfile(data.user, {
+      email,
+      fullName,
+      phone,
+      role: normalizedSignupRole
+    });
     await waitForProfile(data.user.id);
-    const didRoute = await routeAuthenticatedUser(data.user, pageRole);
+    const didRoute = await routeAuthenticatedUser(data.user, normalizedSignupRole);
     if (!didRoute) {
       setFormLoading(signupForm, false, "Creating Account...", `Create ${pageLabel} Account`);
     }
