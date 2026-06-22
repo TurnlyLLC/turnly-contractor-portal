@@ -107,6 +107,28 @@ const commandCenterState = {
   qaAlerts: [],
   scheduleItems: []
 };
+const leadTable = "portal_properties";
+const leadOptionalColumns = [
+  "property_type",
+  "city",
+  "state",
+  "postal_code",
+  "expected_close_date"
+];
+const leadSourceOptions = ["", "Website", "Referral", "Outbound", "Property Manager", "Google", "Existing Client", "Other"];
+const leadPropertyTypeOptions = ["", "Office", "Retail", "Medical", "Multifamily", "Industrial", "Mixed Use", "Other"];
+const leadState = {
+  rows: [],
+  user: null,
+  profile: null,
+  selectedId: null,
+  view: "pipeline",
+  search: "",
+  ownerFilter: "all",
+  stageFilter: "all",
+  sourceFilter: "all",
+  isSaving: false
+};
 
 const pages = {
   "dashboard": {
@@ -1259,45 +1281,696 @@ function renderPipelineColumns() {
   return stageLabels.map(([id, label, tone]) => `
     <article class="lead-stage ${tone}" data-pipeline-stage="${id}">
       <header><span>${esc(label)}</span><strong data-stage-count="${id}">0</strong></header>
-      <div class="lead-drop" data-stage-dropzone="${id}">
-        <button type="button">+</button>
-        <small>Add Lead</small>
+      <div class="lead-stage-list" data-lead-stage-list="${id}">
+        ${emptyState("clipboard-list", "No leads")}
       </div>
+      <button class="lead-drop" type="button" data-lead-stage-add="${id}">
+        ${icon("plus")}
+        <small>Add Lead</small>
+      </button>
     </article>
   `).join("");
 }
 
 function renderLeads() {
   return `
-    ${toolbar(
-      `${chip("Pipeline", true, "filter")}${chip("List View", false, "list")}`,
-      `${selectButton("All Owners")}${actionButton("Filters", "filter", "", "secondary")}${actionButton("Add Lead", "plus")}`
-    )}
-    <section class="lead-board">${renderPipelineColumns()}</section>
-    <section class="content-rail">
-      ${panel("Lead Details", formGrid([
-        inputControl("Company Name"),
-        inputControl("Contact Name"),
-        inputControl("Phone"),
-        inputControl("Email"),
-        selectControl("Property Type", [""]),
-        inputControl("Property Name"),
-        inputControl("Address"),
-        inputControl("City"),
-        selectControl("State", [""]),
-        inputControl("ZIP Code"),
-        selectControl("Lead Source", [""]),
-        selectControl("Lead Owner", [""]),
-        inputControl("Estimated Value", "$"),
-        inputControl("Close Date", "", "date"),
-        textareaControl("Notes", "wide")
-      ]), { className: "span-main" })}
+    <section class="leads-workspace" data-leads-page>
+      ${toolbar(
+        `<button class="view-chip active" type="button" data-lead-view-toggle="pipeline">${icon("filter")}<span>Pipeline</span></button><button class="view-chip" type="button" data-lead-view-toggle="list">${icon("list")}<span>List View</span></button>`,
+        `<label class="inline-search lead-search">${icon("search")}<input id="leadSearchInput" type="search" placeholder="Search leads..." /></label><select id="leadOwnerFilter" class="select-button lead-owner-filter" aria-label="Filter owner"><option value="all">All Owners</option></select><button class="secondary-action" type="button" data-lead-filter-toggle>${icon("filter")}<span>Filters</span></button><button id="leadAddBtn" class="primary-action" type="button">${icon("plus")}<span>Add Lead</span></button>`
+      )}
+      <section id="leadFilterPanel" class="lead-filter-panel" hidden>
+        <label class="suite-field"><span>Stage</span><select id="leadStageFilter"><option value="all">All Stages</option>${stageLabels.map(([id, label]) => `<option value="${esc(id)}">${esc(label)}</option>`).join("")}</select></label>
+        <label class="suite-field"><span>Lead Source</span><select id="leadSourceFilter"><option value="all">All Sources</option>${leadSourceOptions.filter(Boolean).map((source) => `<option value="${esc(source)}">${esc(source)}</option>`).join("")}</select></label>
+        <button class="secondary-action" type="button" data-lead-clear-filters><span>Clear Filters</span></button>
+      </section>
+      <p id="leadMessage" class="status-message" aria-live="polite"></p>
+      <section id="leadBoard" class="lead-board">${renderPipelineColumns()}</section>
+      <section id="leadListPanel" class="lead-list-panel" hidden>
+        <div id="leadList" class="lead-list">${skeletonRows(4)}</div>
+      </section>
+      <section class="content-rail lead-detail-rail">
+        ${panel("Lead Details", leadForm(), { className: "span-main" })}
       <div class="suite-stack">
-        ${panel("Activity Log", emptyState("calendar", "No activity yet"), { action: { label: "View All", tone: "secondary" } })}
-        ${panel("Files & Documents", uploadDrop())}
+        ${panel("Activity Log", `<div id="leadActivityLog" class="lead-activity-list">${emptyState("calendar", "No activity yet")}</div>`)}
+        ${panel("Lead Navigation", leadNavigationPanel())}
       </div>
+      </section>
     </section>
   `;
+}
+
+function leadInputField(id, label, type = "text", options = {}) {
+  const attrs = [
+    options.required ? "required" : "",
+    options.placeholder ? `placeholder="${esc(options.placeholder)}"` : "",
+    options.step ? `step="${esc(options.step)}"` : "",
+    options.min ? `min="${esc(options.min)}"` : ""
+  ].filter(Boolean).join(" ");
+  return `<label class="suite-field ${options.className || ""}"><span>${esc(label)}</span><input id="${esc(id)}" type="${esc(type)}" ${attrs} /></label>`;
+}
+
+function leadSelectField(id, label, options = [], config = {}) {
+  return `
+    <label class="suite-field ${config.className || ""}">
+      <span>${esc(label)}</span>
+      <select id="${esc(id)}" ${config.required ? "required" : ""}>
+        ${options.map((option) => {
+          const value = Array.isArray(option) ? option[0] : option;
+          const labelText = Array.isArray(option) ? option[1] : option || config.emptyLabel || "Select...";
+          return `<option value="${esc(value)}">${esc(labelText)}</option>`;
+        }).join("")}
+      </select>
+    </label>
+  `;
+}
+
+function leadTextareaField(id, label, className = "") {
+  return `<label class="suite-field ${className}"><span>${esc(label)}</span><textarea id="${esc(id)}"></textarea></label>`;
+}
+
+function leadForm() {
+  return `
+    <form id="leadForm" class="lead-form">
+      <input id="leadId" type="hidden" />
+      ${formGrid([
+        leadSelectField("leadPipelineStage", "Pipeline Stage", stageLabels.map(([id, label]) => [id, label]), { required: true }),
+        leadInputField("leadCompanyName", "Company Name", "text", { required: true }),
+        leadInputField("leadContactName", "Contact Name"),
+        leadInputField("leadPhone", "Phone", "tel"),
+        leadInputField("leadEmail", "Email", "email"),
+        leadSelectField("leadPropertyType", "Property Type", leadPropertyTypeOptions, { emptyLabel: "Select type" }),
+        leadInputField("leadPropertyName", "Property Name", "text", { required: true }),
+        leadInputField("leadAddress", "Address"),
+        leadInputField("leadCity", "City"),
+        leadInputField("leadState", "State"),
+        leadInputField("leadZip", "ZIP Code"),
+        leadSelectField("leadSource", "Lead Source", leadSourceOptions, { emptyLabel: "Select source" }),
+        leadInputField("leadOwner", "Lead Owner"),
+        leadInputField("leadEstimatedValue", "Estimated Value", "number", { min: "0", step: "0.01" }),
+        leadInputField("leadCloseDate", "Close Date", "date"),
+        leadInputField("leadNextStep", "Next Step", "text", { className: "wide" }),
+        leadInputField("leadNextStepDue", "Next Step Due", "date"),
+        leadTextareaField("leadNotes", "Notes", "wide")
+      ])}
+      <div class="lead-form-actions">
+        <button id="leadNewBtn" class="secondary-action" type="button">${icon("plus")}<span>New Lead</span></button>
+        <button id="leadMoveNextBtn" class="secondary-action" type="button">${icon("chevron-right")}<span>Move Next</span></button>
+        <button id="leadSaveBtn" class="primary-action" type="submit">${icon("check")}<span>Save Lead</span></button>
+      </div>
+    </form>
+  `;
+}
+
+function leadNavigationPanel() {
+  return `
+    <div class="lead-navigation-panel">
+      <p id="leadNavigationSummary">Select a lead to jump between workflow pages or move it through the pipeline.</p>
+      <div class="quick-nav-list">
+        <button type="button" data-lead-move-stage="contacted">${icon("contact")}<span>Mark Contacted</span></button>
+        <button type="button" data-lead-move-stage="walkthrough">${icon("calendar-days")}<span>Move to Walkthrough</span></button>
+        <button type="button" data-lead-move-stage="quote_sent">${icon("badge-dollar")}<span>Move to Quote Sent</span></button>
+        <button type="button" data-lead-move-stage="contract_out">${icon("file-signature")}<span>Move to Contract Out</span></button>
+        <a href="walkthroughs.html">${icon("calendar-days")}<span>Open Walkthroughs</span></a>
+        <a href="quotes.html">${icon("badge-dollar")}<span>Open Quotes</span></a>
+        <a href="contracts-pending.html">${icon("file-signature")}<span>Open Contracts Pending</span></a>
+      </div>
+    </div>
+  `;
+}
+
+function initLeads() {
+  const root = document.querySelector("[data-leads-page]");
+  if (!root) return;
+
+  root.addEventListener("click", handleLeadClick);
+  root.querySelector("#leadForm")?.addEventListener("submit", saveLeadForm);
+  root.querySelector("#leadSearchInput")?.addEventListener("input", (event) => {
+    leadState.search = event.target.value || "";
+    renderLeadData();
+  });
+  root.querySelector("#leadOwnerFilter")?.addEventListener("change", (event) => {
+    leadState.ownerFilter = event.target.value || "all";
+    renderLeadData();
+  });
+  root.querySelector("#leadStageFilter")?.addEventListener("change", (event) => {
+    leadState.stageFilter = event.target.value || "all";
+    renderLeadData();
+  });
+  root.querySelector("#leadSourceFilter")?.addEventListener("change", (event) => {
+    leadState.sourceFilter = event.target.value || "all";
+    renderLeadData();
+  });
+
+  clearLeadForm();
+  void loadLeads();
+}
+
+function handleLeadClick(event) {
+  const addStage = event.target.closest("[data-lead-stage-add]");
+  if (addStage) {
+    clearLeadForm(addStage.dataset.leadStageAdd || "new_leads");
+    document.getElementById("leadCompanyName")?.focus();
+    return;
+  }
+
+  const addButton = event.target.closest("#leadAddBtn, #leadNewBtn");
+  if (addButton) {
+    clearLeadForm("new_leads");
+    document.getElementById("leadCompanyName")?.focus();
+    return;
+  }
+
+  const viewToggle = event.target.closest("[data-lead-view-toggle]");
+  if (viewToggle) {
+    leadState.view = viewToggle.dataset.leadViewToggle || "pipeline";
+    renderLeadData();
+    return;
+  }
+
+  const filterToggle = event.target.closest("[data-lead-filter-toggle]");
+  if (filterToggle) {
+    const panel = document.getElementById("leadFilterPanel");
+    if (panel) panel.hidden = !panel.hidden;
+    return;
+  }
+
+  const clearFilters = event.target.closest("[data-lead-clear-filters]");
+  if (clearFilters) {
+    leadState.stageFilter = "all";
+    leadState.sourceFilter = "all";
+    leadState.ownerFilter = "all";
+    leadState.search = "";
+    renderLeadFilterControls();
+    renderLeadData();
+    return;
+  }
+
+  const moveStage = event.target.closest("[data-lead-move-stage]");
+  if (moveStage) {
+    void moveSelectedLeadToStage(moveStage.dataset.leadMoveStage);
+    return;
+  }
+
+  const moveLead = event.target.closest("[data-lead-move]");
+  if (moveLead) {
+    void moveLeadToStage(moveLead.dataset.leadMove, moveLead.dataset.leadMoveStage);
+    return;
+  }
+
+  const moveNext = event.target.closest("#leadMoveNextBtn");
+  if (moveNext) {
+    void moveSelectedLeadToStage(nextLeadStage(document.getElementById("leadPipelineStage")?.value));
+    return;
+  }
+
+  const select = event.target.closest("[data-lead-select]");
+  if (select) {
+    selectLead(select.dataset.leadSelect);
+  }
+}
+
+async function loadLeads() {
+  if (!suiteSupabase) {
+    showLeadMessage("Supabase config is missing. Add env.js values before using leads.", true);
+    return;
+  }
+
+  showLeadMessage("Loading leads...");
+  document.getElementById("leadList").innerHTML = skeletonRows(4);
+  const { data: userData } = await suiteSupabase.auth.getUser();
+  leadState.user = userData?.user || null;
+  if (leadState.user) {
+    const { data: profile } = await suiteSupabase
+      .from("profiles")
+      .select("role,full_name")
+      .eq("id", leadState.user.id)
+      .maybeSingle();
+    leadState.profile = profile || null;
+  }
+
+  const { data, error } = await suiteSupabase
+    .from(leadTable)
+    .select("*")
+    .order("last_activity_at", { ascending: false })
+    .limit(250);
+
+  if (error) {
+    showLeadMessage("Unable to load leads: " + error.message, true);
+    renderLeadData();
+    return;
+  }
+
+  leadState.rows = data || [];
+  if (!leadState.selectedId && leadState.rows.length) {
+    leadState.selectedId = leadState.rows[0].id;
+    fillLeadForm(leadState.rows[0]);
+  }
+  populateLeadOwnerFilter();
+  renderLeadData();
+  showLeadMessage(leadState.rows.length ? `${leadState.rows.length} lead${leadState.rows.length === 1 ? "" : "s"} synced from Supabase.` : "Synced with Supabase. No leads yet.");
+}
+
+function renderLeadData() {
+  renderLeadViewToggles();
+  renderLeadFilterControls();
+  renderLeadBoard();
+  renderLeadList();
+  renderLeadActivity(getSelectedLead());
+  renderLeadNavigation(getSelectedLead());
+
+  const board = document.getElementById("leadBoard");
+  const list = document.getElementById("leadListPanel");
+  if (board) board.hidden = leadState.view !== "pipeline";
+  if (list) list.hidden = leadState.view !== "list";
+}
+
+function renderLeadViewToggles() {
+  document.querySelectorAll("[data-lead-view-toggle]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.leadViewToggle === leadState.view);
+  });
+}
+
+function renderLeadFilterControls() {
+  const search = document.getElementById("leadSearchInput");
+  if (search && search.value !== leadState.search) search.value = leadState.search;
+  const owner = document.getElementById("leadOwnerFilter");
+  if (owner && owner.value !== leadState.ownerFilter) owner.value = leadState.ownerFilter;
+  const stage = document.getElementById("leadStageFilter");
+  if (stage && stage.value !== leadState.stageFilter) stage.value = leadState.stageFilter;
+  const source = document.getElementById("leadSourceFilter");
+  if (source && source.value !== leadState.sourceFilter) source.value = leadState.sourceFilter;
+}
+
+function populateLeadOwnerFilter() {
+  const filter = document.getElementById("leadOwnerFilter");
+  if (!filter) return;
+  const owners = Array.from(new Set([
+    leadDisplayName(),
+    ...leadState.rows.map((row) => row.sales_owner_name).filter(Boolean)
+  ])).filter(Boolean).sort();
+  filter.innerHTML = `<option value="all">All Owners</option><option value="unassigned">Unassigned</option>${owners.map((owner) => `<option value="${esc(owner)}">${esc(owner)}</option>`).join("")}`;
+  filter.value = leadState.ownerFilter;
+}
+
+function renderLeadBoard() {
+  const filtered = getFilteredLeads();
+  stageLabels.forEach(([stage]) => {
+    const rows = filtered.filter((row) => normalizeLeadStage(row.pipeline_stage) === stage);
+    const count = document.querySelector(`[data-stage-count="${stage}"]`);
+    const list = document.querySelector(`[data-lead-stage-list="${stage}"]`);
+    if (count) count.textContent = rows.length;
+    if (list) {
+      list.innerHTML = rows.length
+        ? rows.map(renderLeadCard).join("")
+        : `<div class="lead-empty"><span>No leads</span></div>`;
+    }
+  });
+}
+
+function renderLeadList() {
+  const list = document.getElementById("leadList");
+  if (!list) return;
+  const rows = getFilteredLeads();
+  list.innerHTML = rows.length
+    ? rows.map(renderLeadListRow).join("")
+    : emptyState("clipboard-list", "No leads found", "Adjust the filters or add a new lead.");
+}
+
+function renderLeadCard(row) {
+  const id = esc(row.id);
+  const stage = normalizeLeadStage(row.pipeline_stage);
+  const nextStage = nextLeadStage(stage);
+  return `
+    <article class="lead-card ${row.id === leadState.selectedId ? "active" : ""}" data-lead-select="${id}" tabindex="0">
+      <div class="lead-card-head">
+        <strong>${esc(leadTitle(row))}</strong>
+        <span class="status-badge ${statusClassName(stage)}">${esc(leadStageLabel(stage))}</span>
+      </div>
+      <p>${esc(leadSubtitle(row))}</p>
+      <div class="lead-card-meta">
+        <span>${esc(row.sales_owner_name || "Unassigned")}</span>
+        <span>${esc(leadMoney(row.lead_value))}</span>
+      </div>
+      <div class="lead-card-actions">
+        <button type="button" data-lead-select="${id}">Edit</button>
+        ${nextStage ? `<button type="button" data-lead-move="${id}" data-lead-move-stage="${esc(nextStage)}">Move Next</button>` : ""}
+      </div>
+    </article>
+  `;
+}
+
+function renderLeadListRow(row) {
+  const id = esc(row.id);
+  const stage = normalizeLeadStage(row.pipeline_stage);
+  const nextStage = nextLeadStage(stage);
+  return `
+    <article class="lead-list-row ${row.id === leadState.selectedId ? "active" : ""}" data-lead-select="${id}">
+      <div>
+        <strong>${esc(leadTitle(row))}</strong>
+        <p>${esc(leadSubtitle(row))}</p>
+      </div>
+      <span>${esc(row.contact_name || "No contact")}</span>
+      <span>${esc(row.sales_owner_name || "Unassigned")}</span>
+      <span>${esc(leadMoney(row.lead_value))}</span>
+      <span class="status-badge ${statusClassName(stage)}">${esc(leadStageLabel(stage))}</span>
+      <div class="lead-list-actions">
+        <button type="button" data-lead-select="${id}">Edit</button>
+        ${nextStage ? `<button type="button" data-lead-move="${id}" data-lead-move-stage="${esc(nextStage)}">Move Next</button>` : ""}
+      </div>
+    </article>
+  `;
+}
+
+function getFilteredLeads() {
+  const term = leadState.search.trim().toLowerCase();
+  return leadState.rows.filter((row) => {
+    const stage = normalizeLeadStage(row.pipeline_stage);
+    if (leadState.stageFilter !== "all" && stage !== leadState.stageFilter) return false;
+    if (leadState.sourceFilter !== "all" && String(row.lead_source || "") !== leadState.sourceFilter) return false;
+    if (leadState.ownerFilter === "unassigned" && row.sales_owner_name) return false;
+    if (leadState.ownerFilter !== "all" && leadState.ownerFilter !== "unassigned" && row.sales_owner_name !== leadState.ownerFilter) return false;
+    if (!term) return true;
+    return [
+      row.company_name,
+      row.contact_name,
+      row.contact_email,
+      row.contact_phone,
+      row.name,
+      row.property_name,
+      row.address,
+      row.city,
+      row.state,
+      row.postal_code,
+      row.lead_source,
+      row.sales_owner_name,
+      row.lead_notes,
+      row.next_step
+    ].some((value) => String(value || "").toLowerCase().includes(term));
+  });
+}
+
+function selectLead(id) {
+  const row = leadState.rows.find((item) => item.id === id);
+  if (!row) return;
+  leadState.selectedId = id;
+  fillLeadForm(row);
+  renderLeadData();
+}
+
+function clearLeadForm(stage = "new_leads") {
+  leadState.selectedId = null;
+  setLeadFormValues({
+    id: "",
+    pipeline_stage: stage,
+    company_name: "",
+    contact_name: "",
+    contact_phone: "",
+    contact_email: "",
+    property_type: "",
+    property_name: "",
+    address: "",
+    city: "",
+    state: "",
+    postal_code: "",
+    lead_source: "",
+    sales_owner_name: leadDisplayName(),
+    lead_value: "",
+    expected_close_date: "",
+    next_step: "",
+    next_step_due_at: "",
+    lead_notes: ""
+  });
+  renderLeadActivity(null);
+  renderLeadNavigation(null);
+  renderLeadData();
+}
+
+function fillLeadForm(row) {
+  setLeadFormValues({
+    id: row.id || "",
+    pipeline_stage: normalizeLeadStage(row.pipeline_stage),
+    company_name: row.company_name || "",
+    contact_name: row.contact_name || "",
+    contact_phone: row.contact_phone || "",
+    contact_email: row.contact_email || "",
+    property_type: row.property_type || "",
+    property_name: row.property_name || row.name || "",
+    address: row.address || "",
+    city: row.city || "",
+    state: row.state || "",
+    postal_code: row.postal_code || "",
+    lead_source: row.lead_source || "",
+    sales_owner_name: row.sales_owner_name || "",
+    lead_value: row.lead_value ?? "",
+    expected_close_date: row.expected_close_date || "",
+    next_step: row.next_step || "",
+    next_step_due_at: toDateInput(row.next_step_due_at),
+    lead_notes: row.lead_notes || ""
+  });
+}
+
+function setLeadFormValues(values) {
+  const map = {
+    leadId: values.id,
+    leadPipelineStage: values.pipeline_stage,
+    leadCompanyName: values.company_name,
+    leadContactName: values.contact_name,
+    leadPhone: values.contact_phone,
+    leadEmail: values.contact_email,
+    leadPropertyType: values.property_type,
+    leadPropertyName: values.property_name,
+    leadAddress: values.address,
+    leadCity: values.city,
+    leadState: values.state,
+    leadZip: values.postal_code,
+    leadSource: values.lead_source,
+    leadOwner: values.sales_owner_name,
+    leadEstimatedValue: values.lead_value,
+    leadCloseDate: values.expected_close_date,
+    leadNextStep: values.next_step,
+    leadNextStepDue: values.next_step_due_at,
+    leadNotes: values.lead_notes
+  };
+  Object.entries(map).forEach(([id, value]) => {
+    const field = document.getElementById(id);
+    if (field) field.value = value ?? "";
+  });
+}
+
+function leadValue(id) {
+  return (document.getElementById(id)?.value || "").trim();
+}
+
+function collectLeadPayload() {
+  const existing = getSelectedLead();
+  const ownerName = leadValue("leadOwner");
+  const propertyName = leadValue("leadPropertyName") || leadValue("leadCompanyName") || "Untitled Lead";
+  const value = Number(leadValue("leadEstimatedValue"));
+  const dueDate = leadValue("leadNextStepDue");
+  const payload = {
+    pipeline_stage: leadValue("leadPipelineStage") || "new_leads",
+    company_name: leadValue("leadCompanyName"),
+    contact_name: leadValue("leadContactName"),
+    contact_phone: leadValue("leadPhone"),
+    contact_email: leadValue("leadEmail"),
+    property_type: leadValue("leadPropertyType"),
+    property_name: propertyName,
+    name: propertyName,
+    address: leadValue("leadAddress"),
+    city: leadValue("leadCity"),
+    state: leadValue("leadState"),
+    postal_code: leadValue("leadZip"),
+    lead_source: leadValue("leadSource"),
+    sales_owner_name: ownerName,
+    sales_owner_id: ownerName === leadDisplayName() ? leadState.user?.id || null : existing?.sales_owner_name === ownerName ? existing?.sales_owner_id || null : null,
+    lead_value: Number.isFinite(value) && value > 0 ? value : null,
+    expected_close_date: leadValue("leadCloseDate") || null,
+    next_step: leadValue("leadNextStep"),
+    next_step_due_at: dueDate ? new Date(`${dueDate}T12:00:00`).toISOString() : null,
+    lead_notes: leadValue("leadNotes"),
+    last_activity_at: new Date().toISOString()
+  };
+  if (!leadValue("leadId")) {
+    payload.created_by = leadState.user?.id || null;
+  }
+  return payload;
+}
+
+async function saveLeadForm(event) {
+  event?.preventDefault();
+  if (!suiteSupabase || leadState.isSaving) return;
+  leadState.isSaving = true;
+  setLeadSaving(true);
+  showLeadMessage("Saving lead to Supabase...");
+
+  const id = leadValue("leadId");
+  const payload = collectLeadPayload();
+  let result = id
+    ? await suiteSupabase.from(leadTable).update(payload).eq("id", id).select("*").maybeSingle()
+    : await suiteSupabase.from(leadTable).insert(payload).select("*").maybeSingle();
+
+  if (result.error && isMissingLeadOptionalColumn(result.error)) {
+    const fallbackPayload = { ...payload };
+    leadOptionalColumns.forEach((column) => delete fallbackPayload[column]);
+    result = id
+      ? await suiteSupabase.from(leadTable).update(fallbackPayload).eq("id", id).select("*").maybeSingle()
+      : await suiteSupabase.from(leadTable).insert(fallbackPayload).select("*").maybeSingle();
+  }
+
+  leadState.isSaving = false;
+  setLeadSaving(false);
+
+  if (result.error) {
+    showLeadMessage("Unable to save lead: " + result.error.message, true);
+    return;
+  }
+
+  const saved = result.data;
+  const index = leadState.rows.findIndex((row) => row.id === saved.id);
+  if (index >= 0) {
+    leadState.rows[index] = saved;
+  } else {
+    leadState.rows.unshift(saved);
+  }
+  leadState.selectedId = saved.id;
+  populateLeadOwnerFilter();
+  fillLeadForm(saved);
+  renderLeadData();
+  showLeadMessage("Lead saved to Supabase.");
+}
+
+async function moveSelectedLeadToStage(stage) {
+  const id = leadValue("leadId") || leadState.selectedId;
+  if (!id) {
+    showLeadMessage("Select or save a lead before moving it.", true);
+    return;
+  }
+  await moveLeadToStage(id, stage);
+}
+
+async function moveLeadToStage(id, stage) {
+  if (!suiteSupabase || !id || !stage) return;
+  showLeadMessage(`Moving lead to ${leadStageLabel(stage)}...`);
+  const { data, error } = await suiteSupabase
+    .from(leadTable)
+    .update({ pipeline_stage: stage, last_activity_at: new Date().toISOString() })
+    .eq("id", id)
+    .select("*")
+    .maybeSingle();
+
+  if (error) {
+    showLeadMessage("Unable to move lead: " + error.message, true);
+    return;
+  }
+
+  const index = leadState.rows.findIndex((row) => row.id === id);
+  if (index >= 0) leadState.rows[index] = data;
+  leadState.selectedId = id;
+  fillLeadForm(data);
+  renderLeadData();
+  showLeadMessage(`Lead moved to ${leadStageLabel(stage)}.`);
+}
+
+function setLeadSaving(isSaving) {
+  const button = document.getElementById("leadSaveBtn");
+  if (button) {
+    button.disabled = isSaving;
+    const labels = button.querySelectorAll("span");
+    const label = labels[labels.length - 1];
+    if (label) label.textContent = isSaving ? "Saving..." : "Save Lead";
+  }
+}
+
+function renderLeadActivity(row) {
+  const log = document.getElementById("leadActivityLog");
+  if (!log) return;
+  if (!row) {
+    log.innerHTML = emptyState("calendar", "No activity yet");
+    return;
+  }
+  const events = [
+    ["Last Activity", formatDashboardDate(row.last_activity_at || row.updated_at || row.created_at), "activity"],
+    ["Created", formatDashboardDate(row.created_at), "calendar"],
+    ["Stage", leadStageLabel(row.pipeline_stage), "filter"],
+    ["Next Step", row.next_step || "No next step", "chevron-right"],
+    ["Close Date", row.expected_close_date || "Not set", "clock"]
+  ];
+  log.innerHTML = events.map(([label, value, iconName]) => `
+    <div class="lead-activity-item">
+      ${icon(iconName)}
+      <div><strong>${esc(label)}</strong><span>${esc(value)}</span></div>
+    </div>
+  `).join("");
+}
+
+function renderLeadNavigation(row) {
+  const summary = document.getElementById("leadNavigationSummary");
+  if (!summary) return;
+  summary.textContent = row
+    ? `${leadTitle(row)} is in ${leadStageLabel(row.pipeline_stage)}.`
+    : "Select a lead to jump between workflow pages or move it through the pipeline.";
+}
+
+function showLeadMessage(text, isError = false) {
+  const message = document.getElementById("leadMessage");
+  if (!message) return;
+  message.textContent = text || "";
+  message.classList.toggle("error", Boolean(isError));
+}
+
+function getSelectedLead() {
+  return leadState.rows.find((row) => row.id === leadState.selectedId) || null;
+}
+
+function leadTitle(row) {
+  return row?.company_name || row?.property_name || row?.name || "Untitled Lead";
+}
+
+function leadSubtitle(row) {
+  return [row?.contact_name, row?.address, row?.city, row?.state].filter(Boolean).join(" - ") || row?.contact_email || "No contact details";
+}
+
+function normalizeLeadStage(stage) {
+  const token = String(stage || "new_leads").replace(/-/g, "_");
+  return stageLabels.some(([id]) => id === token) ? token : "new_leads";
+}
+
+function leadStageLabel(stage) {
+  const normalized = normalizeLeadStage(stage);
+  return stageLabels.find(([id]) => id === normalized)?.[1] || titleCase(normalized);
+}
+
+function nextLeadStage(stage) {
+  const normalized = normalizeLeadStage(stage);
+  const index = stageLabels.findIndex(([id]) => id === normalized);
+  return index >= 0 && index < stageLabels.length - 1 ? stageLabels[index + 1][0] : "";
+}
+
+function leadDisplayName() {
+  return leadState.profile?.full_name || leadState.user?.user_metadata?.full_name || leadState.user?.email?.split("@")[0] || "";
+}
+
+function leadMoney(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return "Value not set";
+  return number.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+}
+
+function toDateInput(value) {
+  const date = parseDate(value);
+  if (!date) return "";
+  const pad = (part) => String(part).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function statusClassName(value) {
+  return `status-${normalizeToken(value || "open")}`;
+}
+
+function isMissingLeadOptionalColumn(error) {
+  const message = String(error?.message || "").toLowerCase();
+  return leadOptionalColumns.some((column) => message.includes(column.toLowerCase())) || message.includes("schema cache");
 }
 
 function renderWalkthroughs() {
@@ -2179,6 +2852,9 @@ function renderApp() {
   }
   if (activeKey === "dashboard" || activeKey === "command-center") {
     initCommandCenter();
+  }
+  if (activeKey === "leads") {
+    initLeads();
   }
 }
 
