@@ -163,6 +163,26 @@ const walkthroughState = {
   assigneeFilter: "all",
   isSaving: false
 };
+const clientTable = "clients";
+const clientStatusOptions = [
+  ["active", "Active"],
+  ["prospect", "Prospect"],
+  ["onboarding", "Onboarding"],
+  ["paused", "Paused"],
+  ["inactive", "Inactive"]
+];
+const clientTypeOptions = ["", "Commercial", "Residential", "Property Manager", "HOA", "Retail", "Medical", "Industrial", "Other"];
+const clientState = {
+  rows: [],
+  user: null,
+  profile: null,
+  selectedId: null,
+  search: "",
+  statusFilter: "all",
+  typeFilter: "all",
+  managerFilter: "all",
+  isSaving: false
+};
 const topbarState = {
   user: null,
   profile: null,
@@ -3230,30 +3250,526 @@ function renderClients(active) {
 
 function renderClientDirectory(clientTabs) {
   return `
-    ${clientTabs}
-    <section class="metric-strip six">
-      ${metric("Total Clients", "-", "No data yet", "building", "blue")}
-      ${metric("Active Clients", "-", "No data yet", "check", "green")}
-      ${metric("Prospects", "-", "No data yet", "clock", "yellow")}
-      ${metric("Contracts", "-", "No data yet", "calendar", "purple")}
-      ${metric("Annual Revenue", "-", "No data yet", "badge-dollar", "blue")}
-      ${metric("Contacts", "-", "No data yet", "users", "slate")}
-    </section>
-    <section class="content-rail">
-      ${tableFrame(["", "Client Name", "Company", "Primary Contact", "Status", "Contract Start", "Renewal Date", "Properties", "Annual Revenue", "Actions"], emptyState("building", "No clients found", "You haven't added any clients yet. Add your first client to get started.", actionButton("Add Client", "plus")), {
-        checkbox: true,
-        toolbar: toolbar(searchBox("Search clients by name, property, city, or tag..."), `${selectButton("Bulk Actions")}${actionButton("Add Client", "plus")}`),
-        className: "span-main"
-      })}
-      ${filters("Filters", [selectControl("Status", ["Select status..."]), selectControl("Client Type", ["Select client type..."]), selectControl("Region / Market", ["Select region..."]), selectControl("Property / Project", ["Select property..."]), inputControl("Contract Start Date", "Select date range", "date"), inputControl("Renewal Date", "Select date range", "date"), selectControl("Account Manager", ["Select account manager..."]), selectControl("Tags", ["Select tags..."])])}
-    </section>
-    <section class="four-panels">
-      ${panel("Top Clients by Revenue", chart("donut"))}
-      ${panel("Clients by Status", chart("donut"))}
-      ${panel("New Clients (30 Days)", chart("line"))}
-      ${panel("Upcoming Renewals", skeletonRows(3), { action: { label: "View Full Report", tone: "secondary" } })}
+    <section class="client-directory-workspace" data-client-directory-page>
+      ${clientTabs}
+      <section class="metric-strip six">
+        ${metric("Total Clients", "0", "synced from Supabase", "building", "blue", 'id="clientTotalCount"')}
+        ${metric("Active Clients", "0", "currently active", "check", "green", 'id="clientActiveCount"')}
+        ${metric("Prospects", "0", "pipeline clients", "clock", "yellow", 'id="clientProspectCount"')}
+        ${metric("Renewals", "0", "next 60 days", "calendar", "purple", 'id="clientRenewalCount"')}
+        ${metric("Annual Revenue", "$0", "tracked ARR", "badge-dollar", "blue", 'id="clientRevenueTotal"')}
+        ${metric("Contacts", "0", "primary contacts", "users", "slate", 'id="clientContactCount"')}
+      </section>
+      ${toolbar(
+        `<label class="inline-search client-search">${icon("search")}<input id="clientSearchInput" type="search" placeholder="Search clients..." /></label>`,
+        `<select id="clientManagerFilter" class="select-button" aria-label="Filter account manager"><option value="all">All Managers</option></select><button class="secondary-action" type="button" data-client-filter-toggle>${icon("filter")}<span>Filters</span></button><button id="clientAddBtn" class="primary-action" type="button">${icon("plus")}<span>Add Client</span></button>`
+      )}
+      <section id="clientFilterPanel" class="lead-filter-panel client-filter-panel" hidden>
+        <label class="suite-field"><span>Status</span><select id="clientStatusFilter"><option value="all">All Statuses</option>${clientStatusOptions.map(([id, label]) => `<option value="${esc(id)}">${esc(label)}</option>`).join("")}</select></label>
+        <label class="suite-field"><span>Client Type</span><select id="clientTypeFilter"><option value="all">All Types</option>${clientTypeOptions.filter(Boolean).map((type) => `<option value="${esc(type)}">${esc(type)}</option>`).join("")}</select></label>
+        <button class="secondary-action" type="button" data-client-clear-filters><span>Clear Filters</span></button>
+      </section>
+      <p id="clientMessage" class="status-message" aria-live="polite"></p>
+      <section class="content-rail client-directory-rail">
+        <div class="table-card span-main clients-table-card">
+          <div class="table-scroll">
+            <table class="suite-table">
+              <thead>
+                <tr>
+                  <th>Client Name</th>
+                  <th>Company</th>
+                  <th>Primary Contact</th>
+                  <th>Status</th>
+                  <th>Renewal Date</th>
+                  <th>Properties</th>
+                  <th>Annual Revenue</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="clientTableBody">${skeletonRows(4)}</tbody>
+            </table>
+          </div>
+          <div id="clientEmptyState" hidden>${emptyState("building", "No clients found", "Add your first client to start tracking accounts.", actionButton("Add Client", "plus", "clientEmptyAddBtn"))}</div>
+          <div class="table-foot"><span id="clientTableCount">Showing 0 clients</span>${pager()}</div>
+        </div>
+        ${panel("Client Details", clientForm())}
+      </section>
+      <section class="four-panels client-insight-grid">
+        ${panel("Top Clients by Revenue", `<div id="clientTopRevenue" class="client-insight-list">${emptyState("badge-dollar", "No revenue yet")}</div>`)}
+        ${panel("Clients by Status", `<div id="clientStatusBreakdown" class="client-insight-list">${skeletonRows(3)}</div>`)}
+        ${panel("New Clients (30 Days)", `<div id="clientNewClients" class="client-insight-list">${emptyState("user-plus", "No new clients")}</div>`)}
+        ${panel("Upcoming Renewals", `<div id="clientUpcomingRenewals" class="client-insight-list">${emptyState("calendar", "No upcoming renewals")}</div>`)}
+      </section>
     </section>
   `;
+}
+
+function clientForm() {
+  return `
+    <form id="clientForm" class="lead-form client-form">
+      <input id="clientId" type="hidden" />
+      ${formGrid([
+        leadInputField("clientName", "Client Name", "text", { required: true }),
+        leadInputField("clientCompany", "Company"),
+        leadInputField("clientPrimaryContact", "Primary Contact"),
+        leadInputField("clientContactEmail", "Contact Email", "email"),
+        leadInputField("clientContactPhone", "Contact Phone", "tel"),
+        leadSelectField("clientStatus", "Status", clientStatusOptions, { required: true }),
+        leadSelectField("clientType", "Client Type", clientTypeOptions, { emptyLabel: "Select type" }),
+        leadInputField("clientRegion", "Region / Market"),
+        leadInputField("clientProperties", "Properties", "number", { min: "0", step: "1" }),
+        leadInputField("clientAnnualRevenue", "Annual Revenue", "number", { min: "0", step: "0.01" }),
+        leadInputField("clientContractStart", "Contract Start", "date"),
+        leadInputField("clientRenewalDate", "Renewal Date", "date"),
+        leadInputField("clientAccountManager", "Account Manager"),
+        leadInputField("clientTags", "Tags", "text", { className: "wide", placeholder: "Separate tags with commas" }),
+        leadTextareaField("clientNotes", "Notes", "wide")
+      ])}
+      <div class="lead-form-actions">
+        <button id="clientNewBtn" class="secondary-action" type="button">${icon("plus")}<span>New Client</span></button>
+        <button id="clientSaveBtn" class="primary-action" type="submit">${icon("check")}<span>Save Client</span></button>
+      </div>
+    </form>
+  `;
+}
+
+function initClientDirectory() {
+  const root = document.querySelector("[data-client-directory-page]");
+  if (!root) return;
+
+  root.addEventListener("click", handleClientClick);
+  root.querySelector("#clientForm")?.addEventListener("submit", saveClientForm);
+  root.querySelector("#clientSearchInput")?.addEventListener("input", (event) => {
+    clientState.search = event.target.value || "";
+    renderClientData();
+  });
+  root.querySelector("#clientStatusFilter")?.addEventListener("change", (event) => {
+    clientState.statusFilter = event.target.value || "all";
+    renderClientData();
+  });
+  root.querySelector("#clientTypeFilter")?.addEventListener("change", (event) => {
+    clientState.typeFilter = event.target.value || "all";
+    renderClientData();
+  });
+  root.querySelector("#clientManagerFilter")?.addEventListener("change", (event) => {
+    clientState.managerFilter = event.target.value || "all";
+    renderClientData();
+  });
+
+  const topbarAdd = Array.from(document.querySelectorAll(".suite-topbar .primary-action"))
+    .find((link) => link.textContent?.trim() === "Add Client");
+  topbarAdd?.addEventListener("click", (event) => {
+    event.preventDefault();
+    clearClientForm();
+    document.getElementById("clientName")?.focus();
+  });
+
+  clearClientForm();
+  void loadClients();
+}
+
+function handleClientClick(event) {
+  const addButton = event.target.closest("#clientAddBtn, #clientNewBtn, #clientEmptyAddBtn");
+  if (addButton) {
+    clearClientForm();
+    document.getElementById("clientName")?.focus();
+    return;
+  }
+
+  const filterToggle = event.target.closest("[data-client-filter-toggle]");
+  if (filterToggle) {
+    const panel = document.getElementById("clientFilterPanel");
+    if (panel) panel.hidden = !panel.hidden;
+    return;
+  }
+
+  const clearFilters = event.target.closest("[data-client-clear-filters]");
+  if (clearFilters) {
+    clientState.search = "";
+    clientState.statusFilter = "all";
+    clientState.typeFilter = "all";
+    clientState.managerFilter = "all";
+    renderClientFilterControls();
+    renderClientData();
+    return;
+  }
+
+  const select = event.target.closest("[data-client-select]");
+  if (select) {
+    selectClient(select.dataset.clientSelect);
+  }
+}
+
+async function loadClients() {
+  if (!suiteSupabase) {
+    showClientMessage("Supabase config is missing. Add env.js values before using clients.", true);
+    return;
+  }
+
+  showClientMessage("Loading clients...");
+  const { data: userData } = await suiteSupabase.auth.getUser();
+  clientState.user = userData?.user || null;
+  if (clientState.user) {
+    const { data: profile } = await suiteSupabase
+      .from("profiles")
+      .select("role,full_name,email")
+      .eq("id", clientState.user.id)
+      .maybeSingle();
+    clientState.profile = profile || null;
+  }
+
+  const { data, error } = await suiteSupabase
+    .from(clientTable)
+    .select("*")
+    .order("updated_at", { ascending: false })
+    .limit(500);
+
+  if (error) {
+    showClientMessage("Unable to load clients: " + error.message, true);
+    renderClientData();
+    return;
+  }
+
+  clientState.rows = data || [];
+  if (!clientState.selectedId && clientState.rows.length) {
+    clientState.selectedId = clientState.rows[0].id;
+    fillClientForm(clientState.rows[0]);
+  }
+  populateClientManagerFilter();
+  renderClientData();
+  showClientMessage(clientState.rows.length ? `${clientState.rows.length} client${clientState.rows.length === 1 ? "" : "s"} synced from Supabase.` : "Synced with Supabase. No clients yet.");
+}
+
+function renderClientData() {
+  renderClientFilterControls();
+  renderClientMetrics();
+  renderClientTable();
+  renderClientInsights();
+}
+
+function renderClientFilterControls() {
+  const search = document.getElementById("clientSearchInput");
+  if (search && search.value !== clientState.search) search.value = clientState.search;
+  const status = document.getElementById("clientStatusFilter");
+  if (status && status.value !== clientState.statusFilter) status.value = clientState.statusFilter;
+  const type = document.getElementById("clientTypeFilter");
+  if (type && type.value !== clientState.typeFilter) type.value = clientState.typeFilter;
+  const manager = document.getElementById("clientManagerFilter");
+  if (manager && manager.value !== clientState.managerFilter) manager.value = clientState.managerFilter;
+}
+
+function populateClientManagerFilter() {
+  const filter = document.getElementById("clientManagerFilter");
+  if (!filter) return;
+  const managers = Array.from(new Set([
+    clientDisplayName(),
+    ...clientState.rows.map((row) => row.account_manager_name).filter(Boolean)
+  ])).filter(Boolean).sort();
+  filter.innerHTML = `<option value="all">All Managers</option><option value="unassigned">Unassigned</option>${managers.map((name) => `<option value="${esc(name)}">${esc(name)}</option>`).join("")}`;
+  filter.value = clientState.managerFilter;
+}
+
+function renderClientMetrics() {
+  const rows = clientState.rows;
+  const revenue = rows.reduce((sum, row) => sum + (Number(row.annual_revenue) || 0), 0);
+  const setText = (id, value) => {
+    const element = document.getElementById(id);
+    if (element) element.textContent = value;
+  };
+  setText("clientTotalCount", rows.length);
+  setText("clientActiveCount", rows.filter((row) => clientStatus(row) === "active").length);
+  setText("clientProspectCount", rows.filter((row) => clientStatus(row) === "prospect").length);
+  setText("clientRenewalCount", rows.filter((row) => isWithinNextDays(row.renewal_date, 60)).length);
+  setText("clientRevenueTotal", clientMoney(revenue));
+  setText("clientContactCount", rows.filter((row) => row.primary_contact_name || row.primary_contact_email || row.primary_contact_phone).length);
+}
+
+function renderClientTable() {
+  const body = document.getElementById("clientTableBody");
+  const empty = document.getElementById("clientEmptyState");
+  const count = document.getElementById("clientTableCount");
+  if (!body) return;
+  const rows = getFilteredClients();
+  body.innerHTML = rows.length ? rows.map(renderClientRow).join("") : "";
+  if (empty) empty.hidden = rows.length > 0;
+  if (count) count.textContent = `Showing ${rows.length} of ${clientState.rows.length} clients`;
+}
+
+function renderClientRow(row) {
+  const id = esc(row.id);
+  return `
+    <tr class="${row.id === clientState.selectedId ? "active-row" : ""}" data-client-select="${id}">
+      <td><strong>${esc(clientTitle(row))}</strong><small>${esc(clientRegionText(row))}</small></td>
+      <td>${esc(row.company_name || "-")}</td>
+      <td><strong>${esc(row.primary_contact_name || "-")}</strong><small>${esc(row.primary_contact_email || row.primary_contact_phone || "")}</small></td>
+      <td><span class="status-badge ${statusClassName(clientStatus(row))}">${esc(clientStatusLabel(row.status))}</span></td>
+      <td>${esc(formatDateOnly(row.renewal_date, "-"))}</td>
+      <td>${esc(row.property_count ?? 0)}</td>
+      <td>${esc(clientMoney(row.annual_revenue))}</td>
+      <td><button class="table-action-button" type="button" data-client-select="${id}">Edit</button></td>
+    </tr>
+  `;
+}
+
+function renderClientInsights() {
+  const filtered = getFilteredClients();
+  const topRevenue = document.getElementById("clientTopRevenue");
+  const statusBreakdown = document.getElementById("clientStatusBreakdown");
+  const newClients = document.getElementById("clientNewClients");
+  const renewals = document.getElementById("clientUpcomingRenewals");
+
+  if (topRevenue) {
+    const rows = [...clientState.rows].sort((a, b) => (Number(b.annual_revenue) || 0) - (Number(a.annual_revenue) || 0)).slice(0, 5);
+    topRevenue.innerHTML = rows.length ? rows.map((row) => clientInsightItem(clientTitle(row), clientMoney(row.annual_revenue), "badge-dollar")).join("") : emptyState("badge-dollar", "No revenue yet");
+  }
+  if (statusBreakdown) {
+    statusBreakdown.innerHTML = clientStatusOptions.map(([status, label]) => clientInsightItem(label, String(clientState.rows.filter((row) => clientStatus(row) === status).length), "filter")).join("");
+  }
+  if (newClients) {
+    const rows = clientState.rows.filter((row) => isWithinPastDays(row.created_at, 30)).slice(0, 5);
+    newClients.innerHTML = rows.length ? rows.map((row) => clientInsightItem(clientTitle(row), formatDateOnly(row.created_at), "user-plus")).join("") : emptyState("user-plus", "No new clients");
+  }
+  if (renewals) {
+    const rows = filtered.filter((row) => isWithinNextDays(row.renewal_date, 60)).sort((a, b) => dateValue(a.renewal_date) - dateValue(b.renewal_date)).slice(0, 5);
+    renewals.innerHTML = rows.length ? rows.map((row) => clientInsightItem(clientTitle(row), formatDateOnly(row.renewal_date), "calendar")).join("") : emptyState("calendar", "No upcoming renewals");
+  }
+}
+
+function clientInsightItem(label, value, iconName) {
+  return `
+    <div class="client-insight-item">
+      ${icon(iconName)}
+      <span><strong>${esc(label)}</strong><small>${esc(value)}</small></span>
+    </div>
+  `;
+}
+
+function getFilteredClients() {
+  const term = clientState.search.trim().toLowerCase();
+  return clientState.rows.filter((row) => {
+    if (clientState.statusFilter !== "all" && clientStatus(row) !== clientState.statusFilter) return false;
+    if (clientState.typeFilter !== "all" && row.client_type !== clientState.typeFilter) return false;
+    if (clientState.managerFilter === "unassigned" && row.account_manager_name) return false;
+    if (clientState.managerFilter !== "all" && clientState.managerFilter !== "unassigned" && row.account_manager_name !== clientState.managerFilter) return false;
+    if (!term) return true;
+    return [
+      row.name,
+      row.company_name,
+      row.primary_contact_name,
+      row.primary_contact_email,
+      row.primary_contact_phone,
+      row.status,
+      row.client_type,
+      row.region,
+      row.market,
+      row.account_manager_name,
+      ...(Array.isArray(row.tags) ? row.tags : []),
+      row.notes
+    ].some((value) => String(value || "").toLowerCase().includes(term));
+  });
+}
+
+function selectClient(id) {
+  const row = clientState.rows.find((item) => item.id === id);
+  if (!row) return;
+  clientState.selectedId = id;
+  fillClientForm(row);
+  renderClientData();
+}
+
+function clearClientForm() {
+  clientState.selectedId = null;
+  setClientFormValues({
+    id: "",
+    name: "",
+    company_name: "",
+    primary_contact_name: "",
+    primary_contact_email: "",
+    primary_contact_phone: "",
+    status: "active",
+    client_type: "",
+    region: "",
+    property_count: 0,
+    annual_revenue: "",
+    contract_start_date: "",
+    renewal_date: "",
+    account_manager_name: clientDisplayName(),
+    tags: [],
+    notes: ""
+  });
+  renderClientData();
+}
+
+function fillClientForm(row) {
+  setClientFormValues({
+    id: row.id || "",
+    name: row.name || "",
+    company_name: row.company_name || "",
+    primary_contact_name: row.primary_contact_name || "",
+    primary_contact_email: row.primary_contact_email || "",
+    primary_contact_phone: row.primary_contact_phone || "",
+    status: clientStatus(row),
+    client_type: row.client_type || "",
+    region: row.region || row.market || "",
+    property_count: row.property_count ?? 0,
+    annual_revenue: row.annual_revenue ?? "",
+    contract_start_date: row.contract_start_date || "",
+    renewal_date: row.renewal_date || "",
+    account_manager_name: row.account_manager_name || clientDisplayName(),
+    tags: Array.isArray(row.tags) ? row.tags : [],
+    notes: row.notes || ""
+  });
+}
+
+function setClientFormValues(values) {
+  const map = {
+    clientId: values.id,
+    clientName: values.name,
+    clientCompany: values.company_name,
+    clientPrimaryContact: values.primary_contact_name,
+    clientContactEmail: values.primary_contact_email,
+    clientContactPhone: values.primary_contact_phone,
+    clientStatus: values.status,
+    clientType: values.client_type,
+    clientRegion: values.region,
+    clientProperties: values.property_count,
+    clientAnnualRevenue: values.annual_revenue,
+    clientContractStart: toDateInput(values.contract_start_date),
+    clientRenewalDate: toDateInput(values.renewal_date),
+    clientAccountManager: values.account_manager_name,
+    clientTags: Array.isArray(values.tags) ? values.tags.join(", ") : values.tags,
+    clientNotes: values.notes
+  };
+  Object.entries(map).forEach(([id, value]) => {
+    const field = document.getElementById(id);
+    if (field) field.value = value ?? "";
+  });
+}
+
+function clientValue(id) {
+  return (document.getElementById(id)?.value || "").trim();
+}
+
+function collectClientPayload() {
+  const existing = clientState.rows.find((row) => row.id === clientValue("clientId"));
+  const propertyCount = Number(clientValue("clientProperties"));
+  const revenue = Number(clientValue("clientAnnualRevenue"));
+  const managerName = clientValue("clientAccountManager");
+  const payload = {
+    name: clientValue("clientName"),
+    company_name: clientValue("clientCompany"),
+    primary_contact_name: clientValue("clientPrimaryContact"),
+    primary_contact_email: clientValue("clientContactEmail"),
+    primary_contact_phone: clientValue("clientContactPhone"),
+    status: clientValue("clientStatus") || "active",
+    client_type: clientValue("clientType"),
+    region: clientValue("clientRegion"),
+    market: clientValue("clientRegion"),
+    property_count: Number.isFinite(propertyCount) && propertyCount >= 0 ? Math.floor(propertyCount) : 0,
+    annual_revenue: Number.isFinite(revenue) && revenue >= 0 ? revenue : null,
+    contract_start_date: clientValue("clientContractStart") || null,
+    renewal_date: clientValue("clientRenewalDate") || null,
+    account_manager_name: managerName,
+    account_manager_id: managerName === clientDisplayName() ? clientState.user?.id || null : existing?.account_manager_name === managerName ? existing?.account_manager_id || null : null,
+    tags: clientValue("clientTags").split(",").map((tag) => tag.trim()).filter(Boolean),
+    notes: clientValue("clientNotes")
+  };
+  if (!clientValue("clientId")) {
+    payload.created_by = clientState.user?.id || null;
+  }
+  return payload;
+}
+
+async function saveClientForm(event) {
+  event?.preventDefault();
+  if (!suiteSupabase || clientState.isSaving) return;
+  clientState.isSaving = true;
+  setClientSaving(true);
+  showClientMessage("Saving client to Supabase...");
+
+  const id = clientValue("clientId");
+  const payload = collectClientPayload();
+  const result = id
+    ? await suiteSupabase.from(clientTable).update(payload).eq("id", id).select("*").maybeSingle()
+    : await suiteSupabase.from(clientTable).insert(payload).select("*").maybeSingle();
+
+  clientState.isSaving = false;
+  setClientSaving(false);
+
+  if (result.error) {
+    showClientMessage("Unable to save client: " + result.error.message, true);
+    return;
+  }
+
+  const saved = result.data;
+  const index = clientState.rows.findIndex((row) => row.id === saved.id);
+  if (index >= 0) {
+    clientState.rows[index] = saved;
+  } else {
+    clientState.rows.unshift(saved);
+  }
+  clientState.selectedId = saved.id;
+  populateClientManagerFilter();
+  fillClientForm(saved);
+  renderClientData();
+  showClientMessage("Client saved to Supabase.");
+}
+
+function setClientSaving(isSaving) {
+  const button = document.getElementById("clientSaveBtn");
+  if (button) {
+    button.disabled = isSaving;
+    const labels = button.querySelectorAll("span");
+    const label = labels[labels.length - 1];
+    if (label) label.textContent = isSaving ? "Saving..." : "Save Client";
+  }
+}
+
+function showClientMessage(text, isError = false) {
+  const message = document.getElementById("clientMessage");
+  if (!message) return;
+  message.textContent = text || "";
+  message.classList.toggle("error", Boolean(isError));
+}
+
+function clientTitle(row) {
+  return row?.name || row?.company_name || "Untitled Client";
+}
+
+function clientStatus(row) {
+  return normalizeToken(row?.status || "active") || "active";
+}
+
+function clientStatusLabel(status) {
+  const normalized = normalizeToken(status || "active");
+  return clientStatusOptions.find(([id]) => id === normalized)?.[1] || titleCase(normalized);
+}
+
+function clientRegionText(row) {
+  return [row?.client_type, row?.region || row?.market].filter(Boolean).join(" - ") || "No type or market";
+}
+
+function clientMoney(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return "$0";
+  return number.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+}
+
+function clientDisplayName() {
+  return clientState.profile?.full_name || clientState.user?.user_metadata?.full_name || clientState.user?.email?.split("@")[0] || "";
+}
+
+function formatDateOnly(value, fallback = "No date") {
+  const date = parseDate(value);
+  if (!date) return fallback;
+  return date.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+}
+
+function isWithinPastDays(value, days) {
+  const date = parseDate(value);
+  if (!date) return false;
+  const today = startOfToday();
+  return date >= addDays(today, -days) && date <= addDays(today, 1);
 }
 
 function renderContacts(clientTabs) {
@@ -3903,6 +4419,9 @@ function renderApp() {
   }
   if (activeKey === "walkthroughs") {
     initWalkthroughs();
+  }
+  if (activeKey === "client-directory") {
+    initClientDirectory();
   }
 }
 
