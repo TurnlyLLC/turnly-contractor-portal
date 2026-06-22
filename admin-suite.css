@@ -105,8 +105,20 @@ a {
   gap: 3px;
 }
 
+.nav-section-group,
+.nav-section-links {
+  display: grid;
+  gap: 3px;
+}
+
+.nav-section-links[hidden] {
+  display: none;
+}
+
 .nav-section-title {
   align-items: center;
+  background: transparent;
+  border: 0;
   color: #9fb1c5;
   display: flex;
   font-size: 10px;
@@ -114,12 +126,37 @@ a {
   justify-content: space-between;
   letter-spacing: 1.2px;
   margin: 15px 6px 5px;
+  padding: 0;
+  text-align: left;
   text-transform: uppercase;
+  width: calc(100% - 12px);
+}
+
+.nav-section-title:hover,
+.nav-section-title:focus-visible {
+  color: var(--suite-text);
+}
+
+.nav-section-title:focus-visible {
+  outline: 2px solid rgba(0, 214, 163, 0.5);
+  outline-offset: 3px;
 }
 
 .nav-section-title .suite-icon {
   height: 12px;
   width: 12px;
+}
+
+.nav-section-arrow {
+  transition: transform 160ms ease, color 160ms ease;
+}
+
+.nav-section-title[aria-expanded="true"] .nav-section-arrow {
+  transform: rotate(90deg);
+}
+
+.nav-section-group.collapsed .nav-section-title {
+  color: #74879d;
 }
 
 .suite-nav-link {
