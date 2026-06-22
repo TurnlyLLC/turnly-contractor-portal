@@ -1,3 +1,10 @@
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+
+const suiteEnv = window.__ENV || {};
+const suiteSupabase = suiteEnv.SUPABASE_URL && suiteEnv.SUPABASE_ANON_KEY
+  ? createClient(suiteEnv.SUPABASE_URL, suiteEnv.SUPABASE_ANON_KEY)
+  : null;
+
 const navSections = [
   {
     title: "",
@@ -77,6 +84,29 @@ const pipelineStages = [
   ["contract_out", "Contract Out", "purple"],
   ["active", "Active", "green"]
 ];
+
+const commandCenterDefaultWidgetIds = ["action-items", "coverage-requests", "qa-alerts", "schedule"];
+const commandCenterStorageKey = "turnlyAdminCommandCenterWidgets";
+const commandCenterWidgetCatalog = [
+  { id: "action-items", title: "Action Items", icon: "clipboard-list", href: "assignments.html" },
+  { id: "coverage-requests", title: "Coverage Requests", icon: "shield", href: "coverage-center.html" },
+  { id: "qa-alerts", title: "QA Alerts", icon: "alert", href: "qa-queue.html" },
+  { id: "schedule", title: "Today's Schedule", icon: "calendar", href: "schedule.html" }
+];
+const commandCenterState = {
+  widgetIds: null,
+  preferencesLoaded: false,
+  filters: {
+    "action-items": "all",
+    "coverage-requests": "all",
+    "qa-alerts": "all"
+  },
+  scheduleView: "day",
+  actionItems: [],
+  coverageRequests: [],
+  qaAlerts: [],
+  scheduleItems: []
+};
 
 const pages = {
   "dashboard": {
@@ -262,7 +292,9 @@ const iconPaths = {
   map: '<path d="M9 18 3 21V6l6-3 6 3 6-3v15l-6 3Z"/><path d="M9 3v15"/><path d="M15 6v15"/>',
   "message-square": '<path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z"/>',
   more: '<circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/>',
+  minus: '<path d="M5 12h14"/>',
   plus: '<path d="M12 5v14"/><path d="M5 12h14"/>',
+  refresh: '<path d="M21 12a9 9 0 0 1-15.4 6.4L3 16"/><path d="M3 21v-5h5"/><path d="M3 12a9 9 0 0 1 15.4-6.4L21 8"/><path d="M21 3v5h-5"/>',
   search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
   settings: '<path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/>',
   shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>',
@@ -351,7 +383,17 @@ function metric(label, value = "0", meta = "from last 7 days", iconName = "activ
 function panel(title, body, options = {}) {
   const subtitle = options.subtitle ? `<p>${options.rawSubtitle ? options.subtitle : esc(options.subtitle)}</p>` : "";
   const action = options.action ? actionLink(options.action.label, options.action.icon, options.action.href, options.action.tone) : "";
-  const menu = options.menu ? `<button class="ghost-icon-btn" type="button" aria-label="More options">${icon("more")}</button>` : "";
+  const panelKey = options.key || title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const menu = options.menu ? `
+    <div class="widget-menu-wrap">
+      <button class="ghost-icon-btn" type="button" aria-label="${esc(title)} options" aria-expanded="false" data-widget-menu-toggle="${esc(panelKey)}">${icon("more")}</button>
+      <div class="widget-menu-panel" data-widget-menu="${esc(panelKey)}" hidden>
+        <button type="button" data-widget-menu-action="refresh" data-widget-id="${esc(panelKey)}">${icon("refresh")}<span>Refresh</span></button>
+        <button type="button" data-widget-menu-action="hide" data-widget-id="${esc(panelKey)}">${icon("minus")}<span>Hide Widget</span></button>
+        ${options.href ? `<a href="${esc(options.href)}">${icon("chevron-right")}<span>Open Page</span></a>` : ""}
+      </div>
+    </div>
+  ` : "";
   return `
     <section class="suite-panel ${options.className || ""}">
       <div class="panel-head">
@@ -376,6 +418,16 @@ function actionButton(label, iconName = "", id = "", tone = "") {
 
 function tabs(items, active) {
   return `<div class="suite-tabs">${items.map(([key, label, href]) => `<a class="suite-tab ${key === active ? "active" : ""}" href="${href || "#"}">${esc(label)}</a>`).join("")}</div>`;
+}
+
+function commandTabs(widgetId, items, active) {
+  return `
+    <div class="suite-tabs" role="tablist">
+      ${items.map(([key, label]) => `
+        <button class="suite-tab command-filter-tab ${key === active ? "active" : ""}" type="button" data-command-filter="${esc(widgetId)}" data-command-filter-value="${esc(key)}">${esc(label)}</button>
+      `).join("")}
+    </div>
+  `;
 }
 
 function toolbar(left = "", right = "") {
@@ -495,34 +547,712 @@ function statLegend(items) {
 }
 
 function renderCommandCenter() {
+  const widgetIds = readCommandWidgetIds();
   return `
-    <section class="command-grid">
-      ${panel("Action Items", `
-        ${tabs([["all", "All"], ["priority", "High Priority"], ["due", "Due Today"], ["week", "This Week"]], "all")}
-        <div id="accountApprovalsMessage" class="request-message" aria-live="polite"></div>
-        <div id="accountApprovalsList" class="account-request-list">
-          ${emptyState("clipboard-list", "No action items")}
-        </div>
-        <button id="refreshAccountRequestsBtn" class="panel-bottom-link" type="button">View All Action Items ${icon("chevron-right")}</button>
-        <span data-account-request-count class="sr-only">0 Pending</span>
-      `, { menu: true })}
-      ${panel("Coverage Requests", `
-        ${tabs([["all", "All"], ["pending", "Pending Approval"], ["upcoming", "Upcoming"], ["needs", "Needs Coverage"]], "all")}
-        ${emptyState("calendar", "No coverage requests")}
-        <a class="panel-bottom-link purple" href="coverage-center.html">View All Coverage Requests ${icon("chevron-right")}</a>
-      `, { menu: true })}
-      ${panel("QA Alerts", `
-        ${tabs([["all", "All"], ["failures", "QA Failures"], ["reclean", "Recleans Requested"], ["pending", "Pending Review"]], "all")}
-        ${emptyState("alert", "No QA alerts")}
-        <a class="panel-bottom-link red" href="qa-queue.html">View All QA Alerts ${icon("chevron-right")}</a>
-      `, { menu: true })}
-      ${panel("Today's Schedule", `
-        <div class="schedule-tabs">${chip("Day", true)}${chip("Week")}${chip("Month")}</div>
-        ${emptyState("calendar", "No scheduled assignments")}
-        <div class="schedule-legend">${["Scheduled", "In Progress", "Completed", "Needs Coverage", "QA Pending"].map((item, i) => `<span class="legend-${i}">${esc(item)}</span>`).join("")}</div>
-      `, { action: { label: "View Full Schedule", href: "schedule.html", tone: "secondary" }, menu: true })}
+    <section class="command-center-workspace" data-command-center>
+      <div class="command-customize-bar">
+        <button class="secondary-action" type="button" data-command-add-toggle>${icon("plus")}<span>Add Widget</span></button>
+      </div>
+      ${renderCommandWidgetCatalog(widgetIds)}
+      <section class="command-grid" data-command-grid>
+        ${widgetIds.length ? widgetIds.map(renderCommandWidget).join("") : renderEmptyCommandGrid()}
+      </section>
     </section>
   `;
+}
+
+function getCommandWidget(widgetId) {
+  return commandCenterWidgetCatalog.find((widget) => widget.id === widgetId) || null;
+}
+
+function normalizeCommandWidgetIds(ids, fallback = commandCenterDefaultWidgetIds) {
+  const validIds = new Set(commandCenterWidgetCatalog.map((widget) => widget.id));
+  const seen = new Set();
+  const normalized = (Array.isArray(ids) ? ids : []).filter((id) => {
+    if (!validIds.has(id) || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+  return normalized.length || !fallback ? normalized : [...fallback];
+}
+
+function readCommandWidgetIds() {
+  if (Array.isArray(commandCenterState.widgetIds)) return commandCenterState.widgetIds;
+  try {
+    commandCenterState.widgetIds = normalizeCommandWidgetIds(JSON.parse(localStorage.getItem(commandCenterStorageKey) || "null"));
+  } catch {
+    commandCenterState.widgetIds = [...commandCenterDefaultWidgetIds];
+  }
+  return commandCenterState.widgetIds;
+}
+
+function writeCommandWidgetIds(ids) {
+  commandCenterState.widgetIds = normalizeCommandWidgetIds(ids, null);
+  try {
+    localStorage.setItem(commandCenterStorageKey, JSON.stringify(commandCenterState.widgetIds));
+  } catch {
+    // Dashboard preferences still work for the current session.
+  }
+}
+
+function renderCommandWidgetCatalog(activeIds) {
+  const activeSet = new Set(activeIds);
+  return `
+    <div class="command-widget-catalog" data-command-widget-catalog hidden>
+      ${commandCenterWidgetCatalog.map((widget) => {
+        const isActive = activeSet.has(widget.id);
+        return `
+          <button class="widget-catalog-item ${isActive ? "is-active" : ""}" type="button" data-command-add-widget="${esc(widget.id)}" ${isActive ? "disabled" : ""} aria-pressed="${isActive ? "true" : "false"}">
+            ${icon(widget.icon)}
+            <strong>${esc(widget.title)}</strong>
+            <small>${isActive ? "Added" : "Add"}</small>
+          </button>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function renderCommandWidget(widgetId) {
+  if (widgetId === "action-items") return renderActionItemsWidget();
+  if (widgetId === "coverage-requests") return renderCoverageRequestsWidget();
+  if (widgetId === "qa-alerts") return renderQaAlertsWidget();
+  if (widgetId === "schedule") return renderScheduleWidget();
+  return "";
+}
+
+function renderEmptyCommandGrid() {
+  return panel("Command Center", emptyState("layout-grid", "No widgets selected", "", `
+    <button class="secondary-action" type="button" data-command-add-toggle>${icon("plus")}<span>Add Widget</span></button>
+  `), { className: "command-empty-panel" });
+}
+
+function renderActionItemsWidget() {
+  return panel("Action Items", `
+    ${commandTabs("action-items", [["all", "All"], ["priority", "High Priority"], ["due", "Due Today"], ["week", "This Week"]], commandCenterState.filters["action-items"])}
+    <div id="commandActionItemsMessage" class="request-message" aria-live="polite"></div>
+    <div id="commandActionItemsList" class="dashboard-list">${skeletonRows(3)}</div>
+    <a class="panel-bottom-link" href="assignments.html">View All Action Items ${icon("chevron-right")}</a>
+  `, { menu: true, key: "action-items", href: "assignments.html" });
+}
+
+function renderCoverageRequestsWidget() {
+  return panel("Coverage Requests", `
+    ${commandTabs("coverage-requests", [["all", "All"], ["pending", "Pending Approval"], ["upcoming", "Upcoming"], ["needs", "Needs Coverage"]], commandCenterState.filters["coverage-requests"])}
+    <div id="commandCoverageRequestsMessage" class="request-message" aria-live="polite"></div>
+    <div id="commandCoverageRequestsList" class="dashboard-list">${skeletonRows(3)}</div>
+    <a class="panel-bottom-link purple" href="coverage-center.html">View All Coverage Requests ${icon("chevron-right")}</a>
+  `, { menu: true, key: "coverage-requests", href: "coverage-center.html" });
+}
+
+function renderQaAlertsWidget() {
+  return panel("QA Alerts", `
+    ${commandTabs("qa-alerts", [["all", "All"], ["failures", "QA Failures"], ["reclean", "Recleans Requested"], ["pending", "Pending Review"]], commandCenterState.filters["qa-alerts"])}
+    <div id="commandQaAlertsMessage" class="request-message" aria-live="polite"></div>
+    <div id="commandQaAlertsList" class="dashboard-list">${skeletonRows(3)}</div>
+    <a class="panel-bottom-link red" href="qa-queue.html">View All QA Alerts ${icon("chevron-right")}</a>
+  `, { menu: true, key: "qa-alerts", href: "qa-queue.html" });
+}
+
+function renderScheduleWidget() {
+  return panel("Today's Schedule", `
+    <div class="schedule-tabs command-schedule-tabs">
+      ${["day", "week", "month"].map((view) => `
+        <button class="view-chip ${commandCenterState.scheduleView === view ? "active" : ""}" type="button" data-command-schedule-view="${esc(view)}"><span>${esc(titleCase(view))}</span></button>
+      `).join("")}
+    </div>
+    <div id="commandScheduleMessage" class="request-message" aria-live="polite"></div>
+    <div id="commandScheduleList" class="dashboard-list">${skeletonRows(3)}</div>
+    <div class="schedule-legend">${["Scheduled", "In Progress", "Completed", "Needs Coverage", "QA Pending"].map((item, i) => `<span class="legend-${i}">${esc(item)}</span>`).join("")}</div>
+  `, { action: { label: "View Full Schedule", href: "schedule.html", tone: "secondary" }, menu: true, key: "schedule", href: "schedule.html" });
+}
+
+function initCommandCenter(options = {}) {
+  const root = document.querySelector("[data-command-center]");
+  if (!root) return;
+  root.addEventListener("click", handleCommandCenterClick);
+  renderCommandCenterLists();
+  if (!options.skipRemotePreferences) {
+    void hydrateCommandWidgetPreferences();
+  }
+  if (!options.skipLoad) {
+    void loadCommandCenterData();
+  }
+}
+
+function handleCommandCenterClick(event) {
+  const filterButton = event.target.closest("[data-command-filter]");
+  if (filterButton) {
+    commandCenterState.filters[filterButton.dataset.commandFilter] = filterButton.dataset.commandFilterValue || "all";
+    updateCommandFilterButtons(filterButton.dataset.commandFilter);
+    renderCommandCenterLists();
+    return;
+  }
+
+  const scheduleButton = event.target.closest("[data-command-schedule-view]");
+  if (scheduleButton) {
+    commandCenterState.scheduleView = scheduleButton.dataset.commandScheduleView || "day";
+    updateCommandScheduleButtons();
+    renderCommandSchedule();
+    return;
+  }
+
+  const addToggle = event.target.closest("[data-command-add-toggle]");
+  if (addToggle) {
+    const catalog = document.querySelector("[data-command-widget-catalog]");
+    if (catalog) catalog.hidden = !catalog.hidden;
+    return;
+  }
+
+  const addWidget = event.target.closest("[data-command-add-widget]");
+  if (addWidget && !addWidget.disabled) {
+    addCommandWidget(addWidget.dataset.commandAddWidget);
+    return;
+  }
+
+  const menuToggle = event.target.closest("[data-widget-menu-toggle]");
+  if (menuToggle) {
+    const widgetId = menuToggle.dataset.widgetMenuToggle;
+    const menu = document.querySelector(`[data-widget-menu="${widgetId}"]`);
+    const shouldOpen = menu?.hidden;
+    closeCommandWidgetMenus();
+    if (menu) {
+      menu.hidden = !shouldOpen;
+      menuToggle.setAttribute("aria-expanded", shouldOpen ? "true" : "false");
+    }
+    return;
+  }
+
+  const menuAction = event.target.closest("[data-widget-menu-action]");
+  if (menuAction) {
+    const widgetId = menuAction.dataset.widgetId;
+    closeCommandWidgetMenus();
+    if (menuAction.dataset.widgetMenuAction === "hide") {
+      hideCommandWidget(widgetId);
+    } else if (menuAction.dataset.widgetMenuAction === "refresh") {
+      void refreshCommandWidget(widgetId);
+    }
+  }
+}
+
+function closeCommandWidgetMenus() {
+  document.querySelectorAll("[data-widget-menu]").forEach((menu) => {
+    menu.hidden = true;
+  });
+  document.querySelectorAll("[data-widget-menu-toggle]").forEach((button) => {
+    button.setAttribute("aria-expanded", "false");
+  });
+}
+
+function addCommandWidget(widgetId) {
+  if (!getCommandWidget(widgetId)) return;
+  const widgetIds = readCommandWidgetIds();
+  if (widgetIds.includes(widgetId)) return;
+  writeCommandWidgetIds([...widgetIds, widgetId]);
+  void persistCommandWidgetPreferences();
+  rerenderCommandCenter({ skipLoad: true, skipRemotePreferences: true });
+}
+
+function hideCommandWidget(widgetId) {
+  writeCommandWidgetIds(readCommandWidgetIds().filter((id) => id !== widgetId));
+  void persistCommandWidgetPreferences();
+  rerenderCommandCenter({ skipLoad: true, skipRemotePreferences: true });
+}
+
+function rerenderCommandCenter(options = {}) {
+  const root = document.querySelector("[data-command-center]");
+  if (!root) return;
+  root.outerHTML = renderCommandCenter();
+  initCommandCenter(options);
+}
+
+async function hydrateCommandWidgetPreferences() {
+  if (commandCenterState.preferencesLoaded || !suiteSupabase) return;
+  commandCenterState.preferencesLoaded = true;
+  const user = await getCommandCenterUser();
+  if (!user) return;
+
+  const { data, error } = await suiteSupabase
+    .from("command_center_widget_preferences")
+    .select("widget_key,is_visible,sort_order")
+    .eq("user_id", user.id)
+    .order("sort_order", { ascending: true });
+
+  if (error || !data?.length) return;
+
+  const remoteWidgetIds = normalizeCommandWidgetIds(
+    data.filter((item) => item.is_visible).map((item) => item.widget_key),
+    null
+  );
+  if (remoteWidgetIds.join("|") !== readCommandWidgetIds().join("|")) {
+    writeCommandWidgetIds(remoteWidgetIds);
+    rerenderCommandCenter({ skipLoad: true, skipRemotePreferences: true });
+  }
+}
+
+async function persistCommandWidgetPreferences() {
+  if (!suiteSupabase) return;
+  const user = await getCommandCenterUser();
+  if (!user) return;
+
+  const visibleIds = readCommandWidgetIds();
+  const visibleSet = new Set(visibleIds);
+  const rows = commandCenterWidgetCatalog.map((widget, index) => ({
+    user_id: user.id,
+    widget_key: widget.id,
+    is_visible: visibleSet.has(widget.id),
+    sort_order: visibleIds.includes(widget.id) ? visibleIds.indexOf(widget.id) : commandCenterWidgetCatalog.length + index,
+    settings: {},
+    updated_at: new Date().toISOString()
+  }));
+  const { error } = await suiteSupabase
+    .from("command_center_widget_preferences")
+    .upsert(rows, { onConflict: "user_id,widget_key" });
+  if (error) console.warn("[admin-suite] Unable to save command center preferences", error);
+}
+
+async function getCommandCenterUser() {
+  if (!suiteSupabase) return null;
+  const { data } = await suiteSupabase.auth.getUser();
+  return data?.user || null;
+}
+
+async function loadCommandCenterData() {
+  await Promise.all([
+    loadCommandActionItems(),
+    loadCommandCoverageRequests(),
+    loadCommandQaAlerts(),
+    loadCommandSchedule()
+  ]);
+}
+
+async function refreshCommandWidget(widgetId) {
+  setCommandWidgetLoading(widgetId);
+  if (widgetId === "action-items") await loadCommandActionItems();
+  if (widgetId === "coverage-requests") await loadCommandCoverageRequests();
+  if (widgetId === "qa-alerts") await loadCommandQaAlerts();
+  if (widgetId === "schedule") await loadCommandSchedule();
+}
+
+function setCommandWidgetLoading(widgetId) {
+  const listIds = {
+    "action-items": "commandActionItemsList",
+    "coverage-requests": "commandCoverageRequestsList",
+    "qa-alerts": "commandQaAlertsList",
+    schedule: "commandScheduleList"
+  };
+  const list = document.getElementById(listIds[widgetId]);
+  if (list) list.innerHTML = skeletonRows(3);
+  setCommandMessage(widgetId, "Syncing...");
+}
+
+async function fetchCommandRows(table, select = "*", options = {}) {
+  if (!suiteSupabase) {
+    return { data: [], error: new Error("Supabase is not configured.") };
+  }
+  let query = suiteSupabase.from(table).select(select);
+  if (options.order) {
+    query = query.order(options.order, { ascending: options.ascending !== false });
+  }
+  if (options.limit) {
+    query = query.limit(options.limit);
+  }
+  const { data, error } = await query;
+  if (error) console.warn(`[admin-suite] ${table} load failed`, error);
+  return { data: data || [], error };
+}
+
+async function loadCommandActionItems() {
+  setCommandMessage("action-items", "Syncing...");
+  const [customResult, profileResult] = await Promise.all([
+    fetchCommandRows("command_center_action_items", "*", { order: "due_at", ascending: true, limit: 40 }),
+    fetchCommandRows("profiles", "id,full_name,email,phone,role,status,contractor_approved,property_manager_property_id", { limit: 60 })
+  ]);
+
+  const customItems = customResult.error ? [] : customResult.data
+    .filter((item) => isOpenStatus(item.status))
+    .map(mapActionItem);
+  const profileItems = profileResult.error ? [] : profileResult.data
+    .filter(isPendingProfileAction)
+    .map(mapProfileActionItem);
+
+  commandCenterState.actionItems = [...profileItems, ...customItems]
+    .sort((a, b) => priorityWeight(b.priority) - priorityWeight(a.priority) || dateValue(a.dueAt) - dateValue(b.dueAt));
+
+  const hasSchemaError = customResult.error && !profileItems.length;
+  setCommandMessage("action-items", hasSchemaError
+    ? "Action items are ready once the Supabase migration is applied."
+    : commandCenterState.actionItems.length
+      ? `${commandCenterState.actionItems.length} open action item${commandCenterState.actionItems.length === 1 ? "" : "s"}`
+      : "Synced with Supabase. No open action items.");
+  renderCommandActionItems();
+}
+
+async function loadCommandCoverageRequests() {
+  setCommandMessage("coverage-requests", "Syncing...");
+  const result = await fetchCommandRows("coverage_requests", "*", { order: "requested_start_at", ascending: true, limit: 40 });
+  commandCenterState.coverageRequests = result.error ? [] : result.data.map(mapCoverageRequest);
+  setCommandMessage("coverage-requests", result.error
+    ? "Coverage requests are ready once the Supabase migration is applied."
+    : commandCenterState.coverageRequests.length
+      ? `${commandCenterState.coverageRequests.length} coverage request${commandCenterState.coverageRequests.length === 1 ? "" : "s"}`
+      : "Synced with Supabase. No coverage requests yet.");
+  renderCommandCoverageRequests();
+}
+
+async function loadCommandQaAlerts() {
+  setCommandMessage("qa-alerts", "Syncing...");
+  const [qaResult, assignmentResult] = await Promise.all([
+    fetchCommandRows("qa_alerts", "*", { order: "created_at", ascending: false, limit: 40 }),
+    fetchCommandRows("assignment_blocks", "id,title,property_name,address,service_type,status,start_window,end_window,claimed_by_name,claimed_by_email,assigned_to_name,assigned_to_email,created_at", { order: "created_at", ascending: false, limit: 60 })
+  ]);
+
+  const qaRows = qaResult.error ? [] : qaResult.data.filter((item) => isOpenStatus(item.status)).map(mapQaAlert);
+  const qaAssignments = assignmentResult.error ? [] : assignmentResult.data
+    .filter((item) => normalizeToken(item.status) === "qa-pending")
+    .map(mapQaAssignmentAlert);
+
+  commandCenterState.qaAlerts = [...qaRows, ...qaAssignments]
+    .sort((a, b) => priorityWeight(b.priority) - priorityWeight(a.priority) || dateValue(b.dueAt, 0) - dateValue(a.dueAt, 0));
+
+  setCommandMessage("qa-alerts", qaResult.error && !qaAssignments.length
+    ? "QA alerts are ready once the Supabase migration is applied."
+    : commandCenterState.qaAlerts.length
+      ? `${commandCenterState.qaAlerts.length} open QA alert${commandCenterState.qaAlerts.length === 1 ? "" : "s"}`
+      : "Synced with Supabase. No QA alerts.");
+  renderCommandQaAlerts();
+}
+
+async function loadCommandSchedule() {
+  setCommandMessage("schedule", "Syncing...");
+  const result = await fetchCommandRows("assignment_blocks", "id,title,property_name,address,service_type,status,start_window,end_window,claimed_by_name,claimed_by_email,assigned_to_name,assigned_to_email,created_at", { order: "start_window", ascending: true, limit: 120 });
+  commandCenterState.scheduleItems = result.error ? [] : result.data;
+  setCommandMessage("schedule", result.error ? "Unable to load assignments from Supabase." : "Synced with Supabase.");
+  renderCommandSchedule();
+}
+
+function renderCommandCenterLists() {
+  renderCommandActionItems();
+  renderCommandCoverageRequests();
+  renderCommandQaAlerts();
+  renderCommandSchedule();
+}
+
+function updateCommandFilterButtons(widgetId) {
+  document.querySelectorAll(`[data-command-filter="${widgetId}"]`).forEach((button) => {
+    button.classList.toggle("active", button.dataset.commandFilterValue === commandCenterState.filters[widgetId]);
+  });
+}
+
+function updateCommandScheduleButtons() {
+  document.querySelectorAll("[data-command-schedule-view]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.commandScheduleView === commandCenterState.scheduleView);
+  });
+}
+
+function renderCommandActionItems() {
+  const list = document.getElementById("commandActionItemsList");
+  if (!list) return;
+  const rows = filterActionItems(commandCenterState.actionItems).slice(0, 6);
+  list.innerHTML = rows.length
+    ? rows.map(renderDashboardItem).join("")
+    : emptyState("clipboard-list", "No action items");
+}
+
+function renderCommandCoverageRequests() {
+  const list = document.getElementById("commandCoverageRequestsList");
+  if (!list) return;
+  const rows = filterCoverageRequests(commandCenterState.coverageRequests).slice(0, 6);
+  list.innerHTML = rows.length
+    ? rows.map(renderDashboardItem).join("")
+    : emptyState("calendar", "No coverage requests");
+}
+
+function renderCommandQaAlerts() {
+  const list = document.getElementById("commandQaAlertsList");
+  if (!list) return;
+  const rows = filterQaAlerts(commandCenterState.qaAlerts).slice(0, 6);
+  list.innerHTML = rows.length
+    ? rows.map(renderDashboardItem).join("")
+    : emptyState("alert", "No QA alerts");
+}
+
+function renderCommandSchedule() {
+  const list = document.getElementById("commandScheduleList");
+  if (!list) return;
+  const rows = filterScheduleItems(commandCenterState.scheduleItems).slice(0, commandCenterState.scheduleView === "month" ? 8 : 6);
+  list.innerHTML = rows.length
+    ? rows.map(renderScheduleDashboardItem).join("")
+    : emptyState("calendar", "No scheduled assignments");
+}
+
+function setCommandMessage(widgetId, text, isError = false) {
+  const messageIds = {
+    "action-items": "commandActionItemsMessage",
+    "coverage-requests": "commandCoverageRequestsMessage",
+    "qa-alerts": "commandQaAlertsMessage",
+    schedule: "commandScheduleMessage"
+  };
+  const message = document.getElementById(messageIds[widgetId]);
+  if (!message) return;
+  message.textContent = text || "";
+  message.classList.toggle("error", Boolean(isError));
+}
+
+function mapActionItem(item) {
+  return {
+    id: `action-${item.id}`,
+    title: item.title || "Action item",
+    body: item.body || item.description || item.notes || "",
+    status: item.status || "open",
+    priority: item.priority || "normal",
+    dueAt: item.due_at || item.created_at || null,
+    meta: item.item_type ? titleCase(item.item_type.replace(/_/g, " ")) : "Action item",
+    href: item.href || "assignments.html",
+    icon: "clipboard-list"
+  };
+}
+
+function mapProfileActionItem(profile) {
+  const role = normalizeToken(profile.role);
+  const label = role === "property-manager" ? "Link property manager" : "Approve contractor";
+  const name = profile.full_name || profile.email || "New account";
+  return {
+    id: `profile-${profile.id}`,
+    title: label,
+    body: `${name}${profile.phone ? ` - ${profile.phone}` : ""}`,
+    status: "pending",
+    priority: "high",
+    dueAt: new Date().toISOString(),
+    meta: role === "property-manager" ? "Property manager access" : "Contractor access",
+    href: "onboarding.html",
+    icon: "user-plus"
+  };
+}
+
+function mapCoverageRequest(item) {
+  const title = item.title || item.service_type || "Coverage request";
+  const property = [item.property_name, item.address].filter(Boolean).join(" - ");
+  return {
+    id: `coverage-${item.id}`,
+    title,
+    body: property || item.notes || "Coverage request",
+    status: item.status || "open",
+    priority: item.priority || "normal",
+    dueAt: item.requested_start_at || item.created_at || null,
+    meta: formatDateWindow(item.requested_start_at, item.requested_end_at),
+    href: "coverage-center.html",
+    icon: "shield"
+  };
+}
+
+function mapQaAlert(item) {
+  return {
+    id: `qa-${item.id}`,
+    title: item.title || item.message || "QA alert",
+    body: [item.property_name, item.contractor_name, item.service_type].filter(Boolean).join(" - ") || item.notes || "",
+    status: item.status || "open",
+    priority: item.priority || "normal",
+    dueAt: item.due_at || item.created_at || null,
+    meta: item.alert_type ? titleCase(item.alert_type.replace(/_/g, " ")) : "QA alert",
+    href: "qa-queue.html",
+    icon: "alert"
+  };
+}
+
+function mapQaAssignmentAlert(item) {
+  return {
+    id: `qa-assignment-${item.id}`,
+    title: item.title || "QA pending assignment",
+    body: [item.property_name, item.service_type].filter(Boolean).join(" - ") || "Assignment requires QA review",
+    status: "qa_pending",
+    priority: "high",
+    dueAt: item.start_window || item.created_at || null,
+    meta: formatDateWindow(item.start_window, item.end_window),
+    href: "assignments.html",
+    icon: "alert"
+  };
+}
+
+function renderDashboardItem(item) {
+  return `
+    <article class="dashboard-item-row" data-dashboard-item="${esc(item.id)}">
+      <div class="dashboard-item-main">
+        <div class="dashboard-item-title">${icon(item.icon || "clipboard-list")}<strong>${esc(item.title)}</strong></div>
+        ${item.body ? `<p>${esc(item.body)}</p>` : ""}
+        <div class="dashboard-item-meta">
+          <span>${esc(item.meta || formatDashboardDate(item.dueAt))}</span>
+          ${priorityBadge(item.priority)}
+          ${statusBadge(item.status)}
+        </div>
+      </div>
+      <a class="dashboard-item-action" href="${esc(item.href || "#")}" aria-label="Open ${esc(item.title)}">${icon("chevron-right")}</a>
+    </article>
+  `;
+}
+
+function renderScheduleDashboardItem(item) {
+  const contractor = item.assigned_to_name || item.assigned_to_email || item.claimed_by_name || item.claimed_by_email || "Unassigned";
+  return renderDashboardItem({
+    id: `schedule-${item.id}`,
+    title: item.property_name || item.title || "Scheduled assignment",
+    body: [item.service_type, contractor].filter(Boolean).join(" - "),
+    status: item.status || "scheduled",
+    priority: item.status === "qa_pending" ? "high" : "normal",
+    dueAt: item.start_window,
+    meta: formatDateWindow(item.start_window, item.end_window),
+    href: "schedule.html",
+    icon: "calendar"
+  });
+}
+
+function filterActionItems(items) {
+  const filter = commandCenterState.filters["action-items"];
+  if (filter === "priority") return items.filter((item) => priorityWeight(item.priority) >= 3);
+  if (filter === "due") return items.filter((item) => isToday(item.dueAt));
+  if (filter === "week") return items.filter((item) => isWithinNextDays(item.dueAt, 7));
+  return items;
+}
+
+function filterCoverageRequests(items) {
+  const filter = commandCenterState.filters["coverage-requests"];
+  if (filter === "pending") return items.filter((item) => ["pending", "pending-approval"].includes(normalizeToken(item.status)));
+  if (filter === "upcoming") return items.filter((item) => {
+    const dueAt = parseDate(item.dueAt);
+    return dueAt && dueAt >= startOfToday();
+  });
+  if (filter === "needs") return items.filter((item) => ["open", "needs-coverage", "needs"].includes(normalizeToken(item.status)));
+  return items;
+}
+
+function filterQaAlerts(items) {
+  const filter = commandCenterState.filters["qa-alerts"];
+  if (filter === "failures") return items.filter((item) => ["failed", "failure", "qa-failure"].includes(normalizeToken(item.status)) || normalizeToken(item.meta).includes("failure"));
+  if (filter === "reclean") return items.filter((item) => normalizeToken(item.meta).includes("reclean"));
+  if (filter === "pending") return items.filter((item) => ["pending", "pending-review", "qa-pending", "open"].includes(normalizeToken(item.status)));
+  return items;
+}
+
+function filterScheduleItems(items) {
+  const now = new Date();
+  const today = startOfToday();
+  const weekEnd = addDays(today, 7);
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  return items.filter((item) => {
+    const start = parseDate(item.start_window);
+    if (!start) return false;
+    if (commandCenterState.scheduleView === "day") return isSameDay(start, now);
+    if (commandCenterState.scheduleView === "week") return start >= today && start < weekEnd;
+    return start >= monthStart && start < monthEnd;
+  });
+}
+
+function isPendingProfileAction(profile) {
+  const role = normalizeToken(profile.role);
+  const status = normalizeToken(profile.status);
+  if (role === "contractor") {
+    return !profile.contractor_approved && !isApprovedStatus(status);
+  }
+  if (role === "property-manager") {
+    return !profile.property_manager_property_id;
+  }
+  return false;
+}
+
+function isApprovedStatus(status) {
+  return ["approved", "active", "enabled"].includes(normalizeToken(status));
+}
+
+function isOpenStatus(status) {
+  return !["completed", "closed", "cancelled", "canceled", "resolved", "done"].includes(normalizeToken(status));
+}
+
+function priorityWeight(priority) {
+  const token = normalizeToken(priority);
+  if (["critical", "urgent"].includes(token)) return 4;
+  if (token === "high") return 3;
+  if (token === "medium" || token === "normal") return 2;
+  if (token === "low") return 1;
+  return 0;
+}
+
+function priorityBadge(priority) {
+  const token = normalizeToken(priority || "normal");
+  const tone = priorityWeight(token) >= 3 ? "red" : token === "low" ? "blue" : "yellow";
+  return `<span class="status-badge status-${tone}">${esc(titleCase(token || "normal"))}</span>`;
+}
+
+function statusBadge(status) {
+  const token = normalizeToken(status || "open");
+  return `<span class="status-badge status-${token}">${esc(titleCase(token || "open"))}</span>`;
+}
+
+function normalizeToken(value) {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+function titleCase(value) {
+  return String(value || "")
+    .replace(/[-_]+/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function parseDate(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function dateValue(value, fallback = Number.MAX_SAFE_INTEGER) {
+  return parseDate(value)?.getTime() || fallback;
+}
+
+function startOfToday() {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function addDays(value, days) {
+  const date = new Date(value);
+  date.setDate(date.getDate() + days);
+  return date;
+}
+
+function isSameDay(a, b) {
+  return a.getFullYear() === b.getFullYear()
+    && a.getMonth() === b.getMonth()
+    && a.getDate() === b.getDate();
+}
+
+function isToday(value) {
+  const date = parseDate(value);
+  return date ? isSameDay(date, new Date()) : false;
+}
+
+function isWithinNextDays(value, days) {
+  const date = parseDate(value);
+  if (!date) return false;
+  const today = startOfToday();
+  return date >= today && date < addDays(today, days);
+}
+
+function formatDashboardDate(value, fallback = "No date") {
+  const date = parseDate(value);
+  if (!date) return fallback;
+  return date.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+function formatDateWindow(start, end) {
+  const startDate = parseDate(start);
+  const endDate = parseDate(end);
+  if (!startDate) return "No start time";
+  if (!endDate) return formatDashboardDate(startDate);
+  const sameDay = isSameDay(startDate, endDate);
+  const startText = startDate.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  const endText = endDate.toLocaleString([], sameDay ? { hour: "numeric", minute: "2-digit" } : { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  return `${startText} - ${endText}`;
 }
 
 function renderPipelineColumns() {
@@ -1446,6 +2176,9 @@ function renderApp() {
 
   if (activeKey === "schedule") {
     initScheduleViews();
+  }
+  if (activeKey === "dashboard" || activeKey === "command-center") {
+    initCommandCenter();
   }
 }
 
