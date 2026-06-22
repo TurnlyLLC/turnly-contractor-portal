@@ -8,6 +8,7 @@ const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
 const list = document.getElementById("adminAssignments");
 const pageMessage = document.getElementById("message");
 const statusOptions = ["open", "claimed", "scheduled", "in_progress", "completed", "qa_pending", "cancelled"];
+const assignmentTableColumns = 10;
 let assignmentsById = new Map();
 
 function escapeHtml(value) {
@@ -35,6 +36,10 @@ function formatDateTime(value) {
 
 function formatMoney(value) {
   return value ? "$" + Number(value).toFixed(2) : "Not listed";
+}
+
+function shortId(value) {
+  return String(value || "").slice(0, 8) || "pending";
 }
 
 function toDateTimeInput(value) {
@@ -73,7 +78,7 @@ async function requireAdmin() {
 
 async function loadAssignments() {
   if (!list || !supabase) return;
-  list.innerHTML = "<p>Loading assignments...</p>";
+  list.innerHTML = renderTableNotice("Loading assignments...");
 
   const { data, error } = await supabase
     .from("assignment_blocks")
@@ -81,57 +86,73 @@ async function loadAssignments() {
     .order("created_at", { ascending: false });
 
   if (error) {
-    list.innerHTML = `<p>${escapeHtml(error.message)}</p>`;
+    list.innerHTML = renderTableNotice("Unable to load assignments.", error.message, true);
     return;
   }
 
   assignmentsById = new Map((data || []).map((item) => [item.id, item]));
 
   if (!data?.length) {
-    list.innerHTML = "<p>No assignments have been posted yet.</p>";
+    list.innerHTML = renderTableNotice("No assignments found", "Assignments will appear here.");
     return;
   }
 
-  list.innerHTML = data.map(renderAssignmentCard).join("");
+  list.innerHTML = data.map(renderAssignmentRow).join("");
 }
 
-function renderAssignmentCard(item) {
+function renderTableNotice(title, text = "", isError = false) {
+  return `
+    <tr class="assignment-empty-row">
+      <td colspan="${assignmentTableColumns}">
+        <div class="empty-state assignment-table-empty ${isError ? "error" : ""}">
+          <strong>${escapeHtml(title)}</strong>
+          ${text ? `<p>${escapeHtml(text)}</p>` : ""}
+          <div class="empty-lines"><span></span><span></span></div>
+        </div>
+      </td>
+    </tr>
+  `;
+}
+
+function renderAssignmentRow(item) {
   const id = escapeHtml(item.id);
   const normalizedStatus = String(item.status || "unknown").toLowerCase();
   const claimedName = item.claimed_by_name || item.claimed_by_email || (item.claimed_by ? "Contractor assigned" : "Not claimed");
-  const started = item.started_at ? `<p><strong>Started:</strong> ${escapeHtml(formatDateTime(item.started_at))}</p>` : "";
-  const completed = item.completed_at ? `<p><strong>Completed:</strong> ${escapeHtml(formatDateTime(item.completed_at))}</p>` : "";
+  const assignedName = item.assigned_to_name || item.assigned_to_email || "Unassigned";
+  const priority = item.priority || "Medium";
 
   return `
-    <div class="assignment-card admin-managed-assignment" data-admin-assignment-card="${id}">
-      <div class="assignment-card-header">
-        <div>
-          <h3>${escapeHtml(item.title || "Untitled assignment")}</h3>
-          <p>${escapeHtml(item.property_name || "Property not set")}</p>
+    <tr class="admin-assignment-row" data-admin-assignment-card="${id}">
+      <td><input type="checkbox" aria-label="Select assignment" /></td>
+      <td>
+        <strong>${escapeHtml(shortId(item.id))}</strong>
+        <small>${escapeHtml(item.title || "Untitled assignment")}</small>
+      </td>
+      <td>
+        <strong>${escapeHtml(item.property_name || "Property not set")}</strong>
+        <small>${escapeHtml(item.address || "Address not set")}</small>
+      </td>
+      <td>${escapeHtml(item.service_type || "Service not set")}</td>
+      <td>${escapeHtml(claimedName)}</td>
+      <td>${escapeHtml(assignedName)}</td>
+      <td>
+        <strong>${escapeHtml(formatDateTime(item.start_window))}</strong>
+        <small>${escapeHtml(item.end_window ? "Ends " + formatDateTime(item.end_window) : "End not set")}</small>
+      </td>
+      <td>
+        <select class="assignment-status-select ${statusClass(item.status)}" data-admin-status-id="${id}" aria-label="Assignment status">
+          ${renderStatusOptions(normalizedStatus)}
+        </select>
+      </td>
+      <td><span class="status-badge status-yellow">${escapeHtml(priority)}</span></td>
+      <td>
+        <div class="assignment-inline-actions">
+          <button type="button" class="secondary-btn small-btn" data-admin-save-status="${id}">Update</button>
+          <button type="button" class="secondary-btn small-btn" data-admin-edit-assignment="${id}">Edit</button>
+          <button type="button" class="secondary-btn small-btn danger-btn" data-admin-delete-assignment="${id}">Delete</button>
         </div>
-        <span class="status-badge ${statusClass(item.status)}">${escapeHtml(normalizedStatus.replace(/_/g, " "))}</span>
-      </div>
-
-      <p><strong>Address:</strong> ${escapeHtml(item.address || "Address not set")}</p>
-      <p><strong>Service:</strong> ${escapeHtml(item.service_type || "Service not set")}</p>
-      <p><strong>Pay:</strong> ${escapeHtml(formatMoney(item.pay_amount))}</p>
-      <p><strong>Window:</strong> ${escapeHtml(formatDateTime(item.start_window))} - ${escapeHtml(formatDateTime(item.end_window))}</p>
-      <p><strong>Claimed By:</strong> ${escapeHtml(claimedName)}</p>
-      ${started}
-      ${completed}
-
-      <div class="admin-assignment-actions">
-        <label>
-          Status
-          <select data-admin-status-id="${id}">
-            ${renderStatusOptions(normalizedStatus)}
-          </select>
-        </label>
-        <button type="button" class="secondary-btn small-btn" data-admin-save-status="${id}">Update</button>
-        <button type="button" class="secondary-btn small-btn" data-admin-edit-assignment="${id}">Edit</button>
-        <button type="button" class="secondary-btn small-btn danger-btn" data-admin-delete-assignment="${id}">Delete</button>
-      </div>
-    </div>
+      </td>
+    </tr>
   `;
 }
 
@@ -448,9 +469,57 @@ function injectStyles() {
       .admin-assignment-actions select {
         min-height: 38px;
       }
+      .admin-assignment-row td {
+        vertical-align: middle;
+      }
+      .admin-assignment-row strong,
+      .admin-assignment-row small {
+        display: block;
+      }
+      .admin-assignment-row small {
+        color: var(--suite-soft, #9aaabc);
+        font-size: 11px;
+        font-weight: 700;
+        margin-top: 4px;
+        max-width: 220px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .assignment-status-select {
+        background: rgba(7, 18, 32, 0.84);
+        border: 1px solid rgba(117, 143, 169, 0.2);
+        border-radius: 6px;
+        color: var(--suite-text, #f7fbff);
+        min-height: 34px;
+        min-width: 128px;
+        padding: 7px 8px;
+        text-transform: capitalize;
+      }
+      .assignment-inline-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        justify-content: flex-end;
+      }
+      .assignment-inline-actions .small-btn {
+        min-height: 30px;
+        padding: 0 10px;
+      }
+      .assignment-empty-row td {
+        padding: 0;
+      }
+      .assignment-table-empty {
+        border: 0;
+        min-height: 270px;
+      }
+      .assignment-table-empty.error strong,
+      .assignment-table-empty.error p {
+        color: var(--suite-red, #ff5b68);
+      }
       .danger-btn {
         border-color: rgba(255, 91, 102, 0.45);
-        color: var(--admin-red);
+        color: var(--suite-red, #ff5b68);
       }
       .assignment-command .status-scheduled {
         background: rgba(155, 108, 255, 0.13);
@@ -502,6 +571,9 @@ function injectStyles() {
         }
         .assignment-edit-actions {
           display: grid;
+        }
+        .assignment-inline-actions {
+          justify-content: flex-start;
         }
       }
     </style>
