@@ -129,6 +129,46 @@ const leadState = {
   sourceFilter: "all",
   isSaving: false
 };
+const walkthroughOptionalColumns = [
+  "walkthrough_type",
+  "walkthrough_location",
+  "walkthrough_end_at",
+  "walkthrough_assigned_to",
+  "walkthrough_status"
+];
+const walkthroughTypeOptions = [
+  "",
+  "Initial Walkthrough",
+  "Follow-up Walkthrough",
+  "Scope Review",
+  "Quality Review",
+  "Virtual Walkthrough"
+];
+const walkthroughStatusOptions = [
+  ["scheduled", "Scheduled"],
+  ["confirmed", "Confirmed"],
+  ["completed", "Completed"],
+  ["cancelled", "Cancelled"]
+];
+const walkthroughState = {
+  rows: [],
+  user: null,
+  profile: null,
+  selectedId: null,
+  view: "calendar",
+  calendarMode: "week",
+  dateCursor: new Date(),
+  search: "",
+  statusFilter: "all",
+  assigneeFilter: "all",
+  isSaving: false
+};
+const topbarState = {
+  user: null,
+  profile: null,
+  loaded: false,
+  loading: false
+};
 
 const pages = {
   "dashboard": {
@@ -1975,30 +2015,754 @@ function isMissingLeadOptionalColumn(error) {
 
 function renderWalkthroughs() {
   return `
-    ${toolbar(
-      `${chip("Calendar View", true, "calendar")}${chip("List View", false, "list")}`,
-      `${actionButton("Filters", "filter", "", "secondary")}${actionButton("Schedule Walkthrough", "plus")}`
-    )}
-    ${panel("", `
-      <div class="calendar-controls"><button>${icon("chevron-right", "flip")}</button><button>${icon("chevron-right")}</button><button>Today</button><strong>May 19 - May 25, 2025 ${icon("chevron-down")}</strong><div>${chip("Week", true)}${chip("Month")}${chip("Day")}</div></div>
-      ${weekCalendar("No walkthroughs scheduled")}
-    `, { className: "no-head" })}
-    <section class="three-panels">
-      ${panel("Walkthrough Details", formGrid([
-        selectControl("Property / Lead", [""]),
-        selectControl("Type", [""]),
-        inputControl("Date", "", "date"),
-        inputControl("Start Time", "", "time"),
-        inputControl("End Time", "", "time"),
-        inputControl("Location / Meeting Link"),
-        selectControl("Assigned To", [""]),
-        selectControl("Status", [""]),
-        textareaControl("Notes", "wide")
-      ]))}
-      ${panel("Activity Log", emptyState("calendar", "No activity yet"), { action: { label: "View All", tone: "secondary" } })}
-      ${panel("Files & Documents", uploadDrop())}
+    <section class="walkthrough-workspace" data-walkthrough-page>
+      ${toolbar(
+        `<button class="view-chip active" type="button" data-walkthrough-view-toggle="calendar">${icon("calendar")}<span>Calendar</span></button><button class="view-chip" type="button" data-walkthrough-view-toggle="list">${icon("list")}<span>List</span></button>`,
+        `<label class="inline-search walkthrough-search">${icon("search")}<input id="walkthroughSearchInput" type="search" placeholder="Search walkthroughs..." /></label><select id="walkthroughAssigneeFilter" class="select-button" aria-label="Filter assigned to"><option value="all">All Assignees</option></select><button class="secondary-action" type="button" data-walkthrough-filter-toggle>${icon("filter")}<span>Filters</span></button><button id="walkthroughAddBtn" class="primary-action" type="button">${icon("plus")}<span>Schedule</span></button>`
+      )}
+      <section id="walkthroughFilterPanel" class="lead-filter-panel" hidden>
+        <label class="suite-field"><span>Status</span><select id="walkthroughStatusFilter"><option value="all">All Statuses</option>${walkthroughStatusOptions.map(([id, label]) => `<option value="${esc(id)}">${esc(label)}</option>`).join("")}</select></label>
+        <button class="secondary-action" type="button" data-walkthrough-clear-filters><span>Clear Filters</span></button>
+      </section>
+      <p id="walkthroughMessage" class="status-message" aria-live="polite"></p>
+      <section class="metric-strip four walkthrough-metrics">
+        ${metric("Scheduled", "0", "active walkthroughs", "calendar-days", "blue", 'id="walkthroughScheduledCount"')}
+        ${metric("Confirmed", "0", "ready for visit", "check", "green", 'id="walkthroughConfirmedCount"')}
+        ${metric("Today", "0", "on today's calendar", "clock", "yellow", 'id="walkthroughTodayCount"')}
+        ${metric("Completed", "0", "ready for quote", "badge-dollar", "purple", 'id="walkthroughCompletedCount"')}
+      </section>
+      ${panel("Walkthrough Calendar", `
+        <div class="calendar-controls walkthrough-calendar-controls">
+          <button type="button" data-walkthrough-date-nav="prev" aria-label="Previous range">${icon("chevron-right", "flip")}</button>
+          <button type="button" data-walkthrough-date-nav="today">Today</button>
+          <button type="button" data-walkthrough-date-nav="next" aria-label="Next range">${icon("chevron-right")}</button>
+          <strong id="walkthroughDateRange">Loading...</strong>
+          <div>
+            <button class="view-chip active" type="button" data-walkthrough-mode="week"><span>Week</span></button>
+            <button class="view-chip" type="button" data-walkthrough-mode="month"><span>Month</span></button>
+            <button class="view-chip" type="button" data-walkthrough-mode="day"><span>Day</span></button>
+          </div>
+        </div>
+        <div id="walkthroughCalendar" class="walkthrough-calendar-shell">${skeletonRows(4)}</div>
+      `, { className: "no-head walkthrough-calendar-panel" })}
+      <section id="walkthroughListPanel" class="lead-list-panel" hidden>
+        <div id="walkthroughList" class="walkthrough-list">${skeletonRows(4)}</div>
+      </section>
+      <section class="content-rail lead-detail-rail walkthrough-detail-rail">
+        ${panel("Walkthrough Details", walkthroughForm(), { className: "span-main" })}
+        <div class="suite-stack">
+          ${panel("Activity Log", `<div id="walkthroughActivityLog" class="lead-activity-list">${emptyState("calendar", "No activity yet")}</div>`)}
+          ${panel("Linked Workflow", walkthroughNavigationPanel())}
+        </div>
+      </section>
     </section>
   `;
+}
+
+function walkthroughForm() {
+  return `
+    <form id="walkthroughForm" class="lead-form walkthrough-form">
+      <input id="walkthroughId" type="hidden" />
+      ${formGrid([
+        leadSelectField("walkthroughRecordSelect", "Property / Lead", [["", "New walkthrough"]]),
+        leadInputField("walkthroughCompanyName", "Company Name", "text", { required: true }),
+        leadInputField("walkthroughPropertyName", "Property Name", "text", { required: true }),
+        leadInputField("walkthroughContactName", "Contact Name"),
+        leadInputField("walkthroughContactEmail", "Contact Email", "email"),
+        leadSelectField("walkthroughType", "Type", walkthroughTypeOptions, { emptyLabel: "Select type" }),
+        leadSelectField("walkthroughStatus", "Status", walkthroughStatusOptions, { required: true }),
+        leadInputField("walkthroughDate", "Date", "date", { required: true }),
+        leadInputField("walkthroughStartTime", "Start Time", "time"),
+        leadInputField("walkthroughEndTime", "End Time", "time"),
+        leadInputField("walkthroughLocation", "Location / Meeting Link", "text", { className: "wide" }),
+        leadInputField("walkthroughAssignedTo", "Assigned To"),
+        leadTextareaField("walkthroughNotes", "Notes", "wide")
+      ])}
+      <div class="lead-form-actions">
+        <button id="walkthroughNewBtn" class="secondary-action" type="button">${icon("plus")}<span>New</span></button>
+        <button id="walkthroughQuoteBtn" class="secondary-action" type="button">${icon("badge-dollar")}<span>Move to Quote</span></button>
+        <button id="walkthroughSaveBtn" class="primary-action" type="submit">${icon("check")}<span>Save Walkthrough</span></button>
+      </div>
+    </form>
+  `;
+}
+
+function walkthroughNavigationPanel() {
+  return `
+    <div class="lead-navigation-panel">
+      <p id="walkthroughNavigationSummary">Select a walkthrough to open the connected sales workflow.</p>
+      <div class="quick-nav-list">
+        <a href="leads.html">${icon("triangle")}<span>Open Leads</span></a>
+        <a href="quotes.html">${icon("badge-dollar")}<span>Open Quotes</span></a>
+        <a href="contracts-pending.html">${icon("file-signature")}<span>Open Contracts Pending</span></a>
+        <button type="button" data-walkthrough-move-stage="quote_sent">${icon("badge-dollar")}<span>Move Selected to Quote</span></button>
+      </div>
+    </div>
+  `;
+}
+
+function initWalkthroughs() {
+  const root = document.querySelector("[data-walkthrough-page]");
+  if (!root) return;
+
+  root.addEventListener("click", handleWalkthroughClick);
+  root.querySelector("#walkthroughForm")?.addEventListener("submit", saveWalkthroughForm);
+  root.querySelector("#walkthroughSearchInput")?.addEventListener("input", (event) => {
+    walkthroughState.search = event.target.value || "";
+    renderWalkthroughData();
+  });
+  root.querySelector("#walkthroughAssigneeFilter")?.addEventListener("change", (event) => {
+    walkthroughState.assigneeFilter = event.target.value || "all";
+    renderWalkthroughData();
+  });
+  root.querySelector("#walkthroughStatusFilter")?.addEventListener("change", (event) => {
+    walkthroughState.statusFilter = event.target.value || "all";
+    renderWalkthroughData();
+  });
+  root.querySelector("#walkthroughRecordSelect")?.addEventListener("change", (event) => {
+    const id = event.target.value;
+    if (id) {
+      selectWalkthroughRecord(id);
+    } else {
+      clearWalkthroughForm();
+    }
+  });
+
+  clearWalkthroughForm();
+  void loadWalkthroughs();
+}
+
+function handleWalkthroughClick(event) {
+  const addButton = event.target.closest("#walkthroughAddBtn, #walkthroughNewBtn");
+  if (addButton) {
+    clearWalkthroughForm();
+    document.getElementById("walkthroughCompanyName")?.focus();
+    return;
+  }
+
+  const viewToggle = event.target.closest("[data-walkthrough-view-toggle]");
+  if (viewToggle) {
+    walkthroughState.view = viewToggle.dataset.walkthroughViewToggle || "calendar";
+    renderWalkthroughData();
+    return;
+  }
+
+  const modeToggle = event.target.closest("[data-walkthrough-mode]");
+  if (modeToggle) {
+    walkthroughState.calendarMode = modeToggle.dataset.walkthroughMode || "week";
+    renderWalkthroughData();
+    return;
+  }
+
+  const dateNav = event.target.closest("[data-walkthrough-date-nav]");
+  if (dateNav) {
+    moveWalkthroughDateCursor(dateNav.dataset.walkthroughDateNav);
+    renderWalkthroughData();
+    return;
+  }
+
+  const filterToggle = event.target.closest("[data-walkthrough-filter-toggle]");
+  if (filterToggle) {
+    const panel = document.getElementById("walkthroughFilterPanel");
+    if (panel) panel.hidden = !panel.hidden;
+    return;
+  }
+
+  const clearFilters = event.target.closest("[data-walkthrough-clear-filters]");
+  if (clearFilters) {
+    walkthroughState.search = "";
+    walkthroughState.statusFilter = "all";
+    walkthroughState.assigneeFilter = "all";
+    renderWalkthroughFilterControls();
+    renderWalkthroughData();
+    return;
+  }
+
+  const moveStage = event.target.closest("#walkthroughQuoteBtn, [data-walkthrough-move-stage]");
+  if (moveStage) {
+    const rowId = moveStage.dataset.walkthroughSelect || event.target.closest("[data-walkthrough-select]")?.dataset.walkthroughSelect || "";
+    void moveSelectedWalkthroughToQuote(rowId);
+    return;
+  }
+
+  const select = event.target.closest("[data-walkthrough-select]");
+  if (select) {
+    selectWalkthroughRecord(select.dataset.walkthroughSelect);
+  }
+}
+
+async function loadWalkthroughs() {
+  if (!suiteSupabase) {
+    showWalkthroughMessage("Supabase config is missing. Add env.js values before using walkthroughs.", true);
+    return;
+  }
+
+  showWalkthroughMessage("Loading walkthroughs...");
+  const calendar = document.getElementById("walkthroughCalendar");
+  if (calendar) calendar.innerHTML = skeletonRows(4);
+
+  const { data: userData } = await suiteSupabase.auth.getUser();
+  walkthroughState.user = userData?.user || null;
+  if (walkthroughState.user) {
+    const { data: profile } = await suiteSupabase
+      .from("profiles")
+      .select("role,full_name,email,avatar_url")
+      .eq("id", walkthroughState.user.id)
+      .maybeSingle();
+    walkthroughState.profile = profile || null;
+  }
+
+  const { data, error } = await suiteSupabase
+    .from(leadTable)
+    .select("*")
+    .order("last_activity_at", { ascending: false })
+    .limit(300);
+
+  if (error) {
+    showWalkthroughMessage("Unable to load walkthroughs: " + error.message, true);
+    renderWalkthroughData();
+    return;
+  }
+
+  walkthroughState.rows = data || [];
+  const first = getWalkthroughRows()[0] || walkthroughState.rows.find((row) => normalizeLeadStage(row.pipeline_stage) === "walkthrough") || null;
+  if (!walkthroughState.selectedId && first) {
+    walkthroughState.selectedId = first.id;
+    fillWalkthroughForm(first);
+  }
+  populateWalkthroughRecordSelect();
+  populateWalkthroughAssigneeFilter();
+  renderWalkthroughData();
+  showWalkthroughMessage(getWalkthroughRows().length ? `${getWalkthroughRows().length} walkthrough${getWalkthroughRows().length === 1 ? "" : "s"} synced from Supabase.` : "Synced with Supabase. No walkthroughs scheduled yet.");
+}
+
+function renderWalkthroughData() {
+  renderWalkthroughViewToggles();
+  renderWalkthroughModeToggles();
+  renderWalkthroughFilterControls();
+  renderWalkthroughMetrics();
+  renderWalkthroughCalendar();
+  renderWalkthroughList();
+  renderWalkthroughActivity(getSelectedWalkthrough());
+  renderWalkthroughNavigation(getSelectedWalkthrough());
+
+  const calendarPanel = document.querySelector(".walkthrough-calendar-panel");
+  const listPanel = document.getElementById("walkthroughListPanel");
+  if (calendarPanel) calendarPanel.hidden = walkthroughState.view !== "calendar";
+  if (listPanel) listPanel.hidden = walkthroughState.view !== "list";
+}
+
+function renderWalkthroughViewToggles() {
+  document.querySelectorAll("[data-walkthrough-view-toggle]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.walkthroughViewToggle === walkthroughState.view);
+  });
+}
+
+function renderWalkthroughModeToggles() {
+  document.querySelectorAll("[data-walkthrough-mode]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.walkthroughMode === walkthroughState.calendarMode);
+  });
+}
+
+function renderWalkthroughFilterControls() {
+  const search = document.getElementById("walkthroughSearchInput");
+  if (search && search.value !== walkthroughState.search) search.value = walkthroughState.search;
+  const assignee = document.getElementById("walkthroughAssigneeFilter");
+  if (assignee && assignee.value !== walkthroughState.assigneeFilter) assignee.value = walkthroughState.assigneeFilter;
+  const status = document.getElementById("walkthroughStatusFilter");
+  if (status && status.value !== walkthroughState.statusFilter) status.value = walkthroughState.statusFilter;
+}
+
+function populateWalkthroughRecordSelect() {
+  const select = document.getElementById("walkthroughRecordSelect");
+  if (!select) return;
+  const rows = [...walkthroughState.rows].sort((a, b) => leadTitle(a).localeCompare(leadTitle(b)));
+  select.innerHTML = `<option value="">New walkthrough</option>${rows.map((row) => `<option value="${esc(row.id)}">${esc(leadTitle(row))}</option>`).join("")}`;
+  select.value = walkthroughState.selectedId || "";
+}
+
+function populateWalkthroughAssigneeFilter() {
+  const filter = document.getElementById("walkthroughAssigneeFilter");
+  if (!filter) return;
+  const assignees = Array.from(new Set([
+    walkthroughDisplayName(),
+    ...walkthroughState.rows.map((row) => row.walkthrough_assigned_to || row.sales_owner_name).filter(Boolean)
+  ])).filter(Boolean).sort();
+  filter.innerHTML = `<option value="all">All Assignees</option><option value="unassigned">Unassigned</option>${assignees.map((name) => `<option value="${esc(name)}">${esc(name)}</option>`).join("")}`;
+  filter.value = walkthroughState.assigneeFilter;
+}
+
+function renderWalkthroughMetrics() {
+  const rows = getWalkthroughRows();
+  const byStatus = (status) => rows.filter((row) => walkthroughStatus(row) === status).length;
+  const setText = (id, value) => {
+    const target = document.getElementById(id);
+    if (target) target.textContent = value;
+  };
+  setText("walkthroughScheduledCount", byStatus("scheduled"));
+  setText("walkthroughConfirmedCount", byStatus("confirmed"));
+  setText("walkthroughTodayCount", rows.filter((row) => isToday(row.walkthrough_at)).length);
+  setText("walkthroughCompletedCount", byStatus("completed"));
+}
+
+function renderWalkthroughCalendar() {
+  const shell = document.getElementById("walkthroughCalendar");
+  const rangeLabel = document.getElementById("walkthroughDateRange");
+  if (!shell) return;
+
+  const { start, end } = walkthroughCalendarRange();
+  if (rangeLabel) rangeLabel.textContent = walkthroughRangeLabel(start, end);
+  const rows = getFilteredWalkthroughs().filter((row) => {
+    const date = parseDate(row.walkthrough_at);
+    return date && date >= start && date < end;
+  });
+
+  if (walkthroughState.calendarMode === "day") {
+    shell.innerHTML = renderWalkthroughDay(start, rows);
+    return;
+  }
+  if (walkthroughState.calendarMode === "month") {
+    shell.innerHTML = renderWalkthroughMonth(start, rows);
+    return;
+  }
+  shell.innerHTML = renderWalkthroughWeek(start, rows);
+}
+
+function renderWalkthroughWeek(start, rows) {
+  const days = Array.from({ length: 7 }, (_, index) => addDays(start, index));
+  return `
+    <div class="walkthrough-week-grid">
+      ${days.map((day) => {
+        const dayRows = rows.filter((row) => {
+          const date = parseDate(row.walkthrough_at);
+          return date && isSameDay(date, day);
+        });
+        return `
+          <article class="walkthrough-day-column ${isSameDay(day, new Date()) ? "today" : ""}">
+            <header><strong>${esc(day.toLocaleDateString([], { weekday: "short" }))}</strong><span>${esc(day.toLocaleDateString([], { month: "short", day: "numeric" }))}</span></header>
+            <div>${dayRows.length ? dayRows.map((row) => renderWalkthroughEventCard(row)).join("") : `<p>No walkthroughs</p>`}</div>
+          </article>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function renderWalkthroughDay(day, rows) {
+  return `
+    <div class="walkthrough-day-agenda">
+      ${rows.length ? rows.map((row) => renderWalkthroughEventCard(row)).join("") : emptyState("calendar", "No walkthroughs scheduled", "Use Schedule to add one for this date.")}
+    </div>
+  `;
+}
+
+function renderWalkthroughMonth(start, rows) {
+  const monthStart = new Date(start.getFullYear(), start.getMonth(), 1);
+  const gridStart = startOfWeek(monthStart);
+  const days = Array.from({ length: 42 }, (_, index) => addDays(gridStart, index));
+  return `
+    <div class="walkthrough-month-grid">
+      ${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => `<b>${day}</b>`).join("")}
+      ${days.map((day) => {
+        const dayRows = rows.filter((row) => {
+          const date = parseDate(row.walkthrough_at);
+          return date && isSameDay(date, day);
+        });
+        return `
+          <article class="${day.getMonth() !== monthStart.getMonth() ? "muted" : ""} ${isSameDay(day, new Date()) ? "today" : ""}">
+            <time>${day.getDate()}</time>
+            ${dayRows.slice(0, 3).map((row) => renderWalkthroughEventCard(row, true)).join("")}
+            ${dayRows.length > 3 ? `<small>+${dayRows.length - 3} more</small>` : ""}
+          </article>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function renderWalkthroughEventCard(row, compact = false) {
+  const status = walkthroughStatus(row);
+  return `
+    <button class="walkthrough-event-card ${compact ? "compact" : ""} ${statusClassName(status)} ${row.id === walkthroughState.selectedId ? "active" : ""}" type="button" data-walkthrough-select="${esc(row.id)}">
+      <strong>${esc(walkthroughTitle(row))}</strong>
+      <span>${esc(walkthroughTimeText(row))}</span>
+      ${compact ? "" : `<small>${esc(walkthroughAssignee(row))} - ${esc(titleCase(status))}</small>`}
+    </button>
+  `;
+}
+
+function renderWalkthroughList() {
+  const list = document.getElementById("walkthroughList");
+  if (!list) return;
+  const rows = getFilteredWalkthroughs();
+  list.innerHTML = rows.length
+    ? rows.map((row) => `
+      <article class="lead-list-row walkthrough-list-row ${row.id === walkthroughState.selectedId ? "active" : ""}" data-walkthrough-select="${esc(row.id)}">
+        <div><strong>${esc(walkthroughTitle(row))}</strong><p>${esc(walkthroughSubtitle(row))}</p></div>
+        <span>${esc(walkthroughTimeText(row))}</span>
+        <span>${esc(walkthroughAssignee(row))}</span>
+        <span class="status-badge ${statusClassName(walkthroughStatus(row))}">${esc(titleCase(walkthroughStatus(row)))}</span>
+        <div class="lead-list-actions">
+          <button type="button" data-walkthrough-select="${esc(row.id)}">Edit</button>
+          <button type="button" data-walkthrough-select="${esc(row.id)}" data-walkthrough-move-stage="quote_sent">Move to Quote</button>
+        </div>
+      </article>
+    `).join("")
+    : emptyState("calendar", "No walkthroughs found", "Adjust the filters or schedule one.");
+}
+
+function getFilteredWalkthroughs() {
+  const term = walkthroughState.search.trim().toLowerCase();
+  return getWalkthroughRows().filter((row) => {
+    const status = walkthroughStatus(row);
+    const assignee = row.walkthrough_assigned_to || row.sales_owner_name || "";
+    if (walkthroughState.statusFilter !== "all" && status !== walkthroughState.statusFilter) return false;
+    if (walkthroughState.assigneeFilter === "unassigned" && assignee) return false;
+    if (walkthroughState.assigneeFilter !== "all" && walkthroughState.assigneeFilter !== "unassigned" && assignee !== walkthroughState.assigneeFilter) return false;
+    if (!term) return true;
+    return [
+      row.company_name,
+      row.property_name,
+      row.name,
+      row.contact_name,
+      row.contact_email,
+      row.address,
+      row.city,
+      row.state,
+      row.walkthrough_type,
+      row.walkthrough_location,
+      row.walkthrough_assigned_to,
+      row.walkthrough_notes,
+      row.sales_owner_name
+    ].some((value) => String(value || "").toLowerCase().includes(term));
+  }).sort((a, b) => dateValue(a.walkthrough_at) - dateValue(b.walkthrough_at));
+}
+
+function getWalkthroughRows() {
+  return walkthroughState.rows.filter((row) => {
+    const stage = normalizeLeadStage(row.pipeline_stage);
+    return stage === "walkthrough" || Boolean(row.walkthrough_at || row.walkthrough_notes);
+  });
+}
+
+function selectWalkthroughRecord(id) {
+  const row = walkthroughState.rows.find((item) => item.id === id);
+  if (!row) return;
+  walkthroughState.selectedId = id;
+  fillWalkthroughForm(row);
+  renderWalkthroughData();
+  document.getElementById("walkthroughForm")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function clearWalkthroughForm() {
+  walkthroughState.selectedId = null;
+  const now = new Date();
+  now.setMinutes(Math.ceil(now.getMinutes() / 15) * 15, 0, 0);
+  const end = new Date(now);
+  end.setHours(end.getHours() + 1);
+  setWalkthroughFormValues({
+    id: "",
+    company_name: "",
+    property_name: "",
+    contact_name: "",
+    contact_email: "",
+    walkthrough_type: "",
+    walkthrough_status: "scheduled",
+    walkthrough_at: now.toISOString(),
+    walkthrough_end_at: end.toISOString(),
+    walkthrough_location: "",
+    walkthrough_assigned_to: walkthroughDisplayName(),
+    walkthrough_notes: ""
+  });
+  renderWalkthroughActivity(null);
+  renderWalkthroughNavigation(null);
+  renderWalkthroughData();
+}
+
+function fillWalkthroughForm(row) {
+  setWalkthroughFormValues({
+    id: row.id || "",
+    company_name: row.company_name || "",
+    property_name: row.property_name || row.name || "",
+    contact_name: row.contact_name || "",
+    contact_email: row.contact_email || "",
+    walkthrough_type: row.walkthrough_type || "",
+    walkthrough_status: walkthroughStatus(row),
+    walkthrough_at: row.walkthrough_at || "",
+    walkthrough_end_at: row.walkthrough_end_at || "",
+    walkthrough_location: row.walkthrough_location || row.address || "",
+    walkthrough_assigned_to: row.walkthrough_assigned_to || row.sales_owner_name || walkthroughDisplayName(),
+    walkthrough_notes: row.walkthrough_notes || ""
+  });
+}
+
+function setWalkthroughFormValues(values) {
+  const map = {
+    walkthroughId: values.id,
+    walkthroughRecordSelect: values.id,
+    walkthroughCompanyName: values.company_name,
+    walkthroughPropertyName: values.property_name,
+    walkthroughContactName: values.contact_name,
+    walkthroughContactEmail: values.contact_email,
+    walkthroughType: values.walkthrough_type,
+    walkthroughStatus: values.walkthrough_status,
+    walkthroughDate: toDateInput(values.walkthrough_at),
+    walkthroughStartTime: toTimeInput(values.walkthrough_at),
+    walkthroughEndTime: toTimeInput(values.walkthrough_end_at),
+    walkthroughLocation: values.walkthrough_location,
+    walkthroughAssignedTo: values.walkthrough_assigned_to,
+    walkthroughNotes: values.walkthrough_notes
+  };
+  Object.entries(map).forEach(([id, value]) => {
+    const field = document.getElementById(id);
+    if (field) field.value = value ?? "";
+  });
+}
+
+function walkthroughValue(id) {
+  return (document.getElementById(id)?.value || "").trim();
+}
+
+function collectWalkthroughPayload() {
+  const existing = getSelectedWalkthrough() || walkthroughState.rows.find((row) => row.id === walkthroughValue("walkthroughId"));
+  const propertyName = walkthroughValue("walkthroughPropertyName") || walkthroughValue("walkthroughCompanyName") || "Untitled Walkthrough";
+  const startAt = combineWalkthroughDateTime("walkthroughDate", "walkthroughStartTime");
+  const endAt = combineWalkthroughDateTime("walkthroughDate", "walkthroughEndTime");
+  const payload = {
+    pipeline_stage: "walkthrough",
+    company_name: walkthroughValue("walkthroughCompanyName"),
+    property_name: propertyName,
+    name: propertyName,
+    contact_name: walkthroughValue("walkthroughContactName"),
+    contact_email: walkthroughValue("walkthroughContactEmail"),
+    walkthrough_type: walkthroughValue("walkthroughType"),
+    walkthrough_status: walkthroughValue("walkthroughStatus") || "scheduled",
+    walkthrough_at: startAt,
+    walkthrough_end_at: endAt,
+    walkthrough_location: walkthroughValue("walkthroughLocation"),
+    walkthrough_assigned_to: walkthroughValue("walkthroughAssignedTo"),
+    walkthrough_notes: walkthroughValue("walkthroughNotes"),
+    sales_owner_name: existing?.sales_owner_name || walkthroughValue("walkthroughAssignedTo"),
+    sales_owner_id: existing?.sales_owner_id || null,
+    last_activity_at: new Date().toISOString()
+  };
+  if (!walkthroughValue("walkthroughId")) {
+    payload.created_by = walkthroughState.user?.id || null;
+  }
+  return payload;
+}
+
+async function saveWalkthroughForm(event) {
+  event?.preventDefault();
+  if (!suiteSupabase || walkthroughState.isSaving) return;
+  walkthroughState.isSaving = true;
+  setWalkthroughSaving(true);
+  showWalkthroughMessage("Saving walkthrough to Supabase...");
+
+  const id = walkthroughValue("walkthroughId");
+  const payload = collectWalkthroughPayload();
+  let result = id
+    ? await suiteSupabase.from(leadTable).update(payload).eq("id", id).select("*").maybeSingle()
+    : await suiteSupabase.from(leadTable).insert(payload).select("*").maybeSingle();
+
+  if (result.error && isMissingWalkthroughOptionalColumn(result.error)) {
+    const fallbackPayload = { ...payload };
+    walkthroughOptionalColumns.forEach((column) => delete fallbackPayload[column]);
+    result = id
+      ? await suiteSupabase.from(leadTable).update(fallbackPayload).eq("id", id).select("*").maybeSingle()
+      : await suiteSupabase.from(leadTable).insert(fallbackPayload).select("*").maybeSingle();
+  }
+
+  walkthroughState.isSaving = false;
+  setWalkthroughSaving(false);
+
+  if (result.error) {
+    showWalkthroughMessage("Unable to save walkthrough: " + result.error.message, true);
+    return;
+  }
+
+  const saved = result.data;
+  const index = walkthroughState.rows.findIndex((row) => row.id === saved.id);
+  if (index >= 0) {
+    walkthroughState.rows[index] = saved;
+  } else {
+    walkthroughState.rows.unshift(saved);
+  }
+  walkthroughState.selectedId = saved.id;
+  populateWalkthroughRecordSelect();
+  populateWalkthroughAssigneeFilter();
+  fillWalkthroughForm(saved);
+  renderWalkthroughData();
+  showWalkthroughMessage("Walkthrough saved to Supabase.");
+}
+
+async function moveSelectedWalkthroughToQuote(idOverride = "") {
+  const id = idOverride || walkthroughValue("walkthroughId") || walkthroughState.selectedId;
+  if (!id || !suiteSupabase) {
+    showWalkthroughMessage("Select or save a walkthrough before moving it to quote.", true);
+    return;
+  }
+  showWalkthroughMessage("Moving walkthrough to quote...");
+  const payload = { pipeline_stage: "quote_sent", walkthrough_status: "completed", last_activity_at: new Date().toISOString() };
+  let result = await suiteSupabase.from(leadTable).update(payload).eq("id", id).select("*").maybeSingle();
+  if (result.error && isMissingWalkthroughOptionalColumn(result.error)) {
+    result = await suiteSupabase.from(leadTable).update({ pipeline_stage: "quote_sent", last_activity_at: payload.last_activity_at }).eq("id", id).select("*").maybeSingle();
+  }
+  if (result.error) {
+    showWalkthroughMessage("Unable to move walkthrough: " + result.error.message, true);
+    return;
+  }
+  const index = walkthroughState.rows.findIndex((row) => row.id === id);
+  if (index >= 0) walkthroughState.rows[index] = result.data;
+  walkthroughState.selectedId = id;
+  fillWalkthroughForm(result.data);
+  renderWalkthroughData();
+  showWalkthroughMessage("Walkthrough moved to Quote Sent.");
+}
+
+function setWalkthroughSaving(isSaving) {
+  const button = document.getElementById("walkthroughSaveBtn");
+  if (button) {
+    button.disabled = isSaving;
+    const labels = button.querySelectorAll("span");
+    const label = labels[labels.length - 1];
+    if (label) label.textContent = isSaving ? "Saving..." : "Save Walkthrough";
+  }
+}
+
+function renderWalkthroughActivity(row) {
+  const log = document.getElementById("walkthroughActivityLog");
+  if (!log) return;
+  if (!row) {
+    log.innerHTML = emptyState("calendar", "No activity yet");
+    return;
+  }
+  const events = [
+    ["Scheduled", walkthroughTimeText(row), "calendar-days"],
+    ["Status", titleCase(walkthroughStatus(row)), "filter"],
+    ["Assigned To", walkthroughAssignee(row), "user"],
+    ["Last Activity", formatDashboardDate(row.last_activity_at || row.updated_at || row.created_at), "activity"],
+    ["Notes", row.walkthrough_notes || "No notes yet", "message-square"]
+  ];
+  log.innerHTML = events.map(([label, value, iconName]) => `
+    <div class="lead-activity-item">
+      ${icon(iconName)}
+      <div><strong>${esc(label)}</strong><span>${esc(value)}</span></div>
+    </div>
+  `).join("");
+}
+
+function renderWalkthroughNavigation(row) {
+  const summary = document.getElementById("walkthroughNavigationSummary");
+  if (!summary) return;
+  summary.textContent = row
+    ? `${walkthroughTitle(row)} is ${titleCase(walkthroughStatus(row))}.`
+    : "Select a walkthrough to open the connected sales workflow.";
+}
+
+function showWalkthroughMessage(text, isError = false) {
+  const message = document.getElementById("walkthroughMessage");
+  if (!message) return;
+  message.textContent = text || "";
+  message.classList.toggle("error", Boolean(isError));
+}
+
+function getSelectedWalkthrough() {
+  return walkthroughState.rows.find((row) => row.id === walkthroughState.selectedId) || null;
+}
+
+function walkthroughTitle(row) {
+  return row?.property_name || row?.company_name || row?.name || "Untitled Walkthrough";
+}
+
+function walkthroughSubtitle(row) {
+  return [row?.company_name, row?.contact_name, row?.walkthrough_location || row?.address].filter(Boolean).join(" - ") || "No details yet";
+}
+
+function walkthroughStatus(row) {
+  return normalizeToken(row?.walkthrough_status || "scheduled") || "scheduled";
+}
+
+function walkthroughAssignee(row) {
+  return row?.walkthrough_assigned_to || row?.sales_owner_name || "Unassigned";
+}
+
+function walkthroughDisplayName() {
+  return walkthroughState.profile?.full_name || walkthroughState.user?.user_metadata?.full_name || walkthroughState.user?.email?.split("@")[0] || "";
+}
+
+function walkthroughTimeText(row) {
+  return formatDateWindow(row?.walkthrough_at, row?.walkthrough_end_at);
+}
+
+function walkthroughCalendarRange() {
+  const cursor = new Date(walkthroughState.dateCursor);
+  if (walkthroughState.calendarMode === "day") {
+    const start = new Date(cursor);
+    start.setHours(0, 0, 0, 0);
+    return { start, end: addDays(start, 1) };
+  }
+  if (walkthroughState.calendarMode === "month") {
+    const start = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+    return { start, end: new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1) };
+  }
+  const start = startOfWeek(cursor);
+  return { start, end: addDays(start, 7) };
+}
+
+function walkthroughRangeLabel(start, end) {
+  if (walkthroughState.calendarMode === "day") {
+    return start.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+  }
+  if (walkthroughState.calendarMode === "month") {
+    return start.toLocaleDateString([], { month: "long", year: "numeric" });
+  }
+  const finish = addDays(end, -1);
+  return `${start.toLocaleDateString([], { month: "short", day: "numeric" })} - ${finish.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}`;
+}
+
+function moveWalkthroughDateCursor(direction) {
+  if (direction === "today") {
+    walkthroughState.dateCursor = new Date();
+    return;
+  }
+  const amount = direction === "prev" ? -1 : 1;
+  const cursor = new Date(walkthroughState.dateCursor);
+  if (walkthroughState.calendarMode === "month") {
+    cursor.setMonth(cursor.getMonth() + amount);
+  } else if (walkthroughState.calendarMode === "day") {
+    cursor.setDate(cursor.getDate() + amount);
+  } else {
+    cursor.setDate(cursor.getDate() + amount * 7);
+  }
+  walkthroughState.dateCursor = cursor;
+}
+
+function startOfWeek(value) {
+  const date = new Date(value);
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() - date.getDay());
+  return date;
+}
+
+function toTimeInput(value) {
+  const date = parseDate(value);
+  if (!date) return "";
+  const pad = (part) => String(part).padStart(2, "0");
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function combineWalkthroughDateTime(dateId, timeId) {
+  const date = walkthroughValue(dateId);
+  if (!date) return null;
+  const time = walkthroughValue(timeId) || "09:00";
+  const value = new Date(`${date}T${time}`);
+  return Number.isNaN(value.getTime()) ? null : value.toISOString();
+}
+
+function isMissingWalkthroughOptionalColumn(error) {
+  const message = String(error?.message || "").toLowerCase();
+  return walkthroughOptionalColumns.some((column) => message.includes(column.toLowerCase())) || message.includes("schema cache");
 }
 
 function renderQuotes() {
@@ -2760,6 +3524,7 @@ function renderSidebar(activeKey) {
 function renderTopbar(page) {
   const actions = page.actions || (page.action ? [page.action] : []);
   const actionMarkup = actions.map((action) => actionLink(action.label, action.icon, action.href, action.tone)).join("");
+  const profile = getTopbarProfileDefaults();
   return `
     <header class="suite-topbar">
       <div class="page-heading">
@@ -2767,17 +3532,296 @@ function renderTopbar(page) {
         <p>${esc(page.subtitle || "")}</p>
       </div>
       <div class="topbar-tools">
-        <label class="global-search">${icon("search")}<input type="search" placeholder="Search anything..." /><kbd>K</kbd></label>
+        <div class="global-search topbar-search-wrap" role="search">
+          ${icon("search")}
+          <input id="globalSearchInput" type="search" placeholder="Search anything..." autocomplete="off" />
+          <kbd>K</kbd>
+          <div id="globalSearchResults" class="topbar-dropdown topbar-search-results" hidden></div>
+        </div>
         ${actionMarkup}
-        <button class="top-icon" type="button" aria-label="Notifications">${icon("bell")}<span>3</span></button>
-        <button class="top-user" type="button">
-          <span class="user-photo">SJ</span>
-          <span><strong>Sarah Johnson</strong><small>Administrator</small></span>
-          ${icon("chevron-down")}
-        </button>
+        <div class="topbar-popover-wrap">
+          <button id="topNotificationsBtn" class="top-icon" type="button" aria-label="Notifications" aria-expanded="false">${icon("bell")}<span id="topNotificationsBadge">3</span></button>
+          <div id="topNotificationsMenu" class="topbar-dropdown topbar-notifications" hidden>
+            <div class="topbar-dropdown-head"><strong>Notifications</strong><small>Open active work queues</small></div>
+            <a href="assignments.html">${icon("clipboard-list")}<span><strong>Action Items</strong><small>Assignments and follow-ups</small></span></a>
+            <a href="coverage-center.html">${icon("shield")}<span><strong>Coverage Requests</strong><small>Open coverage center</small></span></a>
+            <a href="qa-queue.html">${icon("alert")}<span><strong>QA Alerts</strong><small>Review quality queue</small></span></a>
+          </div>
+        </div>
+        <div class="topbar-profile-wrap">
+          <button id="topProfileBtn" class="top-user" type="button" aria-label="Profile menu" aria-expanded="false">
+            <span id="topUserAvatar" class="user-photo">${esc(profile.initials)}</span>
+            <span><strong id="topUserName">${esc(profile.name)}</strong><small id="topUserRole">${esc(profile.role)}</small></span>
+            ${icon("chevron-down")}
+          </button>
+          <div id="topProfileMenu" class="topbar-dropdown topbar-profile-menu" hidden>
+            <div class="topbar-profile-card">
+              <span id="topProfileAvatarLarge" class="user-photo large">${esc(profile.initials)}</span>
+              <span><strong id="topProfileName">${esc(profile.name)}</strong><small id="topProfileEmail">${esc(profile.email || profile.role)}</small></span>
+            </div>
+            <p id="topProfileMessage" class="topbar-profile-message" aria-live="polite"></p>
+            <input id="topAvatarInput" type="file" accept="image/*" hidden />
+            <button id="topAvatarUploadBtn" type="button">${icon("upload")}<span>Upload Picture</span></button>
+            <a href="dashboard.html">${icon("home")}<span>Open Dashboard</span></a>
+            <button id="topSignOutBtn" type="button">${icon("chevron-right")}<span>Sign Out</span></button>
+          </div>
+        </div>
       </div>
     </header>
   `;
+}
+
+function initTopbar() {
+  const search = document.getElementById("globalSearchInput");
+  const notificationsButton = document.getElementById("topNotificationsBtn");
+  const profileButton = document.getElementById("topProfileBtn");
+  const avatarButton = document.getElementById("topAvatarUploadBtn");
+  const avatarInput = document.getElementById("topAvatarInput");
+  const signOutButton = document.getElementById("topSignOutBtn");
+
+  search?.addEventListener("input", () => renderTopbarSearchResults(search.value));
+  search?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      const first = getTopbarSearchMatches(search.value)[0];
+      if (first?.href) window.location.href = first.href;
+    }
+    if (event.key === "Escape") closeTopbarMenus();
+  });
+
+  notificationsButton?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    toggleTopbarMenu("notifications");
+  });
+  profileButton?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    toggleTopbarMenu("profile");
+  });
+  avatarButton?.addEventListener("click", () => avatarInput?.click());
+  avatarInput?.addEventListener("change", () => {
+    const file = avatarInput.files?.[0];
+    if (file) void uploadTopbarAvatar(file);
+  });
+  signOutButton?.addEventListener("click", () => void signOutTopbarUser());
+
+  if (!window.__turnlyTopbarKeybind) {
+    window.__turnlyTopbarKeybind = true;
+    document.addEventListener("keydown", (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        document.getElementById("globalSearchInput")?.focus();
+      }
+    });
+    document.addEventListener("click", (event) => {
+      if (!event.target.closest(".topbar-tools")) closeTopbarMenus();
+    });
+  }
+
+  void loadTopbarProfile();
+}
+
+function getTopbarProfileDefaults() {
+  const user = topbarState.user;
+  const profile = topbarState.profile;
+  const email = profile?.email || user?.email || "";
+  const name = profile?.full_name || user?.user_metadata?.full_name || email?.split("@")[0] || "Turnly Admin";
+  const role = titleCase(profile?.role || user?.app_metadata?.role || "Administrator");
+  return { name, role, email, initials: initialsFromName(name || email || "TA"), avatarUrl: profile?.avatar_url || user?.user_metadata?.avatar_url || "" };
+}
+
+async function loadTopbarProfile() {
+  if (!suiteSupabase || topbarState.loading) {
+    applyTopbarProfile();
+    return;
+  }
+  topbarState.loading = true;
+  const { data: userData } = await suiteSupabase.auth.getUser();
+  topbarState.user = userData?.user || null;
+
+  if (topbarState.user) {
+    let result = await suiteSupabase
+      .from("profiles")
+      .select("role,full_name,email,avatar_url,avatar_path")
+      .eq("id", topbarState.user.id)
+      .maybeSingle();
+    if (result.error && isMissingTopbarAvatarColumn(result.error)) {
+      result = await suiteSupabase
+        .from("profiles")
+        .select("role,full_name,email")
+        .eq("id", topbarState.user.id)
+        .maybeSingle();
+    }
+    topbarState.profile = result.data || null;
+  }
+
+  topbarState.loaded = true;
+  topbarState.loading = false;
+  applyTopbarProfile();
+}
+
+function applyTopbarProfile() {
+  const profile = getTopbarProfileDefaults();
+  const setText = (id, value) => {
+    const element = document.getElementById(id);
+    if (element) element.textContent = value || "";
+  };
+  setText("topUserName", profile.name);
+  setText("topUserRole", profile.role);
+  setText("topProfileName", profile.name);
+  setText("topProfileEmail", profile.email || profile.role);
+  paintTopbarAvatar("topUserAvatar", profile);
+  paintTopbarAvatar("topProfileAvatarLarge", profile);
+}
+
+function paintTopbarAvatar(id, profile) {
+  const avatar = document.getElementById(id);
+  if (!avatar) return;
+  if (profile.avatarUrl) {
+    avatar.innerHTML = `<img src="${esc(profile.avatarUrl)}" alt="" />`;
+  } else {
+    avatar.textContent = profile.initials;
+  }
+}
+
+function getTopbarSearchItems() {
+  return navSections.flatMap((section) => section.links.map((link) => ({
+    label: link.label,
+    section: section.title || "Home",
+    href: link.href,
+    icon: link.icon
+  })));
+}
+
+function getTopbarSearchMatches(value) {
+  const term = String(value || "").trim().toLowerCase();
+  if (!term) return [];
+  return getTopbarSearchItems()
+    .filter((item) => `${item.label} ${item.section}`.toLowerCase().includes(term))
+    .slice(0, 7);
+}
+
+function renderTopbarSearchResults(value) {
+  const panel = document.getElementById("globalSearchResults");
+  if (!panel) return;
+  const matches = getTopbarSearchMatches(value);
+  panel.hidden = !matches.length;
+  panel.innerHTML = matches.map((item) => `
+    <a href="${esc(item.href)}" data-topbar-search-result>
+      ${icon(item.icon)}
+      <span><strong>${esc(item.label)}</strong><small>${esc(item.section)}</small></span>
+    </a>
+  `).join("");
+}
+
+function toggleTopbarMenu(menu) {
+  const notifications = document.getElementById("topNotificationsMenu");
+  const profile = document.getElementById("topProfileMenu");
+  const notificationsButton = document.getElementById("topNotificationsBtn");
+  const profileButton = document.getElementById("topProfileBtn");
+  const target = menu === "notifications" ? notifications : profile;
+  const isOpening = Boolean(target?.hidden);
+  closeTopbarMenus();
+  if (target && isOpening) target.hidden = false;
+  notificationsButton?.setAttribute("aria-expanded", menu === "notifications" && isOpening ? "true" : "false");
+  profileButton?.setAttribute("aria-expanded", menu === "profile" && isOpening ? "true" : "false");
+}
+
+function closeTopbarMenus() {
+  const searchResults = document.getElementById("globalSearchResults");
+  const notifications = document.getElementById("topNotificationsMenu");
+  const profile = document.getElementById("topProfileMenu");
+  const notificationsButton = document.getElementById("topNotificationsBtn");
+  const profileButton = document.getElementById("topProfileBtn");
+  if (searchResults) searchResults.hidden = true;
+  if (notifications) notifications.hidden = true;
+  if (profile) profile.hidden = true;
+  notificationsButton?.setAttribute("aria-expanded", "false");
+  profileButton?.setAttribute("aria-expanded", "false");
+}
+
+async function uploadTopbarAvatar(file) {
+  if (!suiteSupabase) {
+    setTopbarProfileMessage("Supabase config is missing.", true);
+    return;
+  }
+  if (!file.type.startsWith("image/")) {
+    setTopbarProfileMessage("Choose an image file.", true);
+    return;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    setTopbarProfileMessage("Use an image smaller than 5 MB.", true);
+    return;
+  }
+  if (!topbarState.user) await loadTopbarProfile();
+  const user = topbarState.user;
+  if (!user) {
+    setTopbarProfileMessage("Sign in before uploading a profile picture.", true);
+    return;
+  }
+
+  setTopbarProfileMessage("Uploading picture...");
+  const path = `${user.id}/${Date.now()}-${safeStorageFileName(file.name)}`;
+  const { error: uploadError } = await suiteSupabase.storage
+    .from("profile-avatars")
+    .upload(path, file, { cacheControl: "3600", contentType: file.type, upsert: true });
+  if (uploadError) {
+    setTopbarProfileMessage("Unable to upload picture: " + uploadError.message, true);
+    return;
+  }
+
+  const { data: publicData } = suiteSupabase.storage.from("profile-avatars").getPublicUrl(path);
+  const avatarUrl = publicData?.publicUrl || "";
+  let result = await suiteSupabase
+    .from("profiles")
+    .update({ avatar_url: avatarUrl, avatar_path: path })
+    .eq("id", user.id)
+    .select("role,full_name,email,avatar_url,avatar_path")
+    .maybeSingle();
+
+  if (result.error && isMissingTopbarAvatarColumn(result.error)) {
+    await suiteSupabase.auth.updateUser({ data: { avatar_url: avatarUrl } });
+    result = { data: { ...topbarState.profile, avatar_url: avatarUrl }, error: null };
+  }
+
+  if (result.error) {
+    setTopbarProfileMessage("Uploaded, but profile update failed: " + result.error.message, true);
+    return;
+  }
+
+  topbarState.profile = result.data || { ...topbarState.profile, avatar_url: avatarUrl };
+  applyTopbarProfile();
+  setTopbarProfileMessage("Profile picture updated.");
+}
+
+async function signOutTopbarUser() {
+  if (suiteSupabase) {
+    await suiteSupabase.auth.signOut();
+  }
+  window.location.href = "login.html";
+}
+
+function setTopbarProfileMessage(text, isError = false) {
+  const message = document.getElementById("topProfileMessage");
+  if (!message) return;
+  message.textContent = text || "";
+  message.classList.toggle("error", Boolean(isError));
+}
+
+function safeStorageFileName(name) {
+  return String(name || "avatar.png").toLowerCase().replace(/[^a-z0-9.]+/g, "-").replace(/^-|-$/g, "") || "avatar.png";
+}
+
+function initialsFromName(value) {
+  const parts = String(value || "")
+    .split(/[\s@._-]+/)
+    .filter(Boolean);
+  if (!parts.length) return "TA";
+  return parts.slice(0, 2).map((part) => part[0].toUpperCase()).join("");
+}
+
+function isMissingTopbarAvatarColumn(error) {
+  const message = String(error?.message || "").toLowerCase();
+  return message.includes("avatar_url") || message.includes("avatar_path") || message.includes("schema cache");
 }
 
 function initScheduleViews() {
@@ -2846,6 +3890,7 @@ function renderApp() {
   `;
 
   initNavSectionToggles();
+  initTopbar();
 
   if (activeKey === "schedule") {
     initScheduleViews();
@@ -2855,6 +3900,9 @@ function renderApp() {
   }
   if (activeKey === "leads") {
     initLeads();
+  }
+  if (activeKey === "walkthroughs") {
+    initWalkthroughs();
   }
 }
 
