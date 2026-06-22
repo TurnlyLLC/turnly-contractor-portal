@@ -1,0 +1,1374 @@
+const navSections = [
+  {
+    title: "",
+    links: [
+      { key: "dashboard", label: "Dashboard", href: "dashboard.html", icon: "home" },
+      { key: "command-center", label: "Command Center", href: "admin.html", icon: "layout-grid" }
+    ]
+  },
+  {
+    title: "Sales",
+    links: [
+      { key: "leads", label: "Leads", href: "leads.html", icon: "triangle" },
+      { key: "walkthroughs", label: "Walkthroughs", href: "walkthroughs.html", icon: "calendar-days" },
+      { key: "quotes", label: "Quotes", href: "quotes.html", icon: "badge-dollar" },
+      { key: "contracts-pending", label: "Contracts Pending", href: "contracts-pending.html", icon: "file-signature" }
+    ]
+  },
+  {
+    title: "Operations",
+    links: [
+      { key: "contracts", label: "Contracts", href: "contracts.html", icon: "briefcase" },
+      { key: "schedule", label: "Schedule", href: "schedule.html", icon: "calendar" },
+      { key: "coverage-center", label: "Coverage Center", href: "coverage-center.html", icon: "shield" },
+      { key: "assignments", label: "Assignments", href: "assignments.html", icon: "clipboard-list" }
+    ]
+  },
+  {
+    title: "Contractors",
+    links: [
+      { key: "directory", label: "Directory", href: "directory.html", icon: "users" },
+      { key: "onboarding", label: "Onboarding", href: "onboarding.html", icon: "user-plus" },
+      { key: "documents-compliance", label: "Documents & Compliance", href: "documents-compliance.html", icon: "file-check" },
+      { key: "availability", label: "Availability", href: "availability.html", icon: "clock" },
+      { key: "performance", label: "Performance", href: "performance.html", icon: "activity" }
+    ]
+  },
+  {
+    title: "Quality",
+    links: [
+      { key: "qa-queue", label: "QA Queue", href: "qa-queue.html", icon: "message-square" },
+      { key: "qa-analytics", label: "QA Analytics", href: "qa-analytics.html", icon: "bar-chart" },
+      { key: "videos", label: "Video Library", href: "videos.html", icon: "video" }
+    ]
+  },
+  {
+    title: "Clients",
+    links: [
+      { key: "client-directory", label: "Client Directory", href: "client-directory.html", icon: "building" },
+      { key: "contacts", label: "Contacts", href: "contacts.html", icon: "contact" }
+    ]
+  },
+  {
+    title: "Reports",
+    links: [
+      { key: "reports-sales", label: "Sales", href: "reports-sales.html", icon: "wallet" },
+      { key: "reports-operations", label: "Operations", href: "reports-operations.html", icon: "settings" },
+      { key: "contractor-performance", label: "Contractor Performance", href: "contractor-performance.html", icon: "trophy" },
+      { key: "growth", label: "Growth", href: "growth.html", icon: "trending-up" }
+    ]
+  }
+];
+
+const stageLabels = [
+  ["new_leads", "New Lead", "green"],
+  ["contacted", "Contacted", "blue"],
+  ["walkthrough", "Walkthrough Scheduled", "purple"],
+  ["quote_sent", "Quote Sent", "yellow"],
+  ["contract_out", "Contract Out", "indigo"],
+  ["active", "Won", "green"],
+  ["lost", "Lost", "red"]
+];
+
+const pipelineStages = [
+  ["new_leads", "New Leads", "green"],
+  ["walkthrough", "Walkthrough", "blue"],
+  ["quote_sent", "Quote Sent", "yellow"],
+  ["contract_out", "Contract Out", "purple"],
+  ["active", "Active", "green"]
+];
+
+const pages = {
+  "dashboard": {
+    title: "Dashboard",
+    subtitle: "Your operational overview and actionable items",
+    render: renderCommandCenter
+  },
+  "command-center": {
+    title: "Command Center",
+    subtitle: "Your operational overview and actionable items",
+    render: renderCommandCenter
+  },
+  "leads": {
+    title: "Leads",
+    subtitle: "Track and manage new business opportunities",
+    action: { label: "Add Lead", icon: "plus" },
+    render: renderLeads
+  },
+  "walkthroughs": {
+    title: "Walkthroughs",
+    subtitle: "Schedule and manage property walkthroughs",
+    action: { label: "Schedule Walkthrough", icon: "plus" },
+    render: renderWalkthroughs
+  },
+  "quotes": {
+    title: "Quotes",
+    subtitle: "Create, send, and manage quotes for potential clients",
+    action: { label: "New Quote", icon: "plus" },
+    render: renderQuotes
+  },
+  "contracts-pending": {
+    title: "Contracts Pending",
+    subtitle: "Track contracts that have been sent and are awaiting signature",
+    action: { label: "Export", icon: "download", tone: "secondary" },
+    render: renderContractsPending
+  },
+  "contracts": {
+    title: "Contracts",
+    subtitle: "Manage and oversee all active client contracts",
+    action: { label: "Export", icon: "download", tone: "secondary" },
+    render: renderContracts
+  },
+  "schedule": {
+    title: "Schedule",
+    subtitle: "View and manage all scheduled cleanings",
+    render: renderSchedule
+  },
+  "coverage-center": {
+    title: "Coverage Center",
+    subtitle: "Manage coverage requests and contractor availability",
+    action: { label: "New Request", icon: "plus" },
+    render: renderCoverageCenter
+  },
+  "assignments": {
+    title: "Assignments",
+    subtitle: "Manage and track cleaning assignments across your portfolio",
+    render: renderAssignments
+  },
+  "directory": {
+    title: "Directory",
+    subtitle: "View and manage your contractor network",
+    action: { label: "Export", icon: "download", tone: "secondary" },
+    render: renderDirectory
+  },
+  "onboarding": {
+    title: "Onboarding",
+    subtitle: "Track and manage contractor onboarding progress",
+    render: renderOnboarding
+  },
+  "documents-compliance": {
+    title: "Documents & Compliance",
+    subtitle: "Manage contractor documents and monitor compliance requirements",
+    action: { label: "Upload Document", icon: "upload" },
+    render: renderDocumentsCompliance
+  },
+  "availability": {
+    title: "Availability",
+    subtitle: "Manage contractor availability and set preferences",
+    render: renderAvailability
+  },
+  "performance": {
+    title: "Performance",
+    subtitle: "Track contractor performance and key metrics",
+    render: renderPerformance
+  },
+  "qa-queue": {
+    title: "Quality",
+    subtitle: "Ensure work meets your standards with comprehensive quality assurance",
+    render: () => renderQuality("qa-queue")
+  },
+  "qa-reviews": {
+    title: "Quality",
+    subtitle: "Ensure work meets your standards with comprehensive quality assurance",
+    render: () => renderQuality("qa-reviews")
+  },
+  "qa-analytics": {
+    title: "Quality",
+    subtitle: "Ensure work meets your standards with comprehensive quality assurance",
+    render: () => renderQuality("qa-analytics")
+  },
+  "videos": {
+    title: "Quality",
+    subtitle: "Ensure work meets your standards with comprehensive quality assurance",
+    action: { label: "Upload Video", icon: "upload", tone: "secondary" },
+    render: () => renderQuality("videos")
+  },
+  "client-directory": {
+    title: "Clients",
+    subtitle: "Manage and monitor your clients in one place.",
+    action: { label: "Add Client", icon: "plus" },
+    render: () => renderClients("client-directory")
+  },
+  "contacts": {
+    title: "Clients",
+    subtitle: "Manage and view all clients and their account details.",
+    action: { label: "Add Contact", icon: "plus" },
+    render: () => renderClients("contacts")
+  },
+  "reports-sales": {
+    title: "Sales",
+    subtitle: "Track pipeline performance and deal activity.",
+    actions: [
+      { label: "Export", icon: "download", tone: "secondary" },
+      { label: "Add Deal", icon: "plus" }
+    ],
+    render: renderSalesReport
+  },
+  "reports-operations": {
+    title: "Operations",
+    subtitle: "Monitor operational performance and team productivity.",
+    actions: [
+      { label: "Export", icon: "download", tone: "secondary" },
+      { label: "Date Range", icon: "calendar", tone: "secondary" }
+    ],
+    render: renderOperationsReport
+  },
+  "contractor-performance": {
+    title: "Contractor Performance",
+    subtitle: "Track and evaluate contractor performance and reliability.",
+    actions: [
+      { label: "Export", icon: "download", tone: "secondary" },
+      { label: "Date Range", icon: "calendar", tone: "secondary" }
+    ],
+    render: renderContractorPerformanceReport
+  },
+  "growth": {
+    title: "Growth",
+    subtitle: "Analyze business growth, trends, and key performance indicators over time.",
+    actions: [
+      { label: "Export", icon: "download", tone: "secondary" },
+      { label: "Date Range", icon: "calendar", tone: "secondary" }
+    ],
+    render: renderGrowthReport
+  }
+};
+
+const iconPaths = {
+  activity: '<path d="M22 12h-4l-3 7-6-14-3 7H2"/>',
+  alert: '<path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+  "badge-dollar": '<circle cx="12" cy="12" r="9"/><path d="M12 7v10"/><path d="M15 9.5c-.8-.7-1.8-1-3-1-1.7 0-3 .8-3 2s1.3 1.8 3 2 3 .8 3 2-1.3 2-3 2c-1.2 0-2.3-.4-3.2-1.2"/>',
+  "bar-chart": '<path d="M3 3v18h18"/><path d="M8 17V9"/><path d="M13 17V5"/><path d="M18 17v-6"/>',
+  bell: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
+  briefcase: '<path d="M10 6V5a2 2 0 0 1 2-2h0a2 2 0 0 1 2 2v1"/><path d="M3 7h18v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/><path d="M3 13h18"/>',
+  building: '<path d="M3 21h18"/><path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16"/><path d="M9 8h1"/><path d="M14 8h1"/><path d="M9 12h1"/><path d="M14 12h1"/><path d="M9 16h1"/><path d="M14 16h1"/>',
+  calendar: '<path d="M8 2v4"/><path d="M16 2v4"/><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 10h18"/>',
+  "calendar-days": '<path d="M8 2v4"/><path d="M16 2v4"/><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/><path d="M16 18h.01"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  "chevron-down": '<path d="m6 9 6 6 6-6"/>',
+  "chevron-right": '<path d="m9 18 6-6-6-6"/>',
+  "clipboard-list": '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M8 11h8"/><path d="M8 16h8"/>',
+  clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  contact: '<path d="M16 2v4"/><path d="M8 2v4"/><rect x="3" y="4" width="18" height="18" rx="2"/><circle cx="12" cy="12" r="3"/><path d="M6 20c1.5-3 10.5-3 12 0"/>',
+  document: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/>',
+  download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>',
+  "file-check": '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="m9 15 2 2 4-5"/>',
+  "file-signature": '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8 18c2-4 4-4 6 0"/><path d="M8 14h6"/>',
+  filter: '<path d="M22 3H2l8 9v7l4 2v-9Z"/>',
+  grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>',
+  home: '<path d="m3 11 9-8 9 8"/><path d="M5 10v11h14V10"/><path d="M9 21v-7h6v7"/>',
+  "layout-grid": '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>',
+  "line-chart": '<path d="M3 3v18h18"/><path d="m7 16 4-4 3 3 5-7"/>',
+  list: '<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/>',
+  map: '<path d="M9 18 3 21V6l6-3 6 3 6-3v15l-6 3Z"/><path d="M9 3v15"/><path d="M15 6v15"/>',
+  "message-square": '<path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z"/>',
+  more: '<circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/>',
+  plus: '<path d="M12 5v14"/><path d="M5 12h14"/>',
+  search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  settings: '<path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/>',
+  shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>',
+  star: '<path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8-6.2-3.3L5.8 21 7 14.2l-5-4.9 6.9-1Z"/>',
+  target: '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
+  "trending-up": '<path d="m3 17 6-6 4 4 8-8"/><path d="M14 7h7v7"/>',
+  triangle: '<path d="m12 3 9 18H3Z"/>',
+  trophy: '<path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0Z"/><path d="M17 5h3a2 2 0 0 1-2 4h-1"/><path d="M7 5H4a2 2 0 0 0 2 4h1"/>',
+  upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8 12 3 7 8"/><path d="M12 3v12"/>',
+  user: '<path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/>',
+  "user-plus": '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/>',
+  users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9"/><path d="M16 3.1a4 4 0 0 1 0 7.8"/>',
+  video: '<path d="m22 8-6 4 6 4V8Z"/><rect x="2" y="6" width="14" height="12" rx="2"/>',
+  wallet: '<path d="M21 12V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5Z"/><path d="M16 12h5"/><path d="M17 12v4"/>'
+};
+
+function esc(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function icon(name, className = "") {
+  const path = iconPaths[name] || iconPaths.grid;
+  return `<span class="suite-icon ${className}" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path}</svg></span>`;
+}
+
+function getPageKey() {
+  const explicit = document.body.dataset.adminPage;
+  if (explicit) return explicit;
+  const file = location.pathname.split("/").pop() || "admin.html";
+  const map = { "admin.html": "command-center" };
+  return map[file] || file.replace(/\.html$/, "");
+}
+
+function metric(label, value = "0", meta = "from last 7 days", iconName = "activity", tone = "green", attrs = "") {
+  return `
+    <article class="metric-card ${tone}">
+      <div class="metric-icon-wrap">${icon(iconName)}</div>
+      <div class="metric-body">
+        <span>${esc(label)}</span>
+        <strong ${attrs}>${esc(value)}</strong>
+        <small>${esc(meta)}</small>
+      </div>
+    </article>
+  `;
+}
+
+function panel(title, body, options = {}) {
+  const subtitle = options.subtitle ? `<p>${options.rawSubtitle ? options.subtitle : esc(options.subtitle)}</p>` : "";
+  const action = options.action ? actionLink(options.action.label, options.action.icon, options.action.href, options.action.tone) : "";
+  const menu = options.menu ? `<button class="ghost-icon-btn" type="button" aria-label="More options">${icon("more")}</button>` : "";
+  return `
+    <section class="suite-panel ${options.className || ""}">
+      <div class="panel-head">
+        <div>
+          <h2>${esc(title)}</h2>
+          ${subtitle}
+        </div>
+        <div class="panel-actions">${action}${menu}</div>
+      </div>
+      ${body}
+    </section>
+  `;
+}
+
+function actionLink(label, iconName = "", href = "#", tone = "") {
+  return `<a class="${tone === "secondary" ? "secondary-action" : "primary-action"}" href="${href || "#"}">${iconName ? icon(iconName) : ""}<span>${esc(label)}</span></a>`;
+}
+
+function actionButton(label, iconName = "", id = "", tone = "") {
+  return `<button ${id ? `id="${esc(id)}"` : ""} class="${tone === "secondary" ? "secondary-action" : "primary-action"}" type="button">${iconName ? icon(iconName) : ""}<span>${esc(label)}</span></button>`;
+}
+
+function tabs(items, active) {
+  return `<div class="suite-tabs">${items.map(([key, label, href]) => `<a class="suite-tab ${key === active ? "active" : ""}" href="${href || "#"}">${esc(label)}</a>`).join("")}</div>`;
+}
+
+function toolbar(left = "", right = "") {
+  return `<div class="suite-toolbar"><div class="toolbar-left">${left}</div><div class="toolbar-right">${right}</div></div>`;
+}
+
+function chip(label, active = false, iconName = "") {
+  return `<button class="view-chip ${active ? "active" : ""}" type="button">${iconName ? icon(iconName) : ""}<span>${esc(label)}</span></button>`;
+}
+
+function scheduleModeButton(key, label, iconName, active = false) {
+  return `<button class="view-chip schedule-view-toggle ${active ? "active" : ""}" type="button" data-schedule-view="${esc(key)}">${icon(iconName)}<span>${esc(label)}</span></button>`;
+}
+
+function selectControl(label, options = ["All"], value = "") {
+  return `
+    <label class="suite-field">
+      <span>${esc(label)}</span>
+      <select>
+        ${options.map((option) => `<option ${option === value ? "selected" : ""}>${esc(option)}</option>`).join("")}
+      </select>
+    </label>
+  `;
+}
+
+function inputControl(label, placeholder = "", type = "text") {
+  return `
+    <label class="suite-field">
+      <span>${esc(label)}</span>
+      <input type="${esc(type)}" placeholder="${esc(placeholder)}" />
+    </label>
+  `;
+}
+
+function filters(title = "Filters", fields = [], options = {}) {
+  return `
+    <aside class="filter-card">
+      <div class="filter-head"><h2>${esc(title)}</h2><button type="button">Clear All</button></div>
+      <div class="filter-grid">${fields.join("")}</div>
+      <div class="filter-actions">
+        <button class="secondary-action" type="button"><span>Clear Filters</span></button>
+        <button class="primary-action" type="button"><span>Apply Filters</span></button>
+      </div>
+      ${options.extra || ""}
+    </aside>
+  `;
+}
+
+function emptyState(iconName, title, text = "", button = "") {
+  return `
+    <div class="empty-state">
+      <div class="empty-icon">${icon(iconName)}</div>
+      <strong>${esc(title)}</strong>
+      ${text ? `<p>${esc(text)}</p>` : ""}
+      <div class="empty-lines"><span></span><span></span></div>
+      ${button}
+    </div>
+  `;
+}
+
+function tableFrame(headers, empty, options = {}) {
+  const rows = options.rows || "";
+  const pagination = options.pagination === false ? "" : `<div class="table-foot"><span>Showing 0 of 0 ${esc(options.itemName || "results")}</span>${pager()}</div>`;
+  const bodyId = options.bodyId ? ` id="${esc(options.bodyId)}"` : "";
+  return `
+    <div class="table-card ${options.className || ""}">
+      ${options.toolbar || ""}
+      <div class="table-scroll">
+        <table class="suite-table">
+          <thead><tr>${headers.map((header, index) => `<th>${index === 0 && options.checkbox ? '<input type="checkbox" />' : esc(header)}</th>`).join("")}</tr></thead>
+          <tbody${bodyId}>${rows}</tbody>
+        </table>
+      </div>
+      ${empty || ""}
+      ${pagination}
+    </div>
+  `;
+}
+
+function pager() {
+  return `<div class="pager"><button type="button">${icon("chevron-right", "flip")}</button><span>1</span><button type="button">${icon("chevron-right")}</button></div>`;
+}
+
+function uploadDrop(text = "Drag and drop files here", subtext = "or click to upload") {
+  return `<div class="upload-drop">${icon("document")}<strong>${esc(text)}</strong><p>${esc(subtext)}</p></div>`;
+}
+
+function skeletonRows(count = 4) {
+  return `<div class="skeleton-list">${Array.from({ length: count }, () => `<div><span></span><strong></strong><em></em></div>`).join("")}</div>`;
+}
+
+function donut(value = "0", label = "Total Score") {
+  return `<div class="donut"><span>${esc(value)}<small>${esc(label)}</small></span></div>`;
+}
+
+function miniCalendar() {
+  const days = ["S", "M", "T", "W", "T", "F", "S"];
+  const nums = ["27", "28", "29", "30", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "1", "2", "3", "4", "5", "6", "7"];
+  return `
+    <div class="mini-calendar-wrap">
+      <div class="mini-cal-head"><button type="button">${icon("chevron-right", "flip")}</button><strong>May 2025</strong><button type="button">${icon("chevron-right")}</button></div>
+      <div class="mini-calendar">
+        ${days.map((day) => `<b>${day}</b>`).join("")}
+        ${nums.map((day) => `<span class="${day === "19" ? "active" : ""}">${day}</span>`).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function chart(type = "line") {
+  const centerIcon = type === "funnel" || type === "donut" ? "" : icon(type === "bar" ? "bar-chart" : "line-chart");
+  return `<div class="chart chart-${type}"><span class="chart-center">${centerIcon}</span></div>`;
+}
+
+function statLegend(items) {
+  return `<div class="stat-legend">${items.map(([label, value, tone]) => `<div><span class="${tone || "green"}"></span><strong>${esc(label)}</strong><em>${esc(value)}</em></div>`).join("")}</div>`;
+}
+
+function renderCommandCenter() {
+  return `
+    <section class="command-grid">
+      ${panel("Action Items", `
+        ${tabs([["all", "All"], ["priority", "High Priority"], ["due", "Due Today"], ["week", "This Week"]], "all")}
+        <div id="accountApprovalsMessage" class="request-message" aria-live="polite"></div>
+        <div id="accountApprovalsList" class="account-request-list">
+          ${emptyState("clipboard-list", "No action items")}
+        </div>
+        <button id="refreshAccountRequestsBtn" class="panel-bottom-link" type="button">View All Action Items ${icon("chevron-right")}</button>
+        <span data-account-request-count class="sr-only">0 Pending</span>
+      `, { menu: true })}
+      ${panel("Coverage Requests", `
+        ${tabs([["all", "All"], ["pending", "Pending Approval"], ["upcoming", "Upcoming"], ["needs", "Needs Coverage"]], "all")}
+        ${emptyState("calendar", "No coverage requests")}
+        <a class="panel-bottom-link purple" href="coverage-center.html">View All Coverage Requests ${icon("chevron-right")}</a>
+      `, { menu: true })}
+      ${panel("QA Alerts", `
+        ${tabs([["all", "All"], ["failures", "QA Failures"], ["reclean", "Recleans Requested"], ["pending", "Pending Review"]], "all")}
+        ${emptyState("alert", "No QA alerts")}
+        <a class="panel-bottom-link red" href="qa-queue.html">View All QA Alerts ${icon("chevron-right")}</a>
+      `, { menu: true })}
+      ${panel("Today's Schedule", `
+        <div class="schedule-tabs">${chip("Day", true)}${chip("Week")}${chip("Month")}</div>
+        ${emptyState("calendar", "No scheduled assignments")}
+        <div class="schedule-legend">${["Scheduled", "In Progress", "Completed", "Needs Coverage", "QA Pending"].map((item, i) => `<span class="legend-${i}">${esc(item)}</span>`).join("")}</div>
+      `, { action: { label: "View Full Schedule", href: "schedule.html", tone: "secondary" }, menu: true })}
+    </section>
+  `;
+}
+
+function renderPipelineColumns() {
+  return stageLabels.map(([id, label, tone]) => `
+    <article class="lead-stage ${tone}" data-pipeline-stage="${id}">
+      <header><span>${esc(label)}</span><strong data-stage-count="${id}">0</strong></header>
+      <div class="lead-drop" data-stage-dropzone="${id}">
+        <button type="button">+</button>
+        <small>Add Lead</small>
+      </div>
+    </article>
+  `).join("");
+}
+
+function renderLeads() {
+  return `
+    ${toolbar(
+      `${chip("Pipeline", true, "filter")}${chip("List View", false, "list")}`,
+      `${selectButton("All Owners")}${actionButton("Filters", "filter", "", "secondary")}${actionButton("Add Lead", "plus")}`
+    )}
+    <section class="lead-board">${renderPipelineColumns()}</section>
+    <section class="content-rail">
+      ${panel("Lead Details", formGrid([
+        inputControl("Company Name"),
+        inputControl("Contact Name"),
+        inputControl("Phone"),
+        inputControl("Email"),
+        selectControl("Property Type", [""]),
+        inputControl("Property Name"),
+        inputControl("Address"),
+        inputControl("City"),
+        selectControl("State", [""]),
+        inputControl("ZIP Code"),
+        selectControl("Lead Source", [""]),
+        selectControl("Lead Owner", [""]),
+        inputControl("Estimated Value", "$"),
+        inputControl("Close Date", "", "date"),
+        textareaControl("Notes", "wide")
+      ]), { className: "span-main" })}
+      <div class="suite-stack">
+        ${panel("Activity Log", emptyState("calendar", "No activity yet"), { action: { label: "View All", tone: "secondary" } })}
+        ${panel("Files & Documents", uploadDrop())}
+      </div>
+    </section>
+  `;
+}
+
+function renderWalkthroughs() {
+  return `
+    ${toolbar(
+      `${chip("Calendar View", true, "calendar")}${chip("List View", false, "list")}`,
+      `${actionButton("Filters", "filter", "", "secondary")}${actionButton("Schedule Walkthrough", "plus")}`
+    )}
+    ${panel("", `
+      <div class="calendar-controls"><button>${icon("chevron-right", "flip")}</button><button>${icon("chevron-right")}</button><button>Today</button><strong>May 19 - May 25, 2025 ${icon("chevron-down")}</strong><div>${chip("Week", true)}${chip("Month")}${chip("Day")}</div></div>
+      ${weekCalendar("No walkthroughs scheduled")}
+    `, { className: "no-head" })}
+    <section class="three-panels">
+      ${panel("Walkthrough Details", formGrid([
+        selectControl("Property / Lead", [""]),
+        selectControl("Type", [""]),
+        inputControl("Date", "", "date"),
+        inputControl("Start Time", "", "time"),
+        inputControl("End Time", "", "time"),
+        inputControl("Location / Meeting Link"),
+        selectControl("Assigned To", [""]),
+        selectControl("Status", [""]),
+        textareaControl("Notes", "wide")
+      ]))}
+      ${panel("Activity Log", emptyState("calendar", "No activity yet"), { action: { label: "View All", tone: "secondary" } })}
+      ${panel("Files & Documents", uploadDrop())}
+    </section>
+  `;
+}
+
+function renderQuotes() {
+  return `
+    ${toolbar(
+      `${chip("All Quotes", true, "briefcase")}${chip("List View", false, "list")}`,
+      `${actionButton("Filters", "filter", "", "secondary")}${actionButton("New Quote", "plus")}`
+    )}
+    <section class="metric-strip six">
+      ${metric("Draft", "0", "", "document", "blue")}
+      ${metric("Sent", "0", "", "document", "purple")}
+      ${metric("Follow Up", "0", "", "clock", "yellow")}
+      ${metric("Accepted", "0", "", "check", "green")}
+      ${metric("Rejected", "0", "", "alert", "red")}
+      ${metric("Expired", "0", "", "clock", "slate")}
+    </section>
+    ${tableFrame(["", "Quote #", "Property / Lead", "Client", "Service Type", "Quote Value", "Status", "Sent Date", "Expiration Date", "Owner", "Actions"], emptyState("document", "No quotes found"), { checkbox: true, className: "tall-table" })}
+    <section class="three-panels">
+      ${panel("Quote Details", formGrid([
+        selectControl("Property / Lead", [""]),
+        selectControl("Client", [""]),
+        inputControl("Service Type"),
+        inputControl("Quote Value", "$"),
+        selectControl("Recurring", [""]),
+        selectControl("One-Time", [""]),
+        inputControl("Expiration Date", "", "date"),
+        selectControl("Owner", [""]),
+        selectControl("Status", [""]),
+        textareaControl("Notes", "wide")
+      ]))}
+      ${panel("Activity Log", emptyState("calendar", "No activity yet"), { action: { label: "View All", tone: "secondary" } })}
+      ${panel("Files & Documents", uploadDrop())}
+    </section>
+  `;
+}
+
+function renderContractsPending() {
+  return `
+    ${toolbar(`${chip("All Contracts", true, "calendar")}${chip("Calendar View", false, "calendar-days")}`, `${actionButton("Filters", "filter", "", "secondary")}${actionButton("Export", "download", "", "secondary")}`)}
+    <section class="metric-strip six">
+      ${metric("Sent", "0", "", "file-signature", "purple")}
+      ${metric("Viewed", "0", "", "activity", "blue")}
+      ${metric("Pending Signature", "0", "", "line-chart", "yellow")}
+      ${metric("Expiring Soon", "0", "", "alert", "orange")}
+      ${metric("Signed", "0", "", "check", "green")}
+      ${metric("Declined", "0", "", "alert", "red")}
+    </section>
+    ${tableFrame(["", "Contract / Property", "Client", "Contract Value", "Sent Date", "Status", "Expires On", "Last Activity", "Sent To", "Actions"], emptyState("document", "No contracts pending"), { checkbox: true, className: "tall-table" })}
+    <section class="three-panels">
+      ${panel("Contract Details", formGrid([
+        selectControl("Client", [""]),
+        selectControl("Property / Location", [""]),
+        inputControl("Contract Value", "$"),
+        selectControl("Frequency", [""]),
+        inputControl("Start Date", "", "date"),
+        inputControl("Expires On", "", "date"),
+        textareaControl("Notes", "wide")
+      ]))}
+      ${panel("Activity Log", emptyState("calendar", "No activity yet"), { action: { label: "View All", tone: "secondary" } })}
+      ${panel("Files & Documents", uploadDrop())}
+    </section>
+  `;
+}
+
+function renderContracts() {
+  return `
+    <section class="split-contracts">
+      <div>
+        ${toolbar(`${searchBox("Search contracts...")}${actionButton("Filters", "filter", "", "secondary")}`, actionButton("Export", "download", "", "secondary"))}
+        ${tableFrame(["", "Contract / Property", "Client", "Status", "Frequency", "Start Date", "End Date", "Monthly Value", "Actions"], emptyState("document", "No contracts found"), {
+          checkbox: true,
+          toolbar: tabs([["all", "All Contracts"], ["archived", "Archived"]], "all"),
+          className: "contract-list-card"
+        })}
+      </div>
+      ${panel("Contract Details", `
+        ${tabs([["overview", "Overview"], ["scope", "Scope of Work"], ["schedule", "Schedule"], ["docs", "Documents"], ["activity", "Activity"]], "overview")}
+        <h3>Contract Information</h3>
+        ${formGrid([
+          inputControl("Contract / Property"),
+          inputControl("Client"),
+          selectControl("Status", [""]),
+          selectControl("Contract Type", [""]),
+          selectControl("Frequency", [""]),
+          inputControl("Start Date", "", "date"),
+          inputControl("End Date", "", "date"),
+          inputControl("Monthly Value", "$")
+        ])}
+        <h3>Key Contacts</h3>
+        ${formGrid([inputControl("Primary Contact"), inputControl("Email"), inputControl("Phone"), inputControl("Secondary Contact")])}
+        <h3>Service Details</h3>
+        ${formGrid([selectControl("Assigned Contractor", [""]), selectControl("Backup Contractor", [""]), inputControl("Service Days"), inputControl("Service Time"), inputControl("Property Address", "", "text")])}
+        ${textareaControl("Contract Notes", "wide")}
+      `, { className: "contract-details-panel" })}
+    </section>
+  `;
+}
+
+function renderSchedule() {
+  const rightFilters = filters("Filter Schedule", [
+    selectControl("Property / Location", ["Select property..."]),
+    selectControl("Contractor", ["Select contractor..."]),
+    selectControl("Service Type", ["Select service type..."]),
+    selectControl("Status", ["Select status..."])
+  ]);
+  return `
+    ${toolbar(`${scheduleModeButton("today", "Today", "calendar", true)}${scheduleModeButton("week", "Week", "calendar-days")}${scheduleModeButton("month", "Month", "calendar")}`, actionButton("Filters", "filter", "", "secondary"))}
+    <section class="schedule-layout" data-schedule-layout>
+      <div class="schedule-main-views">
+        <div class="schedule-view is-active" data-schedule-panel="today">
+          ${panel("", `
+            <div class="calendar-controls"><button>${icon("chevron-right", "flip")}</button><button>${icon("chevron-right")}</button><button>Today</button><strong>May 19, 2025 ${icon("calendar")} ${icon("chevron-down")}</strong></div>
+            ${dayCalendar("No schedule items", "There are no scheduled cleanings for this day.")}
+          `, { className: "no-head schedule-mode-panel" })}
+        </div>
+        <div class="schedule-view" data-schedule-panel="week" hidden>
+          ${panel("", `
+            <div class="calendar-controls"><button>${icon("chevron-right", "flip")}</button><button>${icon("chevron-right")}</button><button>This Week</button><strong>May 18 - May 24, 2025 ${icon("chevron-down")}</strong></div>
+            ${scheduleWeekCalendar("No schedule items", "There are no scheduled cleanings for this week.")}
+          `, { className: "no-head schedule-mode-panel" })}
+        </div>
+        <div class="schedule-view" data-schedule-panel="month" hidden>
+          ${panel("", monthCalendarGrid(), { className: "no-head schedule-mode-panel schedule-month-panel" })}
+        </div>
+      </div>
+      <aside class="suite-stack">
+        ${panel("", miniCalendar(), { className: "no-head" })}
+        ${rightFilters}
+      </aside>
+    </section>
+  `;
+}
+
+function renderCoverageCenter() {
+  return `
+    <section class="coverage-layout">
+      <div class="suite-stack">
+        <section class="metric-strip five">
+          ${metric("Open Requests", "0", "from last 7 days", "calendar", "green")}
+          ${metric("Filled Requests", "0", "from last 7 days", "check", "green")}
+          ${metric("Pending Response", "0", "from last 7 days", "clock", "blue")}
+          ${metric("Available Contractors", "0", "online now", "users", "green")}
+          ${metric("Coverage Rating", "-", "based on last 30 days", "star", "blue")}
+        </section>
+        ${tableFrame(["", "Request ID", "Service Type", "Property / Location", "Date & Time", "Duration", "Status", "Requested By", "Actions"], emptyState("calendar", "No coverage requests", "Coverage requests will appear here."), {
+          checkbox: true,
+          toolbar: toolbar(tabs([["all", "All Requests"], ["mine", "My Requests"], ["open", "Open"], ["filled", "Filled"], ["cancelled", "Cancelled"], ["past", "Past"]], "all"), `${actionButton("Filters", "filter", "", "secondary")}${searchBox("Search requests...")}`)
+        })}
+        <section class="two-panels">
+          ${panel("Contractor Availability", emptyState("user", "No contractors available", "Available contractors will appear here."), { action: { label: "View All", tone: "secondary" } })}
+          ${panel("Recent Activity", skeletonRows(4), { action: { label: "View All", tone: "secondary" } })}
+        </section>
+      </div>
+      <aside class="suite-stack">
+        ${panel("Coverage Requests", emptyState("document", "No active requests", "Create a new coverage request or view all requests.", actionButton("Create New Request", "plus")), { action: { label: "New Request", icon: "plus" } })}
+        ${panel("Calendar Overview", miniCalendar())}
+        ${filters("Quick Filters", [selectControl("Service Type", ["Select service type..."]), selectControl("Property / Location", ["Select property..."]), inputControl("Date Range", "Select date range...", "date")])}
+      </aside>
+    </section>
+  `;
+}
+
+function renderAssignments() {
+  const assignmentToolbar = toolbar(
+    tabs([["all", "All Assignments"], ["upcoming", "Upcoming"], ["progress", "In Progress"], ["completed", "Completed"], ["overdue", "Overdue"], ["draft", "Draft"]], "all"),
+    `${actionButton("Filters", "filter", "", "secondary")}${searchBox("Search assignments...")}`
+  );
+  return `
+    <section class="assignments-layout">
+      <div class="suite-stack">
+        <section class="metric-strip five">
+          ${metric("Total Assignments", "0", "from last 7 days", "calendar", "green")}
+          ${metric("Today's Assignments", "0", "due today", "calendar", "purple")}
+          ${metric("In Progress", "0", "right now", "clock", "orange")}
+          ${metric("Completed (7 Days)", "0", "from last 7 days", "check", "green")}
+          ${metric("Overdue", "0", "past due", "alert", "red")}
+        </section>
+        ${tableFrame(["", "Assignment ID", "Property / Location", "Service Type", "Contractor", "Assigned To", "Date", "Status", "Priority", "Actions"], `
+          <p id="message" class="status-message table-status-message" aria-live="polite"></p>
+        `, {
+          checkbox: true,
+          toolbar: assignmentToolbar,
+          className: "assignment-table-card",
+          itemName: "results",
+          bodyId: "adminAssignments",
+          rows: `<tr class="assignment-empty-row"><td colspan="10">${emptyState("calendar", "No assignments found", "Assignments will appear here.")}</td></tr>`
+        })}
+      </div>
+      <aside class="suite-stack">
+        ${filters("Filters", [
+          selectControl("Property / Location", ["Select property..."]),
+          selectControl("Service Type", ["Select service type..."]),
+          selectControl("Contractor", ["Select contractor..."]),
+          selectControl("Assigned To", ["Select team member..."]),
+          selectControl("Status", ["Select status..."]),
+          selectControl("Priority", ["Select priority..."]),
+          inputControl("Date Range", "Select date range...", "date")
+        ])}
+        ${panel("Calendar Overview", miniCalendar())}
+        ${panel("Assignment Builder", assignmentForm(), { className: "assignment-builder-panel" })}
+      </aside>
+    </section>
+  `;
+}
+
+function renderDirectory() {
+  return `
+    <section class="directory-layout">
+      <div class="suite-stack">
+        <section class="metric-strip five">
+          ${metric("Total Contractors", "0", "total in network", "users", "blue")}
+          ${metric("Active", "0", "currently active", "check", "green")}
+          ${metric("Onboarding", "0", "in onboarding", "clock", "yellow")}
+          ${metric("Inactive", "0", "not active", "alert", "red")}
+          ${metric("Suspended", "0", "suspended", "user", "red")}
+        </section>
+        ${tableFrame(["", "Contractor", "Company", "Status", "Service Types", "Location", "Rating", "Jobs Completed", "Last Active", "Actions"], emptyState("users", "No contractors found", "No contractors match your current filters.", actionButton("Clear Filters", "", "", "secondary")), {
+          checkbox: true,
+          toolbar: toolbar(`${searchBox("Search contractors...")}${actionButton("Filters", "filter", "", "secondary")}`, actionButton("Export", "download", "", "secondary")),
+          className: "directory-table"
+        })}
+      </div>
+      ${filters("Filters", [
+        selectControl("Status", ["Select status..."]),
+        selectControl("Service Type", ["Select service type..."]),
+        selectControl("Location", ["Select location..."]),
+        inputControl("Company", "Search company..."),
+        selectControl("Rating", ["Select rating..."]),
+        inputControl("Jobs Completed", "Min"),
+        inputControl("Last Active", "Select date range...", "date")
+      ])}
+    </section>
+  `;
+}
+
+function renderOnboarding() {
+  return `
+    ${tabs([["overview", "Overview"], ["docs", "Docs"], ["training", "Completed Training Checklist"]], "overview")}
+    <section class="metric-strip five">
+      ${metric("Invited", "0", "waiting to register", "document", "blue")}
+      ${metric("In Progress", "0", "onboarding in progress", "clock", "blue")}
+      ${metric("Docs Pending", "0", "documents outstanding", "document", "blue")}
+      ${metric("Training Pending", "0", "training outstanding", "user-plus", "purple")}
+      ${metric("Completed", "0", "fully onboarded", "check", "green")}
+    </section>
+    <section class="onboarding-layout">
+      ${panel("Onboarding Pipeline", `
+        ${toolbar("", `${actionButton("Filters", "filter", "", "secondary")}${searchBox("Search contractors...")}`)}
+        <div class="pipeline-board onboarding-board">
+          ${["Invited", "In Progress", "Docs Pending", "Training Pending", "Completed"].map((label, i) => `
+            <article class="pipeline-column ${["purple", "blue", "yellow", "purple", "green"][i]}">
+              <header><span>${esc(label)}</span><strong>0</strong></header>
+              <div class="pipeline-dropzone">${emptyState("plus", "No contractors.", "Contractors will appear here.")}</div>
+            </article>
+          `).join("")}
+        </div>
+      `)}
+      <aside class="suite-stack">
+        ${panel("Onboarding Progress", `${donut("0%", "Complete")}${statLegend([["Docs Completed", "0", "blue"], ["Training Completed", "0", "green"], ["In Progress", "0", "yellow"], ["Not Started", "0", "slate"], ["Total Contractors", "0", "none"]])}`)}
+      </aside>
+    </section>
+    <section class="two-panels">
+      ${panel("Upcoming Onboarding Tasks", emptyState("calendar", "No upcoming tasks", "Upcoming onboarding tasks and deadlines will appear here."))}
+      ${panel("Recent Activity", skeletonRows(3))}
+    </section>
+  `;
+}
+
+function renderDocumentsCompliance() {
+  return `
+    ${tabs([["documents", "Documents"], ["compliance", "Compliance"]], "documents")}
+    <section class="metric-strip five">
+      ${metric("Total Documents", "0", "all time", "document", "blue")}
+      ${metric("Expiring Soon", "0", "within 30 days", "clock", "yellow")}
+      ${metric("Expired", "0", "require immediate attention", "alert", "red")}
+      ${metric("Compliant", "0", "up to date", "check", "green")}
+      ${metric("Pending Review", "0", "awaiting review", "clock", "blue")}
+    </section>
+    <section class="content-rail compliance-layout">
+      ${tableFrame(["", "Document Name", "Document Type", "Contractor", "Status", "Issue Date", "Expiration Date", "Actions"], emptyState("document", "No documents found", "Upload documents to get started.", actionButton("Upload Document", "upload")), {
+        checkbox: true,
+        toolbar: toolbar(`${searchBox("Search documents...")}${selectButton("All Document Types")}${selectButton("All Statuses")}`, `${actionButton("Filters", "filter", "", "secondary")}${actionButton("Upload Document", "upload")}`),
+        className: "span-main"
+      })}
+      <aside class="suite-stack">
+        ${panel("Compliance Overview", `${donut("0%", "Compliant")}${statLegend([["Compliant", "0 (0%)", "green"], ["Expiring Soon", "0 (0%)", "yellow"], ["Expired", "0 (0%)", "red"], ["Pending Review", "0 (0%)", "blue"], ["Total Documents", "0", "none"]])}`)}
+        ${panel("Document Types", statLegend([["Insurance", "0"], ["Licenses & Certifications", "0"], ["Background Checks", "0"], ["Safety Documents", "0"], ["Tax Documents", "0"], ["Other", "0"], ["Total", "0"]]))}
+      </aside>
+    </section>
+  `;
+}
+
+function renderAvailability() {
+  return `
+    ${tabs([["overview", "Overview"], ["calendar", "Availability Calendar"], ["timeoff", "Time Off"], ["prefs", "Preferences"], ["blackout", "Blackout Dates"]], "overview")}
+    <section class="metric-strip five">
+      ${metric("Available Today", "0", "contractors", "calendar", "green")}
+      ${metric("Available This Week", "0", "contractors", "calendar", "blue")}
+      ${metric("Unavailable This Week", "0", "contractors", "calendar", "red")}
+      ${metric("On Time Off", "0", "contractors", "activity", "purple")}
+      ${metric("With Restrictions", "0", "contractors", "alert", "yellow")}
+    </section>
+    <section class="content-rail availability-layout">
+      ${tableFrame(["", "Contractor", "Status", "Availability This Week", "Next Available", "Restrictions", "Actions"], emptyState("calendar", "No contractors found", "Try adjusting your filters or add contractors.", actionButton("Clear Filters", "", "", "secondary")), {
+        checkbox: true,
+        toolbar: toolbar(`${searchBox("Search contractors...")}${selectButton("All Statuses")}${selectButton("All Service Types")}${actionButton("Filters", "filter", "", "secondary")}`, selectButton("Bulk Actions")),
+        className: "span-main"
+      })}
+      <aside class="suite-stack">
+        ${panel("Availability Overview", `${miniRange("May 19 - May 25, 2025")}${statLegend([["Fully Available", "0 (0%)", "green"], ["Partially Available", "0 (0%)", "blue"], ["Limited Availability", "0 (0%)", "yellow"], ["Unavailable", "0 (0%)", "red"], ["Total Contractors", "0", "none"]])}`)}
+        ${panel("Quick Actions", `<div class="quick-actions">${["Add Time Off", "Set Availability Preference", "Add Blackout Date", "Export Availability"].map((item, i) => `<button type="button">${icon(["plus", "clock", "calendar", "download"][i])}<span>${esc(item)}</span><small>${esc(["Request time off for yourself", "Update your general availability", "Block dates you are unavailable", "Export availability report"][i])}</small></button>`).join("")}</div>`)}
+        ${panel("Upcoming Time Off", emptyState("calendar", "No upcoming time off", "You have no time off scheduled.", actionButton("View Calendar", "calendar", "", "secondary")))}
+      </aside>
+    </section>
+  `;
+}
+
+function renderPerformance() {
+  return `
+    ${tabs([["overview", "Overview"], ["scorecard", "Scorecard"], ["reviews", "Reviews"], ["insights", "Insights"], ["goals", "Goals & Improvement"]], "overview")}
+    <section class="metric-strip five">
+      ${metric("Overall Score", "0", "vs last 90 days", "activity", "purple")}
+      ${metric("Jobs Completed", "0", "vs last 90 days", "calendar", "blue")}
+      ${metric("On-Time Rate", "0%", "vs last 90 days", "clock", "green")}
+      ${metric("Quality Score", "0", "vs last 90 days", "star", "yellow")}
+      ${metric("Client Satisfaction", "0.0", "vs last 90 days", "check", "red")}
+    </section>
+    <section class="performance-layout">
+      ${panel("Performance Trend", `${toolbar(selectButton("Overall Score"), selectButton("Feb 24 - May 25, 2025"))}${axisChart("No performance data yet", "Performance trends will appear here once data is available.")}`, { className: "span-wide" })}
+      ${panel("Performance Breakdown", `${donut("0", "Total Score")}${statLegend([["Quality", "0 (0%)", "green"], ["Timeliness", "0 (0%)", "yellow"], ["Communication", "0 (0%)", "purple"], ["Professionalism", "0 (0%)", "blue"], ["Safety & Compliance", "0 (0%)", "red"]])}`)}
+      ${filters("Filters", [inputControl("Date Range", "Feb 24 - May 25, 2025", "date"), selectControl("Contractor", ["Select contractor..."]), selectControl("Service Type", ["Select service type..."]), selectControl("Location", ["Select location..."]), selectControl("Status", ["Select status..."])])}
+      ${panel("Recent Performance Reviews", emptyState("star", "No reviews yet", "Performance reviews and feedback will appear here.", actionButton("Create Review", "plus")), { action: { label: "View All Reviews", tone: "secondary" } })}
+      ${panel("Top Strengths", emptyState("star", "No strengths identified", "Top strengths will appear here once performance data is available."))}
+      ${panel("Areas for Improvement", emptyState("target", "No improvement areas identified", "Areas for improvement will appear here once performance data is available."))}
+      ${panel("Quick Actions", `<div class="quick-actions">${["Create Review", "View Scorecard", "Export Report"].map((item, i) => `<button type="button">${icon(["star", "calendar", "download"][i])}<span>${esc(item)}</span><small>${esc(["Provide feedback for a contractor", "Detailed performance scorecard", "Download performance report"][i])}</small></button>`).join("")}</div>`)}
+    </section>
+  `;
+}
+
+function renderQuality(active) {
+  if (active === "videos") return renderVideoLibrary();
+  if (active === "qa-analytics") return renderQaAnalytics();
+  if (active === "qa-reviews") return renderQaReviews();
+  return renderQaQueue();
+}
+
+function qualityTabs(active) {
+  return tabs([
+    ["qa-queue", "QA Queue", "qa-queue.html"],
+    ["qa-reviews", "QA Reviews", "qa-reviews.html"],
+    ["qa-analytics", "QA Analytics", "qa-analytics.html"],
+    ["videos", "Video Library", "videos.html"]
+  ], active);
+}
+
+function renderQaQueue() {
+  return `
+    ${qualityTabs("qa-queue")}
+    <section class="metric-strip five">
+      ${metric("Total in Queue", "0", "all time", "briefcase", "blue")}
+      ${metric("Due Today", "0", "reviews", "clock", "yellow")}
+      ${metric("Due This Week", "0", "reviews", "calendar", "purple")}
+      ${metric("Overdue", "0", "reviews", "alert", "red")}
+      ${metric("Avg. Age in Queue", "0", "days", "activity", "blue")}
+    </section>
+    <section class="content-rail">
+      ${tableFrame(["", "Review ID", "Property / Project", "Contractor", "Service Type", "Location", "Due Date", "Priority", "Status", "Actions"], emptyState("briefcase", "No reviews in queue", "QA reviews assigned to you or your team will appear here.", actionButton("View All Reviews", "line-chart")), {
+        checkbox: true,
+        toolbar: toolbar(`${searchBox("Search properties, contractors...")}${selectButton("All Statuses")}${selectButton("All Service Types")}${selectButton("All Reviewers")}${actionButton("Filters", "filter", "", "secondary")}`, selectButton("Bulk Actions")),
+        className: "span-main"
+      })}
+      ${filters("Filters", [inputControl("Date Range", "May 19 - May 25, 2025", "date"), selectControl("Status", ["Select status..."]), selectControl("Service Type", ["Select service type..."]), selectControl("Location", ["Select location..."]), inputControl("Contractor", "Search contractor..."), selectControl("Priority", ["Select priority..."]), selectControl("Reviewer", ["Select reviewer..."])])}
+    </section>
+  `;
+}
+
+function renderQaReviews() {
+  return `
+    ${qualityTabs("qa-reviews")}
+    <section class="metric-strip six">
+      ${metric("Total Reviews", "0", "all time", "calendar", "blue")}
+      ${metric("Pending Review", "0", "awaiting review", "clock", "yellow")}
+      ${metric("Approved", "0", "(0%)", "check", "green")}
+      ${metric("Needs Improvement", "0", "(0%)", "alert", "red")}
+      ${metric("Average Score", "0%", "overall average", "star", "purple")}
+      ${metric("Re-Reviews", "0", "required", "activity", "blue")}
+    </section>
+    <section class="content-rail">
+      ${tableFrame(["", "Review ID", "Contractor", "Property / Project", "Service Type", "Location", "Reviewer", "Score", "Status", "Review Date", "Actions"], emptyState("document", "No reviews found", "Reviews will appear here once work is completed and submitted for quality assurance.", actionButton("View QA Queue", "message-square")), {
+        checkbox: true,
+        toolbar: toolbar(`${searchBox("Search reviews...")}${selectButton("All Statuses")}${selectButton("All Service Types")}${selectButton("All Locations")}`, actionButton("Export", "download", "", "secondary")),
+        className: "span-main"
+      })}
+      ${filters("Filters", [inputControl("Date Range", "May 19 - May 25, 2025", "date"), selectControl("Status", ["Select status..."]), selectControl("Service Type", ["Select service type..."]), selectControl("Location", ["Select location..."]), inputControl("Contractor", "Search contractor..."), inputControl("Score", "Min"), inputControl("Reviewer", "Search reviewer...")])}
+    </section>
+    <section class="four-panels">
+      ${panel("Score Distribution", statLegend([["5 Stars", "0 (0%)", "green"], ["4 Stars", "0 (0%)", "green"], ["3 Stars", "0 (0%)", "yellow"], ["2 Stars", "0 (0%)", "orange"], ["1 Star", "0 (0%)", "red"]]))}
+      ${panel("Top Service Types", emptyState("settings", "No data available", "Service type data will appear here once reviews are available."))}
+      ${panel("Top Contractors", emptyState("users", "No data available", "Contractor performance will appear here once reviews are available."))}
+      ${panel("Recent Activity", emptyState("clock", "No recent activity", "QA review activity will appear here."))}
+    </section>
+  `;
+}
+
+function renderQaAnalytics() {
+  return `
+    ${qualityTabs("qa-analytics")}
+    <section class="metric-strip six">
+      ${metric("Total Reviews", "-", "No data yet", "calendar", "purple")}
+      ${metric("Average Score", "-", "No data yet", "star", "yellow")}
+      ${metric("Pass Rate (>= 80%)", "-", "No data yet", "check", "green")}
+      ${metric("Needs Improvement", "-", "No data yet", "alert", "red")}
+      ${metric("Re-Review Rate", "-", "No data yet", "activity", "blue")}
+      ${metric("Avg. Time to Review", "-", "No data yet", "clock", "yellow")}
+    </section>
+    <section class="analytics-layout">
+      ${panel("QA Score Over Time", axisChart("No data to display", "Review scores over time will appear here once data is available."))}
+      ${panel("Score Distribution", `${donut("No data", "")}${statLegend([["", "-", "blue"], ["", "-", "green"], ["", "-", "yellow"], ["", "-", "orange"], ["", "-", "red"]])}`)}
+      ${filters("Filters", [inputControl("Date Range", "Select date range", "date"), selectControl("Service Type", ["All Service Types"]), selectControl("Location", ["All Locations"]), inputControl("Contractor", "Search contractors..."), selectControl("Reviewer", ["All Reviewers"]), inputControl("Score Range", "Min"), selectControl("Review Status", ["All Statuses"])])}
+      ${panel("Scores by Service Type", emptyState("grid", "No data yet", "Scores by service type will appear here once data is available."), { action: { label: "View all service types", tone: "secondary" } })}
+      ${panel("Top Strengths", emptyState("star", "No data yet", "Top strengths will appear here once data is available."), { action: { label: "View all categories", tone: "secondary" } })}
+      ${panel("Top Opportunities", emptyState("target", "No data yet", "Top opportunities will appear here once data is available."), { action: { label: "View all categories", tone: "secondary" } })}
+      ${tableFrame(["Contractor", "Total Reviews", "Average Score", "Pass Rate (>= 80%)", "Needs Improvement", "Re-Review Rate", "Trend (90 Days)", "Actions"], emptyState("user", "No data yet", "Contractor performance data will appear here once data is available."), { className: "span-wide" })}
+      ${panel("Insights", emptyState("activity", "No insights yet", "Insights and recommendations will appear here once data is available."))}
+    </section>
+  `;
+}
+
+function renderVideoLibrary() {
+  return `
+    ${qualityTabs("videos")}
+    ${panel("Video Library", `<p>Access and review training, best practices, and quality standard videos.</p>`, { action: { label: "Upload Video", icon: "upload", tone: "secondary" } })}
+    ${panel("Filters", formGrid([
+      selectControl("Property / Project", ["Select property..."]),
+      selectControl("Service Type", ["All Service Types"]),
+      selectControl("Video Category", ["Select category..."]),
+      selectControl("Topic", ["Select topic..."]),
+      selectControl("Location", ["All Locations"]),
+      selectControl("Uploaded By", ["Select user..."]),
+      selectControl("Duration", ["Select duration..."]),
+      inputControl("Date Uploaded", "Select date range", "date"),
+      selectControl("Visibility", ["All Visibility"]),
+      selectControl("Audience", ["All Audiences"]),
+      selectControl("Language", ["All Languages"]),
+      checkboxControl("Favorites Only")
+    ], "video-filter-grid"), { className: "compact-panel" })}
+    ${tableFrame([""], emptyState("video", "No videos found", "No videos match your current filters. Try adjusting your filters or upload a new video.", actionButton("Upload First Video", "upload")), {
+      toolbar: toolbar(searchBox("Search videos by title, description, or tags..."), `${selectButton("Newest First")}${chip("", true, "grid")}${chip("", false, "list")}`),
+      pagination: true,
+      itemName: "videos",
+      className: "video-library-card"
+    })}
+  `;
+}
+
+function renderClients(active) {
+  const clientTabs = tabs([
+    ["client-directory", "Client Directory", "client-directory.html"],
+    ["contacts", "Contacts", "contacts.html"],
+    ["activity", "Activity Log"],
+    ["performance", "Client Performance"]
+  ], active);
+  return active === "contacts" ? renderContacts(clientTabs) : renderClientDirectory(clientTabs);
+}
+
+function renderClientDirectory(clientTabs) {
+  return `
+    ${clientTabs}
+    <section class="metric-strip six">
+      ${metric("Total Clients", "-", "No data yet", "building", "blue")}
+      ${metric("Active Clients", "-", "No data yet", "check", "green")}
+      ${metric("Prospects", "-", "No data yet", "clock", "yellow")}
+      ${metric("Contracts", "-", "No data yet", "calendar", "purple")}
+      ${metric("Annual Revenue", "-", "No data yet", "badge-dollar", "blue")}
+      ${metric("Contacts", "-", "No data yet", "users", "slate")}
+    </section>
+    <section class="content-rail">
+      ${tableFrame(["", "Client Name", "Company", "Primary Contact", "Status", "Contract Start", "Renewal Date", "Properties", "Annual Revenue", "Actions"], emptyState("building", "No clients found", "You haven't added any clients yet. Add your first client to get started.", actionButton("Add Client", "plus")), {
+        checkbox: true,
+        toolbar: toolbar(searchBox("Search clients by name, property, city, or tag..."), `${selectButton("Bulk Actions")}${actionButton("Add Client", "plus")}`),
+        className: "span-main"
+      })}
+      ${filters("Filters", [selectControl("Status", ["Select status..."]), selectControl("Client Type", ["Select client type..."]), selectControl("Region / Market", ["Select region..."]), selectControl("Property / Project", ["Select property..."]), inputControl("Contract Start Date", "Select date range", "date"), inputControl("Renewal Date", "Select date range", "date"), selectControl("Account Manager", ["Select account manager..."]), selectControl("Tags", ["Select tags..."])])}
+    </section>
+    <section class="four-panels">
+      ${panel("Top Clients by Revenue", chart("donut"))}
+      ${panel("Clients by Status", chart("donut"))}
+      ${panel("New Clients (30 Days)", chart("line"))}
+      ${panel("Upcoming Renewals", skeletonRows(3), { action: { label: "View Full Report", tone: "secondary" } })}
+    </section>
+  `;
+}
+
+function renderContacts(clientTabs) {
+  return `
+    ${clientTabs}
+    ${panel("Filters", formGrid([
+      inputControl("Search Contacts", "Search by name, email, or phone..."),
+      selectControl("Client", ["All Clients"]),
+      selectControl("Account Manager", ["All Account Managers"]),
+      selectControl("Contact Type", ["All Contact Types"]),
+      selectControl("Role / Title", ["All Roles"]),
+      selectControl("Department", ["All Departments"]),
+      selectControl("Status", ["All Statuses"]),
+      selectControl("Primary Contact", ["All"]),
+      inputControl("Phone", "Search phone number..."),
+      inputControl("Email", "Search email..."),
+      selectControl("Location", ["All Locations"]),
+      selectControl("Tags", ["All Tags"]),
+      inputControl("Date Added", "Select date range", "date"),
+      inputControl("Last Contacted", "Select date range", "date"),
+      selectControl("Notes", ["All"])
+    ], "contacts-filter-grid"), { className: "compact-panel", action: { label: "Save View", icon: "document", tone: "secondary" } })}
+    ${tableFrame(["", "Contact Name", "Client", "Role / Title", "Email", "Phone", "Contact Type", "Status", "Last Contacted", "Actions"], emptyState("contact", "No contacts found", "No contacts match your current filters. Try adjusting your filters or add a new contact.", actionButton("Add Contact", "plus")), {
+      checkbox: true,
+      toolbar: toolbar("", `${actionButton("Export", "download", "", "secondary")}${actionButton("Columns", "grid", "", "secondary")}${actionButton("Add Contact", "plus")}`),
+      className: "contacts-table",
+      itemName: "contacts"
+    })}
+  `;
+}
+
+function renderSalesReport() {
+  return reportLayout("sales", [
+    ["Total Pipeline Value", "-", "badge-dollar", "green"],
+    ["Open Deals", "-", "briefcase", "blue"],
+    ["Won Deals (Value)", "-", "target", "green"],
+    ["Lost Deals (Value)", "-", "alert", "red"],
+    ["Win Rate", "-", "activity", "purple"],
+    ["Avg. Deal Size", "-", "line-chart", "yellow"]
+  ], [
+    panel("Pipeline Value by Stage", chart("funnel")),
+    panel("Pipeline Value Over Time", chart("line")),
+    panel("Deals by Source", `${chart("donut")}${statLegend([["", "", "slate"], ["", "", "slate"], ["", "", "slate"]])}`),
+    panel("Deals by Sales Owner", chart("bar")),
+    tableFrame(["", "Deal Name", "Account", "Pipeline", "Stage", "Deal Value", "Close Date", "Sales Owner", "Status", "Last Activity", "Actions"], skeletonRows(4), { className: "span-all", itemName: "deals" })
+  ], ["Overview", "Pipeline", "Leads", "Deals", "Forecast", "Activity"]);
+}
+
+function renderOperationsReport() {
+  return reportLayout("operations", [
+    ["Tasks Completed", "-", "check", "green"],
+    ["Tasks Created", "-", "plus", "blue"],
+    ["On-Time Completion", "-%", "clock", "purple"],
+    ["Avg. Response Time", "-", "activity", "orange"],
+    ["Backlog", "-", "briefcase", "yellow"],
+    ["Escalations", "-", "alert", "red"]
+  ], [
+    panel("Tasks by Status", chart("donut")),
+    panel("Tasks Over Time", axisChart("No data to display", "Data will appear here once available.")),
+    panel("Workload by Team", chart("bar")),
+    panel("Tasks by Priority", chart("donut")),
+    tableFrame(["Alert", "Severity", "Category", "Source", "Date", "Actions"], emptyState("bell", "No alerts", "You're all caught up. No active alerts at the moment."), { className: "span-half", pagination: false }),
+    tableFrame(["Activity", "User", "Team", "Date", "Details"], emptyState("list", "No recent activity", "Activity logs will appear here once available."), { className: "span-half", pagination: false })
+  ], ["Overview", "Team Performance", "Activity Log", "Utilization", "Service Level", "Capacity Planning"]);
+}
+
+function renderContractorPerformanceReport() {
+  return reportLayout("contractor-performance", [
+    ["Overall Avg. Score", "-", "star", "slate"],
+    ["Total Contractors", "-", "users", "blue"],
+    ["Top Performers", "-", "trophy", "green"],
+    ["At Risk", "-", "alert", "orange"],
+    ["Improvement Rate", "-", "trending-up", "purple"],
+    ["Completed Jobs", "-", "calendar", "blue"]
+  ], [
+    panel("Performance Score Over Time", axisChart("No data to display", "Data will appear here once available.")),
+    panel("Score Distribution", chart("donut")),
+    panel("Performance by Service Type", emptyState("chart", "No data to display", "Data will appear here once available.")),
+    panel("Performance by Region", emptyState("bar-chart", "No data to display", "Data will appear here once available.")),
+    tableFrame(["", "Contractor", "Region", "Market", "Jobs Completed", "On-Time", "Quality Score", "Customer Score", "Overall Score", "Trend", "Tier", "Actions"], skeletonRows(3), { checkbox: true, className: "span-all", itemName: "contractors" })
+  ], ["Overview", "Contractors", "Scorecards", "Metrics", "Leaderboard"]);
+}
+
+function renderGrowthReport() {
+  return reportLayout("growth", [
+    ["Total Revenue", "-", "badge-dollar", "green"],
+    ["Revenue Growth", "-", "trending-up", "blue"],
+    ["Units Leased", "-", "building", "blue"],
+    ["Pipeline Value", "-", "line-chart", "purple"],
+    ["New Clients", "-", "user-plus", "blue"],
+    ["Retention Rate", "-", "activity", "green"]
+  ], [
+    panel("Revenue Over Time", chart("line")),
+    panel("Revenue by Region", chart("donut")),
+    panel("Revenue by Market", chart("bar")),
+    panel("Units Leased Over Time", chart("line")),
+    panel("Pipeline Value Over Time", chart("line")),
+    tableFrame(["Driver", "Impact", "Trend"], skeletonRows(4), { className: "growth-drivers", pagination: false }),
+    panel("Growth Insights", emptyState("activity", "No insights available", "Insights and recommendations will appear here as data becomes available."), { className: "span-all" })
+  ], ["Overview", "Revenue", "Units & Pipeline", "Market Insights", "Retention", "Forecast"]);
+}
+
+function reportLayout(active, metrics, panels, tabLabels) {
+  const tabMarkup = tabs(tabLabels.map((label, index) => [index === 0 ? active : `${active}-${index}`, label]), active);
+  return `
+    ${tabMarkup}
+    ${panel("Filters", formGrid([
+      inputControl("Date Range", "Select date range", "date"),
+      selectControl(active === "growth" ? "Metric Category" : active === "contractor-performance" ? "Contractor" : active === "sales" ? "Pipeline" : "Team", [active === "contractor-performance" ? "Select contractor" : "All"]),
+      selectControl(active === "sales" ? "Sales Owner" : active === "operations" ? "Department" : "Service Type", ["All"]),
+      selectControl(active === "growth" ? "Region" : active === "contractor-performance" ? "Region" : "Location", ["All"]),
+      selectControl(active === "growth" ? "Market" : "Status", ["All"]),
+      selectControl(active === "growth" ? "Property Type" : "Tags", ["All"]),
+      selectControl("Source", ["All Sources"]),
+      selectControl("Team", ["All Teams"])
+    ], "report-filter-grid"), { className: "compact-panel", action: { label: "Clear Filters", tone: "secondary" } })}
+    <section class="metric-strip six">${metrics.map(([label, value, iconName, tone]) => metric(label, value, "vs previous period", iconName, tone)).join("")}</section>
+    <section class="report-grid">${panels.join("")}</section>
+  `;
+}
+
+function formGrid(fields, className = "") {
+  return `<div class="form-grid ${className}">${fields.join("")}</div>`;
+}
+
+function textareaControl(label, className = "") {
+  return `
+    <label class="suite-field ${className}">
+      <span>${esc(label)}</span>
+      <textarea></textarea>
+    </label>
+  `;
+}
+
+function checkboxControl(label) {
+  return `<label class="checkbox-field"><input type="checkbox" /> <span>${esc(label)}</span></label>`;
+}
+
+function searchBox(placeholder) {
+  return `<label class="inline-search">${icon("search")}<input type="search" placeholder="${esc(placeholder)}" /></label>`;
+}
+
+function selectButton(label) {
+  return `<button class="select-button" type="button"><span>${esc(label)}</span>${icon("chevron-down")}</button>`;
+}
+
+function assignmentForm() {
+  return `
+    <form id="assignmentForm">
+      <div class="form-grid">
+        <label class="suite-field wide"><span>Select Property</span><select id="propertySelect" required><option value="">Choose a property...</option></select></label>
+        <input id="property_id" type="hidden" />
+        <label class="suite-field"><span>Assignment Title</span><input id="title" required placeholder="Apartment Turnover - Unit 204" /></label>
+        <label class="suite-field"><span>Property Name</span><input id="property_name" required /></label>
+        <label class="suite-field wide"><span>Address</span><input id="address" /></label>
+        <label class="suite-field"><span>Service Type</span><input id="service_type" /></label>
+        <label class="suite-field"><span>Pay Amount</span><input id="pay_amount" type="number" step="0.01" /></label>
+        <label class="suite-field"><span>Start Window</span><input id="start_window" type="datetime-local" /></label>
+        <label class="suite-field"><span>End Window</span><input id="end_window" type="datetime-local" /></label>
+        <label class="suite-field wide"><span>Scope of Work</span><textarea id="scope"></textarea></label>
+        <label class="suite-field"><span>Supplies Notes</span><textarea id="supplies_notes"></textarea></label>
+        <label class="suite-field"><span>Special Instructions</span><textarea id="special_instructions"></textarea></label>
+      </div>
+      <div id="assignmentChecklistPreview" class="checklist-summary assignment-checklist-preview"></div>
+      <div class="form-actions"><button type="submit" class="primary-action"><span>Post Assignment</span></button></div>
+    </form>
+    <button id="generateRecurringAssignmentsBtn" type="button" class="secondary-action full-width"><span>Generate Due Assignments</span></button>
+    <p id="recurringMessage" class="status-message"></p>
+  `;
+}
+
+function miniRange(label) {
+  return `<div class="mini-range"><button type="button">${icon("chevron-right", "flip")}</button><strong>${esc(label)}</strong><button type="button">${icon("chevron-right")}</button></div>`;
+}
+
+function dayCalendar(title, text) {
+  const hours = ["All Day", "6 AM", "7 AM", "8 AM", "9 AM", "10 AM", "11 AM", "12 PM", "1 PM", "2 PM", "4 PM", "5 PM", "6 PM", "7 PM", "8 PM", "9 PM"];
+  return `<div class="day-calendar">${hours.map((hour) => `<div><time>${esc(hour)}</time></div>`).join("")}<div class="calendar-empty">${emptyState("calendar", title, text)}</div></div>`;
+}
+
+function weekCalendar(title) {
+  const days = ["Sun 5/19", "Mon 5/20", "Tue 5/21", "Wed 5/22", "Thu 5/23", "Fri 5/24", "Sat 5/25"];
+  return `<div class="week-calendar">${days.map((day) => `<div><strong>${esc(day)}</strong></div>`).join("")}<div class="calendar-empty">${emptyState("calendar", title)}</div></div>`;
+}
+
+function scheduleWeekCalendar(title, text) {
+  const days = ["Sun 5/18", "Mon 5/19", "Tue 5/20", "Wed 5/21", "Thu 5/22", "Fri 5/23", "Sat 5/24"];
+  const hours = ["All Day", "6 AM", "7 AM", "8 AM", "9 AM", "10 AM", "11 AM", "12 PM", "1 PM", "2 PM", "3 PM", "5 PM", "6 PM", "7 PM", "8 PM", "9 PM"];
+  return `
+    <div class="schedule-week-grid">
+      <div class="schedule-week-corner"></div>
+      ${days.map((day) => `<strong class="schedule-week-head">${esc(day)}</strong>`).join("")}
+      ${hours.map((hour) => `
+        <time>${esc(hour)}</time>
+        ${days.map(() => "<span></span>").join("")}
+      `).join("")}
+      <div class="calendar-empty">${emptyState("calendar", title, text)}</div>
+    </div>
+  `;
+}
+
+function monthCalendarGrid() {
+  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const cells = [
+    ["27", true], ["28", true], ["29", true], ["30", true], ["1", false], ["2", false], ["3", false],
+    ["4", false], ["5", false], ["6", false], ["7", false], ["8", false], ["9", false], ["10", false],
+    ["11", false], ["12", false], ["13", false], ["14", false], ["15", false], ["16", false], ["17", false],
+    ["18", false, true], ["19", false], ["20", false], ["21", false], ["22", false], ["23", false], ["24", false],
+    ["25", false], ["26", false], ["27", false], ["28", false], ["29", false], ["30", false], ["31", false],
+    ["1", true], ["2", true], ["3", true], ["4", true], ["5", true], ["6", true], ["7", true]
+  ];
+  return `
+    <div class="schedule-month-calendar">
+      <div class="schedule-month-head">
+        <button type="button">${icon("chevron-right", "flip")}</button>
+        <strong>May 2025 ${icon("calendar")}</strong>
+        <button type="button">${icon("chevron-right")}</button>
+      </div>
+      <div class="schedule-month-grid">
+        ${days.map((day) => `<b>${esc(day)}</b>`).join("")}
+        ${cells.map(([day, muted, today]) => `<span class="${muted ? "muted" : ""} ${today ? "today" : ""}">${esc(day)}</span>`).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function axisChart(title, text) {
+  return `<div class="axis-chart">${Array.from({ length: 6 }, () => "<span></span>").join("")}<div>${icon("line-chart")}<strong>${esc(title)}</strong><p>${esc(text)}</p></div></div>`;
+}
+
+function renderSidebar(activeKey) {
+  return `
+    <aside class="suite-sidebar">
+      <a class="suite-brand" href="admin.html" aria-label="Turnly admin">
+        <span class="brand-mark">T</span>
+        <strong>TURNLY</strong>
+      </a>
+      <nav class="suite-nav" aria-label="Admin navigation">
+        ${navSections.map((section) => `
+          ${section.title ? `<div class="nav-section-title"><span>${esc(section.title)}</span>${icon("chevron-down")}</div>` : ""}
+          ${section.links.map((link) => `
+            <a class="suite-nav-link ${activeKey === link.key ? "active" : ""}" href="${link.href || "#"}">
+              ${icon(link.icon)}
+              <span>${esc(link.label)}</span>
+            </a>
+          `).join("")}
+        `).join("")}
+      </nav>
+    </aside>
+  `;
+}
+
+function renderTopbar(page) {
+  const actions = page.actions || (page.action ? [page.action] : []);
+  const actionMarkup = actions.map((action) => actionLink(action.label, action.icon, action.href, action.tone)).join("");
+  return `
+    <header class="suite-topbar">
+      <div class="page-heading">
+        <h1>${esc(page.title)}</h1>
+        <p>${esc(page.subtitle || "")}</p>
+      </div>
+      <div class="topbar-tools">
+        <label class="global-search">${icon("search")}<input type="search" placeholder="Search anything..." /><kbd>K</kbd></label>
+        ${actionMarkup}
+        <button class="top-icon" type="button" aria-label="Notifications">${icon("bell")}<span>3</span></button>
+        <button class="top-user" type="button">
+          <span class="user-photo">SJ</span>
+          <span><strong>Sarah Johnson</strong><small>Administrator</small></span>
+          ${icon("chevron-down")}
+        </button>
+      </div>
+    </header>
+  `;
+}
+
+function initScheduleViews() {
+  const buttons = Array.from(document.querySelectorAll("[data-schedule-view]"));
+  const panels = Array.from(document.querySelectorAll("[data-schedule-panel]"));
+  const layout = document.querySelector("[data-schedule-layout]");
+  if (!buttons.length || !panels.length || !layout) return;
+
+  buttons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const view = button.dataset.scheduleView;
+      buttons.forEach((item) => item.classList.toggle("active", item === button));
+      panels.forEach((panel) => {
+        const isActive = panel.dataset.schedulePanel === view;
+        panel.hidden = !isActive;
+        panel.classList.toggle("is-active", isActive);
+      });
+      layout.classList.toggle("is-month", view === "month");
+    });
+  });
+}
+
+function renderApp() {
+  const activeKey = getPageKey();
+  const page = pages[activeKey] || pages["command-center"];
+  document.title = `${page.title} | Turnly Admin`;
+
+  const app = document.getElementById("adminSuiteApp");
+  if (!app) return;
+
+  app.innerHTML = `
+    <div class="admin-suite-shell">
+      ${renderSidebar(activeKey)}
+      <main class="suite-main">
+        ${renderTopbar(page)}
+        <div class="suite-content">${page.render()}</div>
+      </main>
+    </div>
+  `;
+
+  if (activeKey === "schedule") {
+    initScheduleViews();
+  }
+}
+
+renderApp();
