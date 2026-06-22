@@ -301,6 +301,40 @@ function getPageKey() {
   return map[file] || file.replace(/\.html$/, "");
 }
 
+const navCollapseStorageKey = "turnlyAdminCollapsedNavSections";
+
+function navSectionKey(title) {
+  return String(title || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function readStoredCollapsedNavSections() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(navCollapseStorageKey) || "[]"));
+  } catch {
+    return new Set();
+  }
+}
+
+function readCollapsedNavSections(activeKey) {
+  const collapsedSections = readStoredCollapsedNavSections();
+  const activeSection = navSections.find((section) => section.links.some((link) => link.key === activeKey));
+  if (activeSection?.title) {
+    collapsedSections.delete(navSectionKey(activeSection.title));
+  }
+  return collapsedSections;
+}
+
+function saveCollapsedNavSections(collapsedSections) {
+  try {
+    localStorage.setItem(navCollapseStorageKey, JSON.stringify(Array.from(collapsedSections)));
+  } catch {
+    // Collapse state is helpful, not required.
+  }
+}
+
 function metric(label, value = "0", meta = "from last 7 days", iconName = "activity", tone = "green", attrs = "") {
   return `
     <article class="metric-card ${tone}">
@@ -1284,6 +1318,7 @@ function axisChart(title, text) {
 }
 
 function renderSidebar(activeKey) {
+  const collapsedSections = readCollapsedNavSections(activeKey);
   return `
     <aside class="suite-sidebar">
       <a class="suite-brand" href="admin.html" aria-label="Turnly admin">
@@ -1291,15 +1326,29 @@ function renderSidebar(activeKey) {
         <strong>TURNLY</strong>
       </a>
       <nav class="suite-nav" aria-label="Admin navigation">
-        ${navSections.map((section) => `
-          ${section.title ? `<div class="nav-section-title"><span>${esc(section.title)}</span>${icon("chevron-down")}</div>` : ""}
-          ${section.links.map((link) => `
-            <a class="suite-nav-link ${activeKey === link.key ? "active" : ""}" href="${link.href || "#"}">
-              ${icon(link.icon)}
-              <span>${esc(link.label)}</span>
-            </a>
-          `).join("")}
-        `).join("")}
+        ${navSections.map((section) => {
+          const key = navSectionKey(section.title);
+          const sectionId = key ? `nav-section-${key}` : "";
+          const isCollapsed = key && collapsedSections.has(key);
+          return `
+            <div class="nav-section-group ${isCollapsed ? "collapsed" : ""}">
+              ${section.title ? `
+                <button class="nav-section-title" type="button" data-nav-section-toggle="${esc(key)}" aria-expanded="${isCollapsed ? "false" : "true"}" aria-controls="${esc(sectionId)}">
+                  <span>${esc(section.title)}</span>
+                  ${icon("chevron-right", "nav-section-arrow")}
+                </button>
+              ` : ""}
+              <div class="nav-section-links" ${sectionId ? `id="${esc(sectionId)}" data-nav-section="${esc(key)}"` : ""} ${isCollapsed ? "hidden" : ""}>
+                ${section.links.map((link) => `
+                  <a class="suite-nav-link ${activeKey === link.key ? "active" : ""}" href="${link.href || "#"}">
+                    ${icon(link.icon)}
+                    <span>${esc(link.label)}</span>
+                  </a>
+                `).join("")}
+              </div>
+            </div>
+          `;
+        }).join("")}
       </nav>
     </aside>
   `;
@@ -1348,6 +1397,33 @@ function initScheduleViews() {
   });
 }
 
+function initNavSectionToggles() {
+  const toggles = Array.from(document.querySelectorAll("[data-nav-section-toggle]"));
+  if (!toggles.length) return;
+
+  toggles.forEach((toggle) => {
+    toggle.addEventListener("click", () => {
+      const key = toggle.dataset.navSectionToggle;
+      const links = document.querySelector(`[data-nav-section="${key}"]`);
+      const isExpanded = toggle.getAttribute("aria-expanded") === "true";
+      const collapsedSections = readStoredCollapsedNavSections();
+
+      toggle.setAttribute("aria-expanded", isExpanded ? "false" : "true");
+      toggle.closest(".nav-section-group")?.classList.toggle("collapsed", isExpanded);
+      if (links) {
+        links.hidden = isExpanded;
+      }
+
+      if (isExpanded) {
+        collapsedSections.add(key);
+      } else {
+        collapsedSections.delete(key);
+      }
+      saveCollapsedNavSections(collapsedSections);
+    });
+  });
+}
+
 function renderApp() {
   const activeKey = getPageKey();
   const page = pages[activeKey] || pages["command-center"];
@@ -1365,6 +1441,8 @@ function renderApp() {
       </main>
     </div>
   `;
+
+  initNavSectionToggles();
 
   if (activeKey === "schedule") {
     initScheduleViews();
