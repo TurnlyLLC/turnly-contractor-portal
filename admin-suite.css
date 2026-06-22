@@ -1354,6 +1354,75 @@ a {
   grid-template-columns: minmax(220px, 1.4fr) minmax(150px, 0.9fr) minmax(120px, 0.8fr) minmax(100px, 0.5fr) auto;
 }
 
+.client-directory-workspace {
+  display: grid;
+  gap: 14px;
+}
+
+.client-directory-rail {
+  grid-template-columns: minmax(0, 1fr) 380px;
+}
+
+.clients-table-card .suite-table td {
+  vertical-align: middle;
+}
+
+.clients-table-card .suite-table td strong,
+.clients-table-card .suite-table td small {
+  display: block;
+}
+
+.clients-table-card .suite-table td small {
+  color: var(--suite-soft);
+  font-size: 11px;
+  margin-top: 3px;
+}
+
+.clients-table-card tr[data-client-select] {
+  cursor: pointer;
+}
+
+.clients-table-card tr.active-row td {
+  background: rgba(0, 214, 163, 0.06);
+}
+
+.table-action-button {
+  background: rgba(14, 27, 43, 0.94);
+  border: 1px solid var(--suite-border-soft);
+  border-radius: 6px;
+  color: #d8e7f6;
+  font-size: 11px;
+  font-weight: 900;
+  min-height: 30px;
+  padding: 0 10px;
+}
+
+.client-insight-list {
+  display: grid;
+  gap: 9px;
+}
+
+.client-insight-item {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--suite-border-soft);
+  border-radius: 8px;
+  display: grid;
+  gap: 9px;
+  grid-template-columns: 28px minmax(0, 1fr);
+  padding: 10px;
+}
+
+.client-insight-item strong,
+.client-insight-item small {
+  display: block;
+}
+
+.client-insight-item small {
+  color: var(--suite-soft);
+  font-size: 12px;
+}
+
 .lead-owner-filter {
   min-height: 34px;
 }
@@ -1997,6 +2066,8 @@ a {
 .status-yellow,
 .status-pending,
 .status-pending-approval,
+.status-prospect,
+.status-paused,
 .status-qa-pending,
 .status-scheduled,
 .status-normal,
@@ -2009,6 +2080,7 @@ a {
 .status-claimed,
 .status-confirmed,
 .status-in-progress,
+.status-onboarding,
 .status-sent,
 .status-low,
 .status-contacted,
@@ -2020,6 +2092,7 @@ a {
 .status-red,
 .status-overdue,
 .status-cancelled,
+.status-inactive,
 .status-blocked,
 .status-high,
 .status-urgent,
