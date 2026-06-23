@@ -177,6 +177,10 @@ const clientOptionalColumns = [
   "service_model",
   "unit_count",
   "unit_notes",
+  "monthly_recurring_revenue",
+  "prospect_projected_revenue",
+  "projected_annual_turnovers",
+  "projected_turnover_revenue",
   "annual_revenue",
   "contract_start_date",
   "renewal_date",
@@ -3292,8 +3296,10 @@ function renderClientDirectory(clientTabs) {
         ${metric("Prospects", "0", "pipeline clients", "clock", "yellow", 'id="clientProspectCount"')}
         ${metric("Renewals", "0", "next 60 days", "calendar", "purple", 'id="clientRenewalCount"')}
         ${metric("Units", "0", "tracked service units", "building", "slate", 'id="clientUnitTotal"')}
-        ${metric("Annual Revenue", "$0", "tracked ARR", "badge-dollar", "blue", 'id="clientRevenueTotal"')}
-        ${metric("Contacts", "0", "primary contacts", "users", "slate", 'id="clientContactCount"')}
+        ${metric("Active MRR", "$0", "monthly recurring", "refresh", "green", 'id="clientActiveMrrTotal"')}
+        ${metric("Prospect Income", "$0", "pipeline projection", "badge-dollar", "yellow", 'id="clientProspectIncomeTotal"')}
+        ${metric("Projected Turnovers", "0", "this year", "building", "purple", 'id="clientProjectedTurnovers"')}
+        ${metric("Turnover Revenue", "$0", "projected annual", "badge-dollar", "blue", 'id="clientTurnoverRevenueTotal"')}
       </section>
       ${toolbar(
         `<label class="inline-search client-search">${icon("search")}<input id="clientSearchInput" type="search" placeholder="Search clients..." /></label>`,
@@ -3319,7 +3325,7 @@ function renderClientDirectory(clientTabs) {
                   <th>Renewal Date</th>
                   <th>Properties</th>
                   <th>Units</th>
-                  <th>Annual Revenue</th>
+                  <th>Revenue</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -3379,7 +3385,7 @@ function clientManagerDropdownField(row = null) {
     <div class="suite-field client-manager-field wide">
       <span>Account Managers</span>
       <div class="client-manager-select" data-client-manager-dropdown>
-        <button class="client-manager-toggle" type="button" aria-expanded="false" data-client-manager-toggle>${icon("users")}<span>${esc(label)}</span>${icon("chevron-down")}</button>
+        <button class="client-manager-toggle" type="button" aria-expanded="false" data-client-manager-toggle>${icon("users")}<span class="client-manager-toggle-label">${esc(label)}</span>${icon("chevron-down")}</button>
         <div class="client-manager-menu" data-client-manager-menu hidden>
           ${items}
         </div>
@@ -3407,7 +3413,11 @@ function clientForm(mode = "edit", row = null) {
         clientFormSection("Units"),
         leadSelectField("clientServiceModel", "Service Model", clientServiceModelOptions, { required: true }),
         leadInputField("clientUnitCount", "Units", "number", { min: "0", step: "1" }),
-        leadInputField("clientAnnualRevenue", "Annual Revenue", "number", { min: "0", step: "0.01" }),
+        leadInputField("clientProjectedTurnovers", "Projected Annual Turnovers", "number", { min: "0", step: "1" }),
+        clientFormSection("Revenue"),
+        leadInputField("clientMonthlyRecurringRevenue", "Monthly Recurring Revenue", "number", { min: "0", step: "0.01" }),
+        leadInputField("clientProspectProjectedRevenue", "Prospect Income", "number", { min: "0", step: "0.01" }),
+        leadInputField("clientProjectedTurnoverRevenue", "Projected Turnover Revenue", "number", { min: "0", step: "0.01" }),
         leadInputField("clientContractStart", "Contract Start", "date"),
         leadInputField("clientRenewalDate", "Renewal Date", "date"),
         leadInputField("clientTags", "Tags", "text", { className: "wide", placeholder: "Separate tags with commas" }),
@@ -3661,12 +3671,15 @@ function clientDefaultManagerOption() {
 
 function mergeClientManagerOptions(options) {
   const seen = new Set();
+  const seenNames = new Set();
   return options
     .filter((option) => option?.name)
     .filter((option) => {
       const key = clientManagerOptionKey(option);
-      if (seen.has(key)) return false;
+      const nameKey = clientManagerNameKey(option.name);
+      if (seen.has(key) || seenNames.has(nameKey)) return false;
       seen.add(key);
+      seenNames.add(nameKey);
       return true;
     })
     .sort((a, b) => Number(Boolean(b.isDefault)) - Number(Boolean(a.isDefault)) || a.name.localeCompare(b.name));
@@ -3698,8 +3711,11 @@ function clientSelectedManagerKeys(row = null) {
 
 function renderClientMetrics() {
   const rows = clientState.rows;
-  const revenue = rows.reduce((sum, row) => sum + (Number(row.annual_revenue) || 0), 0);
   const units = rows.reduce((sum, row) => sum + clientUnitCount(row), 0);
+  const activeMrr = rows.filter((row) => clientStatus(row) === "active").reduce((sum, row) => sum + clientMonthlyRecurringRevenue(row), 0);
+  const prospectIncome = rows.filter((row) => clientStatus(row) === "prospect").reduce((sum, row) => sum + clientProspectIncome(row), 0);
+  const projectedTurnovers = rows.reduce((sum, row) => sum + clientProjectedTurnovers(row), 0);
+  const turnoverRevenue = rows.reduce((sum, row) => sum + clientTurnoverRevenue(row), 0);
   const setText = (id, value) => {
     const element = document.getElementById(id);
     if (element) element.textContent = value;
@@ -3709,8 +3725,10 @@ function renderClientMetrics() {
   setText("clientProspectCount", rows.filter((row) => clientStatus(row) === "prospect").length);
   setText("clientRenewalCount", rows.filter((row) => isWithinNextDays(row.renewal_date, 60)).length);
   setText("clientUnitTotal", units.toLocaleString());
-  setText("clientRevenueTotal", clientMoney(revenue));
-  setText("clientContactCount", rows.filter((row) => row.primary_contact_name || row.primary_contact_email || row.primary_contact_phone).length);
+  setText("clientActiveMrrTotal", clientMoney(activeMrr));
+  setText("clientProspectIncomeTotal", clientMoney(prospectIncome));
+  setText("clientProjectedTurnovers", projectedTurnovers.toLocaleString());
+  setText("clientTurnoverRevenueTotal", clientMoney(turnoverRevenue));
 }
 
 function renderClientTable() {
@@ -3739,7 +3757,7 @@ function renderClientRow(row) {
       <td>${esc(formatDateOnly(row.renewal_date, "-"))}</td>
       <td>${esc(row.property_count ?? 0)}</td>
       <td class="client-units-cell"><strong>${esc(clientServiceModelLabel(row.service_model))}</strong><small>${esc(clientUnitText(row))}</small></td>
-      <td>${esc(clientMoney(row.annual_revenue))}</td>
+      <td><strong>${esc(clientMoney(clientMonthlyRecurringRevenue(row)))}</strong><small>${esc(clientRevenueMeta(row))}</small></td>
       <td><button class="table-action-button" type="button" data-client-select="${id}">${isOpen ? icon("chevron-down") : ""}<span>${isOpen ? "Close" : "Edit"}</span></button></td>
     </tr>
     ${isOpen ? `
@@ -3768,8 +3786,8 @@ function renderClientInsights() {
   const renewals = document.getElementById("clientUpcomingRenewals");
 
   if (topRevenue) {
-    const rows = [...clientState.rows].sort((a, b) => (Number(b.annual_revenue) || 0) - (Number(a.annual_revenue) || 0)).slice(0, 5);
-    topRevenue.innerHTML = rows.length ? rows.map((row) => clientInsightItem(clientTitle(row), clientMoney(row.annual_revenue), "badge-dollar")).join("") : emptyState("badge-dollar", "No revenue yet");
+    const rows = [...clientState.rows].sort((a, b) => clientProjectedAnnualRevenue(b) - clientProjectedAnnualRevenue(a)).slice(0, 5);
+    topRevenue.innerHTML = rows.length ? rows.map((row) => clientInsightItem(clientTitle(row), clientMoney(clientProjectedAnnualRevenue(row)), "badge-dollar")).join("") : emptyState("badge-dollar", "No revenue yet");
   }
   if (statusBreakdown) {
     statusBreakdown.innerHTML = clientStatusOptions.map(([status, label]) => clientInsightItem(label, String(clientState.rows.filter((row) => clientStatus(row) === status).length), "filter")).join("");
@@ -3816,6 +3834,10 @@ function getFilteredClients() {
       clientServiceModelLabel(row.service_model),
       row.unit_count,
       row.unit_notes,
+      row.monthly_recurring_revenue,
+      row.prospect_projected_revenue,
+      row.projected_annual_turnovers,
+      row.projected_turnover_revenue,
       ...managerNames,
       ...(Array.isArray(row.tags) ? row.tags : []),
       row.notes
@@ -3873,6 +3895,10 @@ function clearClientForm(options = {}) {
     service_model: "apartment_turnover",
     unit_count: 0,
     unit_notes: "",
+    monthly_recurring_revenue: "",
+    prospect_projected_revenue: "",
+    projected_annual_turnovers: 0,
+    projected_turnover_revenue: "",
     annual_revenue: "",
     contract_start_date: "",
     renewal_date: "",
@@ -3899,6 +3925,10 @@ function fillClientForm(row) {
     service_model: row.service_model || "apartment_turnover",
     unit_count: row.unit_count ?? 0,
     unit_notes: row.unit_notes || "",
+    monthly_recurring_revenue: row.monthly_recurring_revenue ?? clientMonthlyRecurringRevenue(row),
+    prospect_projected_revenue: row.prospect_projected_revenue ?? clientProspectIncome(row),
+    projected_annual_turnovers: row.projected_annual_turnovers ?? clientProjectedTurnovers(row),
+    projected_turnover_revenue: row.projected_turnover_revenue ?? clientTurnoverRevenue(row),
     annual_revenue: row.annual_revenue ?? "",
     contract_start_date: row.contract_start_date || "",
     renewal_date: row.renewal_date || "",
@@ -3924,7 +3954,10 @@ function setClientFormValues(values) {
     clientServiceModel: values.service_model,
     clientUnitCount: values.unit_count,
     clientUnitNotes: values.unit_notes,
-    clientAnnualRevenue: values.annual_revenue,
+    clientMonthlyRecurringRevenue: values.monthly_recurring_revenue,
+    clientProspectProjectedRevenue: values.prospect_projected_revenue,
+    clientProjectedTurnovers: values.projected_annual_turnovers,
+    clientProjectedTurnoverRevenue: values.projected_turnover_revenue,
     clientContractStart: toDateInput(values.contract_start_date),
     clientRenewalDate: toDateInput(values.renewal_date),
     clientTags: Array.isArray(values.tags) ? values.tags.join(", ") : values.tags,
@@ -3988,19 +4021,26 @@ function readSelectedClientManagers(form = document.getElementById("clientForm")
 }
 
 function updateClientManagerDropdownLabel(form = document.getElementById("clientForm")) {
-  const button = form?.querySelector("[data-client-manager-toggle] span");
-  if (!button) return;
+  const label = form?.querySelector(".client-manager-toggle-label");
+  if (!label) return;
   const managers = readSelectedClientManagers(form);
-  button.textContent = managers.length ? managers.map((manager) => manager.name).join(", ") : "Select account managers";
+  label.textContent = managers.length ? managers.map((manager) => manager.name).join(", ") : "Select account managers";
 }
 
 function collectClientPayload() {
   const propertyCount = Number(clientValue("clientProperties"));
   const unitCount = Number(clientValue("clientUnitCount"));
-  const revenue = Number(clientValue("clientAnnualRevenue"));
+  const monthlyRecurringRevenue = Number(clientValue("clientMonthlyRecurringRevenue"));
+  const prospectProjectedRevenue = Number(clientValue("clientProspectProjectedRevenue"));
+  const projectedAnnualTurnovers = Number(clientValue("clientProjectedTurnovers"));
+  const projectedTurnoverRevenue = Number(clientValue("clientProjectedTurnoverRevenue"));
   const managers = readSelectedClientManagers();
   const managerIds = managers.map((manager) => manager.id).filter(Boolean);
   const managerNames = managers.map((manager) => manager.name).filter(Boolean);
+  const cleanMonthlyRecurringRevenue = Number.isFinite(monthlyRecurringRevenue) && monthlyRecurringRevenue >= 0 ? monthlyRecurringRevenue : 0;
+  const cleanProspectProjectedRevenue = Number.isFinite(prospectProjectedRevenue) && prospectProjectedRevenue >= 0 ? prospectProjectedRevenue : 0;
+  const cleanProjectedAnnualTurnovers = Number.isFinite(projectedAnnualTurnovers) && projectedAnnualTurnovers >= 0 ? Math.floor(projectedAnnualTurnovers) : 0;
+  const cleanProjectedTurnoverRevenue = Number.isFinite(projectedTurnoverRevenue) && projectedTurnoverRevenue >= 0 ? projectedTurnoverRevenue : 0;
   const payload = {
     name: clientValue("clientName"),
     company_name: clientValue("clientCompany"),
@@ -4015,7 +4055,11 @@ function collectClientPayload() {
     service_model: clientValue("clientServiceModel") || "apartment_turnover",
     unit_count: Number.isFinite(unitCount) && unitCount >= 0 ? Math.floor(unitCount) : 0,
     unit_notes: clientValue("clientUnitNotes"),
-    annual_revenue: Number.isFinite(revenue) && revenue >= 0 ? revenue : null,
+    monthly_recurring_revenue: cleanMonthlyRecurringRevenue,
+    prospect_projected_revenue: cleanProspectProjectedRevenue,
+    projected_annual_turnovers: cleanProjectedAnnualTurnovers,
+    projected_turnover_revenue: cleanProjectedTurnoverRevenue,
+    annual_revenue: cleanMonthlyRecurringRevenue * 12 + cleanProspectProjectedRevenue + cleanProjectedTurnoverRevenue,
     contract_start_date: clientValue("clientContractStart") || null,
     renewal_date: clientValue("clientRenewalDate") || null,
     account_manager_id: managerIds[0] || null,
@@ -4151,13 +4195,64 @@ function clientManagerIds(row) {
 }
 
 function clientManagerNames(row) {
-  if (Array.isArray(row?.account_manager_names) && row.account_manager_names.length) {
-    return row.account_manager_names.map((name) => String(name || "").trim()).filter(Boolean);
-  }
-  return String(row?.account_manager_name || "")
-    .split(",")
-    .map((name) => name.trim())
-    .filter(Boolean);
+  const names = Array.isArray(row?.account_manager_names) && row.account_manager_names.length
+    ? row.account_manager_names.map((name) => String(name || "").trim()).filter(Boolean)
+    : String(row?.account_manager_name || "")
+      .split(",")
+      .map((name) => name.trim())
+      .filter(Boolean);
+  const seen = new Set();
+  return names.filter((name) => {
+    const key = clientManagerNameKey(name);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function clientLegacyAnnualRevenue(row) {
+  const revenue = Number(row?.annual_revenue);
+  return Number.isFinite(revenue) && revenue > 0 ? revenue : 0;
+}
+
+function clientMonthlyRecurringRevenue(row) {
+  const revenue = Number(row?.monthly_recurring_revenue);
+  if (Number.isFinite(revenue) && revenue > 0) return revenue;
+  const service = normalizeToken(row?.service_model || "");
+  if (["monthly-commercial", "hybrid"].includes(service)) return clientLegacyAnnualRevenue(row) / 12;
+  return 0;
+}
+
+function clientProspectIncome(row) {
+  const revenue = Number(row?.prospect_projected_revenue);
+  if (Number.isFinite(revenue) && revenue > 0) return revenue;
+  return clientStatus(row) === "prospect" ? clientLegacyAnnualRevenue(row) : 0;
+}
+
+function clientProjectedTurnovers(row) {
+  const turnovers = Number(row?.projected_annual_turnovers);
+  return Number.isFinite(turnovers) && turnovers > 0 ? Math.floor(turnovers) : 0;
+}
+
+function clientTurnoverRevenue(row) {
+  const revenue = Number(row?.projected_turnover_revenue);
+  if (Number.isFinite(revenue) && revenue > 0) return revenue;
+  const service = normalizeToken(row?.service_model || "");
+  if (["apartment-turnover", "hybrid"].includes(service)) return clientLegacyAnnualRevenue(row);
+  return 0;
+}
+
+function clientProjectedAnnualRevenue(row) {
+  return (clientMonthlyRecurringRevenue(row) * 12) + clientProspectIncome(row) + clientTurnoverRevenue(row);
+}
+
+function clientRevenueMeta(row) {
+  const parts = [];
+  const turnoverRevenue = clientTurnoverRevenue(row);
+  const prospectIncome = clientProspectIncome(row);
+  if (turnoverRevenue) parts.push(`${clientMoney(turnoverRevenue)} turnover`);
+  if (prospectIncome) parts.push(`${clientMoney(prospectIncome)} prospect`);
+  return parts.join(" - ") || "No projection";
 }
 
 function clientManagersText(row) {
