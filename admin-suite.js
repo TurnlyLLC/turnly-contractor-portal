@@ -174,11 +174,16 @@ const clientOptionalColumns = [
   "region",
   "market",
   "property_count",
+  "service_model",
+  "unit_count",
+  "unit_notes",
   "annual_revenue",
   "contract_start_date",
   "renewal_date",
   "account_manager_id",
   "account_manager_name",
+  "account_manager_ids",
+  "account_manager_names",
   "tags",
   "notes",
   "created_by"
@@ -191,16 +196,24 @@ const clientStatusOptions = [
   ["inactive", "Inactive"]
 ];
 const clientTypeOptions = ["", "Commercial", "Residential", "Property Manager", "HOA", "Retail", "Medical", "Industrial", "Other"];
+const clientServiceModelOptions = [
+  ["apartment_turnover", "Apartment Turnover"],
+  ["monthly_commercial", "Monthly Commercial"],
+  ["hybrid", "Hybrid"],
+  ["other", "Other"]
+];
 const clientState = {
   rows: [],
   user: null,
   profile: null,
+  managers: [],
   selectedId: null,
   search: "",
   statusFilter: "all",
   typeFilter: "all",
   managerFilter: "all",
-  isSaving: false
+  isSaving: false,
+  isDeleting: false
 };
 const topbarState = {
   user: null,
@@ -404,6 +417,7 @@ const iconPaths = {
   "trending-up": '<path d="m3 17 6-6 4 4 8-8"/><path d="M14 7h7v7"/>',
   triangle: '<path d="m12 3 9 18H3Z"/>',
   trophy: '<path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0Z"/><path d="M17 5h3a2 2 0 0 1-2 4h-1"/><path d="M7 5H4a2 2 0 0 0 2 4h1"/>',
+  trash: '<path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="m19 6-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/>',
   upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8 12 3 7 8"/><path d="M12 3v12"/>',
   user: '<path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/>',
   "user-plus": '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/>',
@@ -3277,6 +3291,7 @@ function renderClientDirectory(clientTabs) {
         ${metric("Active Clients", "0", "currently active", "check", "green", 'id="clientActiveCount"')}
         ${metric("Prospects", "0", "pipeline clients", "clock", "yellow", 'id="clientProspectCount"')}
         ${metric("Renewals", "0", "next 60 days", "calendar", "purple", 'id="clientRenewalCount"')}
+        ${metric("Units", "0", "tracked service units", "building", "slate", 'id="clientUnitTotal"')}
         ${metric("Annual Revenue", "$0", "tracked ARR", "badge-dollar", "blue", 'id="clientRevenueTotal"')}
         ${metric("Contacts", "0", "primary contacts", "users", "slate", 'id="clientContactCount"')}
       </section>
@@ -3299,14 +3314,16 @@ function renderClientDirectory(clientTabs) {
                   <th>Client Name</th>
                   <th>Company</th>
                   <th>Primary Contact</th>
+                  <th>Account Managers</th>
                   <th>Status</th>
                   <th>Renewal Date</th>
                   <th>Properties</th>
+                  <th>Units</th>
                   <th>Annual Revenue</th>
                   <th>Actions</th>
                 </tr>
               </thead>
-              <tbody id="clientTableBody">${skeletonRows(4)}</tbody>
+              <tbody id="clientTableBody"></tbody>
             </table>
           </div>
           <div id="clientEmptyState" hidden>${emptyState("building", "No clients found", "Add your first client to start tracking accounts.", actionButton("Add Client", "plus", "clientEmptyAddBtn"))}</div>
@@ -3336,7 +3353,42 @@ function renderClientDirectory(clientTabs) {
   `;
 }
 
-function clientForm(mode = "edit") {
+function clientFormSection(title) {
+  return `<div class="client-form-section wide"><span>${esc(title)}</span></div>`;
+}
+
+function clientManagerDropdownField(row = null) {
+  const options = getClientManagerOptions(row);
+  const selectedKeys = clientSelectedManagerKeys(row);
+  const selectedLabels = options.filter((option) => selectedKeys.has(clientManagerOptionKey(option))).map((option) => option.name);
+  const label = selectedLabels.length ? selectedLabels.join(", ") : "Select account managers";
+  const items = options.length
+    ? options.map((option) => {
+      const key = clientManagerOptionKey(option);
+      const checked = selectedKeys.has(key) ? "checked" : "";
+      const meta = [option.email, option.role ? titleCase(option.role) : ""].filter(Boolean).join(" - ");
+      return `
+        <label class="client-manager-option">
+          <input type="checkbox" data-client-manager-option data-manager-id="${esc(option.id)}" data-manager-name="${esc(option.name)}" data-manager-email="${esc(option.email)}" ${checked} />
+          <span><strong>${esc(option.name)}</strong>${meta ? `<small>${esc(meta)}</small>` : ""}</span>
+        </label>
+      `;
+    }).join("")
+    : `<div class="client-manager-empty">No property manager accounts found</div>`;
+  return `
+    <div class="suite-field client-manager-field wide">
+      <span>Account Managers</span>
+      <div class="client-manager-select" data-client-manager-dropdown>
+        <button class="client-manager-toggle" type="button" aria-expanded="false" data-client-manager-toggle>${icon("users")}<span>${esc(label)}</span>${icon("chevron-down")}</button>
+        <div class="client-manager-menu" data-client-manager-menu hidden>
+          ${items}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function clientForm(mode = "edit", row = null) {
   const isAdd = mode === "add";
   return `
     <form id="clientForm" class="lead-form client-form" data-client-form-mode="${esc(mode)}">
@@ -3348,17 +3400,22 @@ function clientForm(mode = "edit") {
         leadInputField("clientContactEmail", "Contact Email", "email"),
         leadInputField("clientContactPhone", "Contact Phone", "tel"),
         leadSelectField("clientStatus", "Status", clientStatusOptions, { required: true }),
+        clientManagerDropdownField(row),
         leadSelectField("clientType", "Client Type", clientTypeOptions, { emptyLabel: "Select type" }),
         leadInputField("clientRegion", "Region / Market"),
         leadInputField("clientProperties", "Properties", "number", { min: "0", step: "1" }),
+        clientFormSection("Units"),
+        leadSelectField("clientServiceModel", "Service Model", clientServiceModelOptions, { required: true }),
+        leadInputField("clientUnitCount", "Units", "number", { min: "0", step: "1" }),
         leadInputField("clientAnnualRevenue", "Annual Revenue", "number", { min: "0", step: "0.01" }),
         leadInputField("clientContractStart", "Contract Start", "date"),
         leadInputField("clientRenewalDate", "Renewal Date", "date"),
-        leadInputField("clientAccountManager", "Account Manager"),
         leadInputField("clientTags", "Tags", "text", { className: "wide", placeholder: "Separate tags with commas" }),
+        leadTextareaField("clientUnitNotes", "Unit Notes", "wide"),
         leadTextareaField("clientNotes", "Notes", "wide")
       ])}
       <div class="lead-form-actions">
+        ${isAdd ? "" : `<button id="clientDeleteBtn" class="secondary-action danger-action client-delete-action" type="button" data-client-delete-current>${icon("trash")}<span>Delete Client</span></button>`}
         <button id="clientCancelBtn" class="secondary-action" type="button" ${isAdd ? "data-client-modal-close" : "data-client-cancel"}>${icon("x")}<span>Cancel</span></button>
         <button id="clientSaveBtn" class="primary-action" type="submit">${icon("check")}<span>${isAdd ? "Add Client" : "Save Client"}</span></button>
       </div>
@@ -3371,6 +3428,7 @@ function initClientDirectory() {
   if (!root) return;
 
   root.addEventListener("click", handleClientClick);
+  root.addEventListener("change", handleClientChange);
   root.addEventListener("submit", saveClientForm);
   root.addEventListener("keydown", (event) => {
     if (event.key === "Escape") closeClientAddModal();
@@ -3404,6 +3462,23 @@ function initClientDirectory() {
 }
 
 function handleClientClick(event) {
+  const managerToggle = event.target.closest("[data-client-manager-toggle]");
+  if (managerToggle) {
+    const dropdown = managerToggle.closest("[data-client-manager-dropdown]");
+    const menu = dropdown?.querySelector("[data-client-manager-menu]");
+    if (menu) {
+      const isOpening = menu.hidden;
+      closeClientManagerDropdowns();
+      menu.hidden = !isOpening;
+      managerToggle.setAttribute("aria-expanded", isOpening ? "true" : "false");
+    }
+    return;
+  }
+
+  if (!event.target.closest("[data-client-manager-dropdown]")) {
+    closeClientManagerDropdowns();
+  }
+
   const closeModal = event.target.closest("[data-client-modal-close]");
   if (closeModal) {
     closeClientAddModal();
@@ -3414,6 +3489,12 @@ function handleClientClick(event) {
   if (cancelEdit) {
     clientState.selectedId = null;
     renderClientData();
+    return;
+  }
+
+  const deleteButton = event.target.closest("[data-client-delete-current]");
+  if (deleteButton) {
+    void deleteSelectedClient();
     return;
   }
 
@@ -3447,6 +3528,12 @@ function handleClientClick(event) {
   }
 }
 
+function handleClientChange(event) {
+  if (event.target.closest("[data-client-manager-option]")) {
+    updateClientManagerDropdownLabel(event.target.closest("#clientForm"));
+  }
+}
+
 async function loadClients() {
   if (!suiteSupabase) {
     showClientMessage("Supabase config is missing. Add env.js values before using clients.", true);
@@ -3462,8 +3549,10 @@ async function loadClients() {
       .select("role,full_name,email")
       .eq("id", clientState.user.id)
       .maybeSingle();
-    clientState.profile = profile || null;
+    clientState.profile = profile ? { ...profile, id: clientState.user.id } : null;
   }
+
+  await loadClientManagerAccounts();
 
   const { data, error } = await suiteSupabase
     .from(clientTable)
@@ -3484,6 +3573,28 @@ async function loadClients() {
   populateClientManagerFilter();
   renderClientData();
   showClientMessage(clientState.rows.length ? `${clientState.rows.length} client${clientState.rows.length === 1 ? "" : "s"} synced from Supabase.` : "Synced with Supabase. No clients yet.");
+}
+
+async function loadClientManagerAccounts() {
+  const fallback = clientDefaultManagerOption();
+  clientState.managers = fallback ? [fallback] : [];
+
+  const { data, error } = await suiteSupabase
+    .from("profiles")
+    .select("id,full_name,email,role,status")
+    .limit(500);
+
+  if (error) {
+    console.warn("[admin-suite] Unable to load client manager accounts", error);
+    return;
+  }
+
+  const propertyManagers = (data || [])
+    .filter(isClientManagerProfile)
+    .map(normalizeClientManagerOption)
+    .filter((manager) => manager.name);
+
+  clientState.managers = mergeClientManagerOptions([fallback, ...propertyManagers].filter(Boolean));
 }
 
 function renderClientData() {
@@ -3507,17 +3618,88 @@ function renderClientFilterControls() {
 function populateClientManagerFilter() {
   const filter = document.getElementById("clientManagerFilter");
   if (!filter) return;
-  const managers = Array.from(new Set([
-    clientDisplayName(),
-    ...clientState.rows.map((row) => row.account_manager_name).filter(Boolean)
-  ])).filter(Boolean).sort();
-  filter.innerHTML = `<option value="all">All Managers</option><option value="unassigned">Unassigned</option>${managers.map((name) => `<option value="${esc(name)}">${esc(name)}</option>`).join("")}`;
+  const registeredManagers = getClientManagerOptions();
+  const registeredNames = new Set(registeredManagers.map((manager) => clientManagerNameKey(manager.name)));
+  const legacyManagers = Array.from(new Set(clientState.rows.flatMap(clientManagerNames)))
+    .filter((name) => name && !registeredNames.has(clientManagerNameKey(name)))
+    .map((name) => ({ id: "", name, email: "", role: "legacy" }));
+  const managers = mergeClientManagerOptions([...registeredManagers, ...legacyManagers]);
+  filter.innerHTML = `<option value="all">All Managers</option><option value="unassigned">Unassigned</option>${managers.map((manager) => `<option value="${esc(clientManagerOptionKey(manager))}">${esc(manager.name)}</option>`).join("")}`;
+  const validValues = new Set(["all", "unassigned", ...managers.map(clientManagerOptionKey)]);
+  if (!validValues.has(clientState.managerFilter)) clientState.managerFilter = "all";
   filter.value = clientState.managerFilter;
+}
+
+function isClientManagerProfile(profile) {
+  const role = normalizeToken(profile?.role);
+  return role === "property-manager" || role === "propertymanager" || role === "property-management";
+}
+
+function normalizeClientManagerOption(profile) {
+  const email = profile?.email || "";
+  const name = profile?.full_name || email.split("@")[0] || "Property Manager";
+  return {
+    id: profile?.id || "",
+    name,
+    email,
+    role: profile?.role || "property-manager",
+    isDefault: Boolean(profile?.id && profile.id === clientState.user?.id)
+  };
+}
+
+function clientDefaultManagerOption() {
+  const name = clientDisplayName() || "Turnly Admin";
+  const email = clientState.profile?.email || clientState.user?.email || "";
+  return {
+    id: clientState.user?.id || "",
+    name,
+    email,
+    role: clientState.profile?.role || "admin",
+    isDefault: true
+  };
+}
+
+function mergeClientManagerOptions(options) {
+  const seen = new Set();
+  return options
+    .filter((option) => option?.name)
+    .filter((option) => {
+      const key = clientManagerOptionKey(option);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => Number(Boolean(b.isDefault)) - Number(Boolean(a.isDefault)) || a.name.localeCompare(b.name));
+}
+
+function getClientManagerOptions(row = null) {
+  const base = clientState.managers.length ? clientState.managers : [clientDefaultManagerOption()];
+  const rowManagers = clientManagerNames(row).map((name) => ({ id: "", name, email: "", role: "legacy" }));
+  return mergeClientManagerOptions([...base, ...rowManagers]);
+}
+
+function clientManagerOptionKey(option) {
+  return option?.id ? `id:${option.id}` : clientManagerNameKey(option?.name);
+}
+
+function clientManagerNameKey(name) {
+  return `name:${String(name || "").trim().toLowerCase()}`;
+}
+
+function clientSelectedManagerKeys(row = null) {
+  const ids = clientManagerIds(row);
+  const names = clientManagerNames(row);
+  if (!row || (!ids.length && !names.length)) {
+    const fallback = clientDefaultManagerOption();
+    return new Set(fallback?.name ? [clientManagerOptionKey(fallback)] : []);
+  }
+  return new Set([...ids.map((id) => `id:${id}`), ...names.map(clientManagerNameKey)]);
 }
 
 function renderClientMetrics() {
   const rows = clientState.rows;
   const revenue = rows.reduce((sum, row) => sum + (Number(row.annual_revenue) || 0), 0);
+  const units = rows.reduce((sum, row) => sum + clientUnitCount(row), 0);
   const setText = (id, value) => {
     const element = document.getElementById(id);
     if (element) element.textContent = value;
@@ -3526,6 +3708,7 @@ function renderClientMetrics() {
   setText("clientActiveCount", rows.filter((row) => clientStatus(row) === "active").length);
   setText("clientProspectCount", rows.filter((row) => clientStatus(row) === "prospect").length);
   setText("clientRenewalCount", rows.filter((row) => isWithinNextDays(row.renewal_date, 60)).length);
+  setText("clientUnitTotal", units.toLocaleString());
   setText("clientRevenueTotal", clientMoney(revenue));
   setText("clientContactCount", rows.filter((row) => row.primary_contact_name || row.primary_contact_email || row.primary_contact_phone).length);
 }
@@ -3551,15 +3734,17 @@ function renderClientRow(row) {
       <td><strong>${esc(clientTitle(row))}</strong><small>${esc(clientRegionText(row))}</small></td>
       <td>${esc(row.company_name || "-")}</td>
       <td><strong>${esc(row.primary_contact_name || "-")}</strong><small>${esc(row.primary_contact_email || row.primary_contact_phone || "")}</small></td>
+      <td><strong>${esc(clientManagersText(row))}</strong><small>${esc(clientManagerCountText(row))}</small></td>
       <td><span class="status-badge ${statusClassName(clientStatus(row))}">${esc(clientStatusLabel(row.status))}</span></td>
       <td>${esc(formatDateOnly(row.renewal_date, "-"))}</td>
       <td>${esc(row.property_count ?? 0)}</td>
+      <td class="client-units-cell"><strong>${esc(clientServiceModelLabel(row.service_model))}</strong><small>${esc(clientUnitText(row))}</small></td>
       <td>${esc(clientMoney(row.annual_revenue))}</td>
       <td><button class="table-action-button" type="button" data-client-select="${id}">${isOpen ? icon("chevron-down") : ""}<span>${isOpen ? "Close" : "Edit"}</span></button></td>
     </tr>
     ${isOpen ? `
       <tr class="client-edit-row">
-        <td colspan="8">
+        <td colspan="10">
           <div class="client-inline-edit">
             <div class="client-inline-edit-head">
               <div>
@@ -3567,7 +3752,7 @@ function renderClientRow(row) {
                 <strong>${esc(clientTitle(row))}</strong>
               </div>
             </div>
-            ${clientForm("edit")}
+            ${clientForm("edit", row)}
           </div>
         </td>
       </tr>
@@ -3611,10 +3796,12 @@ function clientInsightItem(label, value, iconName) {
 function getFilteredClients() {
   const term = clientState.search.trim().toLowerCase();
   return clientState.rows.filter((row) => {
+    const managerIds = clientManagerIds(row);
+    const managerNames = clientManagerNames(row);
     if (clientState.statusFilter !== "all" && clientStatus(row) !== clientState.statusFilter) return false;
     if (clientState.typeFilter !== "all" && row.client_type !== clientState.typeFilter) return false;
-    if (clientState.managerFilter === "unassigned" && row.account_manager_name) return false;
-    if (clientState.managerFilter !== "all" && clientState.managerFilter !== "unassigned" && row.account_manager_name !== clientState.managerFilter) return false;
+    if (clientState.managerFilter === "unassigned" && (managerIds.length || managerNames.length)) return false;
+    if (clientState.managerFilter !== "all" && clientState.managerFilter !== "unassigned" && !clientMatchesManagerFilter(row, clientState.managerFilter)) return false;
     if (!term) return true;
     return [
       row.name,
@@ -3626,7 +3813,10 @@ function getFilteredClients() {
       row.client_type,
       row.region,
       row.market,
-      row.account_manager_name,
+      clientServiceModelLabel(row.service_model),
+      row.unit_count,
+      row.unit_notes,
+      ...managerNames,
       ...(Array.isArray(row.tags) ? row.tags : []),
       row.notes
     ].some((value) => String(value || "").toLowerCase().includes(term));
@@ -3680,10 +3870,14 @@ function clearClientForm(options = {}) {
     client_type: "",
     region: "",
     property_count: 0,
+    service_model: "apartment_turnover",
+    unit_count: 0,
+    unit_notes: "",
     annual_revenue: "",
     contract_start_date: "",
     renewal_date: "",
-    account_manager_name: clientDisplayName(),
+    account_manager_ids: clientDefaultManagerOption()?.id ? [clientDefaultManagerOption().id] : [],
+    account_manager_names: [clientDisplayName()].filter(Boolean),
     tags: [],
     notes: ""
   });
@@ -3702,10 +3896,14 @@ function fillClientForm(row) {
     client_type: row.client_type || "",
     region: row.region || row.market || "",
     property_count: row.property_count ?? 0,
+    service_model: row.service_model || "apartment_turnover",
+    unit_count: row.unit_count ?? 0,
+    unit_notes: row.unit_notes || "",
     annual_revenue: row.annual_revenue ?? "",
     contract_start_date: row.contract_start_date || "",
     renewal_date: row.renewal_date || "",
-    account_manager_name: row.account_manager_name || clientDisplayName(),
+    account_manager_ids: clientManagerIds(row),
+    account_manager_names: clientManagerNames(row),
     tags: Array.isArray(row.tags) ? row.tags : [],
     notes: row.notes || ""
   });
@@ -3723,10 +3921,12 @@ function setClientFormValues(values) {
     clientType: values.client_type,
     clientRegion: values.region,
     clientProperties: values.property_count,
+    clientServiceModel: values.service_model,
+    clientUnitCount: values.unit_count,
+    clientUnitNotes: values.unit_notes,
     clientAnnualRevenue: values.annual_revenue,
     clientContractStart: toDateInput(values.contract_start_date),
     clientRenewalDate: toDateInput(values.renewal_date),
-    clientAccountManager: values.account_manager_name,
     clientTags: Array.isArray(values.tags) ? values.tags.join(", ") : values.tags,
     clientNotes: values.notes
   };
@@ -3734,16 +3934,73 @@ function setClientFormValues(values) {
     const field = document.getElementById(id);
     if (field) field.value = value ?? "";
   });
+  setClientManagerSelections(values.account_manager_ids || [], values.account_manager_names || []);
 }
 
 function clientValue(id) {
   return (document.getElementById(id)?.value || "").trim();
 }
 
+function closeClientManagerDropdowns() {
+  document.querySelectorAll("[data-client-manager-menu]").forEach((menu) => {
+    menu.hidden = true;
+  });
+  document.querySelectorAll("[data-client-manager-toggle]").forEach((button) => {
+    button.setAttribute("aria-expanded", "false");
+  });
+}
+
+function setClientManagerSelections(ids = [], names = []) {
+  const form = document.getElementById("clientForm");
+  if (!form) return;
+  const idSet = new Set((ids || []).filter(Boolean));
+  const nameSet = new Set((names || []).filter(Boolean).map(clientManagerNameKey));
+  let checkedCount = 0;
+
+  form.querySelectorAll("[data-client-manager-option]").forEach((input) => {
+    const id = input.dataset.managerId || "";
+    const nameKey = clientManagerNameKey(input.dataset.managerName);
+    input.checked = (id && idSet.has(id)) || nameSet.has(nameKey);
+    if (input.checked) checkedCount += 1;
+  });
+
+  if (!checkedCount) {
+    const fallback = clientDefaultManagerOption();
+    const fallbackKey = clientManagerOptionKey(fallback);
+    const fallbackInput = Array.from(form.querySelectorAll("[data-client-manager-option]"))
+      .find((input) => (input.dataset.managerId && `id:${input.dataset.managerId}` === fallbackKey) || clientManagerNameKey(input.dataset.managerName) === fallbackKey);
+    if (fallbackInput) fallbackInput.checked = true;
+  }
+
+  updateClientManagerDropdownLabel(form);
+}
+
+function readSelectedClientManagers(form = document.getElementById("clientForm")) {
+  const checked = Array.from(form?.querySelectorAll("[data-client-manager-option]:checked") || [])
+    .map((input) => ({
+      id: input.dataset.managerId || "",
+      name: input.dataset.managerName || "",
+      email: input.dataset.managerEmail || ""
+    }))
+    .filter((manager) => manager.name);
+  const selected = checked.length ? checked : [clientDefaultManagerOption()].filter(Boolean);
+  return mergeClientManagerOptions(selected);
+}
+
+function updateClientManagerDropdownLabel(form = document.getElementById("clientForm")) {
+  const button = form?.querySelector("[data-client-manager-toggle] span");
+  if (!button) return;
+  const managers = readSelectedClientManagers(form);
+  button.textContent = managers.length ? managers.map((manager) => manager.name).join(", ") : "Select account managers";
+}
+
 function collectClientPayload() {
   const propertyCount = Number(clientValue("clientProperties"));
+  const unitCount = Number(clientValue("clientUnitCount"));
   const revenue = Number(clientValue("clientAnnualRevenue"));
-  const managerName = clientValue("clientAccountManager");
+  const managers = readSelectedClientManagers();
+  const managerIds = managers.map((manager) => manager.id).filter(Boolean);
+  const managerNames = managers.map((manager) => manager.name).filter(Boolean);
   const payload = {
     name: clientValue("clientName"),
     company_name: clientValue("clientCompany"),
@@ -3755,10 +4012,16 @@ function collectClientPayload() {
     region: clientValue("clientRegion"),
     market: clientValue("clientRegion"),
     property_count: Number.isFinite(propertyCount) && propertyCount >= 0 ? Math.floor(propertyCount) : 0,
+    service_model: clientValue("clientServiceModel") || "apartment_turnover",
+    unit_count: Number.isFinite(unitCount) && unitCount >= 0 ? Math.floor(unitCount) : 0,
+    unit_notes: clientValue("clientUnitNotes"),
     annual_revenue: Number.isFinite(revenue) && revenue >= 0 ? revenue : null,
     contract_start_date: clientValue("clientContractStart") || null,
     renewal_date: clientValue("clientRenewalDate") || null,
-    account_manager_name: managerName,
+    account_manager_id: managerIds[0] || null,
+    account_manager_name: managerNames.join(", "),
+    account_manager_ids: managerIds,
+    account_manager_names: managerNames,
     tags: clientValue("clientTags").split(",").map((tag) => tag.trim()).filter(Boolean),
     notes: clientValue("clientNotes")
   };
@@ -3836,6 +4099,34 @@ async function saveClientPayloadWithSchemaFallback(id, payload) {
   };
 }
 
+async function deleteSelectedClient() {
+  const id = clientValue("clientId") || clientState.selectedId;
+  if (!suiteSupabase || !id || clientState.isSaving || clientState.isDeleting) return;
+  const row = clientState.rows.find((item) => item.id === id);
+  const label = clientTitle(row);
+  if (!window.confirm(`Delete ${label}? This removes the client from Supabase.`)) return;
+
+  clientState.isDeleting = true;
+  showClientMessage("Deleting client from Supabase...");
+  const { error } = await suiteSupabase
+    .from(clientTable)
+    .delete()
+    .eq("id", id);
+
+  clientState.isDeleting = false;
+  if (error) {
+    showClientMessage("Unable to delete client: " + error.message, true);
+    return;
+  }
+
+  clientState.rows = clientState.rows.filter((item) => item.id !== id);
+  clientState.selectedId = null;
+  closeClientAddModal();
+  populateClientManagerFilter();
+  renderClientData();
+  showClientMessage(`${label} deleted from Supabase.`);
+}
+
 function setClientSaving(isSaving) {
   const button = document.getElementById("clientSaveBtn");
   if (button) {
@@ -3852,6 +4143,61 @@ function showClientMessage(text, isError = false) {
   if (!message) return;
   message.textContent = text || "";
   message.classList.toggle("error", Boolean(isError));
+}
+
+function clientManagerIds(row) {
+  if (Array.isArray(row?.account_manager_ids)) return row.account_manager_ids.filter(Boolean);
+  return row?.account_manager_id ? [row.account_manager_id] : [];
+}
+
+function clientManagerNames(row) {
+  if (Array.isArray(row?.account_manager_names) && row.account_manager_names.length) {
+    return row.account_manager_names.map((name) => String(name || "").trim()).filter(Boolean);
+  }
+  return String(row?.account_manager_name || "")
+    .split(",")
+    .map((name) => name.trim())
+    .filter(Boolean);
+}
+
+function clientManagersText(row) {
+  const names = clientManagerNames(row);
+  if (!names.length) return "Unassigned";
+  if (names.length <= 2) return names.join(", ");
+  return `${names.slice(0, 2).join(", ")} +${names.length - 2}`;
+}
+
+function clientManagerCountText(row) {
+  const count = clientManagerNames(row).length;
+  if (!count) return "No manager assigned";
+  return `${count} account manager${count === 1 ? "" : "s"}`;
+}
+
+function clientMatchesManagerFilter(row, filterValue) {
+  if (filterValue.startsWith("id:")) {
+    return clientManagerIds(row).includes(filterValue.slice(3));
+  }
+  if (filterValue.startsWith("name:")) {
+    const key = filterValue.toLowerCase();
+    return clientManagerNames(row).some((name) => clientManagerNameKey(name) === key);
+  }
+  return false;
+}
+
+function clientUnitCount(row) {
+  const count = Number(row?.unit_count);
+  return Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
+}
+
+function clientUnitText(row) {
+  const count = clientUnitCount(row);
+  if (!count) return "No units set";
+  return `${count.toLocaleString()} unit${count === 1 ? "" : "s"}`;
+}
+
+function clientServiceModelLabel(value) {
+  const normalized = normalizeToken(value || "apartment_turnover").replace(/-/g, "_");
+  return clientServiceModelOptions.find(([id]) => id === normalized)?.[1] || titleCase(value || "Apartment Turnover");
 }
 
 function clientTitle(row) {
