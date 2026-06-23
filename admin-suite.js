@@ -164,7 +164,25 @@ const walkthroughState = {
   isSaving: false
 };
 const clientTable = "clients";
-const clientOptionalColumns = ["account_manager_id", "created_by", "tags"];
+const clientOptionalColumns = [
+  "company_name",
+  "primary_contact_name",
+  "primary_contact_email",
+  "primary_contact_phone",
+  "status",
+  "client_type",
+  "region",
+  "market",
+  "property_count",
+  "annual_revenue",
+  "contract_start_date",
+  "renewal_date",
+  "account_manager_id",
+  "account_manager_name",
+  "tags",
+  "notes",
+  "created_by"
+];
 const clientStatusOptions = [
   ["active", "Active"],
   ["prospect", "Prospect"],
@@ -3760,17 +3778,7 @@ async function saveClientForm(event) {
 
   const id = clientValue("clientId");
   const payload = collectClientPayload();
-  let result = id
-    ? await suiteSupabase.from(clientTable).update(payload).eq("id", id).select("*").maybeSingle()
-    : await suiteSupabase.from(clientTable).insert(payload).select("*").maybeSingle();
-
-  if (result.error && isMissingClientOptionalColumn(result.error)) {
-    const fallbackPayload = { ...payload };
-    clientOptionalColumns.forEach((column) => delete fallbackPayload[column]);
-    result = id
-      ? await suiteSupabase.from(clientTable).update(fallbackPayload).eq("id", id).select("*").maybeSingle()
-      : await suiteSupabase.from(clientTable).insert(fallbackPayload).select("*").maybeSingle();
-  }
+  const result = await saveClientPayloadWithSchemaFallback(id, payload);
 
   clientState.isSaving = false;
   setClientSaving(false);
@@ -3792,6 +3800,40 @@ async function saveClientForm(event) {
   populateClientManagerFilter();
   renderClientData();
   showClientMessage(formMode === "add" ? "Client added to Supabase." : "Client saved to Supabase.");
+}
+
+async function saveClientPayloadWithSchemaFallback(id, payload) {
+  const fallbackPayload = { ...payload };
+  const maxAttempts = clientOptionalColumns.length + 2;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const result = id
+      ? await suiteSupabase.from(clientTable).update(fallbackPayload).eq("id", id).select("*").maybeSingle()
+      : await suiteSupabase.from(clientTable).insert(fallbackPayload).select("*").maybeSingle();
+
+    if (!result.error) return result;
+
+    const missingColumn = missingClientColumnName(result.error);
+    if (missingColumn && Object.prototype.hasOwnProperty.call(fallbackPayload, missingColumn)) {
+      delete fallbackPayload[missingColumn];
+      continue;
+    }
+
+    if (isMissingClientOptionalColumn(result.error)) {
+      const remainingOptionalColumn = clientOptionalColumns.find((column) => Object.prototype.hasOwnProperty.call(fallbackPayload, column));
+      if (remainingOptionalColumn) {
+        delete fallbackPayload[remainingOptionalColumn];
+        continue;
+      }
+    }
+
+    return result;
+  }
+
+  return {
+    data: null,
+    error: new Error("Unable to save client because the clients table schema is missing required columns.")
+  };
 }
 
 function setClientSaving(isSaving) {
@@ -3842,6 +3884,13 @@ function clientDisplayName() {
 function isMissingClientOptionalColumn(error) {
   const message = String(error?.message || "").toLowerCase();
   return clientOptionalColumns.some((column) => message.includes(column.toLowerCase())) || message.includes("schema cache");
+}
+
+function missingClientColumnName(error) {
+  const message = String(error?.message || "");
+  const match = message.match(/['"]([^'"]+)['"]\s+column/i) || message.match(/column\s+['"]?([a-z0-9_]+)['"]?/i);
+  const column = match?.[1]?.toLowerCase();
+  return clientOptionalColumns.includes(column) ? column : "";
 }
 
 function formatDateOnly(value, fallback = "No date") {
