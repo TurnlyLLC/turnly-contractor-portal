@@ -1882,6 +1882,36 @@ a {
   min-height: 270px;
 }
 
+.assignment-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 132px;
+}
+
+.assignment-action-muted {
+  color: var(--suite-soft);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.assignment-toggle[hidden] {
+  display: none !important;
+}
+
+.assignment-contractor-field.muted-field,
+.suite-field.muted-field {
+  opacity: 0.58;
+}
+
+.assignment-contractor-field .client-manager-toggle-label {
+  white-space: normal;
+}
+
+.assignment-filter-card .filter-actions {
+  justify-content: flex-end;
+}
+
 .contract-list-card {
   min-height: 620px;
 }
