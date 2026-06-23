@@ -1434,6 +1434,44 @@ a {
   text-transform: uppercase;
 }
 
+.client-monthly-turnovers {
+  background: rgba(7, 18, 32, 0.34);
+  border: 1px solid var(--suite-border-soft);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+
+.client-monthly-turnovers[hidden] {
+  display: none !important;
+}
+
+.client-monthly-turnovers-head {
+  align-items: center;
+  color: #d9e8f6;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.client-monthly-turnovers-head span {
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.client-monthly-turnovers-head small {
+  color: var(--suite-soft);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.client-month-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
 .client-manager-field {
   position: relative;
 }
@@ -1764,7 +1802,8 @@ a {
 }
 
 .suite-field[hidden],
-.client-form-section[hidden] {
+.client-form-section[hidden],
+.client-monthly-turnovers[hidden] {
   display: none !important;
 }
 
@@ -2976,6 +3015,7 @@ a {
   .performance-layout,
   .analytics-layout,
   .report-grid,
+  .client-month-grid,
   .form-grid,
   .video-filter-grid,
   .contacts-filter-grid,
