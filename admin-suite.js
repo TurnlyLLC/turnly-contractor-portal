@@ -234,6 +234,71 @@ const clientState = {
   isSaving: false,
   isDeleting: false
 };
+const assignmentTable = "assignment_blocks";
+const assignmentOptionalColumns = [
+  "property_id",
+  "address",
+  "service_type",
+  "pay_amount",
+  "scope",
+  "supplies_notes",
+  "special_instructions",
+  "priority",
+  "assignment_type",
+  "recurrence_frequency",
+  "recurrence_interval",
+  "recurrence_end_date",
+  "auto_renewal",
+  "recurring_group_id",
+  "source_assignment_id",
+  "preferred_first",
+  "preferred_contractor_ids",
+  "preferred_contractor_names",
+  "preferred_until",
+  "visibility",
+  "declined_contractor_ids",
+  "created_by",
+  "accepted_at",
+  "claimed_at",
+  "started_at",
+  "completed_at",
+  "completion_notes"
+];
+const assignmentFrequencyOptions = [
+  ["one_time", "One Time"],
+  ["daily", "Daily"],
+  ["weekly", "Weekly"],
+  ["monthly", "Monthly"]
+];
+const assignmentStatusOptions = [
+  ["open", "Open"],
+  ["preferred_pending", "Preferred Pending"],
+  ["claimed", "Claimed"],
+  ["in_progress", "In Progress"],
+  ["completed", "Completed"],
+  ["qa_pending", "QA Pending"],
+  ["cancelled", "Cancelled"],
+  ["declined", "Declined"],
+  ["draft", "Draft"]
+];
+const assignmentPriorityOptions = [
+  ["normal", "Normal"],
+  ["high", "High"],
+  ["urgent", "Urgent"]
+];
+const assignmentState = {
+  rows: [],
+  properties: [],
+  contractors: [],
+  user: null,
+  profile: null,
+  search: "",
+  statusFilter: "all",
+  frequencyFilter: "all",
+  contractorFilter: "all",
+  isSaving: false,
+  isGenerating: false
+};
 const topbarState = {
   user: null,
   profile: null,
@@ -296,6 +361,7 @@ const pages = {
   "assignments": {
     title: "Assignments",
     subtitle: "Manage and track cleaning assignments across your portfolio",
+    action: { label: "New Assignment", icon: "plus" },
     render: renderAssignments
   },
   "directory": {
@@ -3000,21 +3066,30 @@ function renderCoverageCenter() {
 
 function renderAssignments() {
   const assignmentToolbar = toolbar(
-    tabs([["all", "All Assignments"], ["upcoming", "Upcoming"], ["progress", "In Progress"], ["completed", "Completed"], ["overdue", "Overdue"], ["draft", "Draft"]], "all"),
-    `${actionButton("Filters", "filter", "", "secondary")}${searchBox("Search assignments...")}`
+    `<div class="suite-tabs" role="tablist">
+      ${[
+        ["all", "All Assignments"],
+        ["upcoming", "Upcoming"],
+        ["in_progress", "In Progress"],
+        ["completed", "Completed"],
+        ["overdue", "Overdue"],
+        ["draft", "Draft"]
+      ].map(([key, label]) => `<button class="suite-tab assignment-status-tab ${key === "all" ? "active" : ""}" type="button" data-assignment-status-tab="${esc(key)}">${esc(label)}</button>`).join("")}
+    </div>`,
+    `<label class="inline-search"><span class="sr-only">Search assignments</span>${icon("search")}<input id="assignmentSearchInput" type="search" placeholder="Search assignments..." /></label><button class="secondary-action" type="button" data-assignment-clear-filters>${icon("x")}<span>Clear</span></button>`
   );
   return `
-    <section class="assignments-layout">
+    <section class="assignments-layout" data-assignments-page>
       <div class="suite-stack">
         <section class="metric-strip five">
-          ${metric("Total Assignments", "0", "from last 7 days", "calendar", "green")}
-          ${metric("Today's Assignments", "0", "due today", "calendar", "purple")}
-          ${metric("In Progress", "0", "right now", "clock", "orange")}
-          ${metric("Completed (7 Days)", "0", "from last 7 days", "check", "green")}
-          ${metric("Overdue", "0", "past due", "alert", "red")}
+          ${metric("Total Assignments", "0", "synced from Supabase", "calendar", "green", 'id="assignmentTotalCount"')}
+          ${metric("Today's Assignments", "0", "due today", "calendar", "purple", 'id="assignmentTodayCount"')}
+          ${metric("In Progress", "0", "right now", "clock", "orange", 'id="assignmentProgressCount"')}
+          ${metric("Completed (7 Days)", "0", "from last 7 days", "check", "green", 'id="assignmentCompletedCount"')}
+          ${metric("Overdue", "0", "past due", "alert", "red", 'id="assignmentOverdueCount"')}
         </section>
-        ${tableFrame(["", "Assignment ID", "Property / Location", "Service Type", "Contractor", "Assigned To", "Date", "Status", "Priority", "Actions"], `
-          <p id="message" class="status-message table-status-message" aria-live="polite"></p>
+        ${tableFrame(["", "Assignment", "Property / Location", "Service Type", "Contractor Routing", "Block", "Date", "Status", "Priority", "Actions"], `
+          <p id="assignmentMessage" class="status-message table-status-message" aria-live="polite"></p>
         `, {
           checkbox: true,
           toolbar: assignmentToolbar,
@@ -3025,19 +3100,27 @@ function renderAssignments() {
         })}
       </div>
       <aside class="suite-stack">
-        ${filters("Filters", [
-          selectControl("Property / Location", ["Select property..."]),
-          selectControl("Service Type", ["Select service type..."]),
-          selectControl("Contractor", ["Select contractor..."]),
-          selectControl("Assigned To", ["Select team member..."]),
-          selectControl("Status", ["Select status..."]),
-          selectControl("Priority", ["Select priority..."]),
-          inputControl("Date Range", "Select date range...", "date")
-        ])}
+        ${assignmentFilterPanel()}
         ${panel("Calendar Overview", miniCalendar())}
         ${panel("Assignment Builder", assignmentForm(), { className: "assignment-builder-panel" })}
       </aside>
     </section>
+  `;
+}
+
+function assignmentFilterPanel() {
+  return `
+    <aside class="filter-card assignment-filter-card">
+      <div class="filter-head"><h2>Filters</h2><button type="button" data-assignment-clear-filters>Clear All</button></div>
+      <div class="filter-grid">
+        <label class="suite-field"><span>Status</span><select id="assignmentStatusFilter"><option value="all">All Statuses</option>${assignmentStatusOptions.map(([value, label]) => `<option value="${esc(value)}">${esc(label)}</option>`).join("")}<option value="overdue">Overdue</option></select></label>
+        <label class="suite-field"><span>Block Type</span><select id="assignmentFrequencyFilter"><option value="all">All Blocks</option>${assignmentFrequencyOptions.map(([value, label]) => `<option value="${esc(value)}">${esc(label)}</option>`).join("")}</select></label>
+        <label class="suite-field"><span>Contractor</span><select id="assignmentContractorFilter"><option value="all">All Contractors</option></select></label>
+      </div>
+      <div class="filter-actions">
+        <button class="secondary-action" type="button" data-assignment-clear-filters><span>Clear Filters</span></button>
+      </div>
+    </aside>
   `;
 }
 
@@ -4699,27 +4782,950 @@ function selectButton(label) {
 
 function assignmentForm() {
   return `
-    <form id="assignmentForm">
-      <div class="form-grid">
-        <label class="suite-field wide"><span>Select Property</span><select id="propertySelect" required><option value="">Choose a property...</option></select></label>
-        <input id="property_id" type="hidden" />
-        <label class="suite-field"><span>Assignment Title</span><input id="title" required placeholder="Apartment Turnover - Unit 204" /></label>
-        <label class="suite-field"><span>Property Name</span><input id="property_name" required /></label>
-        <label class="suite-field wide"><span>Address</span><input id="address" /></label>
-        <label class="suite-field"><span>Service Type</span><input id="service_type" /></label>
-        <label class="suite-field"><span>Pay Amount</span><input id="pay_amount" type="number" step="0.01" /></label>
-        <label class="suite-field"><span>Start Window</span><input id="start_window" type="datetime-local" /></label>
-        <label class="suite-field"><span>End Window</span><input id="end_window" type="datetime-local" /></label>
-        <label class="suite-field wide"><span>Scope of Work</span><textarea id="scope"></textarea></label>
-        <label class="suite-field"><span>Supplies Notes</span><textarea id="supplies_notes"></textarea></label>
-        <label class="suite-field"><span>Special Instructions</span><textarea id="special_instructions"></textarea></label>
-      </div>
+    <form id="assignmentForm" class="lead-form assignment-form">
+      ${formGrid([
+        `<label class="suite-field wide"><span>Select Property</span><select id="propertySelect" required><option value="">Choose a property...</option></select></label>`,
+        `<input id="property_id" type="hidden" />`,
+        leadInputField("title", "Assignment Title", "text", { required: true, placeholder: "Apartment Turnover - Unit 204" }),
+        leadInputField("property_name", "Property Name", "text", { required: true }),
+        leadInputField("address", "Address", "text", { className: "wide" }),
+        leadInputField("service_type", "Service Type"),
+        leadInputField("pay_amount", "Pay Amount", "number", { min: "0", step: "0.01" }),
+        leadSelectField("assignment_frequency", "Block Type", assignmentFrequencyOptions, { required: true }),
+        leadSelectField("priority", "Priority", assignmentPriorityOptions, { required: true }),
+        leadInputField("start_window", "Start Window", "datetime-local", { required: true }),
+        leadInputField("end_window", "End Window", "datetime-local", { required: true }),
+        `<label class="suite-field" data-assignment-recurrence-field><span>Renew Until</span><input id="recurrence_end_date" type="date" /></label>`,
+        `<label class="checkbox-field assignment-toggle wide" data-assignment-recurrence-field><input id="auto_renewal" type="checkbox" /> <span>Auto renew this assignment block</span></label>`,
+        `<label class="checkbox-field assignment-toggle wide"><input id="preferred_first" type="checkbox" checked /> <span>Offer to preferred contractors first</span></label>`,
+        preferredContractorDropdownField(),
+        `<label class="suite-field"><span>Preferred Response Deadline</span><input id="preferred_until" type="datetime-local" /></label>`,
+        leadTextareaField("scope", "Scope of Work", "wide"),
+        leadTextareaField("supplies_notes", "Supplies Notes"),
+        leadTextareaField("special_instructions", "Special Instructions")
+      ])}
       <div id="assignmentChecklistPreview" class="checklist-summary assignment-checklist-preview"></div>
-      <div class="form-actions"><button type="submit" class="primary-action"><span>Post Assignment</span></button></div>
+      <div class="form-actions"><button id="assignmentSaveBtn" type="submit" class="primary-action">${icon("check")}<span>Post Assignment</span></button></div>
     </form>
-    <button id="generateRecurringAssignmentsBtn" type="button" class="secondary-action full-width"><span>Generate Due Assignments</span></button>
+    <button id="generateRecurringAssignmentsBtn" type="button" class="secondary-action full-width">${icon("refresh")}<span>Generate Due Assignments</span></button>
     <p id="recurringMessage" class="status-message"></p>
   `;
+}
+
+function preferredContractorDropdownField() {
+  const options = getAssignmentContractorOptions();
+  const items = options.length
+    ? options.map((option) => {
+      const meta = [option.email, option.status ? titleCase(option.status) : ""].filter(Boolean).join(" - ");
+      return `
+        <label class="client-manager-option assignment-contractor-option">
+          <input type="checkbox" data-assignment-contractor-option data-contractor-id="${esc(option.id)}" data-contractor-name="${esc(option.name)}" data-contractor-email="${esc(option.email)}" />
+          <span><strong>${esc(option.name)}</strong>${meta ? `<small>${esc(meta)}</small>` : ""}</span>
+        </label>
+      `;
+    }).join("")
+    : `<div class="client-manager-empty">Registered contractor accounts will appear here</div>`;
+  return `
+    <div class="suite-field client-manager-field assignment-contractor-field wide">
+      <span>Preferred Contractors</span>
+      <div class="client-manager-select" data-assignment-contractor-dropdown>
+        <button class="client-manager-toggle" type="button" aria-expanded="false" data-assignment-contractor-toggle>${icon("users")}<span class="client-manager-toggle-label" data-assignment-contractor-label>Select preferred contractors</span>${icon("chevron-down")}</button>
+        <div class="client-manager-menu" data-assignment-contractor-menu hidden>
+          ${items}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function initAssignments() {
+  const root = document.querySelector("[data-assignments-page]");
+  if (!root) return;
+
+  root.addEventListener("click", handleAssignmentClick);
+  root.addEventListener("change", handleAssignmentChange);
+  root.addEventListener("submit", saveAssignmentForm);
+  root.querySelector("#assignmentSearchInput")?.addEventListener("input", (event) => {
+    assignmentState.search = event.target.value || "";
+    renderAssignmentData();
+  });
+  root.querySelector("#assignmentStatusFilter")?.addEventListener("change", (event) => {
+    assignmentState.statusFilter = event.target.value || "all";
+    renderAssignmentData();
+  });
+  root.querySelector("#assignmentFrequencyFilter")?.addEventListener("change", (event) => {
+    assignmentState.frequencyFilter = event.target.value || "all";
+    renderAssignmentData();
+  });
+  root.querySelector("#assignmentContractorFilter")?.addEventListener("change", (event) => {
+    assignmentState.contractorFilter = event.target.value || "all";
+    renderAssignmentData();
+  });
+
+  const topbarAdd = Array.from(document.querySelectorAll(".suite-topbar .primary-action"))
+    .find((link) => link.textContent?.trim() === "New Assignment");
+  topbarAdd?.addEventListener("click", (event) => {
+    event.preventDefault();
+    clearAssignmentForm();
+    document.getElementById("title")?.focus();
+  });
+
+  clearAssignmentForm({ keepMessage: true });
+  void loadAssignments();
+}
+
+function handleAssignmentClick(event) {
+  const contractorToggle = event.target.closest("[data-assignment-contractor-toggle]");
+  if (contractorToggle) {
+    const dropdown = contractorToggle.closest("[data-assignment-contractor-dropdown]");
+    const menu = dropdown?.querySelector("[data-assignment-contractor-menu]");
+    if (menu) {
+      const isOpening = menu.hidden;
+      closeAssignmentContractorDropdowns();
+      menu.hidden = !isOpening;
+      contractorToggle.setAttribute("aria-expanded", isOpening ? "true" : "false");
+    }
+    return;
+  }
+
+  if (!event.target.closest("[data-assignment-contractor-dropdown]")) {
+    closeAssignmentContractorDropdowns();
+  }
+
+  const statusTab = event.target.closest("[data-assignment-status-tab]");
+  if (statusTab) {
+    assignmentState.statusFilter = statusTab.dataset.assignmentStatusTab || "all";
+    renderAssignmentData();
+    return;
+  }
+
+  const clearFilters = event.target.closest("[data-assignment-clear-filters]");
+  if (clearFilters) {
+    assignmentState.search = "";
+    assignmentState.statusFilter = "all";
+    assignmentState.frequencyFilter = "all";
+    assignmentState.contractorFilter = "all";
+    renderAssignmentData();
+    return;
+  }
+
+  const generate = event.target.closest("#generateRecurringAssignmentsBtn");
+  if (generate) {
+    void generateDueRecurringAssignments();
+    return;
+  }
+
+  const action = event.target.closest("[data-assignment-action]");
+  if (action) {
+    void updateAssignmentStatus(action.dataset.assignmentId, action.dataset.assignmentAction);
+  }
+}
+
+function handleAssignmentChange(event) {
+  if (event.target.matches("#propertySelect")) {
+    fillAssignmentFromProperty(event.target.value);
+  }
+  if (event.target.matches("#assignment_frequency")) {
+    updateAssignmentRecurrenceVisibility();
+  }
+  if (event.target.closest("[data-assignment-contractor-option]")) {
+    updateAssignmentContractorDropdownLabel();
+  }
+  if (event.target.matches("#preferred_first")) {
+    updateAssignmentContractorControls();
+  }
+}
+
+async function loadAssignments() {
+  if (!suiteSupabase) {
+    showAssignmentMessage("Supabase config is missing. Add env.js values before using assignments.", true);
+    return;
+  }
+
+  showAssignmentMessage("Loading assignments...");
+  const { data: userData } = await suiteSupabase.auth.getUser();
+  assignmentState.user = userData?.user || null;
+  if (assignmentState.user) {
+    const { data: profile } = await suiteSupabase
+      .from("profiles")
+      .select("role,full_name,email")
+      .eq("id", assignmentState.user.id)
+      .maybeSingle();
+    assignmentState.profile = profile ? { ...profile, id: assignmentState.user.id } : null;
+  }
+
+  const [propertiesResult, contractorsResult, assignmentsResult] = await Promise.all([
+    loadAssignmentProperties(),
+    loadAssignmentContractors(),
+    loadAssignmentRows()
+  ]);
+
+  assignmentState.properties = propertiesResult;
+  assignmentState.contractors = contractorsResult;
+  assignmentState.rows = assignmentsResult.rows;
+  renderAssignmentData();
+  showAssignmentMessage(assignmentsResult.error
+    ? "Assignments are ready once the Supabase migration is applied."
+    : assignmentState.rows.length
+      ? `${assignmentState.rows.length} assignment${assignmentState.rows.length === 1 ? "" : "s"} synced from Supabase.`
+      : "Synced with Supabase. No assignments yet.");
+}
+
+async function loadAssignmentProperties() {
+  const { data, error } = await suiteSupabase
+    .from(leadTable)
+    .select("*")
+    .limit(500);
+  if (error) {
+    console.warn("[admin-suite] Unable to load assignment properties", error);
+    return [];
+  }
+  return (data || [])
+    .filter((row) => assignmentPropertyTitle(row))
+    .sort((a, b) => assignmentPropertyTitle(a).localeCompare(assignmentPropertyTitle(b)));
+}
+
+async function loadAssignmentContractors() {
+  const { data, error } = await suiteSupabase
+    .from("profiles")
+    .select("id,full_name,email,role,status,contractor_approved")
+    .limit(500);
+  if (error) {
+    console.warn("[admin-suite] Unable to load assignment contractors", error);
+    return [];
+  }
+  return (data || [])
+    .filter(isAssignmentContractorProfile)
+    .map(normalizeAssignmentContractorOption)
+    .filter((contractor) => contractor.name)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+async function loadAssignmentRows() {
+  const { data, error } = await suiteSupabase
+    .from(assignmentTable)
+    .select("*")
+    .order("start_window", { ascending: true })
+    .limit(1000);
+  if (error) {
+    console.warn("[admin-suite] Unable to load assignments", error);
+    return { rows: [], error };
+  }
+  return { rows: data || [], error: null };
+}
+
+function renderAssignmentData() {
+  populateAssignmentPropertySelect();
+  populateAssignmentContractorMenu();
+  populateAssignmentContractorFilter();
+  renderAssignmentFilterControls();
+  updateAssignmentRecurrenceVisibility();
+  updateAssignmentContractorControls();
+  renderAssignmentMetrics();
+  renderAssignmentTable();
+}
+
+function renderAssignmentFilterControls() {
+  const search = document.getElementById("assignmentSearchInput");
+  if (search && search.value !== assignmentState.search) search.value = assignmentState.search;
+  const status = document.getElementById("assignmentStatusFilter");
+  if (status && status.value !== assignmentState.statusFilter) status.value = assignmentState.statusFilter;
+  const frequency = document.getElementById("assignmentFrequencyFilter");
+  if (frequency && frequency.value !== assignmentState.frequencyFilter) frequency.value = assignmentState.frequencyFilter;
+  const contractor = document.getElementById("assignmentContractorFilter");
+  if (contractor && contractor.value !== assignmentState.contractorFilter) contractor.value = assignmentState.contractorFilter;
+  document.querySelectorAll("[data-assignment-status-tab]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.assignmentStatusTab === assignmentState.statusFilter);
+  });
+}
+
+function populateAssignmentPropertySelect() {
+  const select = document.getElementById("propertySelect");
+  if (!select) return;
+  const selected = select.value;
+  select.innerHTML = `<option value="">Choose a property...</option>${assignmentState.properties.map((row) => `<option value="${esc(row.id)}">${esc(assignmentPropertyTitle(row))}</option>`).join("")}`;
+  if (selected && assignmentState.properties.some((row) => row.id === selected)) {
+    select.value = selected;
+  }
+}
+
+function populateAssignmentContractorMenu() {
+  const menu = document.querySelector("[data-assignment-contractor-menu]");
+  if (!menu) return;
+  const selectedIds = new Set(readSelectedAssignmentContractors().map((contractor) => contractor.id).filter(Boolean));
+  const options = getAssignmentContractorOptions();
+  menu.innerHTML = options.length
+    ? options.map((option) => {
+      const checked = selectedIds.has(option.id) ? "checked" : "";
+      const meta = [option.email, option.status ? titleCase(option.status) : ""].filter(Boolean).join(" - ");
+      return `
+        <label class="client-manager-option assignment-contractor-option">
+          <input type="checkbox" data-assignment-contractor-option data-contractor-id="${esc(option.id)}" data-contractor-name="${esc(option.name)}" data-contractor-email="${esc(option.email)}" ${checked} />
+          <span><strong>${esc(option.name)}</strong>${meta ? `<small>${esc(meta)}</small>` : ""}</span>
+        </label>
+      `;
+    }).join("")
+    : `<div class="client-manager-empty">Registered contractor accounts will appear here</div>`;
+  updateAssignmentContractorDropdownLabel();
+}
+
+function populateAssignmentContractorFilter() {
+  const filter = document.getElementById("assignmentContractorFilter");
+  if (!filter) return;
+  const selected = assignmentState.contractorFilter;
+  filter.innerHTML = `<option value="all">All Contractors</option><option value="unassigned">Unassigned</option>${getAssignmentContractorOptions().map((contractor) => `<option value="${esc(contractor.id)}">${esc(contractor.name)}</option>`).join("")}`;
+  const valid = new Set(["all", "unassigned", ...getAssignmentContractorOptions().map((contractor) => contractor.id)]);
+  if (!valid.has(selected)) assignmentState.contractorFilter = "all";
+  filter.value = assignmentState.contractorFilter;
+}
+
+function renderAssignmentMetrics() {
+  const rows = assignmentState.rows;
+  const setText = (id, value) => {
+    const element = document.getElementById(id);
+    if (element) element.textContent = value;
+  };
+  setText("assignmentTotalCount", rows.length.toLocaleString());
+  setText("assignmentTodayCount", rows.filter((row) => isToday(row.start_window)).length.toLocaleString());
+  setText("assignmentProgressCount", rows.filter((row) => assignmentStatusKey(row.status) === "in-progress").length.toLocaleString());
+  setText("assignmentCompletedCount", rows.filter((row) => assignmentStatusKey(row.status) === "completed" && isWithinPastDays(row.completed_at || row.updated_at || row.end_window, 7)).length.toLocaleString());
+  setText("assignmentOverdueCount", rows.filter(isAssignmentOverdue).length.toLocaleString());
+}
+
+function renderAssignmentTable() {
+  const body = document.getElementById("adminAssignments");
+  if (!body) return;
+  const rows = getFilteredAssignments();
+  body.innerHTML = rows.length
+    ? rows.map(renderAssignmentRow).join("")
+    : `<tr class="assignment-empty-row"><td colspan="10">${emptyState("calendar", "No assignments found", "Assignments will appear here.")}</td></tr>`;
+}
+
+function renderAssignmentRow(row) {
+  const id = esc(row.id || "");
+  const status = assignmentStatusKey(row.status);
+  return `
+    <tr>
+      <td><input type="checkbox" aria-label="Select assignment ${esc(assignmentShortId(row))}" /></td>
+      <td><strong>${esc(row.title || "Untitled Assignment")}</strong><small>${esc(assignmentShortId(row))}</small></td>
+      <td><strong>${esc(row.property_name || "No property")}</strong><small>${esc(row.address || "No address")}</small></td>
+      <td>${esc(row.service_type || "-")}</td>
+      <td><strong>${esc(assignmentContractorText(row))}</strong><small>${esc(assignmentRoutingMeta(row))}</small></td>
+      <td><strong>${esc(assignmentFrequencyLabel(row))}</strong><small>${esc(row.auto_renewal ? "Auto renewal" : "Manual block")}</small></td>
+      <td>${esc(formatDateWindow(row.start_window, row.end_window))}</td>
+      <td>${statusBadge(isAssignmentOverdue(row) ? "overdue" : row.status || "open")}</td>
+      <td><span class="status-badge ${statusClassName(row.priority || "normal")}">${esc(titleCase(row.priority || "Normal"))}</span></td>
+      <td><div class="assignment-row-actions">${assignmentRowActions(row, status, id)}</div></td>
+    </tr>
+  `;
+}
+
+function assignmentRowActions(row, status, id) {
+  const actions = [];
+  if (status === "preferred-pending") {
+    actions.push(["open", "Release"]);
+  }
+  if (["open", "preferred-pending", "claimed", "in-progress", "draft"].includes(status)) {
+    actions.push(["cancel", "Cancel"]);
+  }
+  if (status === "claimed") {
+    actions.push(["start", "Start"]);
+  }
+  if (status === "in-progress") {
+    actions.push(["complete", "Complete"]);
+  }
+  if (["cancelled", "declined"].includes(status)) {
+    actions.push(["reopen", "Reopen"]);
+  }
+  return actions.length
+    ? actions.map(([action, label]) => `<button class="table-action-button" type="button" data-assignment-id="${id}" data-assignment-action="${esc(action)}">${esc(label)}</button>`).join("")
+    : `<span class="assignment-action-muted">Done</span>`;
+}
+
+function getFilteredAssignments() {
+  const term = assignmentState.search.trim().toLowerCase();
+  const statusFilter = normalizeToken(assignmentState.statusFilter);
+  const frequencyFilter = assignmentFrequencyKey(assignmentState.frequencyFilter);
+  return assignmentState.rows.filter((row) => {
+    if (statusFilter && statusFilter !== "all") {
+      if (statusFilter === "upcoming") {
+        if (!isAssignmentUpcoming(row)) return false;
+      } else if (statusFilter === "overdue") {
+        if (!isAssignmentOverdue(row)) return false;
+      } else if (assignmentStatusKey(row.status) !== statusFilter) {
+        return false;
+      }
+    }
+    if (frequencyFilter !== "all" && assignmentFrequencyKey(row.recurrence_frequency || row.assignment_type) !== frequencyFilter) return false;
+    if (assignmentState.contractorFilter === "unassigned" && assignmentHasContractor(row)) return false;
+    if (assignmentState.contractorFilter !== "all" && assignmentState.contractorFilter !== "unassigned" && !assignmentMatchesContractor(row, assignmentState.contractorFilter)) return false;
+    if (!term) return true;
+    return [
+      row.title,
+      row.property_name,
+      row.address,
+      row.service_type,
+      row.status,
+      row.priority,
+      assignmentContractorText(row),
+      assignmentFrequencyLabel(row)
+    ].some((value) => String(value || "").toLowerCase().includes(term));
+  });
+}
+
+function clearAssignmentForm(options = {}) {
+  const form = document.getElementById("assignmentForm");
+  if (!form) return;
+  form.reset();
+  document.getElementById("property_id").value = "";
+  const start = new Date();
+  start.setDate(start.getDate() + 1);
+  start.setHours(Math.max(start.getHours(), 9), 0, 0, 0);
+  const end = new Date(start);
+  end.setHours(end.getHours() + 2);
+  const preferredUntil = new Date(start);
+  preferredUntil.setHours(preferredUntil.getHours() - 24);
+  const setValue = (id, value) => {
+    const field = document.getElementById(id);
+    if (field) field.value = value;
+  };
+  setValue("assignment_frequency", "one_time");
+  setValue("priority", "normal");
+  setValue("start_window", toDatetimeInput(start));
+  setValue("end_window", toDatetimeInput(end));
+  setValue("preferred_until", toDatetimeInput(preferredUntil));
+  setValue("recurrence_end_date", "");
+  document.querySelectorAll("[data-assignment-contractor-option]").forEach((input) => {
+    input.checked = false;
+  });
+  updateAssignmentContractorDropdownLabel();
+  updateAssignmentRecurrenceVisibility();
+  updateAssignmentContractorControls();
+  if (!options.keepMessage) showRecurringMessage("");
+}
+
+function fillAssignmentFromProperty(propertyId) {
+  const row = assignmentState.properties.find((item) => item.id === propertyId);
+  const propertyIdField = document.getElementById("property_id");
+  if (propertyIdField) propertyIdField.value = row?.id || "";
+  if (!row) return;
+  const setIfEmpty = (id, value) => {
+    const field = document.getElementById(id);
+    if (field && (!field.value || id === "property_name" || id === "address")) field.value = value || "";
+  };
+  setIfEmpty("property_name", assignmentPropertyTitle(row));
+  setIfEmpty("address", assignmentPropertyAddress(row));
+  setIfEmpty("service_type", row.service_type || row.property_type || "");
+  const title = document.getElementById("title");
+  if (title && !title.value) title.value = `${assignmentPropertyTitle(row)} Service`;
+}
+
+function collectAssignmentPayloads() {
+  const frequency = assignmentFrequencyKey(assignmentValue("assignment_frequency") || "one_time");
+  const start = parseDate(assignmentValue("start_window"));
+  const end = parseDate(assignmentValue("end_window"));
+  if (!start || !end) throw new Error("Start Window and End Window are required.");
+  if (end <= start) throw new Error("End Window must be after Start Window.");
+  const recurrenceEnd = parseAssignmentRecurrenceEnd(assignmentValue("recurrence_end_date"), frequency, start);
+  const windows = buildAssignmentWindows(start, end, frequency, recurrenceEnd);
+  if (!windows.length) throw new Error("Renew Until must be on or after the Start Window date.");
+  const selectedContractors = readSelectedAssignmentContractors();
+  const preferredFirst = document.getElementById("preferred_first")?.checked && selectedContractors.length > 0;
+  const payAmount = Number(assignmentValue("pay_amount"));
+  const groupId = frequency === "one_time" ? null : randomAssignmentGroupId();
+  const status = preferredFirst ? "preferred_pending" : "open";
+  const payload = {
+    title: assignmentValue("title"),
+    property_id: assignmentValue("property_id") || null,
+    property_name: assignmentValue("property_name"),
+    address: assignmentValue("address"),
+    service_type: assignmentValue("service_type"),
+    pay_amount: Number.isFinite(payAmount) && payAmount >= 0 ? payAmount : 0,
+    scope: assignmentValue("scope"),
+    supplies_notes: assignmentValue("supplies_notes"),
+    special_instructions: assignmentValue("special_instructions"),
+    priority: assignmentValue("priority") || "normal",
+    status,
+    assignment_type: frequency,
+    recurrence_frequency: frequency,
+    recurrence_interval: 1,
+    recurrence_end_date: frequency === "one_time" ? null : toDateInput(recurrenceEnd),
+    auto_renewal: frequency !== "one_time" && Boolean(document.getElementById("auto_renewal")?.checked),
+    recurring_group_id: groupId,
+    preferred_first: preferredFirst,
+    preferred_contractor_ids: selectedContractors.map((contractor) => contractor.id).filter(Boolean),
+    preferred_contractor_names: selectedContractors.map((contractor) => contractor.name).filter(Boolean),
+    preferred_until: assignmentValue("preferred_until") ? parseDate(assignmentValue("preferred_until")).toISOString() : null,
+    visibility: preferredFirst ? "preferred" : "open",
+    declined_contractor_ids: [],
+    created_by: assignmentState.user?.id || null
+  };
+  return windows.map((window) => ({
+    ...payload,
+    start_window: window.start.toISOString(),
+    end_window: window.end.toISOString()
+  }));
+}
+
+async function saveAssignmentForm(event) {
+  event?.preventDefault();
+  if (!suiteSupabase || assignmentState.isSaving) return;
+  assignmentState.isSaving = true;
+  setAssignmentSaving(true);
+  showAssignmentMessage("Saving assignment blocks to Supabase...");
+
+  let payloads = [];
+  try {
+    payloads = collectAssignmentPayloads();
+  } catch (error) {
+    assignmentState.isSaving = false;
+    setAssignmentSaving(false);
+    showAssignmentMessage(error.message, true);
+    return;
+  }
+
+  const result = await insertAssignmentPayloadsWithSchemaFallback(payloads);
+  assignmentState.isSaving = false;
+  setAssignmentSaving(false);
+  if (result.error) {
+    showAssignmentMessage("Unable to save assignment: " + result.error.message, true);
+    return;
+  }
+
+  assignmentState.rows = [...(result.data || []), ...assignmentState.rows]
+    .sort((a, b) => dateValue(a.start_window) - dateValue(b.start_window));
+  renderAssignmentData();
+  clearAssignmentForm({ keepMessage: true });
+  showAssignmentMessage(`${result.data?.length || payloads.length} assignment block${(result.data?.length || payloads.length) === 1 ? "" : "s"} posted to Supabase.`);
+}
+
+async function insertAssignmentPayloadsWithSchemaFallback(payloads) {
+  let fallbackPayloads = payloads.map((payload) => ({ ...payload }));
+  const maxAttempts = assignmentOptionalColumns.length + 2;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const result = await suiteSupabase
+      .from(assignmentTable)
+      .insert(fallbackPayloads)
+      .select("*");
+    if (!result.error) return result;
+    const missingColumn = missingAssignmentColumnName(result.error);
+    if (missingColumn && fallbackPayloads.some((payload) => Object.prototype.hasOwnProperty.call(payload, missingColumn))) {
+      fallbackPayloads = fallbackPayloads.map((payload) => {
+        const next = { ...payload };
+        delete next[missingColumn];
+        return next;
+      });
+      continue;
+    }
+    if (isMissingAssignmentOptionalColumn(result.error)) {
+      const remainingOptionalColumn = assignmentOptionalColumns.find((column) => fallbackPayloads.some((payload) => Object.prototype.hasOwnProperty.call(payload, column)));
+      if (remainingOptionalColumn) {
+        fallbackPayloads = fallbackPayloads.map((payload) => {
+          const next = { ...payload };
+          delete next[remainingOptionalColumn];
+          return next;
+        });
+        continue;
+      }
+    }
+    return result;
+  }
+  return { data: null, error: new Error("Unable to save assignment because the assignment_blocks table schema is missing required columns.") };
+}
+
+async function saveAssignmentPatchWithSchemaFallback(id, payload) {
+  const fallbackPayload = { ...payload };
+  const maxAttempts = assignmentOptionalColumns.length + 2;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const result = await suiteSupabase
+      .from(assignmentTable)
+      .update(fallbackPayload)
+      .eq("id", id)
+      .select("*")
+      .maybeSingle();
+    if (!result.error) return result;
+    const missingColumn = missingAssignmentColumnName(result.error);
+    if (missingColumn && Object.prototype.hasOwnProperty.call(fallbackPayload, missingColumn)) {
+      delete fallbackPayload[missingColumn];
+      continue;
+    }
+    if (isMissingAssignmentOptionalColumn(result.error)) {
+      const remainingOptionalColumn = assignmentOptionalColumns.find((column) => Object.prototype.hasOwnProperty.call(fallbackPayload, column));
+      if (remainingOptionalColumn) {
+        delete fallbackPayload[remainingOptionalColumn];
+        continue;
+      }
+    }
+    return result;
+  }
+  return { data: null, error: new Error("Unable to update assignment because the assignment_blocks table schema is missing required columns.") };
+}
+
+async function updateAssignmentStatus(id, action) {
+  if (!suiteSupabase || !id) return;
+  const now = new Date().toISOString();
+  const patches = {
+    open: { status: "open", visibility: "open" },
+    cancel: { status: "cancelled" },
+    start: { status: "in_progress", started_at: now },
+    complete: { status: "completed", completed_at: now },
+    reopen: { status: "open", visibility: "open", claimed_by: null, claimed_by_name: null, claimed_by_email: null, assigned_to: null, assigned_to_name: null, assigned_to_email: null, claimed_at: null, accepted_at: null, started_at: null, completed_at: null }
+  };
+  const payload = patches[action];
+  if (!payload) return;
+  showAssignmentMessage("Updating assignment...");
+  const result = await saveAssignmentPatchWithSchemaFallback(id, payload);
+  if (result.error) {
+    showAssignmentMessage("Unable to update assignment: " + result.error.message, true);
+    return;
+  }
+  const index = assignmentState.rows.findIndex((row) => row.id === id);
+  if (index >= 0) assignmentState.rows[index] = result.data;
+  renderAssignmentData();
+  showAssignmentMessage("Assignment updated in Supabase.");
+}
+
+async function generateDueRecurringAssignments() {
+  if (!suiteSupabase || assignmentState.isGenerating) return;
+  assignmentState.isGenerating = true;
+  setRecurringButtonSaving(true);
+  showRecurringMessage("Checking recurring assignments...");
+  const payloads = buildDueRecurringAssignmentPayloads();
+  if (!payloads.length) {
+    assignmentState.isGenerating = false;
+    setRecurringButtonSaving(false);
+    showRecurringMessage("No recurring assignments are due.");
+    return;
+  }
+  const result = await insertAssignmentPayloadsWithSchemaFallback(payloads);
+  assignmentState.isGenerating = false;
+  setRecurringButtonSaving(false);
+  if (result.error) {
+    showRecurringMessage("Unable to generate recurring assignments: " + result.error.message, true);
+    return;
+  }
+  assignmentState.rows = [...assignmentState.rows, ...(result.data || [])]
+    .sort((a, b) => dateValue(a.start_window) - dateValue(b.start_window));
+  renderAssignmentData();
+  showRecurringMessage(`${result.data?.length || payloads.length} recurring assignment${(result.data?.length || payloads.length) === 1 ? "" : "s"} generated.`);
+}
+
+function buildDueRecurringAssignmentPayloads() {
+  const groups = new Map();
+  assignmentState.rows
+    .filter((row) => row.auto_renewal && assignmentFrequencyKey(row.recurrence_frequency || row.assignment_type) !== "one_time")
+    .forEach((row) => {
+      const key = row.recurring_group_id || row.id;
+      const current = groups.get(key);
+      if (!current || dateValue(row.start_window, 0) > dateValue(current.start_window, 0)) groups.set(key, row);
+    });
+  const existingStarts = new Set(assignmentState.rows.map((row) => `${row.recurring_group_id || row.id}|${row.start_window}`));
+  const horizon = addDays(new Date(), 14);
+  return Array.from(groups.values()).map((row) => {
+    const next = nextAssignmentWindow(row);
+    if (!next || next.start > horizon) return null;
+    const recurrenceEnd = parseDate(row.recurrence_end_date);
+    if (recurrenceEnd && next.start > endOfDate(recurrenceEnd)) return null;
+    const groupKey = row.recurring_group_id || row.id;
+    if (existingStarts.has(`${groupKey}|${next.start.toISOString()}`)) return null;
+    return renewedAssignmentPayload(row, next);
+  }).filter(Boolean);
+}
+
+function renewedAssignmentPayload(row, window) {
+  const preferredFirst = Boolean(row.preferred_first && assignmentPreferredIds(row).length);
+  return {
+    title: row.title,
+    property_id: row.property_id || null,
+    property_name: row.property_name,
+    address: row.address,
+    service_type: row.service_type,
+    pay_amount: row.pay_amount || 0,
+    scope: row.scope || "",
+    supplies_notes: row.supplies_notes || "",
+    special_instructions: row.special_instructions || "",
+    priority: row.priority || "normal",
+    status: preferredFirst ? "preferred_pending" : "open",
+    assignment_type: assignmentFrequencyKey(row.assignment_type || row.recurrence_frequency),
+    recurrence_frequency: assignmentFrequencyKey(row.recurrence_frequency || row.assignment_type),
+    recurrence_interval: row.recurrence_interval || 1,
+    recurrence_end_date: row.recurrence_end_date || null,
+    auto_renewal: true,
+    recurring_group_id: row.recurring_group_id || row.id,
+    source_assignment_id: row.id,
+    preferred_first: preferredFirst,
+    preferred_contractor_ids: assignmentPreferredIds(row),
+    preferred_contractor_names: assignmentPreferredNames(row),
+    preferred_until: null,
+    visibility: preferredFirst ? "preferred" : "open",
+    declined_contractor_ids: [],
+    created_by: assignmentState.user?.id || row.created_by || null,
+    start_window: window.start.toISOString(),
+    end_window: window.end.toISOString()
+  };
+}
+
+function buildAssignmentWindows(start, end, frequency, recurrenceEnd) {
+  const windows = [];
+  let cursorStart = new Date(start);
+  let cursorEnd = new Date(end);
+  const limit = frequency === "daily" ? 366 : frequency === "weekly" ? 104 : frequency === "monthly" ? 36 : 1;
+  const cutoff = frequency === "one_time" ? end : endOfDate(recurrenceEnd || start);
+  while (windows.length < limit && cursorStart <= cutoff) {
+    windows.push({ start: new Date(cursorStart), end: new Date(cursorEnd) });
+    if (frequency === "one_time") break;
+    const next = advanceAssignmentWindow(cursorStart, cursorEnd, frequency);
+    cursorStart = next.start;
+    cursorEnd = next.end;
+  }
+  return windows;
+}
+
+function advanceAssignmentWindow(start, end, frequency) {
+  const nextStart = new Date(start);
+  const nextEnd = new Date(end);
+  if (frequency === "daily") {
+    nextStart.setDate(nextStart.getDate() + 1);
+    nextEnd.setDate(nextEnd.getDate() + 1);
+  } else if (frequency === "weekly") {
+    nextStart.setDate(nextStart.getDate() + 7);
+    nextEnd.setDate(nextEnd.getDate() + 7);
+  } else if (frequency === "monthly") {
+    nextStart.setMonth(nextStart.getMonth() + 1);
+    nextEnd.setMonth(nextEnd.getMonth() + 1);
+  }
+  return { start: nextStart, end: nextEnd };
+}
+
+function nextAssignmentWindow(row) {
+  const start = parseDate(row.start_window);
+  const end = parseDate(row.end_window);
+  const frequency = assignmentFrequencyKey(row.recurrence_frequency || row.assignment_type);
+  if (!start || !end || frequency === "one_time") return null;
+  return advanceAssignmentWindow(start, end, frequency);
+}
+
+function parseAssignmentRecurrenceEnd(value, frequency, start) {
+  if (frequency === "one_time") return start;
+  if (value) return parseDate(`${value}T23:59:59`);
+  const date = new Date(start);
+  if (frequency === "daily") date.setDate(date.getDate() + 6);
+  if (frequency === "weekly") date.setDate(date.getDate() + 28);
+  if (frequency === "monthly") date.setMonth(date.getMonth() + 5);
+  return date;
+}
+
+function endOfDate(value) {
+  const date = parseDate(value);
+  if (!date) return new Date();
+  date.setHours(23, 59, 59, 999);
+  return date;
+}
+
+function updateAssignmentRecurrenceVisibility() {
+  const frequency = assignmentFrequencyKey(assignmentValue("assignment_frequency") || "one_time");
+  const isRecurring = frequency !== "one_time";
+  document.querySelectorAll("[data-assignment-recurrence-field]").forEach((field) => {
+    field.hidden = !isRecurring;
+  });
+  const endDate = document.getElementById("recurrence_end_date");
+  if (endDate) {
+    endDate.required = isRecurring;
+    if (isRecurring && !endDate.value) {
+      endDate.value = toDateInput(parseAssignmentRecurrenceEnd("", frequency, parseDate(assignmentValue("start_window")) || new Date()));
+    }
+    if (!isRecurring) endDate.value = "";
+  }
+}
+
+function updateAssignmentContractorControls() {
+  const enabled = Boolean(document.getElementById("preferred_first")?.checked);
+  const field = document.querySelector(".assignment-contractor-field");
+  const deadline = document.getElementById("preferred_until")?.closest(".suite-field");
+  if (field) field.classList.toggle("muted-field", !enabled);
+  if (deadline) deadline.classList.toggle("muted-field", !enabled);
+}
+
+function closeAssignmentContractorDropdowns() {
+  document.querySelectorAll("[data-assignment-contractor-menu]").forEach((menu) => {
+    menu.hidden = true;
+  });
+  document.querySelectorAll("[data-assignment-contractor-toggle]").forEach((button) => {
+    button.setAttribute("aria-expanded", "false");
+  });
+}
+
+function readSelectedAssignmentContractors(form = document.getElementById("assignmentForm")) {
+  return Array.from(form?.querySelectorAll("[data-assignment-contractor-option]:checked") || [])
+    .map((input) => ({
+      id: input.dataset.contractorId || "",
+      name: input.dataset.contractorName || "",
+      email: input.dataset.contractorEmail || ""
+    }))
+    .filter((contractor) => contractor.id || contractor.name);
+}
+
+function updateAssignmentContractorDropdownLabel(form = document.getElementById("assignmentForm")) {
+  const label = form?.querySelector("[data-assignment-contractor-label]");
+  if (!label) return;
+  const contractors = readSelectedAssignmentContractors(form);
+  label.textContent = contractors.length ? contractors.map((contractor) => contractor.name).join(", ") : "Select preferred contractors";
+}
+
+function assignmentValue(id) {
+  return (document.getElementById(id)?.value || "").trim();
+}
+
+function getAssignmentContractorOptions() {
+  return assignmentState.contractors || [];
+}
+
+function isAssignmentContractorProfile(profile) {
+  return normalizeToken(profile?.role) === "contractor";
+}
+
+function normalizeAssignmentContractorOption(profile) {
+  const email = profile?.email || "";
+  return {
+    id: profile?.id || "",
+    name: profile?.full_name || email.split("@")[0] || "Contractor",
+    email,
+    role: profile?.role || "contractor",
+    status: profile?.status || (profile?.contractor_approved ? "approved" : "")
+  };
+}
+
+function assignmentPropertyTitle(row) {
+  return row?.property_name || row?.name || row?.company_name || row?.title || "";
+}
+
+function assignmentPropertyAddress(row) {
+  return [row?.address, row?.city, row?.state, row?.postal_code].filter(Boolean).join(", ");
+}
+
+function assignmentStatusKey(value) {
+  return normalizeToken(value || "open");
+}
+
+function assignmentFrequencyKey(value) {
+  return normalizeToken(value || "one_time").replace(/-/g, "_");
+}
+
+function assignmentFrequencyLabel(rowOrValue) {
+  const value = typeof rowOrValue === "string" ? rowOrValue : rowOrValue?.recurrence_frequency || rowOrValue?.assignment_type || "one_time";
+  const key = assignmentFrequencyKey(value);
+  return assignmentFrequencyOptions.find(([id]) => id === key)?.[1] || titleCase(key);
+}
+
+function assignmentShortId(row) {
+  return row?.id ? `A-${String(row.id).slice(0, 8).toUpperCase()}` : "New";
+}
+
+function assignmentPreferredIds(row) {
+  return Array.isArray(row?.preferred_contractor_ids) ? row.preferred_contractor_ids.filter(Boolean) : [];
+}
+
+function assignmentPreferredNames(row) {
+  return Array.isArray(row?.preferred_contractor_names) ? row.preferred_contractor_names.filter(Boolean) : [];
+}
+
+function assignmentContractorText(row) {
+  return row?.assigned_to_name
+    || row?.assigned_to_email
+    || row?.claimed_by_name
+    || row?.claimed_by_email
+    || assignmentPreferredNames(row).join(", ")
+    || "Unassigned";
+}
+
+function assignmentRoutingMeta(row) {
+  if (assignmentStatusKey(row?.status) === "preferred-pending") return "Preferred contractor window";
+  if (row?.visibility === "preferred") return "Preferred only";
+  if (assignmentPreferredNames(row).length) return `${assignmentPreferredNames(row).length} preferred contractor${assignmentPreferredNames(row).length === 1 ? "" : "s"}`;
+  return "Open to contractors";
+}
+
+function assignmentHasContractor(row) {
+  return Boolean(row?.assigned_to || row?.claimed_by || assignmentPreferredIds(row).length || row?.assigned_to_name || row?.claimed_by_name);
+}
+
+function assignmentMatchesContractor(row, contractorId) {
+  return row?.assigned_to === contractorId
+    || row?.claimed_by === contractorId
+    || assignmentPreferredIds(row).includes(contractorId);
+}
+
+function isAssignmentClosed(row) {
+  return ["completed", "cancelled", "declined"].includes(assignmentStatusKey(row?.status));
+}
+
+function isAssignmentOverdue(row) {
+  const status = assignmentStatusKey(row?.status);
+  if (status === "overdue") return true;
+  const end = parseDate(row?.end_window);
+  return Boolean(end && end < new Date() && !isAssignmentClosed(row));
+}
+
+function isAssignmentUpcoming(row) {
+  const start = parseDate(row?.start_window);
+  return Boolean(start && start >= startOfToday() && !isAssignmentClosed(row));
+}
+
+function setAssignmentSaving(isSaving) {
+  const button = document.getElementById("assignmentSaveBtn");
+  if (!button) return;
+  button.disabled = isSaving;
+  const label = button.querySelector("span");
+  if (label) label.textContent = isSaving ? "Posting..." : "Post Assignment";
+}
+
+function setRecurringButtonSaving(isSaving) {
+  const button = document.getElementById("generateRecurringAssignmentsBtn");
+  if (!button) return;
+  button.disabled = isSaving;
+  const label = button.querySelector("span");
+  if (label) label.textContent = isSaving ? "Generating..." : "Generate Due Assignments";
+}
+
+function showAssignmentMessage(text, isError = false) {
+  const message = document.getElementById("assignmentMessage") || document.getElementById("recurringMessage");
+  if (!message) return;
+  message.textContent = text || "";
+  message.classList.toggle("error", Boolean(isError));
+}
+
+function showRecurringMessage(text, isError = false) {
+  const message = document.getElementById("recurringMessage");
+  if (!message) return;
+  message.textContent = text || "";
+  message.classList.toggle("error", Boolean(isError));
+}
+
+function isMissingAssignmentOptionalColumn(error) {
+  const message = String(error?.message || "").toLowerCase();
+  return assignmentOptionalColumns.some((column) => message.includes(column.toLowerCase())) || message.includes("schema cache");
+}
+
+function missingAssignmentColumnName(error) {
+  const message = String(error?.message || "");
+  const quoted = message.match(/'([a-zA-Z0-9_]+)'\s+column/);
+  if (quoted) return quoted[1];
+  const schemaCache = message.match(/Could not find the '([a-zA-Z0-9_]+)' column/i);
+  if (schemaCache) return schemaCache[1];
+  const columnRef = message.match(/column\s+"?([a-zA-Z0-9_]+)"?\s+of relation/i);
+  return columnRef?.[1] || "";
+}
+
+function randomAssignmentGroupId() {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  return `assignment-${Date.now()}-${Math.round(Math.random() * 100000)}`;
+}
+
+function toDatetimeInput(value) {
+  const date = parseDate(value);
+  if (!date) return "";
+  const pad = (part) => String(part).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 function miniRange(label) {
@@ -5194,6 +6200,9 @@ function renderApp() {
   }
   if (activeKey === "dashboard" || activeKey === "command-center") {
     initCommandCenter();
+  }
+  if (activeKey === "assignments") {
+    initAssignments();
   }
   if (activeKey === "leads") {
     initLeads();
