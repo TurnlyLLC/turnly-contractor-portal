@@ -1457,7 +1457,8 @@ a {
   width: 100%;
 }
 
-.client-manager-toggle span:not(.suite-icon) {
+.client-manager-toggle-label {
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1470,13 +1471,12 @@ a {
   box-shadow: var(--suite-shadow);
   display: grid;
   gap: 5px;
-  left: 0;
+  margin-top: 6px;
   max-height: 240px;
   overflow: auto;
   padding: 8px;
-  position: absolute;
-  right: 0;
-  top: calc(100% + 6px);
+  position: static;
+  width: 100%;
   z-index: 15;
 }
 
@@ -1509,6 +1509,8 @@ a {
 .client-manager-option strong,
 .client-manager-option small {
   display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .client-manager-option small,
