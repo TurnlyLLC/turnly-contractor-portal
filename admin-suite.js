@@ -164,6 +164,7 @@ const walkthroughState = {
   isSaving: false
 };
 const clientTable = "clients";
+const clientOptionalColumns = ["account_manager_id", "created_by", "tags"];
 const clientStatusOptions = [
   ["active", "Active"],
   ["prospect", "Prospect"],
@@ -390,7 +391,8 @@ const iconPaths = {
   "user-plus": '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/>',
   users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9"/><path d="M16 3.1a4 4 0 0 1 0 7.8"/>',
   video: '<path d="m22 8-6 4 6 4V8Z"/><rect x="2" y="6" width="14" height="12" rx="2"/>',
-  wallet: '<path d="M21 12V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5Z"/><path d="M16 12h5"/><path d="M17 12v4"/>'
+  wallet: '<path d="M21 12V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5Z"/><path d="M16 12h5"/><path d="M17 12v4"/>',
+  x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'
 };
 
 function esc(value) {
@@ -3270,7 +3272,7 @@ function renderClientDirectory(clientTabs) {
         <button class="secondary-action" type="button" data-client-clear-filters><span>Clear Filters</span></button>
       </section>
       <p id="clientMessage" class="status-message" aria-live="polite"></p>
-      <section class="content-rail client-directory-rail">
+      <section class="client-directory-rail">
         <div class="table-card span-main clients-table-card">
           <div class="table-scroll">
             <table class="suite-table">
@@ -3292,8 +3294,20 @@ function renderClientDirectory(clientTabs) {
           <div id="clientEmptyState" hidden>${emptyState("building", "No clients found", "Add your first client to start tracking accounts.", actionButton("Add Client", "plus", "clientEmptyAddBtn"))}</div>
           <div class="table-foot"><span id="clientTableCount">Showing 0 clients</span>${pager()}</div>
         </div>
-        ${panel("Client Details", clientForm())}
       </section>
+      <div id="clientModal" class="client-modal" role="dialog" aria-modal="true" aria-labelledby="clientModalTitle" hidden>
+        <button class="client-modal-backdrop" type="button" aria-label="Close client form" data-client-modal-close></button>
+        <section class="client-modal-panel">
+          <div class="client-modal-header">
+            <div>
+              <p>Client Directory</p>
+              <h2 id="clientModalTitle">Add Client</h2>
+            </div>
+            <button class="client-modal-close" type="button" aria-label="Close client form" data-client-modal-close>${icon("x")}</button>
+          </div>
+          <div id="clientModalBody"></div>
+        </section>
+      </div>
       <section class="four-panels client-insight-grid">
         ${panel("Top Clients by Revenue", `<div id="clientTopRevenue" class="client-insight-list">${emptyState("badge-dollar", "No revenue yet")}</div>`)}
         ${panel("Clients by Status", `<div id="clientStatusBreakdown" class="client-insight-list">${skeletonRows(3)}</div>`)}
@@ -3304,9 +3318,10 @@ function renderClientDirectory(clientTabs) {
   `;
 }
 
-function clientForm() {
+function clientForm(mode = "edit") {
+  const isAdd = mode === "add";
   return `
-    <form id="clientForm" class="lead-form client-form">
+    <form id="clientForm" class="lead-form client-form" data-client-form-mode="${esc(mode)}">
       <input id="clientId" type="hidden" />
       ${formGrid([
         leadInputField("clientName", "Client Name", "text", { required: true }),
@@ -3326,8 +3341,8 @@ function clientForm() {
         leadTextareaField("clientNotes", "Notes", "wide")
       ])}
       <div class="lead-form-actions">
-        <button id="clientNewBtn" class="secondary-action" type="button">${icon("plus")}<span>New Client</span></button>
-        <button id="clientSaveBtn" class="primary-action" type="submit">${icon("check")}<span>Save Client</span></button>
+        <button id="clientCancelBtn" class="secondary-action" type="button" ${isAdd ? "data-client-modal-close" : "data-client-cancel"}>${icon("x")}<span>Cancel</span></button>
+        <button id="clientSaveBtn" class="primary-action" type="submit">${icon("check")}<span>${isAdd ? "Add Client" : "Save Client"}</span></button>
       </div>
     </form>
   `;
@@ -3338,7 +3353,10 @@ function initClientDirectory() {
   if (!root) return;
 
   root.addEventListener("click", handleClientClick);
-  root.querySelector("#clientForm")?.addEventListener("submit", saveClientForm);
+  root.addEventListener("submit", saveClientForm);
+  root.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeClientAddModal();
+  });
   root.querySelector("#clientSearchInput")?.addEventListener("input", (event) => {
     clientState.search = event.target.value || "";
     renderClientData();
@@ -3360,19 +3378,30 @@ function initClientDirectory() {
     .find((link) => link.textContent?.trim() === "Add Client");
   topbarAdd?.addEventListener("click", (event) => {
     event.preventDefault();
-    clearClientForm();
-    document.getElementById("clientName")?.focus();
+    openClientAddModal();
   });
 
-  clearClientForm();
+  clientState.selectedId = null;
   void loadClients();
 }
 
 function handleClientClick(event) {
-  const addButton = event.target.closest("#clientAddBtn, #clientNewBtn, #clientEmptyAddBtn");
+  const closeModal = event.target.closest("[data-client-modal-close]");
+  if (closeModal) {
+    closeClientAddModal();
+    return;
+  }
+
+  const cancelEdit = event.target.closest("[data-client-cancel]");
+  if (cancelEdit) {
+    clientState.selectedId = null;
+    renderClientData();
+    return;
+  }
+
+  const addButton = event.target.closest("#clientAddBtn, #clientEmptyAddBtn");
   if (addButton) {
-    clearClientForm();
-    document.getElementById("clientName")?.focus();
+    openClientAddModal();
     return;
   }
 
@@ -3431,9 +3460,8 @@ async function loadClients() {
   }
 
   clientState.rows = data || [];
-  if (!clientState.selectedId && clientState.rows.length) {
-    clientState.selectedId = clientState.rows[0].id;
-    fillClientForm(clientState.rows[0]);
+  if (clientState.selectedId && !clientState.rows.some((row) => row.id === clientState.selectedId)) {
+    clientState.selectedId = null;
   }
   populateClientManagerFilter();
   renderClientData();
@@ -3491,14 +3519,17 @@ function renderClientTable() {
   if (!body) return;
   const rows = getFilteredClients();
   body.innerHTML = rows.length ? rows.map(renderClientRow).join("") : "";
+  const selectedRow = rows.find((row) => row.id === clientState.selectedId);
+  if (selectedRow) fillClientForm(selectedRow);
   if (empty) empty.hidden = rows.length > 0;
   if (count) count.textContent = `Showing ${rows.length} of ${clientState.rows.length} clients`;
 }
 
 function renderClientRow(row) {
   const id = esc(row.id);
+  const isOpen = row.id === clientState.selectedId;
   return `
-    <tr class="${row.id === clientState.selectedId ? "active-row" : ""}" data-client-select="${id}">
+    <tr class="${isOpen ? "active-row" : ""}" data-client-select="${id}">
       <td><strong>${esc(clientTitle(row))}</strong><small>${esc(clientRegionText(row))}</small></td>
       <td>${esc(row.company_name || "-")}</td>
       <td><strong>${esc(row.primary_contact_name || "-")}</strong><small>${esc(row.primary_contact_email || row.primary_contact_phone || "")}</small></td>
@@ -3506,8 +3537,23 @@ function renderClientRow(row) {
       <td>${esc(formatDateOnly(row.renewal_date, "-"))}</td>
       <td>${esc(row.property_count ?? 0)}</td>
       <td>${esc(clientMoney(row.annual_revenue))}</td>
-      <td><button class="table-action-button" type="button" data-client-select="${id}">Edit</button></td>
+      <td><button class="table-action-button" type="button" data-client-select="${id}">${isOpen ? icon("chevron-down") : ""}<span>${isOpen ? "Close" : "Edit"}</span></button></td>
     </tr>
+    ${isOpen ? `
+      <tr class="client-edit-row">
+        <td colspan="8">
+          <div class="client-inline-edit">
+            <div class="client-inline-edit-head">
+              <div>
+                <span>Client Details</span>
+                <strong>${esc(clientTitle(row))}</strong>
+              </div>
+            </div>
+            ${clientForm("edit")}
+          </div>
+        </td>
+      </tr>
+    ` : ""}
   `;
 }
 
@@ -3572,12 +3618,38 @@ function getFilteredClients() {
 function selectClient(id) {
   const row = clientState.rows.find((item) => item.id === id);
   if (!row) return;
+  closeClientAddModal();
+  if (clientState.selectedId === id) {
+    clientState.selectedId = null;
+    renderClientData();
+    return;
+  }
   clientState.selectedId = id;
-  fillClientForm(row);
   renderClientData();
+  document.getElementById("clientName")?.focus();
 }
 
-function clearClientForm() {
+function openClientAddModal() {
+  const modal = document.getElementById("clientModal");
+  const body = document.getElementById("clientModalBody");
+  if (!modal || !body) return;
+  clientState.selectedId = null;
+  renderClientData();
+  body.innerHTML = clientForm("add");
+  clearClientForm({ render: false });
+  modal.hidden = false;
+  requestAnimationFrame(() => document.getElementById("clientName")?.focus());
+}
+
+function closeClientAddModal() {
+  const modal = document.getElementById("clientModal");
+  const body = document.getElementById("clientModalBody");
+  if (modal) modal.hidden = true;
+  if (body) body.innerHTML = "";
+}
+
+function clearClientForm(options = {}) {
+  const { render = true } = options;
   clientState.selectedId = null;
   setClientFormValues({
     id: "",
@@ -3597,7 +3669,7 @@ function clearClientForm() {
     tags: [],
     notes: ""
   });
-  renderClientData();
+  if (render) renderClientData();
 }
 
 function fillClientForm(row) {
@@ -3651,7 +3723,6 @@ function clientValue(id) {
 }
 
 function collectClientPayload() {
-  const existing = clientState.rows.find((row) => row.id === clientValue("clientId"));
   const propertyCount = Number(clientValue("clientProperties"));
   const revenue = Number(clientValue("clientAnnualRevenue"));
   const managerName = clientValue("clientAccountManager");
@@ -3670,7 +3741,6 @@ function collectClientPayload() {
     contract_start_date: clientValue("clientContractStart") || null,
     renewal_date: clientValue("clientRenewalDate") || null,
     account_manager_name: managerName,
-    account_manager_id: managerName === clientDisplayName() ? clientState.user?.id || null : existing?.account_manager_name === managerName ? existing?.account_manager_id || null : null,
     tags: clientValue("clientTags").split(",").map((tag) => tag.trim()).filter(Boolean),
     notes: clientValue("clientNotes")
   };
@@ -3683,15 +3753,24 @@ function collectClientPayload() {
 async function saveClientForm(event) {
   event?.preventDefault();
   if (!suiteSupabase || clientState.isSaving) return;
+  const formMode = event?.target?.dataset?.clientFormMode || document.getElementById("clientForm")?.dataset?.clientFormMode || "edit";
   clientState.isSaving = true;
   setClientSaving(true);
   showClientMessage("Saving client to Supabase...");
 
   const id = clientValue("clientId");
   const payload = collectClientPayload();
-  const result = id
+  let result = id
     ? await suiteSupabase.from(clientTable).update(payload).eq("id", id).select("*").maybeSingle()
     : await suiteSupabase.from(clientTable).insert(payload).select("*").maybeSingle();
+
+  if (result.error && isMissingClientOptionalColumn(result.error)) {
+    const fallbackPayload = { ...payload };
+    clientOptionalColumns.forEach((column) => delete fallbackPayload[column]);
+    result = id
+      ? await suiteSupabase.from(clientTable).update(fallbackPayload).eq("id", id).select("*").maybeSingle()
+      : await suiteSupabase.from(clientTable).insert(fallbackPayload).select("*").maybeSingle();
+  }
 
   clientState.isSaving = false;
   setClientSaving(false);
@@ -3702,6 +3781,7 @@ async function saveClientForm(event) {
   }
 
   const saved = result.data;
+  closeClientAddModal();
   const index = clientState.rows.findIndex((row) => row.id === saved.id);
   if (index >= 0) {
     clientState.rows[index] = saved;
@@ -3710,18 +3790,18 @@ async function saveClientForm(event) {
   }
   clientState.selectedId = saved.id;
   populateClientManagerFilter();
-  fillClientForm(saved);
   renderClientData();
-  showClientMessage("Client saved to Supabase.");
+  showClientMessage(formMode === "add" ? "Client added to Supabase." : "Client saved to Supabase.");
 }
 
 function setClientSaving(isSaving) {
   const button = document.getElementById("clientSaveBtn");
   if (button) {
+    const defaultLabel = button.closest("form")?.dataset?.clientFormMode === "add" ? "Add Client" : "Save Client";
     button.disabled = isSaving;
     const labels = button.querySelectorAll("span");
     const label = labels[labels.length - 1];
-    if (label) label.textContent = isSaving ? "Saving..." : "Save Client";
+    if (label) label.textContent = isSaving ? "Saving..." : defaultLabel;
   }
 }
 
@@ -3757,6 +3837,11 @@ function clientMoney(value) {
 
 function clientDisplayName() {
   return clientState.profile?.full_name || clientState.user?.user_metadata?.full_name || clientState.user?.email?.split("@")[0] || "";
+}
+
+function isMissingClientOptionalColumn(error) {
+  const message = String(error?.message || "").toLowerCase();
+  return clientOptionalColumns.some((column) => message.includes(column.toLowerCase())) || message.includes("schema cache");
 }
 
 function formatDateOnly(value, fallback = "No date") {
