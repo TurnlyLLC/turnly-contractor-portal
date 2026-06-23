@@ -296,7 +296,7 @@ const assignmentState = {
   user: null,
   profile: null,
   search: "",
-  statusFilter: "all",
+  statusFilter: "open",
   frequencyFilter: "all",
   contractorFilter: "all",
   isSaving: false,
@@ -3071,13 +3071,15 @@ function renderAssignments() {
   const assignmentToolbar = toolbar(
     `<div class="suite-tabs" role="tablist">
       ${[
-        ["all", "All Assignments"],
-        ["upcoming", "Upcoming"],
+        ["open", "Open"],
+        ["preferred_pending", "Preferred"],
+        ["claimed", "Claimed"],
         ["in_progress", "In Progress"],
-        ["completed", "Completed"],
+        ["upcoming", "Upcoming"],
         ["overdue", "Overdue"],
-        ["draft", "Draft"]
-      ].map(([key, label]) => `<button class="suite-tab assignment-status-tab ${key === "all" ? "active" : ""}" type="button" data-assignment-status-tab="${esc(key)}">${esc(label)}</button>`).join("")}
+        ["completed", "Completed"],
+        ["all", "All"]
+      ].map(([key, label]) => `<button class="suite-tab assignment-status-tab ${key === "open" ? "active" : ""}" type="button" data-assignment-status-tab="${esc(key)}">${esc(label)}</button>`).join("")}
     </div>`,
     `<label class="inline-search"><span class="sr-only">Search assignments</span>${icon("search")}<input id="assignmentSearchInput" type="search" placeholder="Search assignments..." /></label><button class="secondary-action" type="button" data-assignment-clear-filters>${icon("x")}<span>Clear</span></button>`
   );
@@ -3085,30 +3087,59 @@ function renderAssignments() {
     <section class="assignments-layout" data-assignments-page>
       <div class="suite-stack">
         <section class="metric-strip five">
-          ${metric("Total Assignments", "0", "synced from Supabase", "calendar", "green", 'id="assignmentTotalCount"')}
+          ${metric("Open Assignments", "0", "claimable in Supabase", "calendar", "green", 'id="assignmentTotalCount"')}
           ${metric("Today's Assignments", "0", "due today", "calendar", "purple", 'id="assignmentTodayCount"')}
           ${metric("In Progress", "0", "right now", "clock", "orange", 'id="assignmentProgressCount"')}
           ${metric("Completed (7 Days)", "0", "from last 7 days", "check", "green", 'id="assignmentCompletedCount"')}
           ${metric("Overdue", "0", "past due", "alert", "red", 'id="assignmentOverdueCount"')}
         </section>
-        ${tableFrame(["", "Assignment", "Property / Location", "Service Type", "Contractor Routing", "Block", "Date", "Status", "Priority", "Actions"], `
+        <section class="suite-panel assignment-list-panel">
+          <div class="panel-head assignment-list-head">
+            <div>
+              <h2>Open Assignments</h2>
+              <p>Synced from Supabase</p>
+            </div>
+            ${assignmentNewButton("New Assignment", "assignmentPanelNewBtn")}
+          </div>
+          ${assignmentToolbar}
           <p id="assignmentMessage" class="status-message table-status-message" aria-live="polite"></p>
-        `, {
-          checkbox: true,
-          toolbar: assignmentToolbar,
-          className: "assignment-table-card",
-          itemName: "results",
-          bodyId: "adminAssignments",
-          rows: `<tr class="assignment-empty-row"><td colspan="10">${emptyState("calendar", "No assignments found", "Assignments will appear here.")}</td></tr>`
-        })}
+          <div id="adminAssignments" class="assignment-open-list">
+            ${emptyState("calendar", "No open assignments", "Assignments from Supabase will appear here.", assignmentNewButton("New Assignment", "assignmentEmptyNewBtn"))}
+          </div>
+          <div class="table-foot"><span id="assignmentListCount">Showing 0 open assignments</span></div>
+        </section>
       </div>
       <aside class="suite-stack">
         ${assignmentFilterPanel()}
+        ${assignmentToolsPanel()}
         ${panel("Calendar Overview", miniCalendar())}
-        ${panel("Assignment Builder", assignmentForm(), { className: "assignment-builder-panel" })}
       </aside>
+      <div id="assignmentModal" class="client-modal assignment-modal" role="dialog" aria-modal="true" aria-labelledby="assignmentModalTitle" hidden>
+        <button class="client-modal-backdrop" type="button" aria-label="Close assignment form" data-assignment-modal-close></button>
+        <section class="client-modal-panel assignment-modal-panel">
+          <div class="client-modal-header">
+            <div>
+              <p>Assignments</p>
+              <h2 id="assignmentModalTitle">New Assignment</h2>
+            </div>
+            <button class="client-modal-close" type="button" aria-label="Close assignment form" data-assignment-modal-close>${icon("x")}</button>
+          </div>
+          <div id="assignmentModalBody">${assignmentForm()}</div>
+        </section>
+      </div>
     </section>
   `;
+}
+
+function assignmentNewButton(label = "New Assignment", id = "") {
+  return `<button ${id ? `id="${esc(id)}"` : ""} class="primary-action" type="button" data-assignment-new>${icon("plus")}<span>${esc(label)}</span></button>`;
+}
+
+function assignmentToolsPanel() {
+  return panel("Assignment Tools", `
+    <button id="generateRecurringAssignmentsBtn" type="button" class="secondary-action full-width">${icon("refresh")}<span>Generate Due Assignments</span></button>
+    <p id="recurringMessage" class="status-message"></p>
+  `, { className: "assignment-tools-panel" });
 }
 
 function assignmentFilterPanel() {
@@ -4898,33 +4929,45 @@ function selectButton(label) {
 
 function assignmentForm() {
   return `
-    <form id="assignmentForm" class="lead-form assignment-form">
-      ${formGrid([
+    <form id="assignmentForm" class="lead-form assignment-form assignment-modal-form">
+      <input id="property_id" type="hidden" />
+      ${assignmentFormSection("Assignment Details", [
         `<label class="suite-field wide"><span>Select Property</span><select id="propertySelect" required><option value="">Choose a property...</option></select></label>`,
-        `<input id="property_id" type="hidden" />`,
         leadInputField("title", "Assignment Title", "text", { required: true, placeholder: "Apartment Turnover - Unit 204" }),
         leadInputField("property_name", "Property Name", "text", { required: true }),
         leadInputField("address", "Address", "text", { className: "wide" }),
         leadInputField("service_type", "Service Type"),
-        leadInputField("pay_amount", "Pay Amount", "number", { min: "0", step: "0.01" }),
+        leadInputField("pay_amount", "Pay Amount", "number", { min: "0", step: "0.01" })
+      ])}
+      ${assignmentFormSection("Timing & Routing", [
         leadSelectField("assignment_frequency", "Block Type", assignmentFrequencyOptions, { required: true }),
         leadSelectField("priority", "Priority", assignmentPriorityOptions, { required: true }),
         leadInputField("start_window", "Start Window", "datetime-local", { required: true }),
         leadInputField("end_window", "End Window", "datetime-local", { required: true }),
         `<label class="suite-field" data-assignment-recurrence-field><span>Renew Until</span><input id="recurrence_end_date" type="date" /></label>`,
+        `<label class="suite-field"><span>Preferred Response Deadline</span><input id="preferred_until" type="datetime-local" /></label>`,
         `<label class="checkbox-field assignment-toggle wide" data-assignment-recurrence-field><input id="auto_renewal" type="checkbox" /> <span>Auto renew this assignment block</span></label>`,
         `<label class="checkbox-field assignment-toggle wide"><input id="preferred_first" type="checkbox" checked /> <span>Offer to preferred contractors first</span></label>`,
-        preferredContractorDropdownField(),
-        `<label class="suite-field"><span>Preferred Response Deadline</span><input id="preferred_until" type="datetime-local" /></label>`,
+        preferredContractorDropdownField()
+      ])}
+      ${assignmentFormSection("Work Details", [
         leadTextareaField("scope", "Scope of Work", "wide"),
         leadTextareaField("supplies_notes", "Supplies Notes"),
         leadTextareaField("special_instructions", "Special Instructions")
-      ])}
+      ], "assignment-notes-grid")}
       <div id="assignmentChecklistPreview" class="checklist-summary assignment-checklist-preview"></div>
+      <p id="assignmentFormMessage" class="status-message"></p>
       <div class="form-actions"><button id="assignmentSaveBtn" type="submit" class="primary-action">${icon("check")}<span>Post Assignment</span></button></div>
     </form>
-    <button id="generateRecurringAssignmentsBtn" type="button" class="secondary-action full-width">${icon("refresh")}<span>Generate Due Assignments</span></button>
-    <p id="recurringMessage" class="status-message"></p>
+  `;
+}
+
+function assignmentFormSection(title, fields, className = "") {
+  return `
+    <section class="assignment-form-section">
+      <h3>${esc(title)}</h3>
+      ${formGrid(fields, `assignment-form-grid ${className}`)}
+    </section>
   `;
 }
 
@@ -4982,15 +5025,47 @@ function initAssignments() {
     .find((link) => link.textContent?.trim() === "New Assignment");
   topbarAdd?.addEventListener("click", (event) => {
     event.preventDefault();
-    clearAssignmentForm();
-    document.getElementById("title")?.focus();
+    openAssignmentModal();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeAssignmentModal();
   });
 
   clearAssignmentForm({ keepMessage: true });
   void loadAssignments();
 }
 
+function openAssignmentModal() {
+  const modal = document.getElementById("assignmentModal");
+  if (!modal) return;
+  clearAssignmentForm({ keepMessage: true });
+  populateAssignmentPropertySelect();
+  populateAssignmentContractorMenu();
+  updateAssignmentRecurrenceVisibility();
+  updateAssignmentContractorControls();
+  modal.hidden = false;
+  document.getElementById("title")?.focus();
+}
+
+function closeAssignmentModal() {
+  const modal = document.getElementById("assignmentModal");
+  if (modal) modal.hidden = true;
+  closeAssignmentContractorDropdowns();
+}
+
 function handleAssignmentClick(event) {
+  const newAssignment = event.target.closest("[data-assignment-new]");
+  if (newAssignment) {
+    openAssignmentModal();
+    return;
+  }
+
+  const closeModal = event.target.closest("[data-assignment-modal-close]");
+  if (closeModal) {
+    closeAssignmentModal();
+    return;
+  }
+
   const contractorToggle = event.target.closest("[data-assignment-contractor-toggle]");
   if (contractorToggle) {
     const dropdown = contractorToggle.closest("[data-assignment-contractor-dropdown]");
@@ -5018,7 +5093,7 @@ function handleAssignmentClick(event) {
   const clearFilters = event.target.closest("[data-assignment-clear-filters]");
   if (clearFilters) {
     assignmentState.search = "";
-    assignmentState.statusFilter = "all";
+    assignmentState.statusFilter = "open";
     assignmentState.frequencyFilter = "all";
     assignmentState.contractorFilter = "all";
     renderAssignmentData();
@@ -5080,11 +5155,12 @@ async function loadAssignments() {
   assignmentState.contractors = contractorsResult;
   assignmentState.rows = assignmentsResult.rows;
   renderAssignmentData();
+  const openCount = assignmentState.rows.filter(isAssignmentOpen).length;
   showAssignmentMessage(assignmentsResult.error
     ? "Assignments are ready once the Supabase migration is applied."
-    : assignmentState.rows.length
-      ? `${assignmentState.rows.length} assignment${assignmentState.rows.length === 1 ? "" : "s"} synced from Supabase.`
-      : "Synced with Supabase. No assignments yet.");
+    : openCount
+      ? `${openCount} open assignment${openCount === 1 ? "" : "s"} synced from Supabase.`
+      : "Synced with Supabase. No open assignments yet.");
 }
 
 async function loadAssignmentProperties() {
@@ -5201,7 +5277,7 @@ function renderAssignmentMetrics() {
     const element = document.getElementById(id);
     if (element) element.textContent = value;
   };
-  setText("assignmentTotalCount", rows.length.toLocaleString());
+  setText("assignmentTotalCount", rows.filter(isAssignmentOpen).length.toLocaleString());
   setText("assignmentTodayCount", rows.filter((row) => isToday(row.start_window)).length.toLocaleString());
   setText("assignmentProgressCount", rows.filter((row) => assignmentStatusKey(row.status) === "in-progress").length.toLocaleString());
   setText("assignmentCompletedCount", rows.filter((row) => assignmentStatusKey(row.status) === "completed" && isWithinPastDays(row.completed_at || row.updated_at || row.end_window, 7)).length.toLocaleString());
@@ -5212,27 +5288,65 @@ function renderAssignmentTable() {
   const body = document.getElementById("adminAssignments");
   if (!body) return;
   const rows = getFilteredAssignments();
+  const count = document.getElementById("assignmentListCount");
+  if (count) {
+    const label = assignmentState.statusFilter === "open" ? "open assignments" : "assignments";
+    count.textContent = `Showing ${rows.length.toLocaleString()} ${label}`;
+  }
   body.innerHTML = rows.length
     ? rows.map(renderAssignmentRow).join("")
-    : `<tr class="assignment-empty-row"><td colspan="10">${emptyState("calendar", "No assignments found", "Assignments will appear here.")}</td></tr>`;
+    : emptyState("calendar", assignmentState.statusFilter === "open" ? "No open assignments" : "No assignments found", "Assignments from Supabase will appear here.", assignmentNewButton("New Assignment", "assignmentEmptyNewBtn"));
 }
 
 function renderAssignmentRow(row) {
   const id = esc(row.id || "");
   const status = assignmentStatusKey(row.status);
+  const overdue = isAssignmentOverdue(row);
+  const detailItems = [
+    ["Property", row.property_name || "No property", row.address || "No address", "building"],
+    ["Schedule", formatDateWindow(row.start_window, row.end_window), assignmentFrequencyLabel(row), "calendar"],
+    ["Contractor Routing", assignmentContractorText(row), assignmentRoutingMeta(row), "users"],
+    ["Pay", assignmentMoney(row.pay_amount), row.service_type || "No service type", "badge-dollar"]
+  ];
   return `
-    <tr>
-      <td><input type="checkbox" aria-label="Select assignment ${esc(assignmentShortId(row))}" /></td>
-      <td><strong>${esc(row.title || "Untitled Assignment")}</strong><small>${esc(assignmentShortId(row))}</small></td>
-      <td><strong>${esc(row.property_name || "No property")}</strong><small>${esc(row.address || "No address")}</small></td>
-      <td>${esc(row.service_type || "-")}</td>
-      <td><strong>${esc(assignmentContractorText(row))}</strong><small>${esc(assignmentRoutingMeta(row))}</small></td>
-      <td><strong>${esc(assignmentFrequencyLabel(row))}</strong><small>${esc(row.auto_renewal ? "Auto renewal" : "Manual block")}</small></td>
-      <td>${esc(formatDateWindow(row.start_window, row.end_window))}</td>
-      <td>${statusBadge(isAssignmentOverdue(row) ? "overdue" : row.status || "open")}</td>
-      <td><span class="status-badge ${statusClassName(row.priority || "normal")}">${esc(titleCase(row.priority || "Normal"))}</span></td>
-      <td><div class="assignment-row-actions">${assignmentRowActions(row, status, id)}</div></td>
-    </tr>
+    <article class="assignment-list-item ${overdue ? "is-overdue" : ""}">
+      <header class="assignment-list-item-header">
+        <div class="assignment-title-block">
+          <span class="assignment-short-id">${esc(assignmentShortId(row))}</span>
+          <h3>${esc(row.title || "Untitled Assignment")}</h3>
+          <div class="assignment-badge-row">
+            ${statusBadge(overdue ? "overdue" : row.status || "open")}
+            <span class="status-badge ${statusClassName(row.priority || "normal")}">${esc(titleCase(row.priority || "Normal"))}</span>
+            ${row.auto_renewal ? `<span class="status-badge status-open">Auto Renewal</span>` : ""}
+          </div>
+        </div>
+        <div class="assignment-row-actions">${assignmentRowActions(row, status, id)}</div>
+      </header>
+      <div class="assignment-detail-grid">
+        ${detailItems.map(([label, value, meta, iconName]) => `
+          <div class="assignment-detail-cell">
+            <span>${icon(iconName)}${esc(label)}</span>
+            <strong>${esc(value)}</strong>
+            <small>${esc(meta)}</small>
+          </div>
+        `).join("")}
+      </div>
+      ${assignmentNotesPreview(row)}
+    </article>
+  `;
+}
+
+function assignmentNotesPreview(row) {
+  const notes = [
+    ["Scope", row.scope],
+    ["Supplies", row.supplies_notes],
+    ["Instructions", row.special_instructions]
+  ].filter(([, value]) => value);
+  if (!notes.length) return "";
+  return `
+    <div class="assignment-notes-preview">
+      ${notes.map(([label, value]) => `<p><span>${esc(label)}</span>${esc(value)}</p>`).join("")}
+    </div>
   `;
 }
 
@@ -5264,7 +5378,9 @@ function getFilteredAssignments() {
   const frequencyFilter = assignmentFrequencyKey(assignmentState.frequencyFilter);
   return assignmentState.rows.filter((row) => {
     if (statusFilter && statusFilter !== "all") {
-      if (statusFilter === "upcoming") {
+      if (statusFilter === "open") {
+        if (!isAssignmentOpen(row)) return false;
+      } else if (statusFilter === "upcoming") {
         if (!isAssignmentUpcoming(row)) return false;
       } else if (statusFilter === "overdue") {
         if (!isAssignmentOverdue(row)) return false;
@@ -5317,7 +5433,15 @@ function clearAssignmentForm(options = {}) {
   updateAssignmentContractorDropdownLabel();
   updateAssignmentRecurrenceVisibility();
   updateAssignmentContractorControls();
-  if (!options.keepMessage) showRecurringMessage("");
+  const formMessage = document.getElementById("assignmentFormMessage");
+  if (formMessage) {
+    formMessage.textContent = "";
+    formMessage.classList.remove("error");
+  }
+  if (!options.keepMessage) {
+    showAssignmentMessage("");
+    showRecurringMessage("");
+  }
 }
 
 function fillAssignmentFromProperty(propertyId) {
@@ -5411,6 +5535,7 @@ async function saveAssignmentForm(event) {
   assignmentState.rows = [...(result.data || []), ...assignmentState.rows]
     .sort((a, b) => dateValue(a.start_window) - dateValue(b.start_window));
   renderAssignmentData();
+  closeAssignmentModal();
   clearAssignmentForm({ keepMessage: true });
   showAssignmentMessage(`${result.data?.length || payloads.length} assignment block${(result.data?.length || payloads.length) === 1 ? "" : "s"} posted to Supabase.`);
 }
@@ -5733,6 +5858,12 @@ function assignmentFrequencyLabel(rowOrValue) {
   return assignmentFrequencyOptions.find(([id]) => id === key)?.[1] || titleCase(key);
 }
 
+function assignmentMoney(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return "$0";
+  return number.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+}
+
 function assignmentShortId(row) {
   return row?.id ? `A-${String(row.id).slice(0, 8).toUpperCase()}` : "New";
 }
@@ -5775,6 +5906,10 @@ function isAssignmentClosed(row) {
   return ["completed", "cancelled", "declined"].includes(assignmentStatusKey(row?.status));
 }
 
+function isAssignmentOpen(row) {
+  return ["open", "preferred-pending"].includes(assignmentStatusKey(row?.status));
+}
+
 function isAssignmentOverdue(row) {
   const status = assignmentStatusKey(row?.status);
   if (status === "overdue") return true;
@@ -5804,7 +5939,9 @@ function setRecurringButtonSaving(isSaving) {
 }
 
 function showAssignmentMessage(text, isError = false) {
-  const message = document.getElementById("assignmentMessage") || document.getElementById("recurringMessage");
+  const modal = document.getElementById("assignmentModal");
+  const formMessage = modal && !modal.hidden ? document.getElementById("assignmentFormMessage") : null;
+  const message = formMessage || document.getElementById("assignmentMessage") || document.getElementById("recurringMessage");
   if (!message) return;
   message.textContent = text || "";
   message.classList.toggle("error", Boolean(isError));
