@@ -180,6 +180,7 @@ const clientOptionalColumns = [
   "monthly_recurring_revenue",
   "prospect_projected_revenue",
   "projected_annual_turnovers",
+  "projected_monthly_turnovers",
   "projected_turnover_revenue",
   "annual_revenue",
   "contract_start_date",
@@ -205,6 +206,20 @@ const clientServiceModelOptions = [
   ["monthly_commercial", "Monthly Commercial"],
   ["hybrid", "Hybrid"],
   ["other", "Other"]
+];
+const clientTurnoverMonthOptions = [
+  ["jan", "Jan"],
+  ["feb", "Feb"],
+  ["mar", "Mar"],
+  ["apr", "Apr"],
+  ["may", "May"],
+  ["jun", "Jun"],
+  ["jul", "Jul"],
+  ["aug", "Aug"],
+  ["sep", "Sep"],
+  ["oct", "Oct"],
+  ["nov", "Nov"],
+  ["dec", "Dec"]
 ];
 const clientState = {
   rows: [],
@@ -3397,6 +3412,25 @@ function clientManagerDropdownField(row = null) {
   `;
 }
 
+function clientMonthlyTurnoversField() {
+  return `
+    <div class="client-monthly-turnovers wide" data-client-monthly-turnovers>
+      <div class="client-monthly-turnovers-head">
+        <span>Projected Turnover Units by Month</span>
+        <small id="clientMonthlyTurnoversTotal">0 projected this year</small>
+      </div>
+      <div class="client-month-grid">
+        ${clientTurnoverMonthOptions.map(([key, label]) => `
+          <label class="suite-field">
+            <span>${esc(label)}</span>
+            <input id="clientTurnoverMonth_${esc(key)}" data-client-turnover-month="${esc(key)}" type="number" min="0" step="1" />
+          </label>
+        `).join("")}
+      </div>
+    </div>
+  `;
+}
+
 function clientForm(mode = "edit", row = null) {
   const isAdd = mode === "add";
   return `
@@ -3413,9 +3447,10 @@ function clientForm(mode = "edit", row = null) {
         leadSelectField("clientType", "Client Type", clientTypeOptions, { emptyLabel: "Select type" }),
         leadInputField("clientRegion", "Region / Market"),
         leadInputField("clientProperties", "Properties", "number", { min: "0", step: "1" }),
-        clientFormSection("Service Model"),
+        clientFormSection("Property Details"),
         leadSelectField("clientServiceModel", "Service Model", clientServiceModelOptions, { required: true }),
         leadInputField("clientUnitCount", "Units", "number", { min: "0", step: "1", className: "client-unit-field" }),
+        clientMonthlyTurnoversField(),
         clientFormSection("Revenue", "", "revenue"),
         leadInputField("clientMonthlyRecurringRevenue", "Monthly Recurring Income", "number", { min: "0", step: "0.01", className: "client-revenue-field" }),
         leadInputField("clientProspectProjectedRevenue", "Monthly Prospect Income", "number", { min: "0", step: "0.01", className: "client-revenue-field" }),
@@ -3546,6 +3581,9 @@ function handleClientChange(event) {
   }
   if (event.target.matches("#clientServiceModel, #clientStatus")) {
     updateClientRevenueFieldVisibility(event.target.closest("#clientForm"), { clearHidden: true });
+  }
+  if (event.target.closest("[data-client-turnover-month]")) {
+    updateClientMonthlyTurnoversTotal(event.target.closest("#clientForm"));
   }
 }
 
@@ -3846,6 +3884,7 @@ function getFilteredClients() {
       row.monthly_recurring_revenue,
       row.prospect_projected_revenue,
       row.projected_annual_turnovers,
+      JSON.stringify(row.projected_monthly_turnovers || {}),
       row.projected_turnover_revenue,
       ...managerNames,
       ...(Array.isArray(row.tags) ? row.tags : []),
@@ -3907,6 +3946,7 @@ function clearClientForm(options = {}) {
     monthly_recurring_revenue: "",
     prospect_projected_revenue: "",
     projected_annual_turnovers: 0,
+    projected_monthly_turnovers: emptyClientMonthlyTurnovers(),
     projected_turnover_revenue: "",
     annual_revenue: "",
     contract_start_date: "",
@@ -3937,6 +3977,7 @@ function fillClientForm(row) {
     monthly_recurring_revenue: row.monthly_recurring_revenue ?? clientMonthlyRecurringRevenue(row),
     prospect_projected_revenue: row.prospect_projected_revenue ?? clientProspectIncome(row),
     projected_annual_turnovers: row.projected_annual_turnovers ?? clientProjectedTurnovers(row),
+    projected_monthly_turnovers: row.projected_monthly_turnovers ?? clientMonthlyTurnovers(row),
     projected_turnover_revenue: row.projected_turnover_revenue ?? clientTurnoverRevenue(row),
     annual_revenue: row.annual_revenue ?? "",
     contract_start_date: row.contract_start_date || "",
@@ -3977,6 +4018,7 @@ function setClientFormValues(values) {
     if (field) field.value = value ?? "";
   });
   setClientManagerSelections(values.account_manager_ids || [], values.account_manager_names || []);
+  setClientMonthlyTurnoverInputs(values.projected_monthly_turnovers, values.projected_annual_turnovers);
   updateClientRevenueFieldVisibility(document.getElementById("clientForm"));
 }
 
@@ -4028,10 +4070,81 @@ function updateClientRevenueFieldVisibility(form = document.getElementById("clie
   setFieldVisible("clientProspectProjectedRevenue", showProspectIncome);
   setFieldVisible("clientProjectedTurnoverRevenue", showTurnoverRevenue);
 
+  const monthlyTurnovers = form.querySelector("[data-client-monthly-turnovers]");
+  if (monthlyTurnovers) monthlyTurnovers.hidden = !showUnits;
+  if (clearHidden && !showUnits) {
+    setClientMonthlyTurnoverInputs(emptyClientMonthlyTurnovers(), 0, form);
+  }
+
   const revenueSection = form.querySelector('[data-client-section="revenue"]');
   if (revenueSection) {
     revenueSection.hidden = !(showMonthlyRecurring || showProspectIncome || showTurnoverRevenue);
   }
+}
+
+function emptyClientMonthlyTurnovers() {
+  return Object.fromEntries(clientTurnoverMonthOptions.map(([key]) => [key, 0]));
+}
+
+function normalizeClientMonthlyTurnovers(value, fallbackAnnual = 0) {
+  let source = value || {};
+  if (typeof source === "string") {
+    try {
+      source = JSON.parse(source);
+    } catch {
+      source = {};
+    }
+  }
+  if (Array.isArray(source)) {
+    source = Object.fromEntries(clientTurnoverMonthOptions.map(([key], index) => [key, source[index]]));
+  }
+
+  const normalized = emptyClientMonthlyTurnovers();
+  clientTurnoverMonthOptions.forEach(([key]) => {
+    const count = Number(source?.[key]);
+    normalized[key] = Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
+  });
+
+  const fallback = Number(fallbackAnnual);
+  if (!clientMonthlyTurnoversTotal(normalized) && Number.isFinite(fallback) && fallback > 0) {
+    normalized.jan = Math.floor(fallback);
+  }
+  return normalized;
+}
+
+function clientMonthlyTurnoversTotal(turnovers) {
+  return Object.values(turnovers || {}).reduce((sum, value) => {
+    const count = Number(value);
+    return sum + (Number.isFinite(count) && count > 0 ? Math.floor(count) : 0);
+  }, 0);
+}
+
+function setClientMonthlyTurnoverInputs(value, fallbackAnnual = 0, form = document.getElementById("clientForm")) {
+  if (!form) return;
+  const turnovers = normalizeClientMonthlyTurnovers(value, fallbackAnnual);
+  clientTurnoverMonthOptions.forEach(([key]) => {
+    const field = form.querySelector(`[data-client-turnover-month="${key}"]`);
+    if (field) field.value = turnovers[key] || "";
+  });
+  updateClientMonthlyTurnoversTotal(form);
+}
+
+function readClientMonthlyTurnovers(form = document.getElementById("clientForm")) {
+  const turnovers = emptyClientMonthlyTurnovers();
+  form?.querySelectorAll("[data-client-turnover-month]").forEach((field) => {
+    const key = field.dataset.clientTurnoverMonth;
+    const count = Number(field.value);
+    if (key && Object.prototype.hasOwnProperty.call(turnovers, key)) {
+      turnovers[key] = Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
+    }
+  });
+  return turnovers;
+}
+
+function updateClientMonthlyTurnoversTotal(form = document.getElementById("clientForm")) {
+  const total = clientMonthlyTurnoversTotal(readClientMonthlyTurnovers(form));
+  const label = form?.querySelector("#clientMonthlyTurnoversTotal");
+  if (label) label.textContent = `${total.toLocaleString()} projected this year`;
 }
 
 function closeClientManagerDropdowns() {
@@ -4103,9 +4216,10 @@ function collectClientPayload() {
   const managerIds = managers.map((manager) => manager.id).filter(Boolean);
   const managerNames = managers.map((manager) => manager.name).filter(Boolean);
   const cleanUnitCount = isTurnoverService && Number.isFinite(unitCount) && unitCount >= 0 ? Math.floor(unitCount) : 0;
+  const cleanMonthlyTurnovers = isTurnoverService ? readClientMonthlyTurnovers() : emptyClientMonthlyTurnovers();
   const cleanMonthlyRecurringRevenue = isActiveRevenue && isRecurringService && Number.isFinite(monthlyRecurringRevenue) && monthlyRecurringRevenue >= 0 ? monthlyRecurringRevenue : 0;
   const cleanProspectProjectedRevenue = isProspect && Number.isFinite(prospectProjectedRevenue) && prospectProjectedRevenue >= 0 ? prospectProjectedRevenue : 0;
-  const cleanProjectedAnnualTurnovers = isTurnoverService ? cleanUnitCount : 0;
+  const cleanProjectedAnnualTurnovers = isTurnoverService ? clientMonthlyTurnoversTotal(cleanMonthlyTurnovers) : 0;
   const cleanProjectedTurnoverRevenue = isActiveRevenue && isTurnoverService && Number.isFinite(projectedTurnoverRevenue) && projectedTurnoverRevenue >= 0 ? projectedTurnoverRevenue : 0;
   const cleanAnnualRevenue = (cleanMonthlyRecurringRevenue + cleanProjectedTurnoverRevenue) * 12;
   const payload = {
@@ -4125,6 +4239,7 @@ function collectClientPayload() {
     monthly_recurring_revenue: cleanMonthlyRecurringRevenue,
     prospect_projected_revenue: cleanProspectProjectedRevenue,
     projected_annual_turnovers: cleanProjectedAnnualTurnovers,
+    projected_monthly_turnovers: cleanMonthlyTurnovers,
     projected_turnover_revenue: cleanProjectedTurnoverRevenue,
     annual_revenue: cleanAnnualRevenue,
     contract_start_date: clientValue("clientContractStart") || null,
@@ -4296,10 +4411,16 @@ function clientProspectIncome(row) {
   return clientLegacyAnnualRevenue(row) / 12;
 }
 
+function clientMonthlyTurnovers(row) {
+  return normalizeClientMonthlyTurnovers(row?.projected_monthly_turnovers, row?.projected_annual_turnovers);
+}
+
 function clientProjectedTurnovers(row) {
+  if (!isClientTurnoverService(row?.service_model)) return 0;
+  const monthlyTotal = clientMonthlyTurnoversTotal(clientMonthlyTurnovers(row));
+  if (monthlyTotal > 0) return monthlyTotal;
   const turnovers = Number(row?.projected_annual_turnovers);
-  if (Number.isFinite(turnovers) && turnovers > 0) return Math.floor(turnovers);
-  return isClientTurnoverService(row?.service_model) ? clientUnitCount(row) : 0;
+  return Number.isFinite(turnovers) && turnovers > 0 ? Math.floor(turnovers) : 0;
 }
 
 function clientTurnoverRevenue(row) {
