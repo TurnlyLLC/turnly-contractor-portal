@@ -232,7 +232,10 @@ const clientState = {
   typeFilter: "all",
   managerFilter: "all",
   isSaving: false,
-  isDeleting: false
+  isDeleting: false,
+  autoSaveTimer: null,
+  autoSaveQueued: false,
+  autoSaveLastSignature: ""
 };
 const assignmentTable = "assignment_blocks";
 const assignmentOptionalColumns = [
@@ -3585,7 +3588,7 @@ function initClientDirectory() {
     .find((link) => link.textContent?.trim() === "Add Client");
   topbarAdd?.addEventListener("click", (event) => {
     event.preventDefault();
-    openClientAddModal();
+    void openClientAddModal();
   });
 
   clientState.selectedId = null;
@@ -3618,8 +3621,7 @@ function handleClientClick(event) {
 
   const cancelEdit = event.target.closest("[data-client-cancel]");
   if (cancelEdit) {
-    clientState.selectedId = null;
-    renderClientData();
+    void closeClientEditAfterAutosave();
     return;
   }
 
@@ -3631,7 +3633,7 @@ function handleClientClick(event) {
 
   const addButton = event.target.closest("#clientAddBtn, #clientEmptyAddBtn");
   if (addButton) {
-    openClientAddModal();
+    void openClientAddModal();
     return;
   }
 
@@ -3655,7 +3657,7 @@ function handleClientClick(event) {
 
   const select = event.target.closest("[data-client-select]");
   if (select) {
-    selectClient(select.dataset.clientSelect);
+    void selectClient(select.dataset.clientSelect);
   }
 }
 
@@ -3669,12 +3671,14 @@ function handleClientChange(event) {
   if (event.target.closest("[data-client-turnover-month]")) {
     updateClientMonthlyTurnoversTotal(event.target.closest("#clientForm"));
   }
+  scheduleClientAutosave(event.target.closest("#clientForm"));
 }
 
 function handleClientInput(event) {
   if (event.target.closest("[data-client-turnover-month]")) {
     updateClientMonthlyTurnoversTotal(event.target.closest("#clientForm"));
   }
+  scheduleClientAutosave(event.target.closest("#clientForm"));
 }
 
 async function loadClients() {
@@ -3983,25 +3987,31 @@ function getFilteredClients() {
   });
 }
 
-function selectClient(id) {
+async function selectClient(id) {
   const row = clientState.rows.find((item) => item.id === id);
   if (!row) return;
+  await flushClientAutosave();
   closeClientAddModal();
   if (clientState.selectedId === id) {
     clientState.selectedId = null;
+    clearClientAutosaveState();
     renderClientData();
     return;
   }
   clientState.selectedId = id;
+  clearClientAutosaveState();
   renderClientData();
+  markClientAutosaveBaseline();
   document.getElementById("clientName")?.focus();
 }
 
-function openClientAddModal() {
+async function openClientAddModal() {
+  await flushClientAutosave();
   const modal = document.getElementById("clientModal");
   const body = document.getElementById("clientModalBody");
   if (!modal || !body) return;
   clientState.selectedId = null;
+  clearClientAutosaveState();
   renderClientData();
   body.innerHTML = clientForm("add");
   clearClientForm({ render: false });
@@ -4014,6 +4024,13 @@ function closeClientAddModal() {
   const body = document.getElementById("clientModalBody");
   if (modal) modal.hidden = true;
   if (body) body.innerHTML = "";
+}
+
+async function closeClientEditAfterAutosave() {
+  await flushClientAutosave();
+  clientState.selectedId = null;
+  clearClientAutosaveState();
+  renderClientData();
 }
 
 function clearClientForm(options = {}) {
@@ -4350,6 +4367,7 @@ function collectClientPayload() {
 async function saveClientForm(event) {
   event?.preventDefault();
   if (!suiteSupabase || clientState.isSaving) return;
+  clearClientAutosaveTimer();
   const formMode = event?.target?.dataset?.clientFormMode || document.getElementById("clientForm")?.dataset?.clientFormMode || "edit";
   clientState.isSaving = true;
   setClientSaving(true);
@@ -4376,9 +4394,107 @@ async function saveClientForm(event) {
     clientState.rows.unshift(saved);
   }
   clientState.selectedId = saved.id;
+  clientState.autoSaveLastSignature = clientPayloadSignature(payload);
   populateClientManagerFilter();
   renderClientData();
   showClientMessage(formMode === "add" ? "Client added to Supabase." : "Client saved to Supabase.");
+}
+
+function scheduleClientAutosave(form = document.getElementById("clientForm")) {
+  if (!clientShouldAutosave(form)) return;
+  clearClientAutosaveTimer();
+  showClientMessage("Changes pending...");
+  clientState.autoSaveTimer = window.setTimeout(() => {
+    clientState.autoSaveTimer = null;
+    void autosaveClientForm(form);
+  }, 1200);
+}
+
+async function flushClientAutosave() {
+  const form = document.getElementById("clientForm");
+  if (!clientShouldAutosave(form)) {
+    clearClientAutosaveTimer();
+    return;
+  }
+  clearClientAutosaveTimer();
+  await autosaveClientForm(form, { immediate: true });
+}
+
+async function autosaveClientForm(form = document.getElementById("clientForm"), options = {}) {
+  if (!clientShouldAutosave(form) || !suiteSupabase || clientState.isDeleting) return;
+  if (!form.checkValidity()) {
+    showClientMessage("Autosave paused until required fields are filled.", true);
+    return;
+  }
+  if (clientState.isSaving) {
+    clientState.autoSaveQueued = true;
+    return;
+  }
+
+  const id = form.querySelector("#clientId")?.value || "";
+  const payload = collectClientPayload();
+  const signature = clientPayloadSignature(payload);
+  if (signature === clientState.autoSaveLastSignature) return;
+
+  clientState.isSaving = true;
+  setClientSaving(true, "Autosaving...");
+  showClientMessage("Autosaving client...");
+  const result = await saveClientPayloadWithSchemaFallback(id, payload);
+  clientState.isSaving = false;
+  setClientSaving(false);
+
+  if (result.error) {
+    showClientMessage("Unable to autosave client: " + result.error.message, true);
+    return;
+  }
+
+  const saved = result.data;
+  const index = clientState.rows.findIndex((row) => row.id === saved.id);
+  if (index >= 0) {
+    clientState.rows[index] = saved;
+  } else {
+    clientState.rows.unshift(saved);
+  }
+  clientState.selectedId = saved.id;
+  clientState.autoSaveLastSignature = signature;
+  populateClientManagerFilter();
+  renderClientMetrics();
+  renderClientInsights();
+  showClientMessage(`Client autosaved at ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.`);
+
+  if (clientState.autoSaveQueued) {
+    clientState.autoSaveQueued = false;
+    scheduleClientAutosave(form);
+  }
+}
+
+function clientShouldAutosave(form = document.getElementById("clientForm")) {
+  if (!form || form.id !== "clientForm") return false;
+  if (form.dataset.clientFormMode === "add") return false;
+  return Boolean(form.querySelector("#clientId")?.value);
+}
+
+function clearClientAutosaveTimer() {
+  if (clientState.autoSaveTimer) {
+    window.clearTimeout(clientState.autoSaveTimer);
+    clientState.autoSaveTimer = null;
+  }
+}
+
+function clearClientAutosaveState() {
+  clearClientAutosaveTimer();
+  clientState.autoSaveQueued = false;
+  clientState.autoSaveLastSignature = "";
+}
+
+function clientPayloadSignature(payload) {
+  return JSON.stringify(payload || {});
+}
+
+function markClientAutosaveBaseline() {
+  const form = document.getElementById("clientForm");
+  if (!clientShouldAutosave(form)) return;
+  clientState.autoSaveLastSignature = clientPayloadSignature(collectClientPayload());
 }
 
 async function saveClientPayloadWithSchemaFallback(id, payload) {
@@ -4443,14 +4559,14 @@ async function deleteSelectedClient() {
   showClientMessage(`${label} deleted from Supabase.`);
 }
 
-function setClientSaving(isSaving) {
+function setClientSaving(isSaving, savingLabel = "Saving...") {
   const button = document.getElementById("clientSaveBtn");
   if (button) {
     const defaultLabel = button.closest("form")?.dataset?.clientFormMode === "add" ? "Add Client" : "Save Client";
     button.disabled = isSaving;
     const labels = button.querySelectorAll("span");
     const label = labels[labels.length - 1];
-    if (label) label.textContent = isSaving ? "Saving..." : defaultLabel;
+    if (label) label.textContent = isSaving ? savingLabel : defaultLabel;
   }
 }
 
