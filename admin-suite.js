@@ -3476,6 +3476,7 @@ function initClientDirectory() {
 
   root.addEventListener("click", handleClientClick);
   root.addEventListener("change", handleClientChange);
+  root.addEventListener("input", handleClientInput);
   root.addEventListener("submit", saveClientForm);
   root.addEventListener("keydown", (event) => {
     if (event.key === "Escape") closeClientAddModal();
@@ -3582,6 +3583,12 @@ function handleClientChange(event) {
   if (event.target.matches("#clientServiceModel, #clientStatus")) {
     updateClientRevenueFieldVisibility(event.target.closest("#clientForm"), { clearHidden: true });
   }
+  if (event.target.closest("[data-client-turnover-month]")) {
+    updateClientMonthlyTurnoversTotal(event.target.closest("#clientForm"));
+  }
+}
+
+function handleClientInput(event) {
   if (event.target.closest("[data-client-turnover-month]")) {
     updateClientMonthlyTurnoversTotal(event.target.closest("#clientForm"));
   }
