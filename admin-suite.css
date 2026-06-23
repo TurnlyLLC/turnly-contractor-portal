@@ -1763,6 +1763,11 @@ a {
   gap: 6px;
 }
 
+.suite-field[hidden],
+.client-form-section[hidden] {
+  display: none !important;
+}
+
 .suite-field input,
 .suite-field select,
 .suite-field textarea,
