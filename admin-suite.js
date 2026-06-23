@@ -28,7 +28,8 @@ const navSections = [
       { key: "contracts", label: "Contracts", href: "contracts.html", icon: "briefcase" },
       { key: "schedule", label: "Schedule", href: "schedule.html", icon: "calendar" },
       { key: "coverage-center", label: "Coverage Center", href: "coverage-center.html", icon: "shield" },
-      { key: "assignments", label: "Assignments", href: "assignments.html", icon: "clipboard-list" }
+      { key: "assignments", label: "Assignments", href: "assignments.html", icon: "clipboard-list" },
+      { key: "property-units", label: "Property Units", href: "property-units.html", icon: "building" }
     ]
   },
   {
@@ -302,6 +303,16 @@ const assignmentState = {
   isSaving: false,
   isGenerating: false
 };
+const propertyUnitsTable = "property_units";
+const propertyUnitState = {
+  properties: [],
+  units: [],
+  selectedPropertyId: "",
+  search: "",
+  user: null,
+  isSaving: false,
+  isDeleting: false
+};
 const topbarState = {
   user: null,
   profile: null,
@@ -366,6 +377,12 @@ const pages = {
     subtitle: "Manage and track cleaning assignments across your portfolio",
     action: { label: "New Assignment", icon: "plus" },
     render: renderAssignments
+  },
+  "property-units": {
+    title: "Property Units",
+    subtitle: "Select a property and manage unit pricing in one place",
+    action: { label: "Add Unit", icon: "plus" },
+    render: renderPropertyUnits
   },
   "directory": {
     title: "Directory",
@@ -3140,6 +3157,399 @@ function assignmentToolsPanel() {
     <button id="generateRecurringAssignmentsBtn" type="button" class="secondary-action full-width">${icon("refresh")}<span>Generate Due Assignments</span></button>
     <p id="recurringMessage" class="status-message"></p>
   `, { className: "assignment-tools-panel" });
+}
+
+function renderPropertyUnits() {
+  return `
+    <section class="property-units-workspace" data-property-units-page>
+      <section class="suite-panel property-unit-selector-panel">
+        <div class="panel-head">
+          <div>
+            <h2>Property Unit Pricing</h2>
+            <p>Select a property, then add or update its units.</p>
+          </div>
+          <button class="secondary-action" type="button" data-property-units-refresh>${icon("refresh")}<span>Refresh</span></button>
+        </div>
+        <div class="property-unit-selector-grid">
+          <label class="suite-field">
+            <span>Property</span>
+            <select id="propertyUnitPropertySelect"><option value="">Loading properties...</option></select>
+          </label>
+          <label class="inline-search property-unit-search"><span class="sr-only">Search units</span>${icon("search")}<input id="propertyUnitSearchInput" type="search" placeholder="Search units..." /></label>
+        </div>
+        <p id="propertyUnitMessage" class="status-message" aria-live="polite"></p>
+      </section>
+      <section class="metric-strip four">
+        ${metric("Units", "0", "on selected property", "building", "green", 'id="propertyUnitCount"')}
+        ${metric("Total Sq Ft", "0", "tracked unit area", "layout-grid", "blue", 'id="propertyUnitSqft"')}
+        ${metric("Customer Charges", "$0", "total unit pricing", "wallet", "purple", 'id="propertyUnitCustomerTotal"')}
+        ${metric("Contractor Pay", "$0", "total contractor cost", "badge-dollar", "orange", 'id="propertyUnitContractorTotal"')}
+      </section>
+      <section class="property-units-layout">
+        <section class="suite-panel property-unit-list-panel">
+          <div class="panel-head property-unit-list-head">
+            <div>
+              <h2>Units</h2>
+              <p id="propertyUnitListSummary">Select a property to manage units.</p>
+            </div>
+            <button class="primary-action" type="button" data-property-unit-add>${icon("plus")}<span>Add Unit</span></button>
+          </div>
+          <form id="propertyUnitQuickForm" class="property-unit-quick-form">
+            ${propertyUnitInput("unit_name", "Unit Number / Name", "text", { required: true, placeholder: "Unit 204" })}
+            ${propertyUnitInput("square_feet", "Square Feet", "number", { min: "0", step: "1" })}
+            ${propertyUnitInput("customer_price", "Customer Charge", "number", { min: "0", step: "0.01" })}
+            ${propertyUnitInput("contractor_pay", "Contractor Pay", "number", { min: "0", step: "0.01" })}
+            <button id="propertyUnitQuickAddBtn" class="primary-action" type="submit">${icon("plus")}<span>Add Unit</span></button>
+          </form>
+          <div class="property-unit-table-head">
+            <span>Unit</span>
+            <span>Sq Ft</span>
+            <span>Customer Charge</span>
+            <span>Contractor Pay</span>
+            <span>Margin</span>
+            <span>Actions</span>
+          </div>
+          <div id="propertyUnitRows" class="property-unit-list">${skeletonRows(4)}</div>
+        </section>
+        <aside class="suite-stack">
+          ${panel("Selected Property", `<div id="propertyUnitPropertySummary" class="property-unit-summary">${emptyState("building", "No property selected")}</div>`)}
+          ${panel("Pricing Snapshot", `<div id="propertyUnitPricingSummary" class="property-unit-summary">${skeletonRows(3)}</div>`)}
+        </aside>
+      </section>
+    </section>
+  `;
+}
+
+function propertyUnitInput(name, label, type = "text", options = {}) {
+  const attrs = [
+    options.required ? "required" : "",
+    options.placeholder ? `placeholder="${esc(options.placeholder)}"` : "",
+    options.min ? `min="${esc(options.min)}"` : "",
+    options.step ? `step="${esc(options.step)}"` : ""
+  ].filter(Boolean).join(" ");
+  return `<label class="suite-field"><span>${esc(label)}</span><input name="${esc(name)}" type="${esc(type)}" ${attrs} /></label>`;
+}
+
+function initPropertyUnits() {
+  const root = document.querySelector("[data-property-units-page]");
+  if (!root) return;
+
+  root.addEventListener("click", handlePropertyUnitClick);
+  root.addEventListener("submit", handlePropertyUnitSubmit);
+  root.querySelector("#propertyUnitPropertySelect")?.addEventListener("change", (event) => {
+    propertyUnitState.selectedPropertyId = event.target.value || "";
+    renderPropertyUnitData();
+  });
+  root.querySelector("#propertyUnitSearchInput")?.addEventListener("input", (event) => {
+    propertyUnitState.search = event.target.value || "";
+    renderPropertyUnitList();
+  });
+
+  const topbarAdd = Array.from(document.querySelectorAll(".suite-topbar .primary-action"))
+    .find((link) => link.textContent?.trim() === "Add Unit");
+  topbarAdd?.addEventListener("click", (event) => {
+    event.preventDefault();
+    focusPropertyUnitQuickAdd();
+  });
+
+  void loadPropertyUnits();
+}
+
+function handlePropertyUnitClick(event) {
+  const refresh = event.target.closest("[data-property-units-refresh]");
+  if (refresh) {
+    void loadPropertyUnits();
+    return;
+  }
+
+  const add = event.target.closest("[data-property-unit-add]");
+  if (add) {
+    focusPropertyUnitQuickAdd();
+    return;
+  }
+
+  const deleteButton = event.target.closest("[data-property-unit-delete]");
+  if (deleteButton) {
+    void deletePropertyUnit(deleteButton.dataset.propertyUnitDelete);
+  }
+}
+
+function handlePropertyUnitSubmit(event) {
+  const form = event.target.closest("#propertyUnitQuickForm, [data-property-unit-row]");
+  if (!form) return;
+  event.preventDefault();
+  void savePropertyUnitForm(form);
+}
+
+async function loadPropertyUnits() {
+  if (!suiteSupabase) {
+    showPropertyUnitMessage("Supabase config is missing. Add env.js values before using property units.", true);
+    return;
+  }
+
+  showPropertyUnitMessage("Loading property units...");
+  const { data: userData } = await suiteSupabase.auth.getUser();
+  propertyUnitState.user = userData?.user || null;
+
+  const [propertiesResult, unitsResult] = await Promise.all([
+    suiteSupabase.from(leadTable).select("*").limit(1000),
+    suiteSupabase.from(propertyUnitsTable).select("*").order("unit_name", { ascending: true }).limit(2000)
+  ]);
+
+  if (propertiesResult.error) {
+    showPropertyUnitMessage("Unable to load properties: " + propertiesResult.error.message, true);
+    return;
+  }
+
+  propertyUnitState.properties = (propertiesResult.data || [])
+    .filter((row) => propertyUnitPropertyTitle(row))
+    .sort((a, b) => propertyUnitPropertyTitle(a).localeCompare(propertyUnitPropertyTitle(b)));
+  propertyUnitState.units = unitsResult.error ? [] : (unitsResult.data || []);
+
+  if (!propertyUnitState.selectedPropertyId && propertyUnitState.properties[0]) {
+    propertyUnitState.selectedPropertyId = propertyUnitState.properties[0].id;
+  }
+
+  renderPropertyUnitData();
+  showPropertyUnitMessage(unitsResult.error
+    ? "Property unit table is ready once the Supabase migration is applied."
+    : `${getSelectedPropertyUnits(false).length} unit${getSelectedPropertyUnits(false).length === 1 ? "" : "s"} synced from Supabase.`);
+}
+
+function renderPropertyUnitData() {
+  populatePropertyUnitPropertySelect();
+  renderPropertyUnitMetrics();
+  renderPropertyUnitList();
+  renderPropertyUnitSummaries();
+}
+
+function populatePropertyUnitPropertySelect() {
+  const select = document.getElementById("propertyUnitPropertySelect");
+  if (!select) return;
+  select.innerHTML = propertyUnitState.properties.length
+    ? propertyUnitState.properties.map((row) => `<option value="${esc(row.id)}">${esc(propertyUnitPropertyTitle(row))}</option>`).join("")
+    : `<option value="">No properties found</option>`;
+  select.value = propertyUnitState.selectedPropertyId || "";
+}
+
+function renderPropertyUnitMetrics() {
+  const rows = getSelectedPropertyUnits(false);
+  const totals = propertyUnitTotals(rows);
+  setText("propertyUnitCount", rows.length.toLocaleString());
+  setText("propertyUnitSqft", Math.round(totals.squareFeet).toLocaleString());
+  setText("propertyUnitCustomerTotal", propertyUnitMoney(totals.customer));
+  setText("propertyUnitContractorTotal", propertyUnitMoney(totals.contractor));
+}
+
+function renderPropertyUnitList() {
+  const list = document.getElementById("propertyUnitRows");
+  const summary = document.getElementById("propertyUnitListSummary");
+  if (!list) return;
+  const selected = getSelectedProperty();
+  const rows = getSelectedPropertyUnits(true);
+  if (summary) {
+    summary.textContent = selected
+      ? `${rows.length.toLocaleString()} unit${rows.length === 1 ? "" : "s"} showing for ${propertyUnitPropertyTitle(selected)}.`
+      : "Select a property to manage units.";
+  }
+  list.innerHTML = selected
+    ? rows.length
+      ? rows.map(renderPropertyUnitRow).join("")
+      : emptyState("building", "No units on this property", "Use Add Unit to create the first unit.")
+    : emptyState("building", "No property selected", "Choose a property to manage units.");
+}
+
+function renderPropertyUnitRow(row) {
+  const margin = propertyUnitNumber(row.customer_price) - propertyUnitNumber(row.contractor_pay);
+  return `
+    <form class="property-unit-row" data-property-unit-row data-property-unit-id="${esc(row.id)}">
+      <label class="suite-field"><span>Unit</span><input name="unit_name" value="${esc(row.unit_name || "")}" required /></label>
+      <label class="suite-field"><span>Sq Ft</span><input name="square_feet" type="number" min="0" step="1" value="${esc(row.square_feet ?? 0)}" /></label>
+      <label class="suite-field"><span>Customer Charge</span><input name="customer_price" type="number" min="0" step="0.01" value="${esc(row.customer_price ?? 0)}" /></label>
+      <label class="suite-field"><span>Contractor Pay</span><input name="contractor_pay" type="number" min="0" step="0.01" value="${esc(row.contractor_pay ?? 0)}" /></label>
+      <div class="property-unit-margin"><span>Margin</span><strong>${esc(propertyUnitMoney(margin))}</strong></div>
+      <div class="property-unit-actions">
+        <button class="primary-action" type="submit">${icon("check")}<span>Save</span></button>
+        <button class="secondary-action danger-btn" type="button" data-property-unit-delete="${esc(row.id)}">${icon("trash")}<span>Delete</span></button>
+      </div>
+    </form>
+  `;
+}
+
+function renderPropertyUnitSummaries() {
+  const property = getSelectedProperty();
+  const propertySummary = document.getElementById("propertyUnitPropertySummary");
+  const pricingSummary = document.getElementById("propertyUnitPricingSummary");
+  const rows = getSelectedPropertyUnits(false);
+  const totals = propertyUnitTotals(rows);
+  if (propertySummary) {
+    propertySummary.innerHTML = property
+      ? `
+        <strong>${esc(propertyUnitPropertyTitle(property))}</strong>
+        <p>${esc(propertyUnitPropertyAddress(property) || "No address on file")}</p>
+        <dl>
+          <div><dt>Type</dt><dd>${esc(property.property_type || property.service_type || "Not set")}</dd></div>
+          <div><dt>Units</dt><dd>${rows.length.toLocaleString()}</dd></div>
+        </dl>
+      `
+      : emptyState("building", "No property selected");
+  }
+  if (pricingSummary) {
+    pricingSummary.innerHTML = `
+      <dl>
+        <div><dt>Customer Total</dt><dd>${esc(propertyUnitMoney(totals.customer))}</dd></div>
+        <div><dt>Contractor Total</dt><dd>${esc(propertyUnitMoney(totals.contractor))}</dd></div>
+        <div><dt>Projected Margin</dt><dd>${esc(propertyUnitMoney(totals.customer - totals.contractor))}</dd></div>
+        <div><dt>Average Sq Ft</dt><dd>${rows.length ? Math.round(totals.squareFeet / rows.length).toLocaleString() : "0"}</dd></div>
+      </dl>
+    `;
+  }
+}
+
+async function savePropertyUnitForm(form) {
+  if (!suiteSupabase || propertyUnitState.isSaving) return;
+  const propertyId = propertyUnitState.selectedPropertyId;
+  if (!propertyId) {
+    showPropertyUnitMessage("Select a property before adding units.", true);
+    return;
+  }
+
+  let payload;
+  try {
+    payload = collectPropertyUnitPayload(form, propertyId);
+  } catch (error) {
+    showPropertyUnitMessage(error.message, true);
+    return;
+  }
+
+  propertyUnitState.isSaving = true;
+  setPropertyUnitFormSaving(form, true);
+  showPropertyUnitMessage(payload.id ? "Saving unit..." : "Adding unit...");
+
+  const id = payload.id;
+  delete payload.id;
+  const result = id
+    ? await suiteSupabase.from(propertyUnitsTable).update(payload).eq("id", id).select("*").single()
+    : await suiteSupabase.from(propertyUnitsTable).insert({ ...payload, created_by: propertyUnitState.user?.id || null }).select("*").single();
+
+  propertyUnitState.isSaving = false;
+  setPropertyUnitFormSaving(form, false);
+  if (result.error) {
+    showPropertyUnitMessage("Unable to save unit: " + result.error.message, true);
+    return;
+  }
+
+  const saved = result.data;
+  const index = propertyUnitState.units.findIndex((unit) => unit.id === saved.id);
+  if (index >= 0) {
+    propertyUnitState.units[index] = saved;
+  } else {
+    propertyUnitState.units.push(saved);
+    form.reset();
+    form.querySelector("[name='unit_name']")?.focus();
+  }
+  propertyUnitState.units.sort(propertyUnitSort);
+  renderPropertyUnitData();
+  showPropertyUnitMessage("Unit saved to Supabase.");
+}
+
+async function deletePropertyUnit(id) {
+  if (!suiteSupabase || !id || propertyUnitState.isDeleting) return;
+  if (!window.confirm("Delete this unit?")) return;
+  propertyUnitState.isDeleting = true;
+  showPropertyUnitMessage("Deleting unit...");
+  const result = await suiteSupabase.from(propertyUnitsTable).delete().eq("id", id);
+  propertyUnitState.isDeleting = false;
+  if (result.error) {
+    showPropertyUnitMessage("Unable to delete unit: " + result.error.message, true);
+    return;
+  }
+  propertyUnitState.units = propertyUnitState.units.filter((unit) => unit.id !== id);
+  renderPropertyUnitData();
+  showPropertyUnitMessage("Unit deleted from Supabase.");
+}
+
+function collectPropertyUnitPayload(form, propertyId) {
+  const value = (name) => (form.querySelector(`[name="${name}"]`)?.value || "").trim();
+  const unitName = value("unit_name");
+  if (!unitName) throw new Error("Unit Number / Name is required.");
+  return {
+    id: form.dataset.propertyUnitId || "",
+    property_id: propertyId,
+    unit_name: unitName,
+    square_feet: propertyUnitNumber(value("square_feet")),
+    customer_price: propertyUnitNumber(value("customer_price")),
+    contractor_pay: propertyUnitNumber(value("contractor_pay")),
+    status: "active"
+  };
+}
+
+function getSelectedProperty() {
+  return propertyUnitState.properties.find((row) => row.id === propertyUnitState.selectedPropertyId) || null;
+}
+
+function getSelectedPropertyUnits(applySearch = true) {
+  const term = applySearch ? propertyUnitState.search.trim().toLowerCase() : "";
+  return propertyUnitState.units
+    .filter((row) => row.property_id === propertyUnitState.selectedPropertyId)
+    .filter((row) => !term || [row.unit_name, row.square_feet, row.customer_price, row.contractor_pay].some((value) => String(value || "").toLowerCase().includes(term)))
+    .sort(propertyUnitSort);
+}
+
+function propertyUnitSort(a, b) {
+  return String(a.unit_name || "").localeCompare(String(b.unit_name || ""), undefined, { numeric: true, sensitivity: "base" });
+}
+
+function propertyUnitTotals(rows) {
+  return rows.reduce((totals, row) => ({
+    squareFeet: totals.squareFeet + propertyUnitNumber(row.square_feet),
+    customer: totals.customer + propertyUnitNumber(row.customer_price),
+    contractor: totals.contractor + propertyUnitNumber(row.contractor_pay)
+  }), { squareFeet: 0, customer: 0, contractor: 0 });
+}
+
+function propertyUnitNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : 0;
+}
+
+function propertyUnitMoney(value) {
+  const number = Number(value);
+  const safe = Number.isFinite(number) ? number : 0;
+  return safe.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 2 });
+}
+
+function propertyUnitPropertyTitle(row) {
+  return row?.property_name || row?.name || row?.company_name || row?.title || "";
+}
+
+function propertyUnitPropertyAddress(row) {
+  return [row?.address, row?.city, row?.state, row?.postal_code].filter(Boolean).join(", ");
+}
+
+function focusPropertyUnitQuickAdd() {
+  if (!propertyUnitState.selectedPropertyId) {
+    showPropertyUnitMessage("Select a property before adding units.", true);
+    document.getElementById("propertyUnitPropertySelect")?.focus();
+    return;
+  }
+  document.getElementById("propertyUnitQuickForm")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  document.querySelector("#propertyUnitQuickForm [name='unit_name']")?.focus();
+}
+
+function setPropertyUnitFormSaving(form, isSaving) {
+  const button = form.querySelector("button[type='submit']");
+  if (!button) return;
+  button.disabled = isSaving;
+  const label = button.querySelector("span");
+  if (label) label.textContent = isSaving ? "Saving..." : form.id === "propertyUnitQuickForm" ? "Add Unit" : "Save";
+}
+
+function showPropertyUnitMessage(text, isError = false) {
+  const message = document.getElementById("propertyUnitMessage");
+  if (!message) return;
+  message.textContent = text || "";
+  message.classList.toggle("error", Boolean(isError));
 }
 
 function assignmentFilterPanel() {
@@ -6456,6 +6866,9 @@ function renderApp() {
   }
   if (activeKey === "assignments") {
     initAssignments();
+  }
+  if (activeKey === "property-units") {
+    initPropertyUnits();
   }
   if (activeKey === "leads") {
     initLeads();
