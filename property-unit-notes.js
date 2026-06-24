@@ -13,6 +13,7 @@ let isLoadingNotes = false;
 let isLoadingClients = false;
 let isHydrating = false;
 let isPopulatingClientSelect = false;
+let hydrateTimer = 0;
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -135,18 +136,31 @@ function updateClientPropertySummary() {
         ${detailRows ? `<dl class="property-unit-detail-grid">${detailRows}</dl>` : ""}
       </div>
     `;
+  } else if (summary) {
+    summary.innerHTML = `
+      <div class="property-unit-client-details">
+        <strong>Select a property</strong>
+        <p>Choose a client directory property to manage its units.</p>
+      </div>
+    `;
   }
   const listSummary = document.getElementById("propertyUnitListSummary");
   const rows = document.querySelectorAll("[data-property-unit-row]").length;
   if (listSummary && client) {
     listSummary.textContent = `${rows.toLocaleString()} unit${rows === 1 ? "" : "s"} showing for ${clientTitle(client)}.`;
+  } else if (listSummary) {
+    listSummary.textContent = "Select a client directory property to manage units.";
   }
 }
 
 function nextClientSelection(currentValue = "") {
   if (hasClientId(currentValue)) return currentValue;
   if (hasClientId(activeClientId)) return activeClientId;
-  return clientProperties[0]?.id || "";
+  return "";
+}
+
+function clientOptionSignature() {
+  return clientProperties.map((client) => `${client.id}:${clientTitle(client)}`).join("|");
 }
 
 function populateClientPropertySelect() {
@@ -156,16 +170,17 @@ function populateClientPropertySelect() {
   isPopulatingClientSelect = true;
   const currentValue = select.value;
   const nextValue = nextClientSelection(currentValue);
-  select.innerHTML = clientProperties
-    .map((client) => `<option value="${escapeHtml(client.id)}">${escapeHtml(clientTitle(client))}</option>`)
-    .join("");
-  select.value = nextValue;
+  const signature = clientOptionSignature();
+  if (select.dataset.clientDirectorySignature !== signature) {
+    select.innerHTML = [
+      `<option value="">Choose a client property...</option>`,
+      ...clientProperties.map((client) => `<option value="${escapeHtml(client.id)}">${escapeHtml(clientTitle(client))}</option>`)
+    ].join("");
+    select.dataset.clientDirectorySignature = signature;
+  }
+  if (select.value !== nextValue) select.value = nextValue;
   if (nextValue) activeClientId = nextValue;
   isPopulatingClientSelect = false;
-
-  if (nextValue && currentValue !== nextValue) {
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-  }
   updateClientPropertySummary();
 }
 
@@ -249,6 +264,14 @@ function hydrateForms() {
   document.querySelectorAll("#propertyUnitQuickForm, [data-property-unit-row]").forEach(hydrateForm);
   updateClientPropertySummary();
   isHydrating = false;
+}
+
+function scheduleHydrate() {
+  if (hydrateTimer) return;
+  hydrateTimer = window.setTimeout(() => {
+    hydrateTimer = 0;
+    hydrateForms();
+  }, 80);
 }
 
 async function loadUnitNotes() {
@@ -337,7 +360,7 @@ function bindSaves() {
       updateClientPropertySummary();
       hydrateForms();
     }, 0);
-  });
+  }, true);
 
   document.addEventListener("submit", (event) => {
     const form = event.target?.closest?.("#propertyUnitQuickForm, [data-property-unit-row]");
@@ -354,7 +377,6 @@ function bindSaves() {
     activeClientId = propertyId;
     if (select && select.value !== propertyId) {
       select.value = propertyId;
-      select.dispatchEvent(new Event("change", { bubbles: true }));
     }
 
     const notes = propertyUnitValue(form, "notes");
@@ -393,7 +415,7 @@ window.addEventListener("load", () => {
   void loadClientProperties();
   void loadUnitNotes();
   const observer = new MutationObserver(() => {
-    hydrateForms();
+    scheduleHydrate();
   });
   observer.observe(document.body, { childList: true, subtree: true });
   window.setTimeout(loadClientProperties, 800);
