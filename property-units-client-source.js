@@ -12,7 +12,10 @@ const state = {
   search: "",
   isLoading: false,
   isRendering: false,
-  renderTimer: 0
+  renderTimer: 0,
+  hasStarted: false,
+  eventsBound: false,
+  observer: null
 };
 
 function escapeHtml(value) {
@@ -111,6 +114,14 @@ function optionSignature() {
   return state.clients.map((client) => `${client.id}:${clientTitle(client)}`).join("|");
 }
 
+function selectOptionSignature(select) {
+  if (!select) return "";
+  return Array.from(select.options || [])
+    .filter((option) => option.value)
+    .map((option) => `${option.value}:${option.textContent || ""}`)
+    .join("|");
+}
+
 function renderSelect() {
   const select = document.getElementById("propertyUnitPropertySelect");
   if (!select) return;
@@ -119,7 +130,7 @@ function renderSelect() {
   if (!validSelected) state.selectedClientId = "";
 
   const signature = optionSignature();
-  if (select.dataset.clientDirectorySignature !== signature) {
+  if (select.dataset.clientDirectorySignature !== signature || selectOptionSignature(select) !== signature) {
     select.innerHTML = [
       `<option value="">Choose a client property...</option>`,
       ...state.clients.map((client) => `<option value="${escapeHtml(client.id)}">${escapeHtml(clientTitle(client))}</option>`)
@@ -382,6 +393,9 @@ function stopPropertyUnitEvent(event) {
 }
 
 function bindEvents() {
+  if (state.eventsBound) return;
+  state.eventsBound = true;
+
   document.addEventListener("change", (event) => {
     if (event.target?.id !== "propertyUnitPropertySelect" || !inWorkspace(event.target)) return;
     stopPropertyUnitEvent(event);
@@ -459,19 +473,29 @@ function startWhenReady() {
     window.setTimeout(startWhenReady, 80);
     return;
   }
+  if (state.hasStarted) {
+    renderAll();
+    return;
+  }
+  state.hasStarted = true;
   installStyles();
   bindEvents();
   renderAll();
   void loadData();
 
-  const observer = new MutationObserver(() => {
+  state.observer = new MutationObserver(() => {
     if (state.isRendering) return;
     const select = document.getElementById("propertyUnitPropertySelect");
-    if (select && select.dataset.clientDirectorySignature !== optionSignature()) scheduleRender();
+    if (select && selectOptionSignature(select) !== optionSignature()) scheduleRender();
   });
-  observer.observe(root, { childList: true, subtree: true });
+  state.observer.observe(root, { childList: true, subtree: true });
   window.setTimeout(renderAll, 800);
   window.setTimeout(renderAll, 1800);
 }
 
-window.addEventListener("load", startWhenReady);
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", startWhenReady, { once: true });
+} else {
+  startWhenReady();
+}
+window.addEventListener("load", startWhenReady, { once: true });
