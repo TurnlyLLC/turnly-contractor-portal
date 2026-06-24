@@ -6,8 +6,11 @@ const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
   : null;
 
 const notesByUnitId = new Map();
+let clientProperties = [];
 let isLoadingNotes = false;
+let isLoadingClients = false;
 let isHydrating = false;
+let isPopulatingClientSelect = false;
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -16,6 +19,14 @@ function escapeHtml(value) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+}
+
+function clientTitle(row) {
+  return row?.property_name || row?.company_name || row?.name || row?.title || "Unnamed property";
+}
+
+function clientAddress(row) {
+  return [row?.address, row?.city, row?.state, row?.postal_code].filter(Boolean).join(", ") || row?.region || row?.market || "";
 }
 
 function injectStyles() {
@@ -32,6 +43,78 @@ function injectStyles() {
     }
   `;
   document.head.appendChild(style);
+}
+
+function selectedClientProperty() {
+  const select = document.getElementById("propertyUnitPropertySelect");
+  if (!select?.value) return null;
+  return clientProperties.find((client) => client.id === select.value) || null;
+}
+
+function updateClientPropertySummary() {
+  const client = selectedClientProperty();
+  const summary = document.getElementById("propertyUnitPropertySummary");
+  if (summary && client) {
+    summary.innerHTML = `
+      <strong>${escapeHtml(clientTitle(client))}</strong>
+      <p>${escapeHtml(clientAddress(client) || "No address on file")}</p>
+    `;
+  }
+  const listSummary = document.getElementById("propertyUnitListSummary");
+  const rows = document.querySelectorAll("[data-property-unit-row]").length;
+  if (listSummary && client) {
+    listSummary.textContent = `${rows.toLocaleString()} unit${rows === 1 ? "" : "s"} showing for ${clientTitle(client)}.`;
+  }
+}
+
+function populateClientPropertySelect() {
+  const select = document.getElementById("propertyUnitPropertySelect");
+  if (!select || !clientProperties.length || isPopulatingClientSelect) return;
+
+  isPopulatingClientSelect = true;
+  const currentValue = select.value;
+  const nextValue = clientProperties.some((client) => client.id === currentValue)
+    ? currentValue
+    : clientProperties[0]?.id || "";
+  select.innerHTML = clientProperties
+    .map((client) => `<option value="${escapeHtml(client.id)}">${escapeHtml(clientTitle(client))}</option>`)
+    .join("");
+  select.value = nextValue;
+  isPopulatingClientSelect = false;
+
+  if (nextValue && currentValue !== nextValue) {
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  updateClientPropertySummary();
+}
+
+async function loadClientProperties() {
+  if (!supabase || isLoadingClients) return;
+  isLoadingClients = true;
+  let result = await supabase
+    .from("clients")
+    .select("*")
+    .order("updated_at", { ascending: false })
+    .limit(500);
+
+  if (result.error && String(result.error.message || "").includes("updated_at")) {
+    result = await supabase
+      .from("clients")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(500);
+  }
+
+  isLoadingClients = false;
+  if (result.error) {
+    console.warn("[property-units] Unable to load clients for property select", result.error);
+    return;
+  }
+
+  clientProperties = (result.data || [])
+    .filter((client) => clientTitle(client))
+    .sort((a, b) => clientTitle(a).localeCompare(clientTitle(b)));
+  populateClientPropertySelect();
 }
 
 function noteFieldHtml(value = "") {
@@ -61,7 +144,9 @@ function hydrateForms() {
   if (isHydrating) return;
   isHydrating = true;
   injectStyles();
+  populateClientPropertySelect();
   document.querySelectorAll("#propertyUnitQuickForm, [data-property-unit-row]").forEach(hydrateForm);
+  updateClientPropertySummary();
   isHydrating = false;
 }
 
@@ -139,6 +224,15 @@ async function syncQuickUnitNotes({ propertyId, unitName, notes }) {
 }
 
 function bindSaves() {
+  document.addEventListener("change", (event) => {
+    if (event.target?.id !== "propertyUnitPropertySelect" || isPopulatingClientSelect) return;
+    window.setTimeout(() => {
+      populateClientPropertySelect();
+      updateClientPropertySummary();
+      hydrateForms();
+    }, 0);
+  });
+
   document.addEventListener("submit", (event) => {
     const form = event.target?.closest?.("#propertyUnitQuickForm, [data-property-unit-row]");
     if (!form) return;
@@ -164,10 +258,12 @@ function bindSaves() {
 window.addEventListener("load", () => {
   bindSaves();
   hydrateForms();
+  void loadClientProperties();
   void loadUnitNotes();
   const observer = new MutationObserver(() => {
     hydrateForms();
   });
   observer.observe(document.body, { childList: true, subtree: true });
+  window.setTimeout(loadClientProperties, 800);
   window.setTimeout(loadUnitNotes, 1200);
 });
