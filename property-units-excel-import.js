@@ -33,6 +33,12 @@ function selectedPropertyId() {
   return document.getElementById("propertyUnitPropertySelect")?.value || "";
 }
 
+function selectedPropertyTitle() {
+  const select = document.getElementById("propertyUnitPropertySelect");
+  const label = select?.selectedOptions?.[0]?.textContent || "";
+  return label.trim() || "Client Directory Property";
+}
+
 function setMessage(text, isError = false) {
   const message = document.getElementById("propertyUnitMessage");
   if (!message) return;
@@ -157,6 +163,64 @@ async function loadExistingUnits(propertyId) {
   return result.data || [];
 }
 
+function duplicateKeyError(error) {
+  const message = String(error?.message || "").toLowerCase();
+  return error?.code === "23505" || message.includes("duplicate key");
+}
+
+function missingColumnName(error) {
+  const message = String(error?.message || "");
+  return message.match(/Could not find the '([^']+)' column/)?.[1]
+    || message.match(/column "([^"]+)" of relation/)?.[1]
+    || "";
+}
+
+async function currentUserId() {
+  try {
+    const result = await supabase.auth.getUser();
+    return result.data?.user?.id || "";
+  } catch {
+    return "";
+  }
+}
+
+async function insertLegacyProperty(payload) {
+  const nextPayload = { ...payload };
+
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const result = await supabase
+      .from("portal_properties")
+      .insert(nextPayload)
+      .select("id")
+      .maybeSingle();
+
+    if (!result.error || duplicateKeyError(result.error)) return;
+
+    const missingColumn = missingColumnName(result.error);
+    if (missingColumn && missingColumn in nextPayload && Object.keys(nextPayload).length > 2) {
+      delete nextPayload[missingColumn];
+      continue;
+    }
+
+    throw result.error;
+  }
+}
+
+async function ensureLegacyProperty(propertyId) {
+  const title = selectedPropertyTitle();
+  const userId = await currentUserId();
+  const payload = {
+    id: propertyId,
+    property_name: title,
+    name: title,
+    company_name: title,
+    pipeline_stage: "client_directory"
+  };
+
+  if (userId) payload.created_by = userId;
+  await insertLegacyProperty(payload);
+}
+
 async function saveRows(payloads, existingUnits) {
   for (const payload of payloads) {
     const existing = existingUnits.find((unit) => normalizeUnitName(unit.unit_name) === normalizeUnitName(payload.unit_name));
@@ -197,6 +261,7 @@ async function importFile(file) {
     const { payloads, errors } = normalizeRows(rows, propertyId);
     if (errors.length) throw new Error(errors.slice(0, 3).join(" "));
     if (!payloads.length) throw new Error("No unit rows were found in that file.");
+    await ensureLegacyProperty(propertyId);
     await saveRows(payloads, await loadExistingUnits(propertyId));
     setMessage(`${payloads.length.toLocaleString()} unit${payloads.length === 1 ? "" : "s"} imported to Supabase.`);
     document.querySelector("[data-property-units-refresh]")?.click();
