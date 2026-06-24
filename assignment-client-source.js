@@ -70,17 +70,17 @@ function isApartmentProperty(row) {
   return tokens.includes("apartment") || tokens.includes("turnover") || Number(row?.units || row?.unit_count || 0) > 0;
 }
 
-function formatMoney(value) {
-  const amount = Number(value);
-  if (!Number.isFinite(amount)) return "";
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount);
-}
-
 function unitLabel(unit) {
   const name = unit?.unit_name || unit?.name || unit?.unit_number || "Unnamed unit";
-  const squareFeet = unit?.square_feet ? `${unit.square_feet} sq ft` : "";
-  const charge = formatMoney(unit?.customer_price);
-  return [name, squareFeet, charge].filter(Boolean).join(" - ");
+  const squareFeet = formatSquareFeet(unit?.square_feet);
+  return [name, squareFeet].filter(Boolean).join(" - ");
+}
+
+function formatSquareFeet(value) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount <= 0) return "";
+  const formatted = Number.isInteger(amount) ? String(amount) : String(amount).replace(/\.0+$/, "");
+  return `${formatted} sq ft`;
 }
 
 function unitInstructions(unit) {
@@ -209,9 +209,16 @@ function renderUnitPicker(message = "", filter = "") {
 function unitScopeDetails(unit) {
   return [
     unit?.unit_name ? `Unit: ${unit.unit_name}` : "",
-    unit?.square_feet ? `Square Feet: ${unit.square_feet}` : "",
-    unit?.customer_price !== undefined && unit?.customer_price !== null && unit?.customer_price !== "" ? `Customer Charge: ${formatMoney(unit.customer_price)}` : ""
+    unit?.square_feet ? `Square Feet: ${formatSquareFeet(unit.square_feet)}` : ""
   ].filter(Boolean).join("\n");
+}
+
+function assignmentTitleForUnit(unit, client) {
+  const unitName = unit?.unit_name || unit?.name || unit?.unit_number || "Unit";
+  const squareFeet = formatSquareFeet(unit?.square_feet);
+  const property = client ? clientPropertyTitle(client) : "";
+  const unitText = squareFeet ? `${unitName}, ${squareFeet}` : unitName;
+  return ["Cleaning unit " + unitText, property].filter(Boolean).join(" - ");
 }
 
 function applySelectedUnit(unit) {
@@ -223,8 +230,6 @@ function applySelectedUnit(unit) {
   if (select) select.value = unit.id;
 
   const client = selectedClient();
-  const title = client ? clientPropertyTitle(client) : "";
-  const service = client ? clientPropertyService(client) : "";
   const baseScope = client?.default_scope || client?.unit_notes || "";
   const details = unitScopeDetails(unit);
   setFieldValue("scope", [baseScope, details].filter(Boolean).join("\n\n"));
@@ -235,7 +240,7 @@ function applySelectedUnit(unit) {
 
   const titleField = document.getElementById("title");
   if (titleField && (!titleField.value || titleField.dataset.clientGeneratedTitle === "true")) {
-    titleField.value = `${service || "Service"} - ${title} - ${unit.unit_name || "Unit"}`;
+    titleField.value = assignmentTitleForUnit(unit, client);
     titleField.dataset.clientGeneratedTitle = "true";
   }
 }
