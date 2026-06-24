@@ -53,6 +53,16 @@ function showPropertyUnitMessage(text, isError = false) {
   message.classList.toggle("is-error", Boolean(isError));
 }
 
+function setHtmlIfChanged(element, html) {
+  if (!element || element.innerHTML === html) return;
+  element.innerHTML = html;
+}
+
+function setTextIfChanged(element, text) {
+  if (!element || element.textContent === text) return;
+  element.textContent = text;
+}
+
 function injectStyles() {
   if (document.getElementById("propertyUnitNotesStyles")) return;
   const style = document.createElement("style");
@@ -127,7 +137,7 @@ function updateClientPropertySummary() {
       detailRow("Phone", client?.contact_phone || client?.phone),
       detailRow("Properties", client?.properties || client?.property_count)
     ].filter(Boolean).join("");
-    summary.innerHTML = `
+    setHtmlIfChanged(summary, `
       <div class="property-unit-client-details">
         <div>
           <strong>${escapeHtml(clientTitle(client))}</strong>
@@ -135,21 +145,21 @@ function updateClientPropertySummary() {
         </div>
         ${detailRows ? `<dl class="property-unit-detail-grid">${detailRows}</dl>` : ""}
       </div>
-    `;
+    `);
   } else if (summary) {
-    summary.innerHTML = `
+    setHtmlIfChanged(summary, `
       <div class="property-unit-client-details">
         <strong>Select a property</strong>
         <p>Choose a client directory property to manage its units.</p>
       </div>
-    `;
+    `);
   }
   const listSummary = document.getElementById("propertyUnitListSummary");
   const rows = document.querySelectorAll("[data-property-unit-row]").length;
   if (listSummary && client) {
-    listSummary.textContent = `${rows.toLocaleString()} unit${rows === 1 ? "" : "s"} showing for ${clientTitle(client)}.`;
+    setTextIfChanged(listSummary, `${rows.toLocaleString()} unit${rows === 1 ? "" : "s"} showing for ${clientTitle(client)}.`);
   } else if (listSummary) {
-    listSummary.textContent = "Select a client directory property to manage units.";
+    setTextIfChanged(listSummary, "Select a client directory property to manage units.");
   }
 }
 
