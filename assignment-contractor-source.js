@@ -6,7 +6,7 @@ const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
   : null;
 
 const contractorSources = [
-  { table: "profiles", select: "id,full_name,email,role,status,contractor_approved" },
+  { table: "profiles", select: "*" },
   { table: "contractors", select: "*" },
   { table: "contractor_profiles", select: "*" }
 ];
@@ -45,7 +45,8 @@ function isInactiveStatus(row) {
 
 function isApprovedStatus(row) {
   return Boolean(row?.contractor_approved)
-    || ["active", "approved", "available", "enabled", "onboarded"].includes(statusToken(row));
+    || ["approved", "available", "enabled", "onboarded"].includes(statusToken(row))
+    || normalizeToken(row?.approval_status) === "approved";
 }
 
 function hasContractorSignal(row, sourceTable) {
@@ -66,7 +67,8 @@ function hasContractorSignal(row, sourceTable) {
 
 function shouldUseContractor(row, sourceTable) {
   if (!row || isInactiveStatus(row) || !hasContractorSignal(row, sourceTable)) return false;
-  return isApprovedStatus(row) || sourceTable !== "profiles";
+  if (sourceTable !== "profiles" && !(row?.profile_id || row?.user_id || row?.auth_user_id)) return false;
+  return isApprovedStatus(row);
 }
 
 function normalizeContractor(row) {
