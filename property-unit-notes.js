@@ -6,7 +6,9 @@ const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
   : null;
 
 const notesByUnitId = new Map();
+const unitRecordsById = new Map();
 let clientProperties = [];
+let activeClientId = "";
 let isLoadingNotes = false;
 let isLoadingClients = false;
 let isHydrating = false;
@@ -29,11 +31,55 @@ function clientAddress(row) {
   return [row?.address, row?.city, row?.state, row?.postal_code].filter(Boolean).join(", ") || row?.region || row?.market || "";
 }
 
+function clientService(row) {
+  const raw = row?.service_model || row?.service_type || row?.default_service_type || row?.client_type || "";
+  return String(raw || "").replace(/[_-]/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function clientStatus(row) {
+  return String(row?.status || row?.client_status || "").replace(/[_-]/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function hasClientId(id) {
+  return Boolean(id && clientProperties.some((client) => client.id === id));
+}
+
+function showPropertyUnitMessage(text, isError = false) {
+  const message = document.getElementById("propertyUnitMessage");
+  if (!message) return;
+  message.textContent = text;
+  message.classList.toggle("error", Boolean(isError));
+  message.classList.toggle("is-error", Boolean(isError));
+}
+
 function injectStyles() {
   if (document.getElementById("propertyUnitNotesStyles")) return;
   const style = document.createElement("style");
   style.id = "propertyUnitNotesStyles";
   style.textContent = `
+    .property-unit-client-details {
+      display: grid;
+      gap: 10px;
+    }
+    .property-unit-detail-grid {
+      display: grid;
+      gap: 8px;
+    }
+    .property-unit-detail-grid div {
+      display: grid;
+      gap: 2px;
+    }
+    .property-unit-detail-grid dt {
+      color: var(--muted, #94a3b8);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .property-unit-detail-grid dd {
+      margin: 0;
+      font-size: 13px;
+    }
     .property-unit-notes-field textarea {
       min-height: 74px;
       resize: vertical;
@@ -47,17 +93,47 @@ function injectStyles() {
 
 function selectedClientProperty() {
   const select = document.getElementById("propertyUnitPropertySelect");
-  if (!select?.value) return null;
-  return clientProperties.find((client) => client.id === select.value) || null;
+  const selectedId = select?.value || activeClientId;
+  if (!selectedId) return null;
+  return clientProperties.find((client) => client.id === selectedId) || null;
+}
+
+function detailRow(label, value) {
+  if (!value) return "";
+  return `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`;
+}
+
+function setPropertyDetailsTitle() {
+  const summary = document.getElementById("propertyUnitPropertySummary");
+  const panel = summary?.closest(".suite-panel, .panel, section, aside");
+  const heading = panel?.querySelector("h2, h3, h4, .panel-title, .panel-heading");
+  if (heading && /selected property/i.test(heading.textContent || "")) {
+    heading.textContent = "Property Details";
+  }
 }
 
 function updateClientPropertySummary() {
   const client = selectedClientProperty();
+  setPropertyDetailsTitle();
   const summary = document.getElementById("propertyUnitPropertySummary");
   if (summary && client) {
+    const detailRows = [
+      detailRow("Status", clientStatus(client)),
+      detailRow("Service", clientService(client)),
+      detailRow("Market", client?.region || client?.market),
+      detailRow("Primary Contact", client?.primary_contact || client?.contact_name),
+      detailRow("Email", client?.contact_email || client?.email),
+      detailRow("Phone", client?.contact_phone || client?.phone),
+      detailRow("Properties", client?.properties || client?.property_count)
+    ].filter(Boolean).join("");
     summary.innerHTML = `
-      <strong>${escapeHtml(clientTitle(client))}</strong>
-      <p>${escapeHtml(clientAddress(client) || "No address on file")}</p>
+      <div class="property-unit-client-details">
+        <div>
+          <strong>${escapeHtml(clientTitle(client))}</strong>
+          <p>${escapeHtml(clientAddress(client) || "No address on file")}</p>
+        </div>
+        ${detailRows ? `<dl class="property-unit-detail-grid">${detailRows}</dl>` : ""}
+      </div>
     `;
   }
   const listSummary = document.getElementById("propertyUnitListSummary");
@@ -67,19 +143,24 @@ function updateClientPropertySummary() {
   }
 }
 
+function nextClientSelection(currentValue = "") {
+  if (hasClientId(currentValue)) return currentValue;
+  if (hasClientId(activeClientId)) return activeClientId;
+  return clientProperties[0]?.id || "";
+}
+
 function populateClientPropertySelect() {
   const select = document.getElementById("propertyUnitPropertySelect");
   if (!select || !clientProperties.length || isPopulatingClientSelect) return;
 
   isPopulatingClientSelect = true;
   const currentValue = select.value;
-  const nextValue = clientProperties.some((client) => client.id === currentValue)
-    ? currentValue
-    : clientProperties[0]?.id || "";
+  const nextValue = nextClientSelection(currentValue);
   select.innerHTML = clientProperties
     .map((client) => `<option value="${escapeHtml(client.id)}">${escapeHtml(clientTitle(client))}</option>`)
     .join("");
   select.value = nextValue;
+  if (nextValue) activeClientId = nextValue;
   isPopulatingClientSelect = false;
 
   if (nextValue && currentValue !== nextValue) {
@@ -115,6 +196,26 @@ async function loadClientProperties() {
     .filter((client) => clientTitle(client))
     .sort((a, b) => clientTitle(a).localeCompare(clientTitle(b)));
   populateClientPropertySelect();
+}
+
+function rememberUnitRecord(unit) {
+  if (!unit?.id) return;
+  unitRecordsById.set(unit.id, unit);
+  notesByUnitId.set(unit.id, unit.notes || "");
+}
+
+function normalizeUnitName(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function duplicateUnitExists(propertyId, unitName, ignoreUnitId = "") {
+  const normalized = normalizeUnitName(unitName);
+  if (!propertyId || !normalized) return false;
+  return Array.from(unitRecordsById.values()).some((unit) => (
+    unit.id !== ignoreUnitId &&
+    unit.property_id === propertyId &&
+    normalizeUnitName(unit.unit_name) === normalized
+  ));
 }
 
 function noteFieldHtml(value = "") {
@@ -155,7 +256,7 @@ async function loadUnitNotes() {
   isLoadingNotes = true;
   const result = await supabase
     .from("property_units")
-    .select("id,notes")
+    .select("id,property_id,unit_name,notes")
     .limit(3000);
   isLoadingNotes = false;
 
@@ -166,7 +267,8 @@ async function loadUnitNotes() {
   }
 
   notesByUnitId.clear();
-  (result.data || []).forEach((unit) => notesByUnitId.set(unit.id, unit.notes || ""));
+  unitRecordsById.clear();
+  (result.data || []).forEach(rememberUnitRecord);
   hydrateForms();
 }
 
@@ -177,6 +279,8 @@ function propertyUnitValue(form, name) {
 async function updateUnitNotes(unitId, notes) {
   if (!supabase || !unitId) return;
   notesByUnitId.set(unitId, notes);
+  const existing = unitRecordsById.get(unitId);
+  if (existing) unitRecordsById.set(unitId, { ...existing, notes });
   const result = await supabase
     .from("property_units")
     .update({ notes })
@@ -215,6 +319,7 @@ async function syncQuickUnitNotes({ propertyId, unitName, notes }) {
   for (let attempt = 0; attempt < 4; attempt += 1) {
     const unit = await findRecentlySavedUnit(propertyId, unitName);
     if (unit?.id) {
+      rememberUnitRecord(unit);
       await updateUnitNotes(unit.id, notes);
       hydrateForms();
       return;
@@ -226,6 +331,7 @@ async function syncQuickUnitNotes({ propertyId, unitName, notes }) {
 function bindSaves() {
   document.addEventListener("change", (event) => {
     if (event.target?.id !== "propertyUnitPropertySelect" || isPopulatingClientSelect) return;
+    if (hasClientId(event.target.value)) activeClientId = event.target.value;
     window.setTimeout(() => {
       populateClientPropertySelect();
       updateClientPropertySummary();
@@ -236,16 +342,42 @@ function bindSaves() {
   document.addEventListener("submit", (event) => {
     const form = event.target?.closest?.("#propertyUnitQuickForm, [data-property-unit-row]");
     if (!form) return;
+    populateClientPropertySelect();
+    const select = document.getElementById("propertyUnitPropertySelect");
+    const propertyId = nextClientSelection(select?.value || activeClientId);
+    if (!propertyId || !hasClientId(propertyId)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      showPropertyUnitMessage("Select a client directory property before saving units.", true);
+      return;
+    }
+    activeClientId = propertyId;
+    if (select && select.value !== propertyId) {
+      select.value = propertyId;
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+
     const notes = propertyUnitValue(form, "notes");
     const unitId = form.dataset.propertyUnitId || "";
+    const unitName = propertyUnitValue(form, "unit_name");
+    if (!unitId && duplicateUnitExists(propertyId, unitName)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      showPropertyUnitMessage(`Unit ${unitName} already exists for ${clientTitle(selectedClientProperty())}.`, true);
+      return;
+    }
     if (unitId) {
-      window.setTimeout(() => updateUnitNotes(unitId, notes), 500);
+      window.setTimeout(() => {
+        void updateUnitNotes(unitId, notes);
+        void loadUnitNotes();
+      }, 500);
       return;
     }
 
-    const propertyId = document.getElementById("propertyUnitPropertySelect")?.value || "";
-    const unitName = propertyUnitValue(form, "unit_name");
-    window.setTimeout(() => syncQuickUnitNotes({ propertyId, unitName, notes }), 900);
+    window.setTimeout(() => {
+      void syncQuickUnitNotes({ propertyId, unitName, notes });
+      void loadUnitNotes();
+    }, 900);
   }, true);
 
   document.addEventListener("input", (event) => {
