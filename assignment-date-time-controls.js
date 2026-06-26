@@ -20,7 +20,7 @@ function timePart(value) {
 function timeOptions() {
   const options = [];
   for (let hour = 0; hour < 24; hour += 1) {
-    for (let minute = 0; minute < 60; minute += 15) {
+    for (let minute = 0; minute < 60; minute += 30) {
       const value = `${pad(hour)}:${pad(minute)}`;
       const displayHour = hour % 12 || 12;
       const suffix = hour < 12 ? "AM" : "PM";
