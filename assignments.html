@@ -12,6 +12,18 @@
     body[data-admin-page="assignments"] .assignment-list-panel .suite-toolbar .toolbar-left {
       display: none !important;
     }
+    body[data-admin-page="assignments"] #adminAssignments > .empty-state {
+      display: none !important;
+    }
+    body[data-admin-page="assignments"] .assignment-table-empty {
+      background: transparent !important;
+      border: 0 !important;
+      box-shadow: none !important;
+      min-height: 72px !important;
+    }
+    body[data-admin-page="assignments"] .assignment-table-empty .empty-lines {
+      display: none !important;
+    }
     body[data-admin-page="assignments"] #adminAssignments.assignment-open-list {
       display: grid;
       gap: 4px;
@@ -44,7 +56,7 @@
   </style>
   <link rel="stylesheet" href="admin-suite.css?v=20260623j" />
   <link rel="stylesheet" href="property-workflows.css" />
-  <link rel="stylesheet" href="assignment-board-ux.css?v=20260626c" />
+  <link rel="stylesheet" href="assignment-board-ux.css?v=20260626d" />
 </head>
 <body class="turnly-admin-suite" data-admin-page="assignments">
   <div id="adminSuiteApp"></div>
@@ -53,6 +65,7 @@
   <script type="module" src="app.js?v=20260623j"></script>
   <script type="module" src="assignment-checklist-snapshot.js?v=20260623j"></script>
   <script type="module" src="admin-assignment-management.js?v=20260626c"></script>
+  <script type="module" src="assignment-contractor-assignment.js?v=20260626a"></script>
   <script type="module" src="assignment-client-source.js?v=20260624c"></script>
   <script type="module" src="assignment-contractor-source.js?v=20260624b"></script>
   <script type="module" src="assignment-board-ux.js?v=20260626c"></script>
