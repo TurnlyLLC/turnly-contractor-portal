@@ -1,7 +1,6 @@
 const ASSIGNMENT_UNIT_PATCH_KEY = "__turnlyAssignmentUnitMetadataPatch";
 
-let pendingUnitMetadata = null;
-let pendingUnitTimer = 0;
+let restorePatchedFetch = null;
 
 function cleanText(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
@@ -47,18 +46,8 @@ function currentUnitMetadata() {
   };
 }
 
-function captureUnitMetadata() {
-  window.clearTimeout(pendingUnitTimer);
-  pendingUnitMetadata = currentUnitMetadata();
-  if (pendingUnitMetadata) {
-    pendingUnitTimer = window.setTimeout(() => {
-      pendingUnitMetadata = null;
-    }, 15000);
-  }
-}
-
-function mergeUnitMetadata(row) {
-  if (!row || typeof row !== "object" || Array.isArray(row) || !pendingUnitMetadata) return row;
+function mergeUnitMetadata(row, metadata) {
+  if (!row || typeof row !== "object" || Array.isArray(row) || !metadata) return row;
   const existing = row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
     ? row.metadata
     : {};
@@ -66,40 +55,62 @@ function mergeUnitMetadata(row) {
     ...row,
     metadata: {
       ...existing,
-      ...pendingUnitMetadata
+      ...metadata
     }
   };
 }
 
-function patchFetch() {
-  if (window[ASSIGNMENT_UNIT_PATCH_KEY] || !window.fetch) return;
+function installTemporaryFetchPatch(metadata) {
+  if (!metadata || !window.fetch) return;
+  if (restorePatchedFetch) restorePatchedFetch();
+
   window[ASSIGNMENT_UNIT_PATCH_KEY] = true;
   const originalFetch = window.fetch.bind(window);
+  let timeoutId = 0;
 
-  window.fetch = (input, init = {}) => {
+  restorePatchedFetch = () => {
+    if (window.fetch !== patchedFetch) return;
+    window.fetch = originalFetch;
+    window[ASSIGNMENT_UNIT_PATCH_KEY] = false;
+    window.clearTimeout(timeoutId);
+    restorePatchedFetch = null;
+  };
+
+  function patchedFetch(input, init = {}) {
     const url = typeof input === "string" ? input : input?.url || "";
     const method = String(init?.method || input?.method || "GET").toUpperCase();
     const body = init?.body;
 
-    if (method === "POST" && /\/rest\/v1\/assignment_blocks/i.test(url) && body && pendingUnitMetadata) {
+    if (method === "POST" && /\/rest\/v1\/assignment_blocks/i.test(url) && body) {
       try {
         const parsed = JSON.parse(body);
-        const patched = Array.isArray(parsed) ? parsed.map(mergeUnitMetadata) : mergeUnitMetadata(parsed);
+        const patched = Array.isArray(parsed)
+          ? parsed.map((row) => mergeUnitMetadata(row, metadata))
+          : mergeUnitMetadata(parsed, metadata);
         init = { ...init, body: JSON.stringify(patched) };
       } catch (error) {
         console.warn("[assignments] Unable to attach unit metadata to assignment insert", error);
+      } finally {
+        window.setTimeout(() => {
+          if (restorePatchedFetch) restorePatchedFetch();
+        }, 0);
       }
     }
 
     return originalFetch(input, init);
-  };
+  }
+
+  window.fetch = patchedFetch;
+  timeoutId = window.setTimeout(() => {
+    if (restorePatchedFetch) restorePatchedFetch();
+  }, 15000);
 }
 
 function bindUnitCapture() {
   document.addEventListener("submit", (event) => {
-    if (event.target?.id === "assignmentForm") captureUnitMetadata();
+    if (event.target?.id !== "assignmentForm") return;
+    installTemporaryFetchPatch(currentUnitMetadata());
   }, true);
 }
 
-patchFetch();
 bindUnitCapture();
