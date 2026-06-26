@@ -10,6 +10,21 @@ body[data-admin-page="assignments"] .assignment-list-panel .suite-toolbar .toolb
   display: none !important;
 }
 
+body[data-admin-page="assignments"] #adminAssignments > .empty-state {
+  display: none !important;
+}
+
+body[data-admin-page="assignments"] .assignment-table-empty {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  min-height: 72px !important;
+}
+
+body[data-admin-page="assignments"] .assignment-table-empty .empty-lines {
+  display: none !important;
+}
+
 .assignment-list-panel .suite-toolbar {
   align-items: stretch;
   background: rgba(7, 18, 32, 0.56);
@@ -341,6 +356,57 @@ body[data-admin-page="assignments"] #adminAssignments > .admin-assignment-row:no
   border-radius: 999px;
   min-height: 32px;
   padding: 0 12px;
+}
+
+.assignment-edit-contractor-list {
+  background: rgba(7, 18, 32, 0.68);
+  border: 1px solid rgba(117, 143, 169, 0.18);
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  max-height: 190px;
+  overflow: auto;
+  padding: 8px;
+}
+
+.assignment-edit-contractor-option {
+  align-items: flex-start;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(117, 143, 169, 0.12);
+  border-radius: 6px;
+  color: #f7fbff;
+  display: flex;
+  gap: 10px;
+  padding: 8px;
+}
+
+.assignment-edit-contractor-option input {
+  flex: 0 0 auto;
+  margin-top: 3px;
+  width: auto;
+}
+
+.assignment-edit-contractor-option span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.assignment-edit-contractor-option strong {
+  font-size: 12px;
+  line-height: 1.15;
+}
+
+.assignment-edit-contractor-option small,
+.assignment-edit-contractor-summary,
+.assignment-edit-contractor-empty {
+  color: var(--suite-soft, #9aaabc);
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.assignment-edit-contractor-empty {
+  padding: 8px;
 }
 
 .assignment-notes-drawer {
