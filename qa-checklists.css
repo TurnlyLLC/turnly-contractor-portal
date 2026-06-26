@@ -1,0 +1,475 @@
+body[data-admin-page='qa-checklists'] .suite-content {
+  gap: 14px;
+}
+
+.qa-checklists-page {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.qa-checklist-tabs {
+  margin-bottom: 2px;
+}
+
+.qa-checklist-metrics {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.qa-checklist-metrics .metric-icon-wrap {
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.qa-status {
+  background: rgba(57, 169, 255, 0.12);
+  border: 1px solid rgba(57, 169, 255, 0.26);
+  border-radius: 8px;
+  color: #d9ecff;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 10px 12px;
+}
+
+.qa-status.success {
+  background: rgba(0, 214, 163, 0.1);
+  border-color: rgba(0, 214, 163, 0.24);
+  color: var(--suite-green);
+}
+
+.qa-status.error {
+  background: rgba(255, 91, 104, 0.1);
+  border-color: rgba(255, 91, 104, 0.24);
+  color: var(--suite-red);
+}
+
+.qa-checklist-workspace {
+  align-items: start;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(220px, 260px) minmax(0, 1fr) minmax(240px, 310px);
+}
+
+.qa-template-library,
+.qa-preview-panel {
+  display: grid;
+  gap: 12px;
+  position: sticky;
+  top: 14px;
+}
+
+.qa-panel-title,
+.qa-editor-head,
+.qa-builder-toolbar,
+.qa-section-head,
+.qa-row-actions,
+.qa-section-actions {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.qa-panel-title h2,
+.qa-editor-head h2 {
+  font-size: 16px;
+  line-height: 1.1;
+  margin: 0;
+}
+
+.qa-panel-title p,
+.qa-editor-head p,
+.qa-builder-toolbar span {
+  color: var(--suite-soft);
+  font-size: 12px;
+  margin: 5px 0 0;
+}
+
+.qa-compact-action {
+  min-height: 32px;
+  padding: 0 12px;
+}
+
+.qa-search-field {
+  background: rgba(6, 18, 31, 0.86);
+  border: 1px solid var(--suite-border);
+  border-radius: 7px;
+  display: block;
+  min-height: 36px;
+  padding: 0 10px;
+}
+
+.qa-search-field input {
+  background: transparent;
+  border: 0;
+  color: var(--suite-text);
+  height: 34px;
+  outline: 0;
+  width: 100%;
+}
+
+.qa-template-list {
+  display: grid;
+  gap: 8px;
+  max-height: calc(100vh - 310px);
+  min-height: 160px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.qa-template-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--suite-border-soft);
+  border-radius: 8px;
+  color: var(--suite-text);
+  display: grid;
+  gap: 5px;
+  min-height: 58px;
+  padding: 10px;
+  text-align: left;
+  width: 100%;
+}
+
+.qa-template-card:hover,
+.qa-template-card.active {
+  border-color: rgba(0, 214, 163, 0.5);
+  box-shadow: inset 3px 0 0 var(--suite-green);
+}
+
+.qa-template-card strong,
+.qa-template-card span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qa-template-card strong {
+  font-size: 12px;
+}
+
+.qa-template-card span,
+.qa-empty-small {
+  color: var(--suite-soft);
+  font-size: 11px;
+}
+
+.qa-empty-small {
+  align-items: center;
+  border: 1px dashed rgba(117, 143, 169, 0.24);
+  border-radius: 8px;
+  display: flex;
+  justify-content: center;
+  min-height: 118px;
+  padding: 16px;
+  text-align: center;
+}
+
+.qa-editor-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.qa-editor-head {
+  align-items: start;
+  border-bottom: 1px solid var(--suite-border-soft);
+  padding-bottom: 12px;
+}
+
+.qa-editor-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.qa-editor-actions button[disabled] {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.qa-template-fields {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(220px, 1.4fr) repeat(3, minmax(150px, 0.8fr));
+}
+
+.qa-field {
+  color: var(--suite-text);
+  display: grid;
+  font-size: 12px;
+  font-weight: 800;
+  gap: 6px;
+  min-width: 0;
+}
+
+.qa-field.span-all {
+  grid-column: 1 / -1;
+}
+
+.qa-field span {
+  color: #d9e8f6;
+  min-width: 0;
+}
+
+.qa-field input,
+.qa-field select,
+.qa-field textarea {
+  background: rgba(6, 18, 31, 0.86);
+  border: 1px solid var(--suite-border-soft);
+  border-radius: 7px;
+  color: var(--suite-text);
+  min-height: 36px;
+  outline: 0;
+  padding: 8px 10px;
+  resize: vertical;
+  width: 100%;
+}
+
+.qa-field input:focus,
+.qa-field select:focus,
+.qa-field textarea:focus,
+.qa-search-field:focus-within {
+  border-color: rgba(0, 214, 163, 0.58);
+  box-shadow: 0 0 0 2px rgba(0, 214, 163, 0.1);
+}
+
+.qa-builder-toolbar {
+  background: rgba(6, 18, 31, 0.56);
+  border: 1px solid var(--suite-border-soft);
+  border-radius: 8px;
+  min-height: 50px;
+  padding: 10px 12px;
+}
+
+.qa-builder-toolbar strong {
+  display: block;
+  font-size: 13px;
+}
+
+.qa-sections {
+  display: grid;
+  gap: 12px;
+}
+
+.qa-builder-section {
+  background: rgba(4, 14, 25, 0.52);
+  border: 1px solid var(--suite-border-soft);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.qa-section-head {
+  align-items: end;
+}
+
+.qa-section-head .qa-field {
+  flex: 1;
+}
+
+.qa-section-actions,
+.qa-row-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.qa-section-items {
+  display: grid;
+  gap: 8px;
+}
+
+.qa-checklist-item {
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(117, 143, 169, 0.14);
+  border-radius: 8px;
+  display: grid;
+  gap: 9px;
+  padding: 10px;
+}
+
+.qa-item-main {
+  align-items: end;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(240px, 1fr) minmax(126px, 0.38fr) repeat(2, minmax(90px, max-content));
+}
+
+.qa-item-task {
+  min-width: 0;
+}
+
+.qa-toggle {
+  align-items: center;
+  background: rgba(6, 18, 31, 0.7);
+  border: 1px solid var(--suite-border-soft);
+  border-radius: 999px;
+  color: #d9e8f6;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 900;
+  gap: 7px;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
+.qa-toggle input {
+  accent-color: var(--suite-green);
+}
+
+.qa-item-notes {
+  width: 100%;
+}
+
+.qa-icon-action {
+  min-height: 30px;
+  padding: 0 10px;
+}
+
+.qa-add-item {
+  justify-self: start;
+}
+
+.qa-preview-meta {
+  background: rgba(0, 214, 163, 0.07);
+  border: 1px solid rgba(0, 214, 163, 0.18);
+  border-radius: 8px;
+  display: grid;
+  gap: 5px;
+  padding: 10px;
+}
+
+.qa-preview-meta strong,
+.qa-preview-meta span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.qa-preview-meta span {
+  color: var(--suite-soft);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.qa-preview-list {
+  display: grid;
+  gap: 12px;
+  max-height: calc(100vh - 380px);
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.qa-preview-list section {
+  display: grid;
+  gap: 6px;
+}
+
+.qa-preview-list h3 {
+  color: var(--suite-text);
+  font-size: 12px;
+  margin: 0;
+}
+
+.qa-preview-item {
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--suite-border-soft);
+  border-radius: 7px;
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+}
+
+.qa-preview-item span {
+  color: #e9f4ff;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.qa-preview-item em {
+  color: var(--suite-green);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.qa-helper-note {
+  color: var(--suite-soft);
+  font-size: 11px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+@media (max-width: 1460px) {
+  .qa-checklist-workspace {
+    grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
+  }
+
+  .qa-preview-panel {
+    grid-column: 1 / -1;
+    position: static;
+  }
+
+  .qa-preview-list {
+    max-height: none;
+  }
+}
+
+@media (max-width: 1120px) {
+  .qa-checklist-metrics,
+  .qa-template-fields,
+  .qa-checklist-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .qa-template-library {
+    position: static;
+  }
+
+  .qa-template-list {
+    max-height: 260px;
+  }
+
+  .qa-item-main {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 680px) {
+  .qa-editor-head,
+  .qa-builder-toolbar,
+  .qa-section-head,
+  .qa-panel-title {
+    align-items: stretch;
+    display: grid;
+  }
+
+  .qa-editor-actions,
+  .qa-section-actions,
+  .qa-row-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .qa-editor-actions button,
+  .qa-section-actions button,
+  .qa-row-actions button,
+  .qa-add-item {
+    width: 100%;
+  }
+
+  .qa-item-main {
+    grid-template-columns: 1fr;
+  }
+
+  .qa-toggle {
+    justify-content: flex-start;
+  }
+}
