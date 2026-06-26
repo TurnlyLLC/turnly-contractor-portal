@@ -6,11 +6,16 @@
   gap: 16px;
 }
 
+body[data-admin-page="assignments"] .assignment-list-panel .suite-toolbar .toolbar-left {
+  display: none !important;
+}
+
 .assignment-list-panel .suite-toolbar {
   align-items: stretch;
   background: rgba(7, 18, 32, 0.56);
   border: 1px solid rgba(124, 151, 176, 0.16);
   border-radius: 8px;
+  justify-content: flex-end;
   padding: 10px;
 }
 
@@ -78,14 +83,25 @@
   box-shadow: 0 0 14px rgba(255, 91, 104, 0.28);
 }
 
-.assignment-board-quick-btn[data-board-quick-view="preferred"]::before {
+.assignment-board-quick-btn[data-board-quick-view="preferred_pending"]::before {
   background: #8f7cff;
   box-shadow: 0 0 14px rgba(143, 124, 255, 0.3);
 }
 
-.assignment-board-quick-btn[data-board-quick-view="unassigned"]::before {
+.assignment-board-quick-btn[data-board-quick-view="claimed"]::before,
+.assignment-board-quick-btn[data-board-quick-view="upcoming"]::before {
   background: #39a9ff;
   box-shadow: 0 0 14px rgba(57, 169, 255, 0.28);
+}
+
+.assignment-board-quick-btn[data-board-quick-view="in_progress"]::before {
+  background: #ffb454;
+  box-shadow: 0 0 14px rgba(255, 180, 84, 0.28);
+}
+
+.assignment-board-quick-btn[data-board-quick-view="completed"]::before {
+  background: #00d6a3;
+  box-shadow: 0 0 14px rgba(0, 214, 163, 0.28);
 }
 
 .assignment-board-quick-btn:hover,
