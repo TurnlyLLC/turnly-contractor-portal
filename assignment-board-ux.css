@@ -124,9 +124,20 @@ body[data-admin-page="assignments"] #adminAssignments > .admin-assignment-row:no
   transition: background 0.16s ease, border-color 0.16s ease;
 }
 
+.assignment-list-item[data-admin-assignment-card],
+.assignment-list-item[role="button"] {
+  cursor: pointer;
+}
+
 .assignment-list-item:hover {
   background: rgba(7, 18, 32, 0.72);
   border-color: rgba(0, 214, 163, 0.82);
+}
+
+.assignment-list-item:focus-visible {
+  border-color: rgba(0, 214, 163, 0.88);
+  outline: 2px solid rgba(0, 214, 163, 0.36);
+  outline-offset: 2px;
 }
 
 .assignment-list-item.is-overdue {
