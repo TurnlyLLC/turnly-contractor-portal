@@ -6,9 +6,10 @@ const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
   : null;
 
 const list = document.getElementById("adminAssignments");
-const pageMessage = document.getElementById("message");
-const statuses = ["open", "claimed", "scheduled", "in_progress", "completed", "qa_pending", "cancelled"];
+const pageMessage = document.getElementById("assignmentMessage") || document.getElementById("message");
+const statuses = ["open", "preferred_pending", "claimed", "scheduled", "in_progress", "completed", "qa_pending", "cancelled"];
 let assignments = new Map();
+let activeStatusFilter = window.__turnlyAssignmentStatusFilter || "open";
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>']/g, (char) => (
@@ -50,12 +51,77 @@ function shortId(value) {
   return String(value || "").slice(0, 8) || "pending";
 }
 
+function metadataValue(item, key) {
+  const metadata = item?.metadata && typeof item.metadata === "object" ? item.metadata : {};
+  return metadata[key] || metadata.unit?.[key] || "";
+}
+
+function extractUnitFromTitle(title) {
+  const text = String(title || "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+
+  const unitMatch = text.match(/\bunit\s+(.+?)(?:,\s*[\d,.]+\s*sq\b|,\s*\d|\s+-\s+|\s+[-]\s+)/i)
+    || text.match(/\bunit\s+([^,]+)/i);
+  if (unitMatch?.[1]) return unitMatch[1].trim();
+
+  const hashMatch = text.match(/#\s*([A-Za-z0-9-]+)/);
+  return hashMatch?.[1]?.trim() || "";
+}
+
+function unitInputValue(item) {
+  return metadataValue(item, "unit_name")
+    || metadataValue(item, "unit_number")
+    || item.unit_name
+    || item.unit_number
+    || item.property_unit_name
+    || item.property_unit_number
+    || item.unit
+    || extractUnitFromTitle(item.title);
+}
+
 function unitLabel(item) {
-  return item.unit_name || item.unit_number || item.unit || item.unit_id || "No unit";
+  return unitInputValue(item) || item.unit_id || "No unit";
 }
 
 function statusKey(status) {
   return String(status || "open").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+function statusToken(status) {
+  return String(status || "open").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+}
+
+function dateTime(value) {
+  const date = value ? new Date(value) : null;
+  return date && !Number.isNaN(date.getTime()) ? date.getTime() : 0;
+}
+
+function isCompletedStatus(item) {
+  return ["completed", "cancelled"].includes(statusToken(item.status));
+}
+
+function isOverdueAssignment(item) {
+  if (isCompletedStatus(item)) return false;
+  const due = dateTime(item.end_window) || dateTime(item.start_window);
+  return Boolean(due && due < Date.now());
+}
+
+function isUpcomingAssignment(item) {
+  if (isCompletedStatus(item)) return false;
+  const start = dateTime(item.start_window);
+  return Boolean(start && start > Date.now());
+}
+
+function matchesActiveStatus(item) {
+  const filter = statusToken(activeStatusFilter || "open");
+  if (filter === "all") return true;
+  if (filter === "overdue") return isOverdueAssignment(item);
+  if (filter === "upcoming") return isUpcomingAssignment(item);
+  return statusToken(item.status) === filter;
+}
+
+function filterLabel() {
+  return String(activeStatusFilter || "open").replace(/_/g, " ");
 }
 
 function statusOptions(current) {
@@ -84,7 +150,7 @@ function renderAssignment(item) {
   const end = item.end_window ? formatDateTime(item.end_window) : "End not set";
 
   return `
-    <article class="admin-assignment-row assignment-list-item assignment-thin-list-item ${currentStatus === "overdue" ? "is-overdue" : ""}" data-admin-assignment-card="${id}" role="button" tabindex="0" aria-label="Edit assignment ${escapeHtml(shortId(item.id))}">
+    <article class="admin-assignment-row assignment-list-item assignment-thin-list-item ${isOverdueAssignment(item) ? "is-overdue" : ""}" data-admin-assignment-card="${id}" role="button" tabindex="0" aria-label="Edit assignment ${escapeHtml(shortId(item.id))}">
       <div class="assignment-thin-row">
         <div class="assignment-thin-cell assignment-thin-main">
           <small>${escapeHtml(shortId(item.id))}</small>
@@ -154,9 +220,16 @@ async function loadAssignments() {
   }
 
   assignments = new Map((data || []).map((item) => [item.id, item]));
-  list.innerHTML = data?.length
-    ? data.map(renderAssignment).join("")
+  const visibleAssignments = (data || []).filter(matchesActiveStatus);
+  list.innerHTML = visibleAssignments.length
+    ? visibleAssignments.map(renderAssignment).join("")
     : renderNotice("No assignments found", "Assignments will appear here.");
+
+  const listCount = document.getElementById("assignmentListCount");
+  if (listCount) {
+    listCount.textContent = `Showing ${visibleAssignments.length} ${filterLabel()} assignment${visibleAssignments.length === 1 ? "" : "s"}`;
+  }
+  showMessage(`${visibleAssignments.length} ${filterLabel()} assignment${visibleAssignments.length === 1 ? "" : "s"} synced from Supabase.`);
 }
 
 function ensureHeader() {
@@ -187,6 +260,7 @@ function ensureEditModal() {
           <div><label>Assignment Title</label><input id="assignmentEditTitle" required /></div>
           <div><label>Status</label><select id="assignmentEditStatus"></select></div>
           <div><label>Property Name</label><input id="assignmentEditProperty" required /></div>
+          <div><label>Unit Number / Name</label><input id="assignmentEditUnit" /></div>
           <div><label>Service Type</label><input id="assignmentEditService" /></div>
           <div class="span-two"><label>Address</label><input id="assignmentEditAddress" /></div>
           <div><label>Pay Amount</label><input id="assignmentEditPay" type="number" step="0.01" /></div>
@@ -229,6 +303,7 @@ function openEditModal(assignmentId) {
   setEditValue("assignmentEditId", item.id);
   setEditValue("assignmentEditTitle", item.title);
   setEditValue("assignmentEditProperty", item.property_name);
+  setEditValue("assignmentEditUnit", unitInputValue(item));
   setEditValue("assignmentEditAddress", item.address);
   setEditValue("assignmentEditService", item.service_type);
   setEditValue("assignmentEditPay", moneyInputValue(item.pay_amount));
@@ -256,6 +331,18 @@ function closeEditModal() {
 }
 
 function getEditPayload() {
+  const id = document.getElementById("assignmentEditId").value;
+  const current = assignments.get(id) || {};
+  const metadata = current.metadata && typeof current.metadata === "object" ? { ...current.metadata } : {};
+  const unitValue = document.getElementById("assignmentEditUnit").value.trim();
+  if (unitValue) {
+    metadata.unit_name = unitValue;
+    metadata.unit_number = unitValue;
+  } else {
+    delete metadata.unit_name;
+    delete metadata.unit_number;
+  }
+
   const payload = {
     title: document.getElementById("assignmentEditTitle").value.trim(),
     property_name: document.getElementById("assignmentEditProperty").value.trim(),
@@ -267,6 +354,7 @@ function getEditPayload() {
     scope: document.getElementById("assignmentEditScope").value.trim(),
     supplies_notes: document.getElementById("assignmentEditSupplies").value.trim(),
     special_instructions: document.getElementById("assignmentEditInstructions").value.trim(),
+    metadata,
     status: document.getElementById("assignmentEditStatus").value
   };
 
@@ -463,6 +551,14 @@ async function init() {
   injectStyles();
   ensureHeader();
   bindActionsOnce();
+  document.addEventListener("turnly:assignment-status-filter", (event) => {
+    activeStatusFilter = event.detail?.status || "open";
+    window.__turnlyAssignmentStatusFilter = activeStatusFilter;
+    void loadAssignments();
+  });
+  document.addEventListener("turnly:assignments-updated", () => {
+    void loadAssignments();
+  });
   list.innerHTML = renderNotice("Loading assignments...");
 
   if (!await requireAdmin()) {
