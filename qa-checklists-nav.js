@@ -19,22 +19,36 @@ function findQualityLinks() {
   return document.querySelector('[data-nav-section="quality"]');
 }
 
+function revealQualitySection() {
+  const qualityLinks = findQualityLinks();
+  if (!qualityLinks) return;
+
+  qualityLinks.hidden = false;
+  const toggle = document.querySelector('[data-nav-section-toggle="quality"]');
+  toggle?.setAttribute("aria-expanded", "true");
+  toggle?.closest(".nav-section-group")?.classList.remove("collapsed");
+}
+
 function injectSidebarLink() {
   const links = findQualityLinks();
-  if (!links || links.querySelector(`a[href="${CHECKLIST_LINK.href}"]`)) return;
+  if (!links) return;
 
-  const anchor = document.createElement("a");
-  anchor.className = "suite-nav-link";
-  anchor.href = CHECKLIST_LINK.href;
-  anchor.dataset.injectedQaChecklists = "true";
-  anchor.innerHTML = `${checklistIcon()}<span>${CHECKLIST_LINK.label}</span>`;
+  if (!links.querySelector(`a[href="${CHECKLIST_LINK.href}"]`)) {
+    const anchor = document.createElement("a");
+    anchor.className = "suite-nav-link";
+    anchor.href = CHECKLIST_LINK.href;
+    anchor.dataset.injectedQaChecklists = "true";
+    anchor.innerHTML = `${checklistIcon()}<span>${CHECKLIST_LINK.label}</span>`;
 
-  const afterQueue = links.querySelector('a[href="qa-queue.html"]');
-  if (afterQueue?.nextSibling) {
-    links.insertBefore(anchor, afterQueue.nextSibling);
-  } else {
-    links.appendChild(anchor);
+    const afterQueue = links.querySelector('a[href="qa-queue.html"]');
+    if (afterQueue?.nextSibling) {
+      links.insertBefore(anchor, afterQueue.nextSibling);
+    } else {
+      links.appendChild(anchor);
+    }
   }
+
+  revealQualitySection();
 }
 
 function injectQualityTabs() {
@@ -76,13 +90,7 @@ function markChecklistActive() {
     item.classList.add("active");
   });
 
-  const qualityLinks = findQualityLinks();
-  if (qualityLinks?.hidden) {
-    qualityLinks.hidden = false;
-    const toggle = document.querySelector('[data-nav-section-toggle="quality"]');
-    toggle?.setAttribute("aria-expanded", "true");
-    toggle?.closest(".nav-section-group")?.classList.remove("collapsed");
-  }
+  revealQualitySection();
 }
 
 function syncQaChecklistNavigation() {
