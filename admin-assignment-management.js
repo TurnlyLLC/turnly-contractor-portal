@@ -84,7 +84,7 @@ function renderAssignment(item) {
   const end = item.end_window ? formatDateTime(item.end_window) : "End not set";
 
   return `
-    <article class="admin-assignment-row assignment-list-item assignment-thin-list-item ${currentStatus === "overdue" ? "is-overdue" : ""}" data-admin-assignment-card="${id}">
+    <article class="admin-assignment-row assignment-list-item assignment-thin-list-item ${currentStatus === "overdue" ? "is-overdue" : ""}" data-admin-assignment-card="${id}" role="button" tabindex="0" aria-label="Edit assignment ${escapeHtml(shortId(item.id))}">
       <div class="assignment-thin-row">
         <div class="assignment-thin-cell assignment-thin-main">
           <small>${escapeHtml(shortId(item.id))}</small>
@@ -379,6 +379,7 @@ function bindActions() {
     const updateButton = event.target.closest("[data-admin-save-status]");
     const editButton = event.target.closest("[data-admin-edit-assignment]");
     const deleteButton = event.target.closest("[data-admin-delete-assignment]");
+    const interactiveTarget = event.target.closest("button, a, input, select, textarea, label, summary, details");
     if (!row) return;
 
     if (updateButton) {
@@ -397,8 +398,48 @@ function bindActions() {
       deleteButton.disabled = true;
       await deleteAssignment(deleteButton.dataset.adminDeleteAssignment);
       deleteButton.disabled = false;
+      return;
+    }
+
+    if (!interactiveTarget) {
+      openEditModal(row.dataset.adminAssignmentCard);
     }
   });
+
+  list.addEventListener("keydown", (event) => {
+    const row = event.target.closest("[data-admin-assignment-card]");
+    const interactiveTarget = event.target.closest("button, a, input, select, textarea, label, summary, details");
+    if (!row || interactiveTarget || !["Enter", " "].includes(event.key)) return;
+    event.preventDefault();
+    openEditModal(row.dataset.adminAssignmentCard);
+  });
+}
+
+function bindRowClickStyles() {
+  if (document.getElementById("adminAssignmentRowClickStyles")) return;
+  document.head.insertAdjacentHTML("beforeend", `
+    <style id="adminAssignmentRowClickStyles">
+      [data-admin-assignment-card] {
+        cursor: pointer;
+      }
+      [data-admin-assignment-card]:focus-visible {
+        border-color: rgba(0, 214, 163, 0.88);
+        outline: 2px solid rgba(0, 214, 163, 0.36);
+        outline-offset: 2px;
+      }
+      [data-admin-assignment-card] button,
+      [data-admin-assignment-card] select {
+        cursor: auto;
+      }
+    </style>
+  `);
+}
+
+function bindActionsOnce() {
+  if (list.dataset.assignmentRowsBound) return;
+  list.dataset.assignmentRowsBound = "true";
+  bindActions();
+  bindRowClickStyles();
 }
 
 function injectStyles() {
@@ -421,7 +462,7 @@ async function init() {
   if (!list || !supabase) return;
   injectStyles();
   ensureHeader();
-  bindActions();
+  bindActionsOnce();
   list.innerHTML = renderNotice("Loading assignments...");
 
   if (!await requireAdmin()) {
