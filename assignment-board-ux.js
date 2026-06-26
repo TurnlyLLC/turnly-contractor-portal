@@ -1,12 +1,16 @@
 const QUICK_VIEWS = {
-  open: { label: "Open Jobs", status: "open" },
-  unassigned: { label: "Need Contractor", status: "open", contractor: "unassigned" },
-  preferred: { label: "Preferred First", status: "preferred_pending" },
+  open: { label: "Open", status: "open" },
+  preferred_pending: { label: "Preferred", status: "preferred_pending" },
+  claimed: { label: "Claimed", status: "claimed" },
+  in_progress: { label: "In Progress", status: "in_progress" },
+  upcoming: { label: "Upcoming", status: "upcoming" },
   overdue: { label: "Overdue", status: "overdue" },
-  all: { label: "All Jobs", status: "all" }
+  completed: { label: "Completed", status: "completed" },
+  all: { label: "All", status: "all" }
 };
 
 let syncTimer = 0;
+window.__turnlyAssignmentStatusFilter = window.__turnlyAssignmentStatusFilter || "open";
 
 function initAssignmentBoardUx() {
   mountQuickViews();
@@ -26,7 +30,7 @@ function mountQuickViews() {
   const bar = document.createElement("div");
   bar.className = "assignment-board-quickbar";
   bar.innerHTML = `
-    <div class="assignment-board-quickbar-label">Quick Views</div>
+    <div class="assignment-board-quickbar-label">Status Views</div>
     <div class="assignment-board-quick-actions">
       ${Object.entries(QUICK_VIEWS).map(([key, view]) => `
         <button class="assignment-board-quick-btn" type="button" data-board-quick-view="${key}">${view.label}</button>
@@ -62,11 +66,22 @@ function mountThinListHead() {
 function handleBoardClick(event) {
   const quickViewButton = event.target.closest("[data-board-quick-view]");
   if (quickViewButton) {
+    event.preventDefault();
     applyQuickView(quickViewButton.dataset.boardQuickView);
     return;
   }
 
-  if (event.target.closest("[data-assignment-status-tab], [data-assignment-clear-filters]")) {
+  const statusTab = event.target.closest("[data-assignment-status-tab]");
+  if (statusTab) {
+    window.__turnlyAssignmentStatusFilter = statusTab.dataset.assignmentStatusTab || "open";
+    publishStatusFilter(window.__turnlyAssignmentStatusFilter);
+    scheduleSyncQuickViews();
+    return;
+  }
+
+  if (event.target.closest("[data-assignment-clear-filters]")) {
+    window.__turnlyAssignmentStatusFilter = "open";
+    publishStatusFilter("open");
     scheduleSyncQuickViews();
   }
 }
@@ -77,14 +92,23 @@ function applyQuickView(key) {
 
   setSearchValue("");
   setSelectValue("assignmentFrequencyFilter", "all");
-  setSelectValue("assignmentContractorFilter", view.contractor || "all");
-  clickStatusTab(view.status);
+  setSelectValue("assignmentContractorFilter", "all");
+  window.__turnlyAssignmentStatusFilter = view.status;
+  setStatusTabActive(view.status);
+  publishStatusFilter(view.status);
   scheduleSyncQuickViews();
 }
 
-function clickStatusTab(status) {
-  const tab = document.querySelector(`[data-assignment-status-tab="${status}"]`);
-  tab?.click();
+function setStatusTabActive(status) {
+  document.querySelectorAll("[data-assignment-status-tab]").forEach((tab) => {
+    tab.classList.toggle("active", tab.dataset.assignmentStatusTab === status);
+  });
+}
+
+function publishStatusFilter(status) {
+  document.dispatchEvent(new CustomEvent("turnly:assignment-status-filter", {
+    detail: { status: status || "open" }
+  }));
 }
 
 function setSearchValue(value) {
@@ -102,10 +126,10 @@ function setSelectValue(id, value) {
 }
 
 function syncQuickViews() {
-  const activeTab = document.querySelector("[data-assignment-status-tab].active")?.dataset.assignmentStatusTab || "open";
-  const contractor = document.getElementById("assignmentContractorFilter")?.value || "all";
-  const activeMatch = Object.entries(QUICK_VIEWS).find(([, view]) => view.status === activeTab && !view.contractor)?.[0] || "";
-  const activeKey = contractor === "unassigned" ? "unassigned" : contractor === "all" ? activeMatch : "";
+  const activeStatus = window.__turnlyAssignmentStatusFilter
+    || document.querySelector("[data-assignment-status-tab].active")?.dataset.assignmentStatusTab
+    || "open";
+  const activeKey = Object.entries(QUICK_VIEWS).find(([, view]) => view.status === activeStatus)?.[0] || "";
 
   document.querySelectorAll("[data-board-quick-view]").forEach((button) => {
     button.classList.toggle("is-active", button.dataset.boardQuickView === activeKey);
