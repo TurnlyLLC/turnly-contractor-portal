@@ -82,13 +82,16 @@ function setRowState(form, text, tone = "") {
     state = form.querySelector("[data-property-unit-save-state]");
   }
   if (!state) return;
-  state.textContent = text;
-  state.className = `property-unit-save-state ${tone ? `is-${tone}` : ""}`.trim();
+  const className = `property-unit-save-state ${tone ? `is-${tone}` : ""}`.trim();
+  if (state.textContent !== text) state.textContent = text;
+  if (state.className !== className) state.className = className;
 }
 
 function prepareRows() {
   document.querySelectorAll("[data-property-unit-row]").forEach((form) => {
     if (!form.dataset.savedSignature) form.dataset.savedSignature = signature(payloadFromForm(form));
+    if (form.dataset.autosavePrepared === "1") return;
+    form.dataset.autosavePrepared = "1";
     setRowState(form, form.dataset.saveState || "Saved", form.dataset.saveTone || "saved");
   });
 }
@@ -476,15 +479,34 @@ function bindEvents() {
   }, true);
 }
 
+function mutationAddsUnitUi(mutations) {
+  return mutations.some((mutation) => Array.from(mutation.addedNodes || []).some((node) => {
+    if (node.nodeType !== 1) return false;
+    return (
+      node.matches?.("[data-property-unit-row], .property-unit-list-head, [data-property-unit-add]") ||
+      node.querySelector?.("[data-property-unit-row], .property-unit-list-head, [data-property-unit-add]")
+    );
+  }));
+}
+
 function start() {
   installStyles();
   ensureBulkModal();
   bindEvents();
-  const observer = new MutationObserver(() => {
-    injectBulkButton();
-    prepareRows();
+  let prepareQueued = false;
+  const queuePrepare = () => {
+    if (prepareQueued) return;
+    prepareQueued = true;
+    window.requestAnimationFrame(() => {
+      prepareQueued = false;
+      injectBulkButton();
+      prepareRows();
+    });
+  };
+  const observer = new MutationObserver((mutations) => {
+    if (mutationAddsUnitUi(mutations)) queuePrepare();
   });
-  observer.observe(document.documentElement, { childList: true, subtree: true });
+  observer.observe(workspace() || document.body, { childList: true, subtree: true });
   injectBulkButton();
   prepareRows();
 }
