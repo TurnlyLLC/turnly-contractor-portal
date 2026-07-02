@@ -45,8 +45,7 @@ function payloadFromForm(form) {
     square_feet: safeNumber(field(form, "square_feet")),
     customer_price: safeNumber(field(form, "customer_price")),
     contractor_pay: safeNumber(field(form, "contractor_pay")),
-    notes: field(form, "notes"),
-    status: "active"
+    notes: field(form, "notes")
   };
 }
 
@@ -57,8 +56,7 @@ function signature(payload) {
     square_feet: safeNumber(payload.square_feet),
     customer_price: safeNumber(payload.customer_price),
     contractor_pay: safeNumber(payload.contractor_pay),
-    notes: payload.notes || "",
-    status: payload.status || "active"
+    notes: payload.notes || ""
   });
 }
 
