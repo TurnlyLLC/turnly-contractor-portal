@@ -846,6 +846,66 @@ body[data-admin-page="assignments"] .assignment-open-list {
   overflow-x: visible;
 }
 
+body[data-admin-page="assignments"] .assignment-week-organizer {
+  align-items: center;
+  background: rgba(7, 18, 32, 0.54);
+  border: 1px solid rgba(124, 151, 176, 0.16);
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px;
+}
+
+body[data-admin-page="assignments"] .assignment-week-organizer .icon-only {
+  min-width: 36px;
+  padding: 0;
+  width: 36px;
+}
+
+body[data-admin-page="assignments"] .assignment-week-organizer-title {
+  display: grid;
+  flex: 1 1 260px;
+  gap: 2px;
+  min-width: 0;
+}
+
+body[data-admin-page="assignments"] .assignment-week-organizer-title span,
+body[data-admin-page="assignments"] .assignment-week-organizer-title small {
+  color: var(--suite-soft);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+body[data-admin-page="assignments"] .assignment-week-organizer-title strong {
+  color: var(--suite-text);
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+body[data-admin-page="assignments"] .assignment-week-header {
+  align-items: center;
+  background: rgba(4, 14, 25, 0.72);
+  border: 1px solid rgba(124, 151, 176, 0.14);
+  border-radius: 6px;
+  color: var(--suite-text);
+  display: flex;
+  justify-content: space-between;
+  min-width: 0;
+  padding: 7px 10px;
+}
+
+body[data-admin-page="assignments"] .assignment-week-header strong {
+  font-size: 12px;
+}
+
+body[data-admin-page="assignments"] .assignment-week-header span {
+  color: var(--suite-soft);
+  font-size: 11px;
+  font-weight: 800;
+}
+
 body[data-admin-page="assignments"] .assignment-list-item {
   align-items: center;
   background: rgba(7, 18, 32, 0.52);
@@ -1119,6 +1179,10 @@ body[data-admin-page="assignments"] .assignment-row-actions .secondary-action {
 
   body[data-admin-page="assignments"] .assignment-row-actions .table-action-button,
   body[data-admin-page="assignments"] .assignment-row-actions .secondary-action {
+    width: 100%;
+  }
+
+  body[data-admin-page="assignments"] .assignment-week-organizer .secondary-action:not(.icon-only) {
     width: 100%;
   }
 

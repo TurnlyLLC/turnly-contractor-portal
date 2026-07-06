@@ -5865,7 +5865,7 @@ function renderAssignmentRow(row) {
     ["Special Notes", assignmentSpecialNotes(row), assignmentSpecialNotesMeta(row), "document"]
   ];
   return `
-    <article class="assignment-list-item ${overdue ? "is-overdue" : ""}" data-assignment-row-id="${id}" role="button" tabindex="0" aria-label="Edit ${esc(row.title || row.property_name || "assignment")}">
+    <article class="assignment-list-item ${overdue ? "is-overdue" : ""}" data-assignment-row-id="${id}" data-assignment-start="${esc(row.start_window || "")}" data-assignment-end="${esc(row.end_window || "")}" role="button" tabindex="0" aria-label="Edit ${esc(row.title || row.property_name || "assignment")}">
       <header class="assignment-list-item-header">
         <div class="assignment-title-block">
           <span class="assignment-short-id">${esc(assignmentShortId(row))}</span>
