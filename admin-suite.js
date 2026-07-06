@@ -264,8 +264,12 @@ const assignmentOptionalColumns = [
   "created_by",
   "accepted_at",
   "claimed_at",
+  "started_by",
   "started_at",
   "completed_at",
+  "completed_by",
+  "checklist_completed_at",
+  "checklist_responses",
   "completion_notes"
 ];
 const assignmentFrequencyOptions = [
@@ -5413,6 +5417,10 @@ function initAssignments() {
   const root = document.querySelector("[data-assignments-page]");
   if (!root) return;
 
+  window.turnlyGetAssignmentStatusContext = (id) => ({
+    row: assignmentState.rows.find((item) => String(item.id || "") === String(id || "")) || {},
+    userId: assignmentState.user?.id || ""
+  });
   root.addEventListener("click", handleAssignmentClick);
   root.addEventListener("keydown", handleAssignmentKeydown);
   root.addEventListener("change", handleAssignmentChange);
@@ -5513,6 +5521,7 @@ function populateAssignmentFormForEdit(row) {
   setValue("address", row.address || "");
   setValue("service_type", row.service_type || "");
   setValue("pay_amount", row.pay_amount ?? "");
+  populateAssignmentStatusSelect(row);
   setValue("assignment_status", assignmentStatusFormValue(row.status));
   setValue("assignment_frequency", frequency || "one_time");
   setValue("priority", row.priority || "normal");
@@ -5896,7 +5905,7 @@ function assignmentStatusInlineSelect(row, id) {
   const current = assignmentStatusFormValue(row?.status);
   return `
     <select class="assignment-status-inline status-${esc(assignmentStatusKey(current))}" data-assignment-status-select="${id}" aria-label="Change assignment status">
-      ${assignmentStatusOptions.map(([value, label]) => `<option value="${esc(value)}" ${value === current ? "selected" : ""}>${esc(label)}</option>`).join("")}
+      ${assignmentStatusOptionsForRow(row).map(([value, label]) => `<option value="${esc(value)}" ${value === current ? "selected" : ""}>${esc(label)}</option>`).join("")}
     </select>
   `;
 }
@@ -5940,6 +5949,7 @@ function clearAssignmentForm(options = {}) {
   const form = document.getElementById("assignmentForm");
   if (!form) return;
   form.reset();
+  populateAssignmentStatusSelect();
   document.getElementById("property_id").value = "";
   const start = new Date();
   start.setHours(9, 0, 0, 0);
@@ -6048,6 +6058,9 @@ function collectAssignmentUpdatePayload(currentRow = {}) {
   const selectedContractors = readSelectedAssignmentContractors();
   const preferredFirst = document.getElementById("preferred_first")?.checked && selectedContractors.length > 0;
   const payAmount = Number(assignmentValue("pay_amount"));
+  const selectedStatus = assignmentValue("assignment_status");
+  const statusError = assignmentStatusChangeError(selectedStatus, currentRow);
+  if (statusError) throw new Error(statusError);
   const payload = {
     title: assignmentValue("title"),
     property_name: assignmentValue("property_name"),
@@ -6058,7 +6071,7 @@ function collectAssignmentUpdatePayload(currentRow = {}) {
     supplies_notes: assignmentValue("supplies_notes"),
     special_instructions: assignmentValue("special_instructions"),
     priority: assignmentValue("priority") || "normal",
-    ...assignmentStatusPayload(assignmentValue("assignment_status"), currentRow),
+    ...assignmentStatusPayload(selectedStatus, currentRow),
     assignment_type: frequency,
     recurrence_frequency: frequency,
     recurrence_interval: currentRow.recurrence_interval || 1,
@@ -6231,6 +6244,12 @@ async function updateAssignmentStatus(id, action) {
 async function updateAssignmentStatusValue(id, status, presetPayload = null) {
   if (!suiteSupabase || !id) return;
   const currentRow = assignmentState.rows.find((row) => row.id === id) || {};
+  const statusError = assignmentStatusChangeError(status, currentRow);
+  if (statusError) {
+    renderAssignmentData();
+    showAssignmentMessage(statusError, true);
+    return;
+  }
   const payload = presetPayload || assignmentStatusPayload(status, currentRow);
   showAssignmentMessage("Updating assignment...");
   const result = await saveAssignmentPatchWithSchemaFallback(id, payload);
@@ -6490,6 +6509,68 @@ function assignmentStatusFormValue(value) {
   return assignmentStatusOptions.some(([id]) => id === key) ? key : "open";
 }
 
+function assignmentStatusOptionsForRow(row = null) {
+  if (!row) return assignmentStatusOptions;
+  const current = assignmentStatusFormValue(row.status);
+  const options = assignmentStatusOptions.filter(([value]) => assignmentStatusCanShow(value, row));
+  if (!options.some(([value]) => value === current)) {
+    const currentOption = assignmentStatusOptions.find(([value]) => value === current);
+    if (currentOption) options.unshift(currentOption);
+  }
+  return options;
+}
+
+function populateAssignmentStatusSelect(row = null) {
+  const field = document.getElementById("assignment_status");
+  if (!field) return;
+  const current = row ? assignmentStatusFormValue(row.status) : assignmentStatusFormValue(field.value || "open");
+  field.innerHTML = assignmentStatusOptionsForRow(row)
+    .map(([value, label]) => `<option value="${esc(value)}" ${value === current ? "selected" : ""}>${esc(label)}</option>`)
+    .join("");
+  field.value = current;
+}
+
+function assignmentStatusCanShow(value, row = {}) {
+  const status = assignmentStatusFormValue(value);
+  if (["claimed", "in_progress"].includes(status)) return Boolean(assignmentWorkerId(row));
+  return true;
+}
+
+function assignmentWorkerId(row = {}) {
+  return row.claimed_by || row.assigned_to || "";
+}
+
+function assignmentCompletionUserId(row = {}) {
+  return row.completed_by || assignmentState.user?.id || row.claimed_by || row.assigned_to || row.started_by || "";
+}
+
+function assignmentHasChecklistResponses(row = {}) {
+  return Array.isArray(row.checklist_responses) && row.checklist_responses.length > 0;
+}
+
+function assignmentAdminCompletionResponses(row = {}, now = new Date().toISOString()) {
+  if (assignmentHasChecklistResponses(row)) return row.checklist_responses;
+  return [{
+    type: "admin_status_update",
+    label: "Completed from admin assignment board",
+    completed_at: now
+  }];
+}
+
+function assignmentStatusChangeError(value, row = {}) {
+  const status = assignmentStatusFormValue(value);
+  if (status === "claimed" && !assignmentWorkerId(row)) {
+    return "Claimed requires a contractor first. Leave the job Open for contractors to claim, or assign a contractor before marking it claimed.";
+  }
+  if (status === "in_progress" && !assignmentWorkerId(row)) {
+    return "In Progress requires a claimed or assigned contractor first.";
+  }
+  if (status === "completed" && !assignmentCompletionUserId(row)) {
+    return "Completed requires a signed-in admin or contractor record.";
+  }
+  return "";
+}
+
 function assignmentStatusPayload(value, currentRow = {}) {
   const status = assignmentStatusFormValue(value);
   const previousStatus = assignmentStatusKey(currentRow.status);
@@ -6522,21 +6603,39 @@ function assignmentStatusPayload(value, currentRow = {}) {
   }
 
   if (status === "claimed") {
+    const workerId = assignmentWorkerId(currentRow);
     payload.visibility = "claimed";
+    if (workerId && !currentRow.claimed_by) {
+      payload.claimed_by = workerId;
+      payload.claimed_by_name = currentRow.claimed_by_name || currentRow.assigned_to_name || null;
+      payload.claimed_by_email = currentRow.claimed_by_email || currentRow.assigned_to_email || null;
+    }
     payload.claimed_at = currentRow.claimed_at || now;
     payload.accepted_at = currentRow.accepted_at || now;
     return payload;
   }
 
   if (status === "in_progress") {
-    payload.visibility = currentRow.visibility || "claimed";
+    const workerId = assignmentWorkerId(currentRow);
+    payload.visibility = currentRow.visibility && currentRow.visibility !== "open" ? currentRow.visibility : "claimed";
+    if (workerId && !currentRow.claimed_by) {
+      payload.claimed_by = workerId;
+      payload.claimed_by_name = currentRow.claimed_by_name || currentRow.assigned_to_name || null;
+      payload.claimed_by_email = currentRow.claimed_by_email || currentRow.assigned_to_email || null;
+      payload.claimed_at = currentRow.claimed_at || now;
+      payload.accepted_at = currentRow.accepted_at || now;
+    }
     payload.started_at = currentRow.started_at || now;
+    payload.started_by = currentRow.started_by || workerId || null;
     return payload;
   }
 
   if (status === "completed") {
     payload.visibility = "closed";
     payload.completed_at = currentRow.completed_at || now;
+    payload.completed_by = assignmentCompletionUserId(currentRow) || null;
+    payload.checklist_completed_at = currentRow.checklist_completed_at || now;
+    payload.checklist_responses = assignmentAdminCompletionResponses(currentRow, now);
     return payload;
   }
 

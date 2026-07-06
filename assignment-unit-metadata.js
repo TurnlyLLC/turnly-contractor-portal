@@ -26,7 +26,46 @@ function assignmentStatusValue() {
     : "open";
 }
 
-function assignmentStatusPatch(status) {
+function assignmentStatusContext(id) {
+  if (!id || typeof window.turnlyGetAssignmentStatusContext !== "function") return {};
+  return window.turnlyGetAssignmentStatusContext(id)?.row || {};
+}
+
+function assignmentWorkerId(row = {}) {
+  return row.claimed_by || row.assigned_to || "";
+}
+
+function assignmentCompletionUserId(row = {}, userId = "") {
+  return row.completed_by || userId || row.claimed_by || row.assigned_to || row.started_by || "";
+}
+
+function assignmentHasChecklistResponses(row = {}) {
+  return Array.isArray(row.checklist_responses) && row.checklist_responses.length > 0;
+}
+
+function assignmentAdminCompletionResponses(row = {}, now = new Date().toISOString()) {
+  if (assignmentHasChecklistResponses(row)) return row.checklist_responses;
+  return [{
+    type: "admin_status_update",
+    label: "Completed from admin assignment board",
+    completed_at: now
+  }];
+}
+
+function assignmentStatusError(status, row = {}, userId = "") {
+  if (status === "claimed" && !assignmentWorkerId(row)) {
+    return "Claimed requires a contractor first. Leave the job Open for contractors to claim, or assign a contractor before marking it claimed.";
+  }
+  if (status === "in_progress" && !assignmentWorkerId(row)) {
+    return "In Progress requires a claimed or assigned contractor first.";
+  }
+  if (status === "completed" && !assignmentCompletionUserId(row, userId)) {
+    return "Completed requires a signed-in admin or contractor record.";
+  }
+  return "";
+}
+
+function assignmentStatusPatch(status, row = {}, userId = "") {
   const now = new Date().toISOString();
   const patch = { status };
   if (status === "open") {
@@ -45,9 +84,46 @@ function assignmentStatusPatch(status) {
     };
   }
   if (status === "preferred_pending") return { ...patch, visibility: "preferred" };
-  if (status === "claimed") return { ...patch, visibility: "claimed" };
-  if (status === "in_progress") return { ...patch };
-  if (status === "completed") return { ...patch, visibility: "closed", completed_at: now };
+  if (status === "claimed") {
+    const workerId = assignmentWorkerId(row);
+    return {
+      ...patch,
+      visibility: "claimed",
+      ...(workerId && !row.claimed_by ? {
+        claimed_by: workerId,
+        claimed_by_name: row.claimed_by_name || row.assigned_to_name || null,
+        claimed_by_email: row.claimed_by_email || row.assigned_to_email || null
+      } : {}),
+      claimed_at: row.claimed_at || now,
+      accepted_at: row.accepted_at || now
+    };
+  }
+  if (status === "in_progress") {
+    const workerId = assignmentWorkerId(row);
+    return {
+      ...patch,
+      visibility: row.visibility && row.visibility !== "open" ? row.visibility : "claimed",
+      ...(workerId && !row.claimed_by ? {
+        claimed_by: workerId,
+        claimed_by_name: row.claimed_by_name || row.assigned_to_name || null,
+        claimed_by_email: row.claimed_by_email || row.assigned_to_email || null,
+        claimed_at: row.claimed_at || now,
+        accepted_at: row.accepted_at || now
+      } : {}),
+      started_at: row.started_at || now,
+      started_by: row.started_by || workerId || null
+    };
+  }
+  if (status === "completed") {
+    return {
+      ...patch,
+      visibility: "closed",
+      completed_at: row.completed_at || now,
+      completed_by: assignmentCompletionUserId(row, userId) || null,
+      checklist_completed_at: row.checklist_completed_at || now,
+      checklist_responses: assignmentAdminCompletionResponses(row, now)
+    };
+  }
   if (["cancelled", "declined", "qa_pending"].includes(status)) return { ...patch, visibility: "closed" };
   return patch;
 }
@@ -303,6 +379,7 @@ async function saveAssignment(event) {
   const userId = await currentUserId();
   const groupId = frequency === "one_time" ? null : randomGroupId();
   const editId = editingAssignmentId();
+  const statusContext = assignmentStatusContext(editId);
   const selectedPropertyId = value("propertySelect");
   const selectedStatus = editId ? assignmentStatusValue() : (preferredFirst ? "preferred_pending" : "open");
 
@@ -335,6 +412,13 @@ async function saveAssignment(event) {
   };
 
   if (editId) {
+    const statusError = assignmentStatusError(selectedStatus, statusContext, userId);
+    if (statusError) {
+      isSavingAssignment = false;
+      setSaving(false);
+      setMessage(statusError, true);
+      return;
+    }
     const updatePayload = {
       ...basePayload,
       start_window: start.toISOString(),
@@ -345,7 +429,7 @@ async function saveAssignment(event) {
     } else {
       delete updatePayload.property_id;
     }
-    Object.assign(updatePayload, assignmentStatusPatch(selectedStatus));
+    Object.assign(updatePayload, assignmentStatusPatch(selectedStatus, statusContext, userId));
     delete updatePayload.created_by;
     delete updatePayload.recurring_group_id;
     delete updatePayload.declined_contractor_ids;
