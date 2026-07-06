@@ -12,8 +12,10 @@
     body[data-admin-page="assignments"] .assignment-list-panel .suite-toolbar .toolbar-left {
       display: none !important;
     }
-    body[data-admin-page="assignments"] #adminAssignments > .empty-state {
-      display: none !important;
+    body[data-admin-page="assignments"] #adminAssignments.assignment-open-list {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: 1fr;
     }
     body[data-admin-page="assignments"] .assignment-table-empty {
       background: transparent !important;
@@ -24,47 +26,15 @@
     body[data-admin-page="assignments"] .assignment-table-empty .empty-lines {
       display: none !important;
     }
-    body[data-admin-page="assignments"] #adminAssignments.assignment-open-list {
-      display: grid;
-      gap: 4px;
-      grid-template-columns: 1fr;
-      overflow-x: auto;
-    }
-    body[data-admin-page="assignments"] #adminAssignments > .assignment-list-item:not(.assignment-thin-list-item),
-    body[data-admin-page="assignments"] #adminAssignments > .admin-assignment-row:not(.assignment-thin-list-item) {
-      display: none !important;
-    }
-    body[data-admin-page="assignments"] .assignment-thin-list-item {
-      border-radius: 6px;
-      gap: 0;
-      padding: 0;
-    }
-    body[data-admin-page="assignments"] .assignment-thin-list-item > .assignment-list-item-header,
-    body[data-admin-page="assignments"] .assignment-thin-list-item > .assignment-detail-grid,
-    body[data-admin-page="assignments"] .assignment-thin-list-item > .assignment-notes-drawer {
-      display: none !important;
-    }
-    body[data-admin-page="assignments"] .assignment-thin-row {
-      align-items: center;
-      display: grid;
-      gap: 10px;
-      grid-template-columns: minmax(220px, 1.45fr) minmax(86px, 0.58fr) minmax(140px, 0.72fr) minmax(124px, 0.64fr) minmax(84px, 0.42fr) minmax(156px, 0.74fr) minmax(136px, max-content);
-      min-height: 32px;
-      min-width: 1020px;
-      padding: 3px 8px;
-    }
   </style>
   <link rel="stylesheet" href="admin-suite.css?v=20260623j" />
   <link rel="stylesheet" href="property-workflows.css" />
-  <link rel="stylesheet" href="assignment-board-ux.css?v=20260626d" />
 </head>
 <body class="turnly-admin-suite" data-admin-page="assignments">
   <div id="adminSuiteApp"></div>
   <script src="env.js"></script>
   <script type="module" src="admin-suite.js?v=20260625b"></script>
   <script type="module" src="app.js?v=20260623j"></script>
-  <script type="module" src="admin-assignment-management.js?v=20260706a"></script>
-  <script type="module" src="assignment-contractor-assignment.js?v=20260626a"></script>
   <script type="module" src="assignment-client-source.js?v=20260626e"></script>
   <script type="module" src="assignment-date-time-controls.js?v=20260626b"></script>
   <script type="module" src="assignment-unit-metadata.js?v=20260626c"></script>
