@@ -19,6 +19,39 @@ function normalizeToken(value) {
   return cleanText(value).toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
 }
 
+function assignmentStatusValue() {
+  const status = normalizeToken(value("assignment_status") || "open");
+  return ["open", "preferred_pending", "claimed", "in_progress", "completed", "qa_pending", "cancelled", "declined", "draft"].includes(status)
+    ? status
+    : "open";
+}
+
+function assignmentStatusPatch(status) {
+  const now = new Date().toISOString();
+  const patch = { status };
+  if (status === "open") {
+    return {
+      ...patch,
+      visibility: "open",
+      claimed_by: null,
+      claimed_by_name: null,
+      claimed_by_email: null,
+      assigned_to: null,
+      assigned_to_name: null,
+      assigned_to_email: null,
+      accepted_at: null,
+      claimed_at: null,
+      completed_at: null
+    };
+  }
+  if (status === "preferred_pending") return { ...patch, visibility: "preferred" };
+  if (status === "claimed") return { ...patch, visibility: "claimed" };
+  if (status === "in_progress") return { ...patch };
+  if (status === "completed") return { ...patch, visibility: "closed", completed_at: now };
+  if (["cancelled", "declined", "qa_pending"].includes(status)) return { ...patch, visibility: "closed" };
+  return patch;
+}
+
 function parseDateTime(inputValue) {
   if (!inputValue) return null;
   const date = new Date(inputValue);
@@ -271,6 +304,7 @@ async function saveAssignment(event) {
   const groupId = frequency === "one_time" ? null : randomGroupId();
   const editId = editingAssignmentId();
   const selectedPropertyId = value("propertySelect");
+  const selectedStatus = editId ? assignmentStatusValue() : (preferredFirst ? "preferred_pending" : "open");
 
   const basePayload = {
     title: value("title"),
@@ -283,7 +317,7 @@ async function saveAssignment(event) {
     supplies_notes: value("supplies_notes"),
     special_instructions: value("special_instructions"),
     priority: value("priority") || "normal",
-    status: preferredFirst ? "preferred_pending" : "open",
+    status: selectedStatus,
     assignment_type: frequency,
     recurrence_frequency: frequency,
     recurrence_interval: 1,
@@ -311,7 +345,7 @@ async function saveAssignment(event) {
     } else {
       delete updatePayload.property_id;
     }
-    delete updatePayload.status;
+    Object.assign(updatePayload, assignmentStatusPatch(selectedStatus));
     delete updatePayload.created_by;
     delete updatePayload.recurring_group_id;
     delete updatePayload.declined_contractor_ids;

@@ -935,11 +935,27 @@ body[data-admin-page="assignments"] .assignment-notes-preview {
 body[data-admin-page="assignments"] .assignment-row-actions {
   align-items: center;
   display: flex;
+  flex-wrap: wrap;
   gap: 5px;
   grid-column: 3;
   grid-row: 1;
   justify-content: flex-end;
   min-width: 0;
+}
+
+body[data-admin-page="assignments"] .assignment-status-inline {
+  background: rgba(14, 27, 43, 0.94);
+  border: 1px solid var(--suite-border-soft);
+  border-radius: 6px;
+  color: #d8e7f6;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 900;
+  min-height: 30px;
+  max-width: 138px;
+  min-width: 118px;
+  padding: 0 8px;
+  text-transform: capitalize;
 }
 
 body[data-admin-page="assignments"] .assignment-row-actions .table-action-button,

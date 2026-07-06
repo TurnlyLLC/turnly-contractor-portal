@@ -5348,7 +5348,8 @@ function assignmentForm() {
         leadInputField("property_name", "Property Name", "text", { required: true }),
         leadInputField("address", "Address", "text", { className: "wide" }),
         leadInputField("service_type", "Service Type"),
-        leadInputField("pay_amount", "Pay Amount", "number", { min: "0", step: "0.01" })
+        leadInputField("pay_amount", "Pay Amount", "number", { min: "0", step: "0.01" }),
+        leadSelectField("assignment_status", "Status", assignmentStatusOptions, { required: true })
       ])}
       ${assignmentFormSection("Timing & Routing", [
         leadSelectField("assignment_frequency", "Block Type", assignmentFrequencyOptions, { required: true }),
@@ -5512,6 +5513,7 @@ function populateAssignmentFormForEdit(row) {
   setValue("address", row.address || "");
   setValue("service_type", row.service_type || "");
   setValue("pay_amount", row.pay_amount ?? "");
+  setValue("assignment_status", assignmentStatusFormValue(row.status));
   setValue("assignment_frequency", frequency || "one_time");
   setValue("priority", row.priority || "normal");
   setValue("start_window", toDatetimeInput(row.start_window));
@@ -5601,6 +5603,10 @@ function handleAssignmentClick(event) {
     return;
   }
 
+  if (event.target.closest("[data-assignment-status-select]")) {
+    return;
+  }
+
   const row = event.target.closest("[data-assignment-row-id]");
   if (row) {
     const assignment = assignmentState.rows.find((item) => String(item.id || "") === row.dataset.assignmentRowId);
@@ -5619,6 +5625,11 @@ function handleAssignmentKeydown(event) {
 }
 
 function handleAssignmentChange(event) {
+  const statusSelect = event.target.closest("[data-assignment-status-select]");
+  if (statusSelect) {
+    void updateAssignmentStatusValue(statusSelect.dataset.assignmentStatusSelect, statusSelect.value);
+    return;
+  }
   if (event.target.matches("#propertySelect")) {
     fillAssignmentFromProperty(event.target.value);
   }
@@ -5875,9 +5886,19 @@ function assignmentRowActions(row, status, id) {
   if (["cancelled", "declined"].includes(status)) {
     actions.push(["reopen", "Reopen"]);
   }
-  return actions.length
+  const actionButtons = actions.length
     ? actions.map(([action, label]) => `<button class="table-action-button" type="button" data-assignment-id="${id}" data-assignment-action="${esc(action)}">${esc(label)}</button>`).join("")
     : `<span class="assignment-action-muted">Done</span>`;
+  return `${assignmentStatusInlineSelect(row, id)}${actionButtons}`;
+}
+
+function assignmentStatusInlineSelect(row, id) {
+  const current = assignmentStatusFormValue(row?.status);
+  return `
+    <select class="assignment-status-inline status-${esc(assignmentStatusKey(current))}" data-assignment-status-select="${id}" aria-label="Change assignment status">
+      ${assignmentStatusOptions.map(([value, label]) => `<option value="${esc(value)}" ${value === current ? "selected" : ""}>${esc(label)}</option>`).join("")}
+    </select>
+  `;
 }
 
 function getFilteredAssignments() {
@@ -5932,6 +5953,7 @@ function clearAssignmentForm(options = {}) {
   };
   setValue("assignment_frequency", "one_time");
   setValue("priority", "normal");
+  setValue("assignment_status", "open");
   setValue("start_window", toDatetimeInput(start));
   setValue("end_window", toDatetimeInput(end));
   setValue("preferred_until", toDatetimeInput(preferredUntil));
@@ -6036,6 +6058,7 @@ function collectAssignmentUpdatePayload(currentRow = {}) {
     supplies_notes: assignmentValue("supplies_notes"),
     special_instructions: assignmentValue("special_instructions"),
     priority: assignmentValue("priority") || "normal",
+    ...assignmentStatusPayload(assignmentValue("assignment_status"), currentRow),
     assignment_type: frequency,
     recurrence_frequency: frequency,
     recurrence_interval: currentRow.recurrence_interval || 1,
@@ -6045,7 +6068,6 @@ function collectAssignmentUpdatePayload(currentRow = {}) {
     preferred_contractor_ids: selectedContractors.map((contractor) => contractor.id).filter(Boolean),
     preferred_contractor_names: selectedContractors.map((contractor) => contractor.name).filter(Boolean),
     preferred_until: assignmentValue("preferred_until") ? parseDate(assignmentValue("preferred_until")).toISOString() : null,
-    visibility: preferredFirst ? "preferred" : (currentRow.visibility === "preferred" ? "open" : currentRow.visibility || "open"),
     start_window: start.toISOString(),
     end_window: end.toISOString()
   };
@@ -6193,16 +6215,23 @@ async function saveAssignmentPatchWithSchemaFallback(id, payload) {
 
 async function updateAssignmentStatus(id, action) {
   if (!suiteSupabase || !id) return;
-  const now = new Date().toISOString();
+  const currentRow = assignmentState.rows.find((row) => row.id === id) || {};
   const patches = {
-    open: { status: "open", visibility: "open" },
-    cancel: { status: "cancelled" },
-    start: { status: "in_progress", started_at: now },
-    complete: { status: "completed", completed_at: now },
-    reopen: { status: "open", visibility: "open", claimed_by: null, claimed_by_name: null, claimed_by_email: null, assigned_to: null, assigned_to_name: null, assigned_to_email: null, claimed_at: null, accepted_at: null, started_at: null, completed_at: null }
+    open: assignmentStatusPayload("open", currentRow),
+    cancel: assignmentStatusPayload("cancelled", currentRow),
+    start: assignmentStatusPayload("in_progress", currentRow),
+    complete: assignmentStatusPayload("completed", currentRow),
+    reopen: assignmentStatusPayload("open", { ...currentRow, claimed_by: currentRow.claimed_by || true })
   };
   const payload = patches[action];
   if (!payload) return;
+  await updateAssignmentStatusValue(id, payload.status, payload);
+}
+
+async function updateAssignmentStatusValue(id, status, presetPayload = null) {
+  if (!suiteSupabase || !id) return;
+  const currentRow = assignmentState.rows.find((row) => row.id === id) || {};
+  const payload = presetPayload || assignmentStatusPayload(status, currentRow);
   showAssignmentMessage("Updating assignment...");
   const result = await saveAssignmentPatchWithSchemaFallback(id, payload);
   if (result.error) {
@@ -6454,6 +6483,73 @@ function assignmentPropertyAddress(row) {
 
 function assignmentStatusKey(value) {
   return normalizeToken(value || "open");
+}
+
+function assignmentStatusFormValue(value) {
+  const key = normalizeToken(value || "open").replace(/-/g, "_");
+  return assignmentStatusOptions.some(([id]) => id === key) ? key : "open";
+}
+
+function assignmentStatusPayload(value, currentRow = {}) {
+  const status = assignmentStatusFormValue(value);
+  const previousStatus = assignmentStatusKey(currentRow.status);
+  const now = new Date().toISOString();
+  const payload = { status };
+
+  if (status === "open") {
+    payload.visibility = "open";
+    if (currentRow.claimed_by || currentRow.assigned_to || previousStatus !== "open") {
+      Object.assign(payload, {
+        claimed_by: null,
+        claimed_by_name: null,
+        claimed_by_email: null,
+        assigned_to: null,
+        assigned_to_name: null,
+        assigned_to_email: null,
+        accepted_at: null,
+        claimed_at: null
+      });
+    }
+    if (previousStatus === "completed") {
+      payload.completed_at = null;
+    }
+    return payload;
+  }
+
+  if (status === "preferred_pending") {
+    payload.visibility = "preferred";
+    return payload;
+  }
+
+  if (status === "claimed") {
+    payload.visibility = "claimed";
+    payload.claimed_at = currentRow.claimed_at || now;
+    payload.accepted_at = currentRow.accepted_at || now;
+    return payload;
+  }
+
+  if (status === "in_progress") {
+    payload.visibility = currentRow.visibility || "claimed";
+    payload.started_at = currentRow.started_at || now;
+    return payload;
+  }
+
+  if (status === "completed") {
+    payload.visibility = "closed";
+    payload.completed_at = currentRow.completed_at || now;
+    return payload;
+  }
+
+  if (status === "cancelled" || status === "declined") {
+    payload.visibility = "closed";
+    return payload;
+  }
+
+  if (status === "qa_pending") {
+    payload.visibility = "closed";
+  }
+
+  return payload;
 }
 
 function assignmentFrequencyKey(value) {

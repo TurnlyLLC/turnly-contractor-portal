@@ -51,7 +51,7 @@ function mountScheduleShell() {
               <strong id="scheduleLiveRange"></strong>
               <button class="secondary-action schedule-clear-calendar" type="button" data-schedule-clear><span>Clear Filters</span></button>
             </div>
-            <p id="scheduleLiveMessage" class="status-message table-status-message" aria-live="polite">Loading scheduled assignments...</p>
+            <p id="scheduleLiveMessage" class="status-message table-status-message" aria-live="polite">Loading all assignment jobs...</p>
             <div id="scheduleLiveBody" class="schedule-dynamic-calendar"></div>
           </section>
         </div>
@@ -147,7 +147,7 @@ async function loadScheduleRows() {
     return;
   }
 
-  showMessage("Loading scheduled assignments...");
+  showMessage("Loading all assignment jobs...");
   const body = document.getElementById("scheduleLiveBody");
   if (body) body.innerHTML = `<div class="schedule-loading">Loading assignments...</div>`;
 
@@ -168,8 +168,8 @@ async function loadScheduleRows() {
     .filter((row) => parseDate(row.start_window))
     .sort((a, b) => dateValue(a.start_window) - dateValue(b.start_window));
   showMessage(state.rows.length
-    ? `${state.rows.length.toLocaleString()} scheduled assignment${state.rows.length === 1 ? "" : "s"} synced from Supabase.`
-    : "Synced with Supabase. No scheduled assignments yet.");
+    ? `${state.rows.length.toLocaleString()} assignment job${state.rows.length === 1 ? "" : "s"} synced from Supabase.`
+    : "Synced with Supabase. No assignment jobs are scheduled yet.");
   renderSchedule();
 }
 
