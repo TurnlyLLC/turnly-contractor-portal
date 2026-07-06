@@ -314,6 +314,7 @@ const assignmentState = {
   statusFilter: "open",
   frequencyFilter: "all",
   contractorFilter: "all",
+  weekStart: "",
   editingId: null,
   isSaving: false,
   isGenerating: false
@@ -1440,6 +1441,14 @@ function parseDate(value) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+function parseDateOnly(value) {
+  if (!value) return null;
+  if (value instanceof Date) return new Date(value);
+  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (match) return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  return parseDate(value);
+}
+
 function dateValue(value, fallback = Number.MAX_SAFE_INTEGER) {
   return parseDate(value)?.getTime() || fallback;
 }
@@ -1450,8 +1459,15 @@ function startOfToday() {
   return date;
 }
 
+function startOfWeek(value) {
+  const date = parseDateOnly(value) || new Date();
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() - date.getDay());
+  return date;
+}
+
 function addDays(value, days) {
-  const date = new Date(value);
+  const date = parseDateOnly(value) || new Date(value);
   date.setDate(date.getDate() + days);
   return date;
 }
@@ -1489,6 +1505,22 @@ function formatDateWindow(start, end) {
   const startText = startDate.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
   const endText = endDate.toLocaleString([], sameDay ? { hour: "numeric", minute: "2-digit" } : { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
   return `${startText} - ${endText}`;
+}
+
+function formatAssignmentWeekRange(start) {
+  const weekStart = startOfWeek(start || new Date());
+  const weekEnd = addDays(weekStart, 6);
+  const sameYear = weekStart.getFullYear() === weekEnd.getFullYear();
+  const startText = weekStart.toLocaleDateString([], { month: "short", day: "numeric", year: sameYear ? undefined : "numeric" });
+  const endText = weekEnd.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+  return `${startText} - ${endText}`;
+}
+
+function assignmentOverlapsRange(row, rangeStart, rangeEnd) {
+  const start = parseDate(row?.start_window);
+  if (!start) return true;
+  const end = parseDate(row?.end_window) || start;
+  return end >= rangeStart && start < rangeEnd;
 }
 
 function renderPipelineColumns() {
@@ -3134,6 +3166,7 @@ function renderAssignments() {
             ${assignmentNewButton("New Assignment", "assignmentPanelNewBtn")}
           </div>
           ${assignmentToolbar}
+          <div id="assignmentWeekControls" class="assignment-week-controls"></div>
           <p id="assignmentMessage" class="status-message table-status-message" aria-live="polite"></p>
           <div id="adminAssignments" class="assignment-open-list">
             ${emptyState("calendar", "No active assignments", "Assignments from Supabase will appear here.", assignmentNewButton("New Assignment", "assignmentEmptyNewBtn"))}
@@ -5594,6 +5627,22 @@ function handleAssignmentClick(event) {
     return;
   }
 
+  const weekNav = event.target.closest("[data-assignment-week-nav]");
+  if (weekNav) {
+    const direction = Number(weekNav.dataset.assignmentWeekNav || 0);
+    const currentWeek = parseDateOnly(assignmentState.weekStart) || startOfWeek(new Date());
+    setAssignmentWeek(addDays(currentWeek, direction * 7));
+    renderAssignmentData();
+    return;
+  }
+
+  const currentWeekButton = event.target.closest("[data-assignment-current-week]");
+  if (currentWeekButton) {
+    setAssignmentWeek(startOfToday());
+    renderAssignmentData();
+    return;
+  }
+
   const contractorToggle = event.target.closest("[data-assignment-contractor-toggle]");
   if (contractorToggle) {
     const dropdown = contractorToggle.closest("[data-assignment-contractor-dropdown]");
@@ -5624,6 +5673,7 @@ function handleAssignmentClick(event) {
     assignmentState.statusFilter = "open";
     assignmentState.frequencyFilter = "all";
     assignmentState.contractorFilter = "all";
+    setAssignmentWeek(startOfToday());
     renderAssignmentData();
     return;
   }
@@ -5709,12 +5759,12 @@ async function loadAssignments() {
   assignmentState.contractors = contractorsResult;
   assignmentState.rows = assignmentsResult.rows;
   renderAssignmentData();
-  const boardCount = assignmentState.rows.filter(isAssignmentOpen).length;
+  const boardCount = getFilteredAssignments().length;
   showAssignmentMessage(assignmentsResult.error
     ? "Assignments are ready once the Supabase migration is applied."
     : boardCount
-      ? `${boardCount} board assignment${boardCount === 1 ? "" : "s"} synced from Supabase.`
-      : "Synced with Supabase. No active assignments yet.");
+      ? `${boardCount} assignment${boardCount === 1 ? "" : "s"} visible for ${formatAssignmentWeekRange(parseDateOnly(assignmentState.weekStart) || new Date())}.`
+      : "Synced with Supabase. No assignments visible for this week.");
 }
 
 async function loadAssignmentProperties() {
@@ -5761,10 +5811,12 @@ async function loadAssignmentRows() {
 }
 
 function renderAssignmentData() {
+  ensureAssignmentWeekState();
   populateAssignmentPropertySelect();
   populateAssignmentContractorMenu();
   populateAssignmentContractorFilter();
   renderAssignmentFilterControls();
+  renderAssignmentWeekControls();
   updateAssignmentRecurrenceVisibility();
   updateAssignmentContractorControls();
   renderAssignmentMetrics();
@@ -5783,6 +5835,36 @@ function renderAssignmentFilterControls() {
   document.querySelectorAll("[data-assignment-status-tab]").forEach((button) => {
     button.classList.toggle("active", button.dataset.assignmentStatusTab === assignmentState.statusFilter);
   });
+}
+
+function ensureAssignmentWeekState() {
+  if (!assignmentState.weekStart) {
+    assignmentState.weekStart = toDateInput(startOfWeek(startOfToday()));
+  }
+}
+
+function setAssignmentWeek(date) {
+  assignmentState.weekStart = toDateInput(startOfWeek(date || new Date()));
+}
+
+function renderAssignmentWeekControls() {
+  const target = document.getElementById("assignmentWeekControls");
+  if (!target) return;
+  ensureAssignmentWeekState();
+  const weekStart = parseDateOnly(assignmentState.weekStart) || startOfWeek(new Date());
+  const rows = getFilteredAssignments();
+  target.innerHTML = `
+    <div class="assignment-week-bar">
+      <button class="secondary-action icon-only" type="button" data-assignment-week-nav="-1" aria-label="Previous week">${icon("chevron-right", "flip")}</button>
+      <div class="assignment-week-title">
+        <span>Available Jobs This Week</span>
+        <strong>${esc(formatAssignmentWeekRange(weekStart))}</strong>
+        <small>${rows.length.toLocaleString()} assignment${rows.length === 1 ? "" : "s"} visible</small>
+      </div>
+      <button class="secondary-action icon-only" type="button" data-assignment-week-nav="1" aria-label="Next week">${icon("chevron-right")}</button>
+      <button class="secondary-action" type="button" data-assignment-current-week>${icon("calendar")}<span>Current Week</span></button>
+    </div>
+  `;
 }
 
 function populateAssignmentPropertySelect() {
@@ -5844,12 +5926,13 @@ function renderAssignmentTable() {
   const rows = getFilteredAssignments();
   const count = document.getElementById("assignmentListCount");
   if (count) {
+    const weekStart = parseDateOnly(assignmentState.weekStart) || startOfWeek(new Date());
     const label = assignmentState.statusFilter === "open" ? "board assignments" : "assignments";
-    count.textContent = `Showing ${rows.length.toLocaleString()} ${label}`;
+    count.textContent = `Showing ${rows.length.toLocaleString()} ${label} for ${formatAssignmentWeekRange(weekStart)}`;
   }
   body.innerHTML = rows.length
     ? rows.map(renderAssignmentRow).join("")
-    : emptyState("calendar", assignmentState.statusFilter === "open" ? "No active assignments" : "No assignments found", "Assignments from Supabase will appear here.", assignmentNewButton("New Assignment", "assignmentEmptyNewBtn"));
+    : emptyState("calendar", assignmentState.statusFilter === "open" ? "No active assignments this week" : "No assignments found", "Use the week controls to view another week.", assignmentNewButton("New Assignment", "assignmentEmptyNewBtn"));
 }
 
 function renderAssignmentRow(row) {
@@ -5939,6 +6022,7 @@ function assignmentStatusInlineSelect(row, id) {
 }
 
 function getFilteredAssignments() {
+  ensureAssignmentWeekState();
   const term = assignmentState.search.trim().toLowerCase();
   const statusFilter = normalizeToken(assignmentState.statusFilter);
   const frequencyFilter = assignmentFrequencyKey(assignmentState.frequencyFilter);
@@ -5957,6 +6041,7 @@ function getFilteredAssignments() {
     if (frequencyFilter !== "all" && assignmentFrequencyKey(row.recurrence_frequency || row.assignment_type) !== frequencyFilter) return false;
     if (assignmentState.contractorFilter === "unassigned" && assignmentHasContractor(row)) return false;
     if (assignmentState.contractorFilter !== "all" && assignmentState.contractorFilter !== "unassigned" && !assignmentMatchesContractor(row, assignmentState.contractorFilter)) return false;
+    if (!assignmentMatchesSelectedWeek(row)) return false;
     if (!term) return true;
     return [
       row.title,
@@ -6905,6 +6990,12 @@ function isAssignmentOverdue(row) {
 function isAssignmentUpcoming(row) {
   const start = parseDate(row?.start_window);
   return Boolean(start && start >= startOfToday() && !isAssignmentClosed(row));
+}
+
+function assignmentMatchesSelectedWeek(row) {
+  ensureAssignmentWeekState();
+  const weekStart = parseDateOnly(assignmentState.weekStart) || startOfWeek(new Date());
+  return assignmentOverlapsRange(row, weekStart, addDays(weekStart, 7));
 }
 
 function setAssignmentSaving(isSaving) {
