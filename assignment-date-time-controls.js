@@ -1,11 +1,16 @@
 const DATE_TIME_FIELDS = [
-  { id: "start_window", label: "Start Window", required: true },
-  { id: "end_window", label: "End Window", required: true },
+  { id: "start_window", label: "Start Window", required: true, defaultDate: true, defaultTime: "09:00" },
+  { id: "end_window", label: "End Window", required: true, defaultDate: true, defaultTime: "17:00" },
   { id: "preferred_until", label: "Preferred Response Deadline", required: false }
 ];
 
 function pad(value) {
   return String(value).padStart(2, "0");
+}
+
+function todayValue() {
+  const today = new Date();
+  return `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
 }
 
 function datePart(value) {
@@ -15,6 +20,10 @@ function datePart(value) {
 function timePart(value) {
   const match = String(value || "").match(/T(\d{2}:\d{2})/);
   return match?.[1] || "";
+}
+
+function fieldConfig(fieldId) {
+  return DATE_TIME_FIELDS.find((field) => field.id === fieldId) || {};
 }
 
 function timeOptions() {
@@ -41,10 +50,29 @@ function syncNativeDateTime(fieldId) {
 }
 
 function setVisibleValues(fieldId, value) {
+  const config = fieldConfig(fieldId);
   const date = document.getElementById(`${fieldId}_date`);
   const time = document.getElementById(`${fieldId}_time`);
-  if (date) date.value = datePart(value);
-  if (time) time.value = timePart(value);
+  if (date) date.value = datePart(value) || (config.defaultDate ? todayValue() : "");
+  if (time) time.value = timePart(value) || config.defaultTime || "";
+}
+
+function showCalendarPicker(input) {
+  if (!input || typeof input.showPicker !== "function") return;
+  try {
+    input.showPicker();
+  } catch {
+    // Some browsers only allow showPicker from direct user gestures.
+  }
+}
+
+function refreshDateTimeControls() {
+  DATE_TIME_FIELDS.forEach((config) => {
+    const input = document.getElementById(config.id);
+    if (!input) return;
+    setVisibleValues(config.id, input.value);
+    syncNativeDateTime(config.id);
+  });
 }
 
 function enhanceDateTimeInput(config) {
@@ -73,7 +101,11 @@ function enhanceDateTimeInput(config) {
   `);
 
   setVisibleValues(config.id, input.value);
-  document.getElementById(`${config.id}_date`)?.addEventListener("change", () => syncNativeDateTime(config.id));
+  syncNativeDateTime(config.id);
+  const dateInput = document.getElementById(`${config.id}_date`);
+  dateInput?.addEventListener("change", () => syncNativeDateTime(config.id));
+  dateInput?.addEventListener("click", () => showCalendarPicker(dateInput));
+  dateInput?.addEventListener("focus", () => showCalendarPicker(dateInput));
   document.getElementById(`${config.id}_time`)?.addEventListener("change", () => syncNativeDateTime(config.id));
 }
 
@@ -122,6 +154,8 @@ function bindDateTimeSync() {
     if (event.target?.id !== "assignmentForm") return;
     DATE_TIME_FIELDS.forEach((field) => syncNativeDateTime(field.id));
   }, true);
+  document.addEventListener("turnly:assignment-date-time-refresh", refreshDateTimeControls);
+  window.turnlySyncAssignmentDateTimeControls = refreshDateTimeControls;
 }
 
 const observer = new MutationObserver(enhanceAssignmentDateTimeControls);

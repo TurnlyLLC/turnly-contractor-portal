@@ -213,6 +213,27 @@ async function updateAssignmentWithFallback(id, payload) {
   return { data: null, error: new Error("Unable to update assignment because the assignment_blocks table schema is missing required columns.") };
 }
 
+async function insertAssignmentsWithFallback(payloads) {
+  let fallbackPayloads = payloads.map((payload) => ({ ...payload }));
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const result = await supabase
+      .from("assignment_blocks")
+      .insert(fallbackPayloads)
+      .select("*");
+    if (!result.error) return result;
+    if (isPropertyReferenceError(result.error) && fallbackPayloads.some((payload) => Object.prototype.hasOwnProperty.call(payload, "property_id"))) {
+      fallbackPayloads = fallbackPayloads.map((payload) => {
+        const next = { ...payload };
+        delete next.property_id;
+        return next;
+      });
+      continue;
+    }
+    return result;
+  }
+  return { data: null, error: new Error("Unable to save assignment because the assignment property reference is not valid.") };
+}
+
 async function saveAssignment(event) {
   if (event.target?.id !== "assignmentForm") return;
   event.preventDefault();
@@ -317,10 +338,7 @@ async function saveAssignment(event) {
     end_window: window.end.toISOString()
   }));
 
-  const { data, error } = await supabase
-    .from("assignment_blocks")
-    .insert(payloads)
-    .select("*");
+  const { data, error } = await insertAssignmentsWithFallback(payloads);
 
   isSavingAssignment = false;
   setSaving(false);

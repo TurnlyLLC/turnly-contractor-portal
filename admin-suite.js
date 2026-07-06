@@ -5539,6 +5539,7 @@ function populateAssignmentFormForEdit(row) {
   if (unitField && unitLabel) unitField.hidden = false;
   setValue("assignmentUnitSearch", unitLabel);
   setValue("assignmentUnitSelect", row.unit_id || metadata.unit_id || "");
+  refreshAssignmentDateTimeControls();
 }
 
 function handleAssignmentClick(event) {
@@ -5920,12 +5921,11 @@ function clearAssignmentForm(options = {}) {
   form.reset();
   document.getElementById("property_id").value = "";
   const start = new Date();
-  start.setDate(start.getDate() + 1);
-  start.setHours(Math.max(start.getHours(), 9), 0, 0, 0);
+  start.setHours(9, 0, 0, 0);
   const end = new Date(start);
-  end.setHours(end.getHours() + 2);
+  end.setHours(17, 0, 0, 0);
   const preferredUntil = new Date(start);
-  preferredUntil.setHours(preferredUntil.getHours() - 24);
+  preferredUntil.setHours(8, 0, 0, 0);
   const setValue = (id, value) => {
     const field = document.getElementById(id);
     if (field) field.value = value;
@@ -5942,6 +5942,7 @@ function clearAssignmentForm(options = {}) {
   updateAssignmentContractorDropdownLabel();
   updateAssignmentRecurrenceVisibility();
   updateAssignmentContractorControls();
+  refreshAssignmentDateTimeControls();
   const formMessage = document.getElementById("assignmentFormMessage");
   if (formMessage) {
     formMessage.textContent = "";
@@ -6125,6 +6126,14 @@ async function insertAssignmentPayloadsWithSchemaFallback(payloads) {
       .insert(fallbackPayloads)
       .select("*");
     if (!result.error) return result;
+    if (isAssignmentPropertyReferenceError(result.error) && fallbackPayloads.some((payload) => Object.prototype.hasOwnProperty.call(payload, "property_id"))) {
+      fallbackPayloads = fallbackPayloads.map((payload) => {
+        const next = { ...payload };
+        delete next.property_id;
+        return next;
+      });
+      continue;
+    }
     const missingColumn = missingAssignmentColumnName(result.error);
     if (missingColumn && fallbackPayloads.some((payload) => Object.prototype.hasOwnProperty.call(payload, missingColumn))) {
       fallbackPayloads = fallbackPayloads.map((payload) => {
@@ -6406,6 +6415,14 @@ function assignmentValue(id) {
 
 function assignmentHasPropertyOption(propertyId) {
   return Boolean(propertyId && assignmentState.properties.some((row) => String(row.id || "") === String(propertyId)));
+}
+
+function refreshAssignmentDateTimeControls() {
+  if (typeof window.turnlySyncAssignmentDateTimeControls === "function") {
+    window.turnlySyncAssignmentDateTimeControls();
+    return;
+  }
+  document.dispatchEvent(new CustomEvent("turnly:assignment-date-time-refresh"));
 }
 
 function getAssignmentContractorOptions() {
