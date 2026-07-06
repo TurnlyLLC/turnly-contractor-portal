@@ -300,6 +300,7 @@ const assignmentState = {
   statusFilter: "open",
   frequencyFilter: "all",
   contractorFilter: "all",
+  editingId: null,
   isSaving: false,
   isGenerating: false
 };
@@ -5412,6 +5413,7 @@ function initAssignments() {
   if (!root) return;
 
   root.addEventListener("click", handleAssignmentClick);
+  root.addEventListener("keydown", handleAssignmentKeydown);
   root.addEventListener("change", handleAssignmentChange);
   root.addEventListener("submit", saveAssignmentForm);
   root.querySelector("#assignmentSearchInput")?.addEventListener("input", (event) => {
@@ -5440,17 +5442,27 @@ function initAssignments() {
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") closeAssignmentModal();
   });
+  document.addEventListener("turnly:assignments-updated", () => {
+    assignmentState.editingId = null;
+    updateAssignmentModalMode();
+    void loadAssignments();
+  });
 
   clearAssignmentForm({ keepMessage: true });
   void loadAssignments();
 }
 
-function openAssignmentModal() {
+function openAssignmentModal(row = null) {
   const modal = document.getElementById("assignmentModal");
   if (!modal) return;
   clearAssignmentForm({ keepMessage: true });
+  assignmentState.editingId = row?.id || null;
   populateAssignmentPropertySelect();
   populateAssignmentContractorMenu();
+  if (row) {
+    populateAssignmentFormForEdit(row);
+  }
+  updateAssignmentModalMode();
   updateAssignmentRecurrenceVisibility();
   updateAssignmentContractorControls();
   modal.hidden = false;
@@ -5460,7 +5472,69 @@ function openAssignmentModal() {
 function closeAssignmentModal() {
   const modal = document.getElementById("assignmentModal");
   if (modal) modal.hidden = true;
+  assignmentState.editingId = null;
+  updateAssignmentModalMode();
   closeAssignmentContractorDropdowns();
+}
+
+function updateAssignmentModalMode() {
+  const isEditing = Boolean(assignmentState.editingId);
+  const title = document.getElementById("assignmentModalTitle");
+  const form = document.getElementById("assignmentForm");
+  const button = document.getElementById("assignmentSaveBtn");
+  const buttonLabel = button?.querySelector("span");
+  if (title) title.textContent = isEditing ? "Edit Assignment" : "New Assignment";
+  if (form) {
+    if (isEditing) {
+      form.dataset.assignmentEditingId = assignmentState.editingId;
+    } else {
+      delete form.dataset.assignmentEditingId;
+    }
+  }
+  if (buttonLabel) buttonLabel.textContent = isEditing ? "Save Changes" : "Post Assignment";
+}
+
+function populateAssignmentFormForEdit(row) {
+  const setValue = (id, value) => {
+    const field = document.getElementById(id);
+    if (field) field.value = value ?? "";
+  };
+  const metadata = assignmentMetadata(row);
+  const frequency = assignmentFrequencyKey(row.recurrence_frequency || row.assignment_type || "one_time");
+  setValue("property_id", row.property_id || "");
+  setValue("propertySelect", row.property_id || "");
+  setValue("title", row.title || "");
+  setValue("property_name", row.property_name || "");
+  setValue("address", row.address || "");
+  setValue("service_type", row.service_type || "");
+  setValue("pay_amount", row.pay_amount ?? "");
+  setValue("assignment_frequency", frequency || "one_time");
+  setValue("priority", row.priority || "normal");
+  setValue("start_window", toDatetimeInput(row.start_window));
+  setValue("end_window", toDatetimeInput(row.end_window));
+  setValue("recurrence_end_date", row.recurrence_end_date || "");
+  setValue("preferred_until", toDatetimeInput(row.preferred_until));
+  setValue("scope", row.scope || "");
+  setValue("supplies_notes", row.supplies_notes || "");
+  setValue("special_instructions", row.special_instructions || metadata.unit_notes || "");
+
+  const autoRenewal = document.getElementById("auto_renewal");
+  if (autoRenewal) autoRenewal.checked = Boolean(row.auto_renewal);
+  const preferredFirst = document.getElementById("preferred_first");
+  if (preferredFirst) preferredFirst.checked = Boolean(row.preferred_first || assignmentPreferredIds(row).length || row.visibility === "preferred");
+
+  const selectedIds = new Set(assignmentPreferredIds(row));
+  const selectedNames = new Set(assignmentPreferredNames(row).map((name) => normalizeToken(name)));
+  document.querySelectorAll("[data-assignment-contractor-option]").forEach((input) => {
+    input.checked = selectedIds.has(input.dataset.contractorId) || selectedNames.has(normalizeToken(input.dataset.contractorName));
+  });
+  updateAssignmentContractorDropdownLabel();
+
+  const unitField = document.getElementById("assignmentUnitField");
+  const unitLabel = row.unit_number || row.unit_name || metadata.unit_number || metadata.unit_name || "";
+  if (unitField && unitLabel) unitField.hidden = false;
+  setValue("assignmentUnitSearch", unitLabel);
+  setValue("assignmentUnitSelect", row.unit_id || metadata.unit_id || "");
 }
 
 function handleAssignmentClick(event) {
@@ -5519,7 +5593,24 @@ function handleAssignmentClick(event) {
   const action = event.target.closest("[data-assignment-action]");
   if (action) {
     void updateAssignmentStatus(action.dataset.assignmentId, action.dataset.assignmentAction);
+    return;
   }
+
+  const row = event.target.closest("[data-assignment-row-id]");
+  if (row) {
+    const assignment = assignmentState.rows.find((item) => String(item.id || "") === row.dataset.assignmentRowId);
+    if (assignment) openAssignmentModal(assignment);
+  }
+}
+
+function handleAssignmentKeydown(event) {
+  if (!["Enter", " "].includes(event.key)) return;
+  if (event.target.closest("button, a, input, select, textarea")) return;
+  const row = event.target.closest("[data-assignment-row-id]");
+  if (!row) return;
+  event.preventDefault();
+  const assignment = assignmentState.rows.find((item) => String(item.id || "") === row.dataset.assignmentRowId);
+  if (assignment) openAssignmentModal(assignment);
 }
 
 function handleAssignmentChange(event) {
@@ -5713,13 +5804,15 @@ function renderAssignmentRow(row) {
   const status = assignmentStatusKey(row.status);
   const overdue = isAssignmentOverdue(row);
   const detailItems = [
-    ["Property", row.property_name || "No property", row.address || "No address", "building"],
+    ["Property Name", row.property_name || "No property", row.address || "No address", "building"],
+    ["Unit Number", assignmentUnitNumber(row), assignmentUnitMeta(row), "home"],
     ["Schedule", formatDateWindow(row.start_window, row.end_window), assignmentFrequencyLabel(row), "calendar"],
     ["Contractor Routing", assignmentContractorText(row), assignmentRoutingMeta(row), "users"],
-    ["Pay", assignmentMoney(row.pay_amount), row.service_type || "No service type", "badge-dollar"]
+    ["Contractor Pay", assignmentMoney(row.pay_amount), row.service_type || "No service type", "badge-dollar"],
+    ["Special Notes", assignmentSpecialNotes(row), assignmentSpecialNotesMeta(row), "document"]
   ];
   return `
-    <article class="assignment-list-item ${overdue ? "is-overdue" : ""}">
+    <article class="assignment-list-item ${overdue ? "is-overdue" : ""}" data-assignment-row-id="${id}" role="button" tabindex="0" aria-label="Edit ${esc(row.title || row.property_name || "assignment")}">
       <header class="assignment-list-item-header">
         <div class="assignment-title-block">
           <span class="assignment-short-id">${esc(assignmentShortId(row))}</span>
@@ -5809,6 +5902,8 @@ function getFilteredAssignments() {
       row.service_type,
       row.status,
       row.priority,
+      assignmentUnitNumber(row),
+      assignmentSpecialNotes(row),
       assignmentContractorText(row),
       assignmentFrequencyLabel(row)
     ].some((value) => String(value || "").toLowerCase().includes(term));
@@ -5917,12 +6012,75 @@ function collectAssignmentPayloads() {
   }));
 }
 
+function collectAssignmentUpdatePayload(currentRow = {}) {
+  const frequency = assignmentFrequencyKey(assignmentValue("assignment_frequency") || currentRow.recurrence_frequency || currentRow.assignment_type || "one_time");
+  const start = parseDate(assignmentValue("start_window"));
+  const end = parseDate(assignmentValue("end_window"));
+  if (!start || !end) throw new Error("Start Window and End Window are required.");
+  if (end <= start) throw new Error("End Window must be after Start Window.");
+  const selectedContractors = readSelectedAssignmentContractors();
+  const preferredFirst = document.getElementById("preferred_first")?.checked && selectedContractors.length > 0;
+  const payAmount = Number(assignmentValue("pay_amount"));
+  return {
+    title: assignmentValue("title"),
+    property_id: assignmentValue("property_id") || null,
+    property_name: assignmentValue("property_name"),
+    address: assignmentValue("address"),
+    service_type: assignmentValue("service_type"),
+    pay_amount: Number.isFinite(payAmount) && payAmount >= 0 ? payAmount : 0,
+    scope: assignmentValue("scope"),
+    supplies_notes: assignmentValue("supplies_notes"),
+    special_instructions: assignmentValue("special_instructions"),
+    priority: assignmentValue("priority") || "normal",
+    assignment_type: frequency,
+    recurrence_frequency: frequency,
+    recurrence_interval: currentRow.recurrence_interval || 1,
+    recurrence_end_date: frequency === "one_time" ? null : assignmentValue("recurrence_end_date") || currentRow.recurrence_end_date || null,
+    auto_renewal: frequency !== "one_time" && Boolean(document.getElementById("auto_renewal")?.checked),
+    preferred_first: preferredFirst,
+    preferred_contractor_ids: selectedContractors.map((contractor) => contractor.id).filter(Boolean),
+    preferred_contractor_names: selectedContractors.map((contractor) => contractor.name).filter(Boolean),
+    preferred_until: assignmentValue("preferred_until") ? parseDate(assignmentValue("preferred_until")).toISOString() : null,
+    visibility: preferredFirst ? "preferred" : (currentRow.visibility === "preferred" ? "open" : currentRow.visibility || "open"),
+    start_window: start.toISOString(),
+    end_window: end.toISOString()
+  };
+}
+
 async function saveAssignmentForm(event) {
   event?.preventDefault();
   if (!suiteSupabase || assignmentState.isSaving) return;
   assignmentState.isSaving = true;
   setAssignmentSaving(true);
-  showAssignmentMessage("Saving assignment blocks to Supabase...");
+  const editingId = assignmentState.editingId;
+  showAssignmentMessage(editingId ? "Saving assignment changes to Supabase..." : "Saving assignment blocks to Supabase...");
+
+  if (editingId) {
+    const currentRow = assignmentState.rows.find((row) => String(row.id || "") === String(editingId)) || {};
+    let payload = {};
+    try {
+      payload = collectAssignmentUpdatePayload(currentRow);
+    } catch (error) {
+      assignmentState.isSaving = false;
+      setAssignmentSaving(false);
+      showAssignmentMessage(error.message, true);
+      return;
+    }
+    const result = await saveAssignmentPatchWithSchemaFallback(editingId, payload);
+    assignmentState.isSaving = false;
+    setAssignmentSaving(false);
+    if (result.error) {
+      showAssignmentMessage("Unable to update assignment: " + result.error.message, true);
+      return;
+    }
+    const index = assignmentState.rows.findIndex((row) => String(row.id || "") === String(editingId));
+    if (index >= 0) assignmentState.rows[index] = result.data;
+    renderAssignmentData();
+    closeAssignmentModal();
+    clearAssignmentForm({ keepMessage: true });
+    showAssignmentMessage("Assignment updated in Supabase.");
+    return;
+  }
 
   let payloads = [];
   try {
@@ -6274,6 +6432,56 @@ function assignmentMoney(value) {
   return number.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 }
 
+function assignmentMetadata(row) {
+  const metadata = row?.metadata;
+  if (metadata && typeof metadata === "object" && !Array.isArray(metadata)) return metadata;
+  if (typeof metadata === "string" && metadata.trim()) {
+    try {
+      const parsed = JSON.parse(metadata);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+function assignmentUnitNumber(row) {
+  const metadata = assignmentMetadata(row);
+  return row?.unit_number
+    || row?.unit_name
+    || metadata.unit_number
+    || metadata.unit_name
+    || metadata.unit_id
+    || "No unit";
+}
+
+function assignmentUnitMeta(row) {
+  const metadata = assignmentMetadata(row);
+  const squareFeet = row?.unit_square_feet || metadata.unit_square_feet;
+  const squareFeetNumber = Number(squareFeet);
+  return Number.isFinite(squareFeetNumber) && squareFeetNumber > 0
+    ? `${squareFeetNumber.toLocaleString()} sq ft`
+    : "Unit not selected";
+}
+
+function assignmentSpecialNotes(row) {
+  const metadata = assignmentMetadata(row);
+  return row?.special_instructions
+    || metadata.unit_notes
+    || row?.supplies_notes
+    || row?.scope
+    || "No notes";
+}
+
+function assignmentSpecialNotesMeta(row) {
+  if (row?.special_instructions) return "Special instructions";
+  if (assignmentMetadata(row).unit_notes) return "Unit notes";
+  if (row?.supplies_notes) return "Supply notes";
+  if (row?.scope) return "Scope";
+  return "Click to edit";
+}
+
 function assignmentShortId(row) {
   return row?.id ? `A-${String(row.id).slice(0, 8).toUpperCase()}` : "New";
 }
@@ -6337,7 +6545,10 @@ function setAssignmentSaving(isSaving) {
   if (!button) return;
   button.disabled = isSaving;
   const label = button.querySelector("span");
-  if (label) label.textContent = isSaving ? "Posting..." : "Post Assignment";
+  const isEditing = Boolean(assignmentState.editingId);
+  if (label) label.textContent = isSaving
+    ? (isEditing ? "Saving..." : "Posting...")
+    : (isEditing ? "Save Changes" : "Post Assignment");
 }
 
 function setRecurringButtonSaving(isSaving) {

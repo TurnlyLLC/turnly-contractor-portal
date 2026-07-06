@@ -771,7 +771,7 @@ body[data-admin-page="assignments"] .assignment-open-list {
   display: grid;
   gap: 6px;
   grid-template-columns: 1fr;
-  overflow-x: auto;
+  overflow-x: visible;
 }
 
 body[data-admin-page="assignments"] .assignment-list-item {
@@ -779,12 +779,23 @@ body[data-admin-page="assignments"] .assignment-list-item {
   background: rgba(7, 18, 32, 0.52);
   border: 1px solid var(--suite-border-soft);
   border-radius: 6px;
+  cursor: pointer;
   display: grid;
   gap: 10px;
-  grid-template-columns: minmax(230px, 1.05fr) minmax(520px, 2.4fr) minmax(132px, max-content);
+  grid-template-columns: minmax(160px, 0.9fr) minmax(0, 2.8fr) minmax(96px, max-content);
   min-height: 44px;
-  min-width: 980px;
+  min-width: 0;
   padding: 5px 8px;
+}
+
+body[data-admin-page="assignments"] .assignment-list-item:hover,
+body[data-admin-page="assignments"] .assignment-list-item:focus-visible {
+  border-color: rgba(0, 214, 163, 0.36);
+}
+
+body[data-admin-page="assignments"] .assignment-list-item:focus-visible {
+  outline: 2px solid rgba(0, 214, 163, 0.4);
+  outline-offset: 2px;
 }
 
 body[data-admin-page="assignments"] .assignment-list-item.is-overdue {
@@ -798,6 +809,8 @@ body[data-admin-page="assignments"] .assignment-list-item-header {
 body[data-admin-page="assignments"] .assignment-title-block {
   display: grid;
   gap: 3px;
+  grid-column: 1;
+  grid-row: 1;
   min-width: 0;
 }
 
@@ -840,7 +853,9 @@ body[data-admin-page="assignments"] .assignment-detail-grid {
   align-items: center;
   display: grid;
   gap: 6px;
-  grid-template-columns: minmax(150px, 1.1fr) minmax(160px, 1.1fr) minmax(180px, 1.2fr) minmax(86px, 0.58fr);
+  grid-column: 2;
+  grid-row: 1;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   min-width: 0;
 }
 
@@ -901,6 +916,8 @@ body[data-admin-page="assignments"] .assignment-row-actions {
   align-items: center;
   display: flex;
   gap: 5px;
+  grid-column: 3;
+  grid-row: 1;
   justify-content: flex-end;
   min-width: 0;
 }
@@ -927,6 +944,10 @@ body[data-admin-page="assignments"] .assignment-row-actions .secondary-action {
   .assignment-command-grid {
     grid-template-columns: 1fr;
   }
+
+  body[data-admin-page="assignments"] .assignment-detail-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 900px) {
@@ -946,8 +967,16 @@ body[data-admin-page="assignments"] .assignment-row-actions .secondary-action {
   }
 
   body[data-admin-page="assignments"] .assignment-list-item-header {
+    grid-column: 1;
     display: grid;
     gap: 6px;
+  }
+
+  body[data-admin-page="assignments"] .assignment-title-block,
+  body[data-admin-page="assignments"] .assignment-detail-grid,
+  body[data-admin-page="assignments"] .assignment-row-actions {
+    grid-column: 1;
+    grid-row: auto;
   }
 
   body[data-admin-page="assignments"] .assignment-detail-grid {

@@ -137,7 +137,10 @@ function setSaving(isSaving) {
   if (!button) return;
   button.disabled = isSaving;
   const label = button.querySelector("span") || button;
-  label.textContent = isSaving ? "Posting..." : "Post Assignment";
+  const isEditing = Boolean(editingAssignmentId());
+  label.textContent = isSaving
+    ? (isEditing ? "Saving..." : "Posting...")
+    : (isEditing ? "Save Changes" : "Post Assignment");
 }
 
 function closeModal() {
@@ -150,12 +153,48 @@ function clearForm() {
   const form = document.getElementById("assignmentForm");
   if (!form) return;
   form.reset();
+  delete form.dataset.assignmentEditingId;
   document.getElementById("assignmentUnitField")?.setAttribute("hidden", "");
 }
 
 async function currentUserId() {
   const { data } = await supabase.auth.getUser();
   return data?.user?.id || null;
+}
+
+function editingAssignmentId() {
+  return document.getElementById("assignmentForm")?.dataset.assignmentEditingId || "";
+}
+
+function missingColumnName(error) {
+  const message = String(error?.message || "");
+  const quoted = message.match(/'([a-zA-Z0-9_]+)'\s+column/);
+  if (quoted) return quoted[1];
+  const schemaCache = message.match(/Could not find the '([a-zA-Z0-9_]+)' column/i);
+  if (schemaCache) return schemaCache[1];
+  const columnRef = message.match(/column\s+"?([a-zA-Z0-9_]+)"?\s+of relation/i);
+  return columnRef?.[1] || "";
+}
+
+async function updateAssignmentWithFallback(id, payload) {
+  const fallbackPayload = { ...payload };
+  const maxAttempts = Object.keys(fallbackPayload).length + 1;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const result = await supabase
+      .from("assignment_blocks")
+      .update(fallbackPayload)
+      .eq("id", id)
+      .select("*")
+      .maybeSingle();
+    if (!result.error) return result;
+    const missingColumn = missingColumnName(result.error);
+    if (missingColumn && Object.prototype.hasOwnProperty.call(fallbackPayload, missingColumn)) {
+      delete fallbackPayload[missingColumn];
+      continue;
+    }
+    return result;
+  }
+  return { data: null, error: new Error("Unable to update assignment because the assignment_blocks table schema is missing required columns.") };
 }
 
 async function saveAssignment(event) {
@@ -193,6 +232,7 @@ async function saveAssignment(event) {
   const metadata = unitMetadata();
   const userId = await currentUserId();
   const groupId = frequency === "one_time" ? null : randomGroupId();
+  const editId = editingAssignmentId();
 
   const basePayload = {
     title: value("title"),
@@ -221,6 +261,33 @@ async function saveAssignment(event) {
     metadata,
     created_by: userId
   };
+
+  if (editId) {
+    const updatePayload = {
+      ...basePayload,
+      start_window: start.toISOString(),
+      end_window: end.toISOString()
+    };
+    delete updatePayload.status;
+    delete updatePayload.created_by;
+    delete updatePayload.recurring_group_id;
+    delete updatePayload.declined_contractor_ids;
+
+    const { data, error } = await updateAssignmentWithFallback(editId, updatePayload);
+
+    isSavingAssignment = false;
+    setSaving(false);
+    if (error) {
+      setMessage("Unable to update assignment: " + error.message, true);
+      return;
+    }
+
+    clearForm();
+    closeModal();
+    document.dispatchEvent(new CustomEvent("turnly:assignments-updated", { detail: { assignment: data, mode: "edit" } }));
+    setMessage("Assignment updated in Supabase.");
+    return;
+  }
 
   const payloads = windows.map((window) => ({
     ...basePayload,
