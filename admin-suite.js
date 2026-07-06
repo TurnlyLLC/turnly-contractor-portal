@@ -314,13 +314,8 @@ const assignmentState = {
   statusFilter: "open",
   frequencyFilter: "all",
   contractorFilter: "all",
-  selectedIds: new Set(),
-  weekStart: "",
-  selectedDate: "",
-  calendarMonth: "",
   editingId: null,
   isSaving: false,
-  isBulkSaving: false,
   isGenerating: false
 };
 const propertyUnitsTable = "property_units";
@@ -1445,14 +1440,6 @@ function parseDate(value) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function parseDateOnly(value) {
-  if (!value) return null;
-  if (value instanceof Date) return new Date(value);
-  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (match) return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-  return parseDate(value);
-}
-
 function dateValue(value, fallback = Number.MAX_SAFE_INTEGER) {
   return parseDate(value)?.getTime() || fallback;
 }
@@ -1463,15 +1450,8 @@ function startOfToday() {
   return date;
 }
 
-function startOfWeek(value) {
-  const date = parseDateOnly(value) || new Date();
-  date.setHours(0, 0, 0, 0);
-  date.setDate(date.getDate() - date.getDay());
-  return date;
-}
-
 function addDays(value, days) {
-  const date = parseDateOnly(value) || new Date();
+  const date = new Date(value);
   date.setDate(date.getDate() + days);
   return date;
 }
@@ -1509,29 +1489,6 @@ function formatDateWindow(start, end) {
   const startText = startDate.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
   const endText = endDate.toLocaleString([], sameDay ? { hour: "numeric", minute: "2-digit" } : { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
   return `${startText} - ${endText}`;
-}
-
-function formatAssignmentWeekRange(start) {
-  const weekStart = parseDate(start) || startOfWeek(new Date());
-  const weekEnd = addDays(weekStart, 6);
-  const sameYear = weekStart.getFullYear() === weekEnd.getFullYear();
-  const startText = weekStart.toLocaleDateString([], { month: "short", day: "numeric", year: sameYear ? undefined : "numeric" });
-  const endText = weekEnd.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
-  return `${startText} - ${endText}`;
-}
-
-function assignmentOverlapsRange(row, rangeStart, rangeEnd) {
-  const start = parseDate(row?.start_window);
-  if (!start) return false;
-  const end = parseDate(row?.end_window) || start;
-  return end >= rangeStart && start < rangeEnd;
-}
-
-function assignmentOverlapsDate(row, date) {
-  const dayStart = parseDateOnly(date);
-  if (!dayStart) return false;
-  dayStart.setHours(0, 0, 0, 0);
-  return assignmentOverlapsRange(row, dayStart, addDays(dayStart, 1));
 }
 
 function renderPipelineColumns() {
@@ -3177,8 +3134,6 @@ function renderAssignments() {
             ${assignmentNewButton("New Assignment", "assignmentPanelNewBtn")}
           </div>
           ${assignmentToolbar}
-          <div id="assignmentScheduleControls" class="assignment-schedule-controls"></div>
-          <div id="assignmentBulkControls" class="assignment-bulk-controls"></div>
           <p id="assignmentMessage" class="status-message table-status-message" aria-live="polite"></p>
           <div id="adminAssignments" class="assignment-open-list">
             ${emptyState("calendar", "No active assignments", "Assignments from Supabase will appear here.", assignmentNewButton("New Assignment", "assignmentEmptyNewBtn"))}
@@ -3189,7 +3144,7 @@ function renderAssignments() {
       <aside class="suite-stack">
         ${assignmentFilterPanel()}
         ${assignmentToolsPanel()}
-        ${panel("Calendar Overview", `<div id="assignmentCalendar">${assignmentCalendarMarkup()}</div>`)}
+        ${panel("Calendar Overview", miniCalendar())}
       </aside>
       <div id="assignmentModal" class="client-modal assignment-modal" role="dialog" aria-modal="true" aria-labelledby="assignmentModalTitle" hidden>
         <button class="client-modal-backdrop" type="button" aria-label="Close assignment form" data-assignment-modal-close></button>
@@ -3202,19 +3157,6 @@ function renderAssignments() {
             <button class="client-modal-close" type="button" aria-label="Close assignment form" data-assignment-modal-close>${icon("x")}</button>
           </div>
           <div id="assignmentModalBody">${assignmentForm()}</div>
-        </section>
-      </div>
-      <div id="assignmentBulkModal" class="client-modal assignment-bulk-modal" role="dialog" aria-modal="true" aria-labelledby="assignmentBulkModalTitle" hidden>
-        <button class="client-modal-backdrop" type="button" aria-label="Close bulk edit" data-assignment-bulk-close></button>
-        <section class="client-modal-panel assignment-bulk-panel">
-          <div class="client-modal-header">
-            <div>
-              <p>Assignments</p>
-              <h2 id="assignmentBulkModalTitle">Bulk Edit Assignments</h2>
-            </div>
-            <button class="client-modal-close" type="button" aria-label="Close bulk edit" data-assignment-bulk-close>${icon("x")}</button>
-          </div>
-          <div id="assignmentBulkModalBody">${assignmentBulkForm()}</div>
         </section>
       </div>
     </section>
@@ -5447,39 +5389,6 @@ function assignmentForm() {
   `;
 }
 
-function assignmentBulkForm() {
-  return `
-    <form id="assignmentBulkForm" class="lead-form assignment-form assignment-bulk-form">
-      <p id="assignmentBulkSummary" class="assignment-bulk-summary">Select assignments from the board to edit them together.</p>
-      ${assignmentFormSection("Bulk Changes", [
-        assignmentBulkField("bulk_status_enabled", "Status", leadSelectField("bulk_assignment_status", "Status", assignmentStatusOptions)),
-        assignmentBulkField("bulk_priority_enabled", "Priority", leadSelectField("bulk_assignment_priority", "Priority", assignmentPriorityOptions)),
-        assignmentBulkField("bulk_pay_enabled", "Contractor Pay", leadInputField("bulk_pay_amount", "Contractor Pay", "number", { min: "0", step: "0.01" })),
-        assignmentBulkField("bulk_service_enabled", "Service Type", leadInputField("bulk_service_type", "Service Type")),
-        assignmentBulkField("bulk_start_enabled", "Start Window", leadInputField("bulk_start_window", "Start Window", "datetime-local")),
-        assignmentBulkField("bulk_end_enabled", "End Window", leadInputField("bulk_end_window", "End Window", "datetime-local")),
-        assignmentBulkField("bulk_scope_enabled", "Scope of Work", leadTextareaField("bulk_scope", "Scope of Work")),
-        assignmentBulkField("bulk_supplies_enabled", "Supplies Notes", leadTextareaField("bulk_supplies_notes", "Supplies Notes")),
-        assignmentBulkField("bulk_special_enabled", "Special Instructions", leadTextareaField("bulk_special_instructions", "Special Instructions"))
-      ], "assignment-bulk-grid")}
-      <p id="assignmentBulkMessage" class="status-message"></p>
-      <div class="form-actions assignment-bulk-actions">
-        <button type="button" class="secondary-action" data-assignment-bulk-close>Cancel</button>
-        <button id="assignmentBulkSaveBtn" type="submit" class="primary-action">${icon("check")}<span>Apply Changes</span></button>
-      </div>
-    </form>
-  `;
-}
-
-function assignmentBulkField(toggleId, label, control) {
-  return `
-    <div class="assignment-bulk-field">
-      <label class="checkbox-field assignment-bulk-toggle"><input id="${esc(toggleId)}" type="checkbox" data-assignment-bulk-toggle /> <span>Update ${esc(label)}</span></label>
-      ${control}
-    </div>
-  `;
-}
-
 function assignmentFormSection(title, fields, className = "") {
   return `
     <section class="assignment-form-section">
@@ -5545,22 +5454,18 @@ function initAssignments() {
   root.addEventListener("submit", saveAssignmentForm);
   root.querySelector("#assignmentSearchInput")?.addEventListener("input", (event) => {
     assignmentState.search = event.target.value || "";
-    clearAssignmentSelection();
     renderAssignmentData();
   });
   root.querySelector("#assignmentStatusFilter")?.addEventListener("change", (event) => {
     assignmentState.statusFilter = event.target.value || "all";
-    clearAssignmentSelection();
     renderAssignmentData();
   });
   root.querySelector("#assignmentFrequencyFilter")?.addEventListener("change", (event) => {
     assignmentState.frequencyFilter = event.target.value || "all";
-    clearAssignmentSelection();
     renderAssignmentData();
   });
   root.querySelector("#assignmentContractorFilter")?.addEventListener("change", (event) => {
     assignmentState.contractorFilter = event.target.value || "all";
-    clearAssignmentSelection();
     renderAssignmentData();
   });
 
@@ -5571,10 +5476,7 @@ function initAssignments() {
     openAssignmentModal();
   });
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") {
-      closeAssignmentModal();
-      closeAssignmentBulkModal();
-    }
+    if (event.key === "Escape") closeAssignmentModal();
   });
   document.addEventListener("turnly:assignments-updated", () => {
     assignmentState.editingId = null;
@@ -5609,53 +5511,6 @@ function closeAssignmentModal() {
   assignmentState.editingId = null;
   updateAssignmentModalMode();
   closeAssignmentContractorDropdowns();
-}
-
-function openAssignmentBulkModal() {
-  const rows = selectedAssignmentRows();
-  if (!rows.length) {
-    showAssignmentMessage("Select one or more assignments first.", true);
-    return;
-  }
-  const modal = document.getElementById("assignmentBulkModal");
-  const form = document.getElementById("assignmentBulkForm");
-  if (!modal || !form) return;
-  form.reset();
-  document.querySelectorAll("[data-assignment-bulk-toggle]").forEach((toggle) => {
-    toggle.checked = false;
-  });
-  updateAssignmentBulkSummary();
-  showAssignmentBulkMessage("");
-  updateAssignmentBulkFieldState();
-  modal.hidden = false;
-}
-
-function closeAssignmentBulkModal() {
-  const modal = document.getElementById("assignmentBulkModal");
-  if (modal) modal.hidden = true;
-  showAssignmentBulkMessage("");
-}
-
-function updateAssignmentBulkSummary() {
-  const summary = document.getElementById("assignmentBulkSummary");
-  if (!summary) return;
-  const rows = selectedAssignmentRows();
-  const names = rows.slice(0, 3).map((row) => row.title || row.property_name || assignmentShortId(row)).filter(Boolean);
-  const extra = rows.length > names.length ? ` and ${rows.length - names.length} more` : "";
-  summary.textContent = rows.length
-    ? `${rows.length} selected: ${names.join(", ")}${extra}`
-    : "Select assignments from the board to edit them together.";
-}
-
-function updateAssignmentBulkFieldState() {
-  document.querySelectorAll(".assignment-bulk-field").forEach((field) => {
-    const toggle = field.querySelector("[data-assignment-bulk-toggle]");
-    const enabled = Boolean(toggle?.checked);
-    field.classList.toggle("is-enabled", enabled);
-    field.querySelectorAll("input:not([data-assignment-bulk-toggle]), select, textarea").forEach((control) => {
-      control.disabled = !enabled;
-    });
-  });
 }
 
 function updateAssignmentModalMode() {
@@ -5733,79 +5588,9 @@ function handleAssignmentClick(event) {
     return;
   }
 
-  const closeBulkModal = event.target.closest("[data-assignment-bulk-close]");
-  if (closeBulkModal) {
-    closeAssignmentBulkModal();
-    return;
-  }
-
   const closeModal = event.target.closest("[data-assignment-modal-close]");
   if (closeModal) {
     closeAssignmentModal();
-    return;
-  }
-
-  const weekNav = event.target.closest("[data-assignment-week-nav]");
-  if (weekNav) {
-    const direction = Number(weekNav.dataset.assignmentWeekNav || 0);
-    const week = parseDateOnly(assignmentState.weekStart) || startOfWeek(new Date());
-    setAssignmentWeek(addDays(week, direction * 7));
-    assignmentState.selectedDate = "";
-    clearAssignmentSelection();
-    renderAssignmentData();
-    return;
-  }
-
-  const currentWeek = event.target.closest("[data-assignment-week-today]");
-  if (currentWeek) {
-    const today = startOfToday();
-    setAssignmentWeek(today);
-    setAssignmentCalendarMonth(today);
-    assignmentState.selectedDate = "";
-    clearAssignmentSelection();
-    renderAssignmentData();
-    return;
-  }
-
-  const clearDate = event.target.closest("[data-assignment-date-clear]");
-  if (clearDate) {
-    assignmentState.selectedDate = "";
-    clearAssignmentSelection();
-    renderAssignmentData();
-    return;
-  }
-
-  const calendarNav = event.target.closest("[data-assignment-calendar-nav]");
-  if (calendarNav) {
-    const direction = Number(calendarNav.dataset.assignmentCalendarNav || 0);
-    const month = parseDateOnly(assignmentState.calendarMonth) || new Date();
-    setAssignmentCalendarMonth(new Date(month.getFullYear(), month.getMonth() + direction, 1));
-    renderAssignmentCalendar();
-    return;
-  }
-
-  const calendarDate = event.target.closest("[data-assignment-calendar-date]");
-  if (calendarDate) {
-    const selected = parseDateOnly(calendarDate.dataset.assignmentCalendarDate);
-    if (selected) {
-      assignmentState.selectedDate = toDateInput(selected);
-      setAssignmentWeek(selected);
-      setAssignmentCalendarMonth(selected);
-      clearAssignmentSelection();
-      renderAssignmentData();
-    }
-    return;
-  }
-
-  const bulkEdit = event.target.closest("[data-assignment-bulk-edit]");
-  if (bulkEdit) {
-    openAssignmentBulkModal();
-    return;
-  }
-
-  const bulkDelete = event.target.closest("[data-assignment-bulk-delete]");
-  if (bulkDelete) {
-    void deleteSelectedAssignments();
     return;
   }
 
@@ -5829,7 +5614,6 @@ function handleAssignmentClick(event) {
   const statusTab = event.target.closest("[data-assignment-status-tab]");
   if (statusTab) {
     assignmentState.statusFilter = statusTab.dataset.assignmentStatusTab || "all";
-    clearAssignmentSelection();
     renderAssignmentData();
     return;
   }
@@ -5840,10 +5624,6 @@ function handleAssignmentClick(event) {
     assignmentState.statusFilter = "open";
     assignmentState.frequencyFilter = "all";
     assignmentState.contractorFilter = "all";
-    assignmentState.selectedDate = "";
-    setAssignmentWeek(startOfToday());
-    setAssignmentCalendarMonth(startOfToday());
-    clearAssignmentSelection();
     renderAssignmentData();
     return;
   }
@@ -5860,7 +5640,7 @@ function handleAssignmentClick(event) {
     return;
   }
 
-  if (event.target.closest("[data-assignment-status-select], [data-assignment-select], .assignment-select-cell")) {
+  if (event.target.closest("[data-assignment-status-select]")) {
     return;
   }
 
@@ -5882,31 +5662,6 @@ function handleAssignmentKeydown(event) {
 }
 
 function handleAssignmentChange(event) {
-  const rowSelect = event.target.closest("[data-assignment-select]");
-  if (rowSelect) {
-    const id = String(rowSelect.dataset.assignmentSelect || "");
-    if (id && rowSelect.checked) assignmentState.selectedIds.add(id);
-    if (id && !rowSelect.checked) assignmentState.selectedIds.delete(id);
-    renderAssignmentData();
-    return;
-  }
-
-  const selectAll = event.target.closest("[data-assignment-select-all]");
-  if (selectAll) {
-    const visibleIds = getFilteredAssignments().map((row) => String(row.id || "")).filter(Boolean);
-    visibleIds.forEach((id) => {
-      if (selectAll.checked) assignmentState.selectedIds.add(id);
-      else assignmentState.selectedIds.delete(id);
-    });
-    renderAssignmentData();
-    return;
-  }
-
-  if (event.target.closest("[data-assignment-bulk-toggle]")) {
-    updateAssignmentBulkFieldState();
-    return;
-  }
-
   const statusSelect = event.target.closest("[data-assignment-status-select]");
   if (statusSelect) {
     void updateAssignmentStatusValue(statusSelect.dataset.assignmentStatusSelect, statusSelect.value);
@@ -5954,12 +5709,12 @@ async function loadAssignments() {
   assignmentState.contractors = contractorsResult;
   assignmentState.rows = assignmentsResult.rows;
   renderAssignmentData();
-  const boardCount = getFilteredAssignments().length;
+  const boardCount = assignmentState.rows.filter(isAssignmentOpen).length;
   showAssignmentMessage(assignmentsResult.error
     ? "Assignments are ready once the Supabase migration is applied."
     : boardCount
-      ? `${boardCount} assignment${boardCount === 1 ? "" : "s"} visible for this view.`
-      : "Synced with Supabase. No assignments for this view yet.");
+      ? `${boardCount} board assignment${boardCount === 1 ? "" : "s"} synced from Supabase.`
+      : "Synced with Supabase. No active assignments yet.");
 }
 
 async function loadAssignmentProperties() {
@@ -6006,15 +5761,10 @@ async function loadAssignmentRows() {
 }
 
 function renderAssignmentData() {
-  ensureAssignmentScheduleState();
-  pruneAssignmentSelection();
   populateAssignmentPropertySelect();
   populateAssignmentContractorMenu();
   populateAssignmentContractorFilter();
   renderAssignmentFilterControls();
-  renderAssignmentScheduleControls();
-  renderAssignmentBulkControls();
-  renderAssignmentCalendar();
   updateAssignmentRecurrenceVisibility();
   updateAssignmentContractorControls();
   renderAssignmentMetrics();
@@ -6033,145 +5783,6 @@ function renderAssignmentFilterControls() {
   document.querySelectorAll("[data-assignment-status-tab]").forEach((button) => {
     button.classList.toggle("active", button.dataset.assignmentStatusTab === assignmentState.statusFilter);
   });
-}
-
-function ensureAssignmentScheduleState() {
-  const today = startOfToday();
-  if (!assignmentState.weekStart) assignmentState.weekStart = toDateInput(startOfWeek(today));
-  if (!assignmentState.calendarMonth) {
-    assignmentState.calendarMonth = toDateInput(new Date(today.getFullYear(), today.getMonth(), 1));
-  }
-}
-
-function setAssignmentWeek(date) {
-  const week = startOfWeek(date || new Date());
-  assignmentState.weekStart = toDateInput(week);
-}
-
-function setAssignmentCalendarMonth(date) {
-  const month = parseDateOnly(date) || new Date();
-  assignmentState.calendarMonth = toDateInput(new Date(month.getFullYear(), month.getMonth(), 1));
-}
-
-function clearAssignmentSelection() {
-  assignmentState.selectedIds.clear();
-}
-
-function pruneAssignmentSelection() {
-  const ids = new Set(assignmentState.rows.map((row) => String(row.id || "")).filter(Boolean));
-  Array.from(assignmentState.selectedIds).forEach((id) => {
-    if (!ids.has(String(id))) assignmentState.selectedIds.delete(id);
-  });
-}
-
-function selectedAssignmentRows() {
-  return assignmentState.rows.filter((row) => assignmentState.selectedIds.has(String(row.id || "")));
-}
-
-function renderAssignmentScheduleControls() {
-  const target = document.getElementById("assignmentScheduleControls");
-  if (!target) return;
-  ensureAssignmentScheduleState();
-  const weekStart = parseDateOnly(assignmentState.weekStart) || startOfWeek(new Date());
-  const selectedDate = parseDateOnly(assignmentState.selectedDate);
-  const rows = getFilteredAssignments();
-  const selectedLabel = selectedDate
-    ? `Showing ${formatDateOnly(selectedDate)}`
-    : "Showing full week";
-  target.innerHTML = `
-    <div class="assignment-week-controls">
-      <button class="secondary-action icon-only" type="button" data-assignment-week-nav="-1" aria-label="Previous week">${icon("chevron-right", "flip")}</button>
-      <div class="assignment-week-label">
-        <span>Available Jobs</span>
-        <strong>${esc(formatAssignmentWeekRange(weekStart))}</strong>
-        <small>${esc(selectedLabel)} - ${rows.length.toLocaleString()} job${rows.length === 1 ? "" : "s"}</small>
-      </div>
-      <button class="secondary-action icon-only" type="button" data-assignment-week-nav="1" aria-label="Next week">${icon("chevron-right")}</button>
-      <button class="secondary-action" type="button" data-assignment-week-today>${icon("calendar")}<span>Current Week</span></button>
-      <button class="secondary-action" type="button" data-assignment-date-clear ${selectedDate ? "" : "disabled"}>${icon("list")}<span>All Week</span></button>
-    </div>
-  `;
-}
-
-function renderAssignmentBulkControls() {
-  const target = document.getElementById("assignmentBulkControls");
-  if (!target) return;
-  const rows = getFilteredAssignments();
-  const visibleIds = rows.map((row) => String(row.id || "")).filter(Boolean);
-  const selectedRows = selectedAssignmentRows();
-  const selectedVisibleCount = visibleIds.filter((id) => assignmentState.selectedIds.has(id)).length;
-  const allVisibleSelected = Boolean(visibleIds.length && selectedVisibleCount === visibleIds.length);
-  target.innerHTML = `
-    <div class="assignment-bulk-bar">
-      <label class="assignment-bulk-select">
-        <input type="checkbox" data-assignment-select-all ${allVisibleSelected ? "checked" : ""} ${visibleIds.length ? "" : "disabled"} />
-        <span>Select all visible</span>
-      </label>
-      <div class="assignment-bulk-status">
-        <strong>${selectedRows.length.toLocaleString()}</strong>
-        <span>selected</span>
-      </div>
-      <div class="assignment-bulk-button-row">
-        <button class="secondary-action" type="button" data-assignment-bulk-edit ${selectedRows.length && !assignmentState.isBulkSaving ? "" : "disabled"}>${icon("settings")}<span>Bulk Edit</span></button>
-        <button class="secondary-action danger-action" type="button" data-assignment-bulk-delete ${selectedRows.length && !assignmentState.isBulkSaving ? "" : "disabled"}>${icon("trash")}<span>Bulk Delete</span></button>
-      </div>
-    </div>
-  `;
-  const selectAll = target.querySelector("[data-assignment-select-all]");
-  if (selectAll) selectAll.indeterminate = selectedVisibleCount > 0 && selectedVisibleCount < visibleIds.length;
-}
-
-function renderAssignmentCalendar() {
-  const target = document.getElementById("assignmentCalendar");
-  if (target) target.innerHTML = assignmentCalendarMarkup();
-}
-
-function assignmentCalendarMarkup() {
-  ensureAssignmentScheduleState();
-  const monthBase = parseDateOnly(assignmentState.calendarMonth) || startOfToday();
-  const monthStart = new Date(monthBase.getFullYear(), monthBase.getMonth(), 1);
-  const gridStart = startOfWeek(monthStart);
-  const todayKey = toDateInput(startOfToday());
-  const selectedKey = assignmentState.selectedDate || "";
-  const weekStart = parseDateOnly(assignmentState.weekStart) || startOfWeek(new Date());
-  const weekEnd = addDays(weekStart, 7);
-  const monthLabel = monthStart.toLocaleDateString([], { month: "long", year: "numeric" });
-  const cells = Array.from({ length: 42 }, (_, index) => addDays(gridStart, index));
-  const weekCount = assignmentState.rows.filter((row) => isAssignmentOpen(row) && assignmentOverlapsRange(row, weekStart, weekEnd)).length;
-  const days = ["S", "M", "T", "W", "T", "F", "S"];
-  return `
-    <div class="assignment-calendar-wrap">
-      <div class="mini-cal-head assignment-calendar-head">
-        <button type="button" data-assignment-calendar-nav="-1" aria-label="Previous month">${icon("chevron-right", "flip")}</button>
-        <strong>${esc(monthLabel)}</strong>
-        <button type="button" data-assignment-calendar-nav="1" aria-label="Next month">${icon("chevron-right")}</button>
-      </div>
-      <div class="assignment-calendar-grid">
-        ${days.map((day) => `<b>${esc(day)}</b>`).join("")}
-        ${cells.map((date) => {
-          const key = toDateInput(date);
-          const count = assignmentState.rows.filter((row) => isAssignmentOpen(row) && assignmentOverlapsDate(row, date)).length;
-          const inMonth = date.getMonth() === monthStart.getMonth();
-          const inWeek = date >= weekStart && date < weekEnd;
-          const classes = [
-            "assignment-calendar-day",
-            inMonth ? "" : "muted",
-            key === todayKey ? "today" : "",
-            key === selectedKey ? "active" : "",
-            inWeek ? "in-week" : "",
-            count ? "has-jobs" : ""
-          ].filter(Boolean).join(" ");
-          return `
-            <button class="${esc(classes)}" type="button" data-assignment-calendar-date="${esc(key)}" aria-label="${esc(formatDateOnly(date))}">
-              <span>${esc(date.getDate())}</span>
-              ${count ? `<em>${esc(count)}</em>` : ""}
-            </button>
-          `;
-        }).join("")}
-      </div>
-      <p class="assignment-calendar-summary">${weekCount.toLocaleString()} active assignment${weekCount === 1 ? "" : "s"} this week</p>
-    </div>
-  `;
 }
 
 function populateAssignmentPropertySelect() {
@@ -6233,23 +5844,18 @@ function renderAssignmentTable() {
   const rows = getFilteredAssignments();
   const count = document.getElementById("assignmentListCount");
   if (count) {
-    const selectedDate = parseDateOnly(assignmentState.selectedDate);
-    const scope = selectedDate
-      ? `for ${formatDateOnly(selectedDate)}`
-      : `for ${formatAssignmentWeekRange(parseDateOnly(assignmentState.weekStart) || new Date())}`;
     const label = assignmentState.statusFilter === "open" ? "board assignments" : "assignments";
-    count.textContent = `Showing ${rows.length.toLocaleString()} ${label} ${scope}`;
+    count.textContent = `Showing ${rows.length.toLocaleString()} ${label}`;
   }
   body.innerHTML = rows.length
     ? rows.map(renderAssignmentRow).join("")
-    : emptyState("calendar", assignmentState.statusFilter === "open" ? "No active assignments" : "No assignments found", "Try another week, pick a calendar date, or add a new assignment.", assignmentNewButton("New Assignment", "assignmentEmptyNewBtn"));
+    : emptyState("calendar", assignmentState.statusFilter === "open" ? "No active assignments" : "No assignments found", "Assignments from Supabase will appear here.", assignmentNewButton("New Assignment", "assignmentEmptyNewBtn"));
 }
 
 function renderAssignmentRow(row) {
   const id = esc(row.id || "");
   const status = assignmentStatusKey(row.status);
   const overdue = isAssignmentOverdue(row);
-  const selected = assignmentState.selectedIds.has(String(row.id || ""));
   const detailItems = [
     ["Property Name", row.property_name || "No property", row.address || "No address", "building"],
     ["Unit Number", assignmentUnitNumber(row), assignmentUnitMeta(row), "home"],
@@ -6259,10 +5865,7 @@ function renderAssignmentRow(row) {
     ["Special Notes", assignmentSpecialNotes(row), assignmentSpecialNotesMeta(row), "document"]
   ];
   return `
-    <article class="assignment-list-item ${overdue ? "is-overdue" : ""} ${selected ? "is-selected" : ""}" data-assignment-row-id="${id}" role="button" tabindex="0" aria-label="Edit ${esc(row.title || row.property_name || "assignment")}">
-      <label class="assignment-select-cell" aria-label="Select ${esc(row.title || row.property_name || "assignment")}">
-        <input type="checkbox" data-assignment-select="${id}" ${selected ? "checked" : ""} />
-      </label>
+    <article class="assignment-list-item ${overdue ? "is-overdue" : ""}" data-assignment-row-id="${id}" role="button" tabindex="0" aria-label="Edit ${esc(row.title || row.property_name || "assignment")}">
       <header class="assignment-list-item-header">
         <div class="assignment-title-block">
           <span class="assignment-short-id">${esc(assignmentShortId(row))}</span>
@@ -6336,7 +5939,6 @@ function assignmentStatusInlineSelect(row, id) {
 }
 
 function getFilteredAssignments() {
-  ensureAssignmentScheduleState();
   const term = assignmentState.search.trim().toLowerCase();
   const statusFilter = normalizeToken(assignmentState.statusFilter);
   const frequencyFilter = assignmentFrequencyKey(assignmentState.frequencyFilter);
@@ -6355,7 +5957,6 @@ function getFilteredAssignments() {
     if (frequencyFilter !== "all" && assignmentFrequencyKey(row.recurrence_frequency || row.assignment_type) !== frequencyFilter) return false;
     if (assignmentState.contractorFilter === "unassigned" && assignmentHasContractor(row)) return false;
     if (assignmentState.contractorFilter !== "all" && assignmentState.contractorFilter !== "unassigned" && !assignmentMatchesContractor(row, assignmentState.contractorFilter)) return false;
-    if (!assignmentMatchesSelectedSchedule(row)) return false;
     if (!term) return true;
     return [
       row.title,
@@ -6523,139 +6124,8 @@ function collectAssignmentUpdatePayload(currentRow = {}) {
   return payload;
 }
 
-function assignmentBulkControlValue(id) {
-  return String(document.getElementById(id)?.value || "");
-}
-
-function assignmentBulkEnabled(id) {
-  return Boolean(document.getElementById(id)?.checked);
-}
-
-function collectAssignmentBulkPatch(row = {}) {
-  const payload = {};
-  if (assignmentBulkEnabled("bulk_status_enabled")) {
-    const status = assignmentBulkControlValue("bulk_assignment_status");
-    const statusError = assignmentStatusChangeError(status, row);
-    if (statusError) throw new Error(`${assignmentShortId(row)}: ${statusError}`);
-    Object.assign(payload, assignmentStatusPayload(status, row));
-  }
-  if (assignmentBulkEnabled("bulk_priority_enabled")) {
-    payload.priority = assignmentBulkControlValue("bulk_assignment_priority") || "normal";
-  }
-  if (assignmentBulkEnabled("bulk_pay_enabled")) {
-    const payAmount = Number(assignmentBulkControlValue("bulk_pay_amount"));
-    if (!Number.isFinite(payAmount) || payAmount < 0) throw new Error("Contractor Pay must be a valid amount.");
-    payload.pay_amount = payAmount;
-  }
-  if (assignmentBulkEnabled("bulk_service_enabled")) payload.service_type = assignmentBulkControlValue("bulk_service_type");
-  if (assignmentBulkEnabled("bulk_scope_enabled")) payload.scope = assignmentBulkControlValue("bulk_scope");
-  if (assignmentBulkEnabled("bulk_supplies_enabled")) payload.supplies_notes = assignmentBulkControlValue("bulk_supplies_notes");
-  if (assignmentBulkEnabled("bulk_special_enabled")) payload.special_instructions = assignmentBulkControlValue("bulk_special_instructions");
-
-  const startEnabled = assignmentBulkEnabled("bulk_start_enabled");
-  const endEnabled = assignmentBulkEnabled("bulk_end_enabled");
-  if (startEnabled || endEnabled) {
-    const start = startEnabled ? parseDate(assignmentBulkControlValue("bulk_start_window")) : parseDate(row.start_window);
-    const end = endEnabled ? parseDate(assignmentBulkControlValue("bulk_end_window")) : parseDate(row.end_window);
-    if (startEnabled && !start) throw new Error("Start Window must be a valid date and time.");
-    if (endEnabled && !end) throw new Error("End Window must be a valid date and time.");
-    if (start && end && end <= start) throw new Error("End Window must be after Start Window.");
-    if (startEnabled) payload.start_window = start.toISOString();
-    if (endEnabled) payload.end_window = end.toISOString();
-  }
-
-  if (!Object.keys(payload).length) throw new Error("Choose at least one bulk field to update.");
-  return payload;
-}
-
-async function saveAssignmentBulkForm(event) {
-  event?.preventDefault();
-  if (!suiteSupabase || assignmentState.isBulkSaving) return;
-  const rows = selectedAssignmentRows();
-  if (!rows.length) {
-    showAssignmentBulkMessage("Select one or more assignments first.", true);
-    return;
-  }
-
-  let patches = [];
-  try {
-    patches = rows.map((row) => ({ row, payload: collectAssignmentBulkPatch(row) }));
-  } catch (error) {
-    showAssignmentBulkMessage(error.message, true);
-    return;
-  }
-
-  assignmentState.isBulkSaving = true;
-  setAssignmentBulkSaving(true);
-  showAssignmentBulkMessage(`Updating ${rows.length} assignment${rows.length === 1 ? "" : "s"}...`);
-  const failures = [];
-  for (const item of patches) {
-    const result = await saveAssignmentPatchWithSchemaFallback(item.row.id, item.payload);
-    if (result.error) {
-      failures.push(`${assignmentShortId(item.row)}: ${result.error.message}`);
-      continue;
-    }
-    const index = assignmentState.rows.findIndex((row) => String(row.id || "") === String(item.row.id || ""));
-    if (index >= 0 && result.data) assignmentState.rows[index] = result.data;
-  }
-
-  assignmentState.isBulkSaving = false;
-  setAssignmentBulkSaving(false);
-  if (failures.length) {
-    renderAssignmentData();
-    showAssignmentBulkMessage(`Updated ${rows.length - failures.length}; ${failures.length} failed. ${failures[0]}`, true);
-    showAssignmentMessage("Some bulk updates could not be saved.", true);
-    return;
-  }
-
-  clearAssignmentSelection();
-  renderAssignmentData();
-  closeAssignmentBulkModal();
-  showAssignmentMessage(`${rows.length} assignment${rows.length === 1 ? "" : "s"} updated in Supabase.`);
-}
-
-async function deleteSelectedAssignments() {
-  if (!suiteSupabase || assignmentState.isBulkSaving) return;
-  const rows = selectedAssignmentRows();
-  const ids = rows.map((row) => row.id).filter(Boolean);
-  if (!ids.length) {
-    showAssignmentMessage("Select one or more assignments first.", true);
-    return;
-  }
-  const label = ids.length === 1
-    ? (rows[0].title || rows[0].property_name || assignmentShortId(rows[0]))
-    : `${ids.length} selected assignments`;
-  if (!window.confirm(`Delete ${label}? This cannot be undone.`)) return;
-
-  assignmentState.isBulkSaving = true;
-  renderAssignmentBulkControls();
-  showAssignmentMessage(`Deleting ${ids.length} assignment${ids.length === 1 ? "" : "s"}...`);
-  const { error } = await suiteSupabase
-    .from(assignmentTable)
-    .delete()
-    .in("id", ids);
-  assignmentState.isBulkSaving = false;
-
-  if (error) {
-    renderAssignmentBulkControls();
-    showAssignmentMessage("Unable to delete assignments: " + error.message, true);
-    return;
-  }
-
-  const deletedIds = new Set(ids.map((id) => String(id)));
-  assignmentState.rows = assignmentState.rows.filter((row) => !deletedIds.has(String(row.id || "")));
-  clearAssignmentSelection();
-  renderAssignmentData();
-  showAssignmentMessage(`${ids.length} assignment${ids.length === 1 ? "" : "s"} deleted from Supabase.`);
-}
-
 async function saveAssignmentForm(event) {
   event?.preventDefault();
-  if (event?.target?.id === "assignmentBulkForm") {
-    await saveAssignmentBulkForm(event);
-    return;
-  }
-  if (event?.target?.id && event.target.id !== "assignmentForm") return;
   if (!suiteSupabase || assignmentState.isSaving) return;
   assignmentState.isSaving = true;
   setAssignmentSaving(true);
@@ -7437,14 +6907,6 @@ function isAssignmentUpcoming(row) {
   return Boolean(start && start >= startOfToday() && !isAssignmentClosed(row));
 }
 
-function assignmentMatchesSelectedSchedule(row) {
-  ensureAssignmentScheduleState();
-  const selectedDate = parseDateOnly(assignmentState.selectedDate);
-  if (selectedDate) return assignmentOverlapsDate(row, selectedDate);
-  const weekStart = parseDateOnly(assignmentState.weekStart) || startOfWeek(new Date());
-  return assignmentOverlapsRange(row, weekStart, addDays(weekStart, 7));
-}
-
 function setAssignmentSaving(isSaving) {
   const button = document.getElementById("assignmentSaveBtn");
   if (!button) return;
@@ -7454,16 +6916,6 @@ function setAssignmentSaving(isSaving) {
   if (label) label.textContent = isSaving
     ? (isEditing ? "Saving..." : "Posting...")
     : (isEditing ? "Save Changes" : "Post Assignment");
-}
-
-function setAssignmentBulkSaving(isSaving) {
-  const button = document.getElementById("assignmentBulkSaveBtn");
-  if (button) {
-    button.disabled = isSaving;
-    const label = button.querySelector("span");
-    if (label) label.textContent = isSaving ? "Applying..." : "Apply Changes";
-  }
-  renderAssignmentBulkControls();
 }
 
 function setRecurringButtonSaving(isSaving) {
@@ -7478,13 +6930,6 @@ function showAssignmentMessage(text, isError = false) {
   const modal = document.getElementById("assignmentModal");
   const formMessage = modal && !modal.hidden ? document.getElementById("assignmentFormMessage") : null;
   const message = formMessage || document.getElementById("assignmentMessage") || document.getElementById("recurringMessage");
-  if (!message) return;
-  message.textContent = text || "";
-  message.classList.toggle("error", Boolean(isError));
-}
-
-function showAssignmentBulkMessage(text, isError = false) {
-  const message = document.getElementById("assignmentBulkMessage");
   if (!message) return;
   message.textContent = text || "";
   message.classList.toggle("error", Boolean(isError));
