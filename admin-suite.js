@@ -3103,7 +3103,7 @@ function renderAssignments() {
   const assignmentToolbar = toolbar(
     `<div class="suite-tabs" role="tablist">
       ${[
-        ["open", "Open"],
+        ["open", "Job Board"],
         ["preferred_pending", "Preferred"],
         ["claimed", "Claimed"],
         ["in_progress", "In Progress"],
@@ -3119,7 +3119,7 @@ function renderAssignments() {
     <section class="assignments-layout" data-assignments-page>
       <div class="suite-stack">
         <section class="metric-strip five">
-          ${metric("Open Assignments", "0", "claimable in Supabase", "calendar", "green", 'id="assignmentTotalCount"')}
+          ${metric("Job Board", "0", "not completed", "calendar", "green", 'id="assignmentTotalCount"')}
           ${metric("Today's Assignments", "0", "due today", "calendar", "purple", 'id="assignmentTodayCount"')}
           ${metric("In Progress", "0", "right now", "clock", "orange", 'id="assignmentProgressCount"')}
           ${metric("Completed (7 Days)", "0", "from last 7 days", "check", "green", 'id="assignmentCompletedCount"')}
@@ -3128,7 +3128,7 @@ function renderAssignments() {
         <section class="suite-panel assignment-list-panel">
           <div class="panel-head assignment-list-head">
             <div>
-              <h2>Open Assignments</h2>
+              <h2>Assignment Job Board</h2>
               <p>Synced from Supabase</p>
             </div>
             ${assignmentNewButton("New Assignment", "assignmentPanelNewBtn")}
@@ -3136,9 +3136,9 @@ function renderAssignments() {
           ${assignmentToolbar}
           <p id="assignmentMessage" class="status-message table-status-message" aria-live="polite"></p>
           <div id="adminAssignments" class="assignment-open-list">
-            ${emptyState("calendar", "No open assignments", "Assignments from Supabase will appear here.", assignmentNewButton("New Assignment", "assignmentEmptyNewBtn"))}
+            ${emptyState("calendar", "No active assignments", "Assignments from Supabase will appear here.", assignmentNewButton("New Assignment", "assignmentEmptyNewBtn"))}
           </div>
-          <div class="table-foot"><span id="assignmentListCount">Showing 0 open assignments</span></div>
+          <div class="table-foot"><span id="assignmentListCount">Showing 0 board assignments</span></div>
         </section>
       </div>
       <aside class="suite-stack">
@@ -5709,12 +5709,12 @@ async function loadAssignments() {
   assignmentState.contractors = contractorsResult;
   assignmentState.rows = assignmentsResult.rows;
   renderAssignmentData();
-  const openCount = assignmentState.rows.filter(isAssignmentOpen).length;
+  const boardCount = assignmentState.rows.filter(isAssignmentOpen).length;
   showAssignmentMessage(assignmentsResult.error
     ? "Assignments are ready once the Supabase migration is applied."
-    : openCount
-      ? `${openCount} open assignment${openCount === 1 ? "" : "s"} synced from Supabase.`
-      : "Synced with Supabase. No open assignments yet.");
+    : boardCount
+      ? `${boardCount} board assignment${boardCount === 1 ? "" : "s"} synced from Supabase.`
+      : "Synced with Supabase. No active assignments yet.");
 }
 
 async function loadAssignmentProperties() {
@@ -5844,12 +5844,12 @@ function renderAssignmentTable() {
   const rows = getFilteredAssignments();
   const count = document.getElementById("assignmentListCount");
   if (count) {
-    const label = assignmentState.statusFilter === "open" ? "open assignments" : "assignments";
+    const label = assignmentState.statusFilter === "open" ? "board assignments" : "assignments";
     count.textContent = `Showing ${rows.length.toLocaleString()} ${label}`;
   }
   body.innerHTML = rows.length
     ? rows.map(renderAssignmentRow).join("")
-    : emptyState("calendar", assignmentState.statusFilter === "open" ? "No open assignments" : "No assignments found", "Assignments from Supabase will appear here.", assignmentNewButton("New Assignment", "assignmentEmptyNewBtn"));
+    : emptyState("calendar", assignmentState.statusFilter === "open" ? "No active assignments" : "No assignments found", "Assignments from Supabase will appear here.", assignmentNewButton("New Assignment", "assignmentEmptyNewBtn"));
 }
 
 function renderAssignmentRow(row) {
@@ -6888,11 +6888,11 @@ function assignmentMatchesContractor(row, contractorId) {
 }
 
 function isAssignmentClosed(row) {
-  return ["completed", "cancelled", "declined"].includes(assignmentStatusKey(row?.status));
+  return assignmentStatusKey(row?.status) === "completed";
 }
 
 function isAssignmentOpen(row) {
-  return ["open", "preferred-pending"].includes(assignmentStatusKey(row?.status));
+  return !isAssignmentClosed(row);
 }
 
 function isAssignmentOverdue(row) {
