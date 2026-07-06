@@ -652,6 +652,26 @@ button.secondary-command-btn {
   grid-column: 1 / -1;
 }
 
+body[data-admin-page="assignments"] .assignment-modal-form .form-actions {
+  align-items: center;
+  justify-content: flex-end;
+}
+
+body[data-admin-page="assignments"] .assignment-save-action {
+  flex: 0 0 auto;
+  min-width: 148px;
+  white-space: nowrap;
+}
+
+body[data-admin-page="assignments"] .assignment-save-action .suite-icon {
+  flex: 0 0 auto;
+}
+
+body[data-admin-page="assignments"] .assignment-save-action [data-assignment-save-label] {
+  display: inline-block;
+  white-space: nowrap;
+}
+
 .assignment-checklist-preview {
   color: var(--admin-muted);
   margin-top: 0;

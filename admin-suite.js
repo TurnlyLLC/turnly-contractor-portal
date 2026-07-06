@@ -5368,7 +5368,7 @@ function assignmentForm() {
       ], "assignment-notes-grid")}
       <div id="assignmentChecklistPreview" class="checklist-summary assignment-checklist-preview"></div>
       <p id="assignmentFormMessage" class="status-message"></p>
-      <div class="form-actions"><button id="assignmentSaveBtn" type="submit" class="primary-action">${icon("check")}<span>Post Assignment</span></button></div>
+      <div class="form-actions"><button id="assignmentSaveBtn" type="submit" class="primary-action assignment-save-action">${icon("check")}<span data-assignment-save-label>Post Assignment</span></button></div>
     </form>
   `;
 }
@@ -5481,9 +5481,11 @@ function updateAssignmentModalMode() {
   const isEditing = Boolean(assignmentState.editingId);
   const title = document.getElementById("assignmentModalTitle");
   const form = document.getElementById("assignmentForm");
+  const propertySelect = document.getElementById("propertySelect");
   const button = document.getElementById("assignmentSaveBtn");
-  const buttonLabel = button?.querySelector("span");
+  const buttonLabel = assignmentSaveButtonLabel(button);
   if (title) title.textContent = isEditing ? "Edit Assignment" : "New Assignment";
+  if (propertySelect) propertySelect.required = !isEditing;
   if (form) {
     if (isEditing) {
       form.dataset.assignmentEditingId = assignmentState.editingId;
@@ -5501,8 +5503,10 @@ function populateAssignmentFormForEdit(row) {
   };
   const metadata = assignmentMetadata(row);
   const frequency = assignmentFrequencyKey(row.recurrence_frequency || row.assignment_type || "one_time");
-  setValue("property_id", row.property_id || "");
-  setValue("propertySelect", row.property_id || "");
+  const propertyId = row.property_id || "";
+  const hasPropertyOption = Boolean(propertyId && assignmentHasPropertyOption(propertyId));
+  setValue("property_id", hasPropertyOption ? propertyId : "");
+  setValue("propertySelect", hasPropertyOption ? propertyId : "");
   setValue("title", row.title || "");
   setValue("property_name", row.property_name || "");
   setValue("address", row.address || "");
@@ -6021,9 +6025,8 @@ function collectAssignmentUpdatePayload(currentRow = {}) {
   const selectedContractors = readSelectedAssignmentContractors();
   const preferredFirst = document.getElementById("preferred_first")?.checked && selectedContractors.length > 0;
   const payAmount = Number(assignmentValue("pay_amount"));
-  return {
+  const payload = {
     title: assignmentValue("title"),
-    property_id: assignmentValue("property_id") || null,
     property_name: assignmentValue("property_name"),
     address: assignmentValue("address"),
     service_type: assignmentValue("service_type"),
@@ -6045,6 +6048,11 @@ function collectAssignmentUpdatePayload(currentRow = {}) {
     start_window: start.toISOString(),
     end_window: end.toISOString()
   };
+  const selectedPropertyId = assignmentValue("propertySelect");
+  if (selectedPropertyId && assignmentHasPropertyOption(selectedPropertyId)) {
+    payload.property_id = selectedPropertyId;
+  }
+  return payload;
 }
 
 async function saveAssignmentForm(event) {
@@ -6153,6 +6161,10 @@ async function saveAssignmentPatchWithSchemaFallback(id, payload) {
       .select("*")
       .maybeSingle();
     if (!result.error) return result;
+    if (isAssignmentPropertyReferenceError(result.error) && Object.prototype.hasOwnProperty.call(fallbackPayload, "property_id")) {
+      delete fallbackPayload.property_id;
+      continue;
+    }
     const missingColumn = missingAssignmentColumnName(result.error);
     if (missingColumn && Object.prototype.hasOwnProperty.call(fallbackPayload, missingColumn)) {
       delete fallbackPayload[missingColumn];
@@ -6374,6 +6386,13 @@ function readSelectedAssignmentContractors(form = document.getElementById("assig
     .filter((contractor) => contractor.id || contractor.name);
 }
 
+function assignmentSaveButtonLabel(button = document.getElementById("assignmentSaveBtn")) {
+  if (!button) return null;
+  return button.querySelector("[data-assignment-save-label]")
+    || Array.from(button.querySelectorAll("span")).find((span) => !span.classList.contains("suite-icon"))
+    || button;
+}
+
 function updateAssignmentContractorDropdownLabel(form = document.getElementById("assignmentForm")) {
   const label = form?.querySelector("[data-assignment-contractor-label]");
   if (!label) return;
@@ -6383,6 +6402,10 @@ function updateAssignmentContractorDropdownLabel(form = document.getElementById(
 
 function assignmentValue(id) {
   return (document.getElementById(id)?.value || "").trim();
+}
+
+function assignmentHasPropertyOption(propertyId) {
+  return Boolean(propertyId && assignmentState.properties.some((row) => String(row.id || "") === String(propertyId)));
 }
 
 function getAssignmentContractorOptions() {
@@ -6544,7 +6567,7 @@ function setAssignmentSaving(isSaving) {
   const button = document.getElementById("assignmentSaveBtn");
   if (!button) return;
   button.disabled = isSaving;
-  const label = button.querySelector("span");
+  const label = assignmentSaveButtonLabel(button);
   const isEditing = Boolean(assignmentState.editingId);
   if (label) label.textContent = isSaving
     ? (isEditing ? "Saving..." : "Posting...")
@@ -6578,6 +6601,12 @@ function showRecurringMessage(text, isError = false) {
 function isMissingAssignmentOptionalColumn(error) {
   const message = String(error?.message || "").toLowerCase();
   return assignmentOptionalColumns.some((column) => message.includes(column.toLowerCase())) || message.includes("schema cache");
+}
+
+function isAssignmentPropertyReferenceError(error) {
+  const message = String(error?.message || "").toLowerCase();
+  return message.includes("assignment_blocks_property_id_fkey")
+    || (message.includes("foreign key") && message.includes("property_id"));
 }
 
 function missingAssignmentColumnName(error) {

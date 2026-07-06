@@ -136,11 +136,17 @@ function setSaving(isSaving) {
   const button = document.getElementById("assignmentSaveBtn") || document.querySelector("#assignmentForm button[type='submit']");
   if (!button) return;
   button.disabled = isSaving;
-  const label = button.querySelector("span") || button;
+  const label = saveButtonLabel(button);
   const isEditing = Boolean(editingAssignmentId());
   label.textContent = isSaving
     ? (isEditing ? "Saving..." : "Posting...")
     : (isEditing ? "Save Changes" : "Post Assignment");
+}
+
+function saveButtonLabel(button) {
+  return button?.querySelector("[data-assignment-save-label]")
+    || Array.from(button?.querySelectorAll("span") || []).find((span) => !span.classList.contains("suite-icon"))
+    || button;
 }
 
 function closeModal() {
@@ -176,6 +182,12 @@ function missingColumnName(error) {
   return columnRef?.[1] || "";
 }
 
+function isPropertyReferenceError(error) {
+  const message = String(error?.message || "").toLowerCase();
+  return message.includes("assignment_blocks_property_id_fkey")
+    || (message.includes("foreign key") && message.includes("property_id"));
+}
+
 async function updateAssignmentWithFallback(id, payload) {
   const fallbackPayload = { ...payload };
   const maxAttempts = Object.keys(fallbackPayload).length + 1;
@@ -187,6 +199,10 @@ async function updateAssignmentWithFallback(id, payload) {
       .select("*")
       .maybeSingle();
     if (!result.error) return result;
+    if (isPropertyReferenceError(result.error) && Object.prototype.hasOwnProperty.call(fallbackPayload, "property_id")) {
+      delete fallbackPayload.property_id;
+      continue;
+    }
     const missingColumn = missingColumnName(result.error);
     if (missingColumn && Object.prototype.hasOwnProperty.call(fallbackPayload, missingColumn)) {
       delete fallbackPayload[missingColumn];
@@ -233,6 +249,7 @@ async function saveAssignment(event) {
   const userId = await currentUserId();
   const groupId = frequency === "one_time" ? null : randomGroupId();
   const editId = editingAssignmentId();
+  const selectedPropertyId = value("propertySelect");
 
   const basePayload = {
     title: value("title"),
@@ -268,6 +285,11 @@ async function saveAssignment(event) {
       start_window: start.toISOString(),
       end_window: end.toISOString()
     };
+    if (selectedPropertyId) {
+      updatePayload.property_id = selectedPropertyId;
+    } else {
+      delete updatePayload.property_id;
+    }
     delete updatePayload.status;
     delete updatePayload.created_by;
     delete updatePayload.recurring_group_id;
