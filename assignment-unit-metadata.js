@@ -35,6 +35,34 @@ function assignmentWorkerId(row = {}) {
   return row.claimed_by || row.assigned_to || "";
 }
 
+function assignmentClaimUser(row = {}, userId = "") {
+  const workerId = assignmentWorkerId(row);
+  if (workerId) {
+    return {
+      id: workerId,
+      name: row.claimed_by_name || row.assigned_to_name || null,
+      email: row.claimed_by_email || row.assigned_to_email || null
+    };
+  }
+  return {
+    id: userId || "",
+    name: null,
+    email: null
+  };
+}
+
+function assignmentRowWithSelectedClaim(row = {}, contractors = []) {
+  if (assignmentWorkerId(row)) return row;
+  const contractor = contractors.find((option) => option.id);
+  if (!contractor) return row;
+  return {
+    ...row,
+    assigned_to: contractor.id,
+    assigned_to_name: contractor.name || null,
+    assigned_to_email: contractor.email || null
+  };
+}
+
 function assignmentCompletionUserId(row = {}, userId = "") {
   return row.completed_by || userId || row.claimed_by || row.assigned_to || row.started_by || "";
 }
@@ -53,11 +81,8 @@ function assignmentAdminCompletionResponses(row = {}, now = new Date().toISOStri
 }
 
 function assignmentStatusError(status, row = {}, userId = "") {
-  if (status === "claimed" && !assignmentWorkerId(row)) {
-    return "Claimed requires a contractor first. Leave the job Open for contractors to claim, or assign a contractor before marking it claimed.";
-  }
-  if (status === "in_progress" && !assignmentWorkerId(row)) {
-    return "In Progress requires a claimed or assigned contractor first.";
+  if (["claimed", "in_progress"].includes(status) && !assignmentClaimUser(row, userId).id) {
+    return `${status.replace(/_/g, " ")} requires a signed-in admin or contractor record.`;
   }
   if (status === "completed" && !assignmentCompletionUserId(row, userId)) {
     return "Completed requires a signed-in admin or contractor record.";
@@ -85,33 +110,29 @@ function assignmentStatusPatch(status, row = {}, userId = "") {
   }
   if (status === "preferred_pending") return { ...patch, visibility: "preferred" };
   if (status === "claimed") {
-    const workerId = assignmentWorkerId(row);
+    const claimUser = assignmentClaimUser(row, userId);
     return {
       ...patch,
       visibility: "claimed",
-      ...(workerId && !row.claimed_by ? {
-        claimed_by: workerId,
-        claimed_by_name: row.claimed_by_name || row.assigned_to_name || null,
-        claimed_by_email: row.claimed_by_email || row.assigned_to_email || null
-      } : {}),
+      claimed_by: row.claimed_by || claimUser.id || null,
+      claimed_by_name: row.claimed_by_name || claimUser.name || null,
+      claimed_by_email: row.claimed_by_email || claimUser.email || null,
       claimed_at: row.claimed_at || now,
       accepted_at: row.accepted_at || now
     };
   }
   if (status === "in_progress") {
-    const workerId = assignmentWorkerId(row);
+    const claimUser = assignmentClaimUser(row, userId);
     return {
       ...patch,
       visibility: row.visibility && row.visibility !== "open" ? row.visibility : "claimed",
-      ...(workerId && !row.claimed_by ? {
-        claimed_by: workerId,
-        claimed_by_name: row.claimed_by_name || row.assigned_to_name || null,
-        claimed_by_email: row.claimed_by_email || row.assigned_to_email || null,
-        claimed_at: row.claimed_at || now,
-        accepted_at: row.accepted_at || now
-      } : {}),
+      claimed_by: row.claimed_by || claimUser.id || null,
+      claimed_by_name: row.claimed_by_name || claimUser.name || null,
+      claimed_by_email: row.claimed_by_email || claimUser.email || null,
+      claimed_at: row.claimed_at || now,
+      accepted_at: row.accepted_at || now,
       started_at: row.started_at || now,
-      started_by: row.started_by || workerId || null
+      started_by: row.started_by || row.claimed_by || claimUser.id || null
     };
   }
   if (status === "completed") {
@@ -173,7 +194,10 @@ function advanceWindow(start, end, frequency) {
   return { start: nextStart, end: nextEnd };
 }
 
-function buildWindows(start, end, frequency, recurrenceEnd) {
+function buildWindows(start, end, frequency, recurrenceEnd, weekdays = []) {
+  if (frequency === "weekly" && weekdays.length) {
+    return buildWeeklyWindows(start, end, recurrenceEnd, weekdays);
+  }
   const windows = [];
   let cursorStart = new Date(start);
   let cursorEnd = new Date(end);
@@ -191,6 +215,27 @@ function buildWindows(start, end, frequency, recurrenceEnd) {
   return windows;
 }
 
+function buildWeeklyWindows(start, end, recurrenceEnd, weekdays) {
+  const windows = [];
+  const selectedDays = new Set(weekdays.map(Number).filter((day) => day >= 0 && day <= 6));
+  if (!selectedDays.size) return windows;
+  const durationMs = end.getTime() - start.getTime();
+  const cutoff = endOfDate(recurrenceEnd || start);
+  const cursor = new Date(start);
+  cursor.setHours(0, 0, 0, 0);
+  while (windows.length < 366 && cursor <= cutoff) {
+    if (selectedDays.has(cursor.getDay())) {
+      const windowStart = new Date(cursor);
+      windowStart.setHours(start.getHours(), start.getMinutes(), start.getSeconds(), start.getMilliseconds());
+      if (windowStart >= start && windowStart <= cutoff) {
+        windows.push({ start: windowStart, end: new Date(windowStart.getTime() + durationMs) });
+      }
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return windows.sort((a, b) => a.start - b.start);
+}
+
 function randomGroupId() {
   return window.crypto?.randomUUID?.() || `assignment-${Date.now()}-${Math.round(Math.random() * 100000)}`;
 }
@@ -203,6 +248,15 @@ function selectedContractors() {
       email: input.dataset.contractorEmail || ""
     }))
     .filter((contractor) => contractor.id || contractor.name);
+}
+
+function selectedWeekdays(startDate = null) {
+  const selected = Array.from(document.querySelectorAll("#assignmentForm [data-assignment-weekday]:checked"))
+    .map((input) => Number(input.value))
+    .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6);
+  if (selected.length) return [...new Set(selected)].sort((a, b) => a - b);
+  const fallback = startDate instanceof Date && !Number.isNaN(startDate.getTime()) ? startDate.getDay() : new Date().getDay();
+  return [fallback];
 }
 
 function selectedUnitLabel(select) {
@@ -230,6 +284,16 @@ function unitMetadata() {
   if (value("pay_amount")) metadata.unit_contractor_pay = value("pay_amount");
   if (value("special_instructions")) metadata.unit_notes = value("special_instructions");
   return metadata;
+}
+
+function assignmentMetadataPatch(metadata, frequency, weekdays) {
+  const patch = { ...metadata };
+  if (frequency === "weekly") {
+    patch.recurrence_weekdays = weekdays;
+  } else {
+    delete patch.recurrence_weekdays;
+  }
+  return patch;
 }
 
 function setMessage(text, isError = false) {
@@ -364,7 +428,8 @@ async function saveAssignment(event) {
 
   const frequency = normalizeToken(value("assignment_frequency") || "one_time") || "one_time";
   const recurrenceEnd = recurrenceEndDate(frequency, start);
-  const windows = buildWindows(start, end, frequency, recurrenceEnd);
+  const weekdays = selectedWeekdays(start);
+  const windows = buildWindows(start, end, frequency, recurrenceEnd, weekdays);
   if (!windows.length) {
     isSavingAssignment = false;
     setSaving(false);
@@ -375,11 +440,11 @@ async function saveAssignment(event) {
   const contractors = selectedContractors();
   const preferredFirst = Boolean(document.getElementById("preferred_first")?.checked && contractors.length);
   const payAmount = Number(value("pay_amount"));
-  const metadata = unitMetadata();
+  const metadata = assignmentMetadataPatch(unitMetadata(), frequency, weekdays);
   const userId = await currentUserId();
   const groupId = frequency === "one_time" ? null : randomGroupId();
   const editId = editingAssignmentId();
-  const statusContext = assignmentStatusContext(editId);
+  const statusContext = assignmentRowWithSelectedClaim(assignmentStatusContext(editId), contractors);
   const selectedPropertyId = value("propertySelect");
   const selectedStatus = editId ? assignmentStatusValue() : (preferredFirst ? "preferred_pending" : "open");
 

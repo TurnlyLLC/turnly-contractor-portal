@@ -652,6 +652,58 @@ button.secondary-command-btn {
   grid-column: 1 / -1;
 }
 
+body[data-admin-page="assignments"] .assignment-weekday-field {
+  border: 0;
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+}
+
+body[data-admin-page="assignments"] .assignment-weekday-field[hidden] {
+  display: none !important;
+}
+
+body[data-admin-page="assignments"] .assignment-weekday-options {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+body[data-admin-page="assignments"] .assignment-weekday-option {
+  margin: 0;
+}
+
+body[data-admin-page="assignments"] .assignment-weekday-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+body[data-admin-page="assignments"] .assignment-weekday-option span {
+  align-items: center;
+  background: rgba(7, 18, 32, 0.78);
+  border: 1px solid var(--suite-border-soft);
+  border-radius: 6px;
+  color: var(--suite-soft);
+  display: flex;
+  font-size: 11px;
+  font-weight: 900;
+  justify-content: center;
+  min-height: 34px;
+}
+
+body[data-admin-page="assignments"] .assignment-weekday-option input:checked + span {
+  background: rgba(0, 214, 163, 0.16);
+  border-color: rgba(0, 214, 163, 0.62);
+  color: #f5fffc;
+}
+
+body[data-admin-page="assignments"] .assignment-weekday-option input:focus-visible + span {
+  outline: 2px solid rgba(0, 214, 163, 0.4);
+  outline-offset: 2px;
+}
+
 body[data-admin-page="assignments"] .assignment-modal-form .form-actions {
   align-items: center;
   justify-content: flex-end;
@@ -1068,5 +1120,9 @@ body[data-admin-page="assignments"] .assignment-row-actions .secondary-action {
   body[data-admin-page="assignments"] .assignment-row-actions .table-action-button,
   body[data-admin-page="assignments"] .assignment-row-actions .secondary-action {
     width: 100%;
+  }
+
+  body[data-admin-page="assignments"] .assignment-weekday-options {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }

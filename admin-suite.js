@@ -270,6 +270,7 @@ const assignmentOptionalColumns = [
   "completed_by",
   "checklist_completed_at",
   "checklist_responses",
+  "metadata",
   "completion_notes"
 ];
 const assignmentFrequencyOptions = [
@@ -277,6 +278,15 @@ const assignmentFrequencyOptions = [
   ["daily", "Daily"],
   ["weekly", "Weekly"],
   ["monthly", "Monthly"]
+];
+const assignmentWeekdayOptions = [
+  [0, "Sun"],
+  [1, "Mon"],
+  [2, "Tue"],
+  [3, "Wed"],
+  [4, "Thu"],
+  [5, "Fri"],
+  [6, "Sat"]
 ];
 const assignmentStatusOptions = [
   ["open", "Open"],
@@ -5358,6 +5368,7 @@ function assignmentForm() {
       ${assignmentFormSection("Timing & Routing", [
         leadSelectField("assignment_frequency", "Block Type", assignmentFrequencyOptions, { required: true }),
         leadSelectField("priority", "Priority", assignmentPriorityOptions, { required: true }),
+        assignmentWeekdayPickerField(),
         leadInputField("start_window", "Start Window", "datetime-local", { required: true }),
         leadInputField("end_window", "End Window", "datetime-local", { required: true }),
         `<label class="suite-field" data-assignment-recurrence-field><span>Renew Until</span><input id="recurrence_end_date" type="date" /></label>`,
@@ -5384,6 +5395,22 @@ function assignmentFormSection(title, fields, className = "") {
       <h3>${esc(title)}</h3>
       ${formGrid(fields, `assignment-form-grid ${className}`)}
     </section>
+  `;
+}
+
+function assignmentWeekdayPickerField() {
+  return `
+    <fieldset class="suite-field assignment-weekday-field wide" data-assignment-weekday-field hidden>
+      <span>Service Days</span>
+      <div class="assignment-weekday-options">
+        ${assignmentWeekdayOptions.map(([value, label]) => `
+          <label class="assignment-weekday-option">
+            <input type="checkbox" value="${value}" data-assignment-weekday />
+            <span>${esc(label)}</span>
+          </label>
+        `).join("")}
+      </div>
+    </fieldset>
   `;
 }
 
@@ -5525,6 +5552,7 @@ function populateAssignmentFormForEdit(row) {
   setValue("assignment_status", assignmentStatusFormValue(row.status));
   setValue("assignment_frequency", frequency || "one_time");
   setValue("priority", row.priority || "normal");
+  setAssignmentWeekdays(Array.isArray(metadata.recurrence_weekdays) ? metadata.recurrence_weekdays : []);
   setValue("start_window", toDatetimeInput(row.start_window));
   setValue("end_window", toDatetimeInput(row.end_window));
   setValue("recurrence_end_date", row.recurrence_end_date || "");
@@ -6009,7 +6037,8 @@ function collectAssignmentPayloads() {
   if (!start || !end) throw new Error("Start Window and End Window are required.");
   if (end <= start) throw new Error("End Window must be after Start Window.");
   const recurrenceEnd = parseAssignmentRecurrenceEnd(assignmentValue("recurrence_end_date"), frequency, start);
-  const windows = buildAssignmentWindows(start, end, frequency, recurrenceEnd);
+  const weekdays = selectedAssignmentWeekdays(start);
+  const windows = buildAssignmentWindows(start, end, frequency, recurrenceEnd, weekdays);
   if (!windows.length) throw new Error("Renew Until must be on or after the Start Window date.");
   const selectedContractors = readSelectedAssignmentContractors();
   const preferredFirst = document.getElementById("preferred_first")?.checked && selectedContractors.length > 0;
@@ -6040,6 +6069,7 @@ function collectAssignmentPayloads() {
     preferred_until: assignmentValue("preferred_until") ? parseDate(assignmentValue("preferred_until")).toISOString() : null,
     visibility: preferredFirst ? "preferred" : "open",
     declined_contractor_ids: [],
+    metadata: assignmentFormMetadata(frequency, weekdays),
     created_by: assignmentState.user?.id || null
   };
   return windows.map((window) => ({
@@ -6058,8 +6088,10 @@ function collectAssignmentUpdatePayload(currentRow = {}) {
   const selectedContractors = readSelectedAssignmentContractors();
   const preferredFirst = document.getElementById("preferred_first")?.checked && selectedContractors.length > 0;
   const payAmount = Number(assignmentValue("pay_amount"));
+  const weekdays = selectedAssignmentWeekdays(start);
   const selectedStatus = assignmentValue("assignment_status");
-  const statusError = assignmentStatusChangeError(selectedStatus, currentRow);
+  const statusRow = assignmentRowWithSelectedClaim(currentRow, selectedContractors);
+  const statusError = assignmentStatusChangeError(selectedStatus, statusRow);
   if (statusError) throw new Error(statusError);
   const payload = {
     title: assignmentValue("title"),
@@ -6071,7 +6103,7 @@ function collectAssignmentUpdatePayload(currentRow = {}) {
     supplies_notes: assignmentValue("supplies_notes"),
     special_instructions: assignmentValue("special_instructions"),
     priority: assignmentValue("priority") || "normal",
-    ...assignmentStatusPayload(selectedStatus, currentRow),
+    ...assignmentStatusPayload(selectedStatus, statusRow),
     assignment_type: frequency,
     recurrence_frequency: frequency,
     recurrence_interval: currentRow.recurrence_interval || 1,
@@ -6081,6 +6113,7 @@ function collectAssignmentUpdatePayload(currentRow = {}) {
     preferred_contractor_ids: selectedContractors.map((contractor) => contractor.id).filter(Boolean),
     preferred_contractor_names: selectedContractors.map((contractor) => contractor.name).filter(Boolean),
     preferred_until: assignmentValue("preferred_until") ? parseDate(assignmentValue("preferred_until")).toISOString() : null,
+    metadata: assignmentFormMetadata(frequency, weekdays, currentRow),
     start_window: start.toISOString(),
     end_window: end.toISOString()
   };
@@ -6293,21 +6326,33 @@ function buildDueRecurringAssignmentPayloads() {
   assignmentState.rows
     .filter((row) => row.auto_renewal && assignmentFrequencyKey(row.recurrence_frequency || row.assignment_type) !== "one_time")
     .forEach((row) => {
-      const key = row.recurring_group_id || row.id;
+      const key = recurringAssignmentRenewalKey(row);
       const current = groups.get(key);
       if (!current || dateValue(row.start_window, 0) > dateValue(current.start_window, 0)) groups.set(key, row);
     });
-  const existingStarts = new Set(assignmentState.rows.map((row) => `${row.recurring_group_id || row.id}|${row.start_window}`));
+  const existingStarts = new Set(assignmentState.rows.map((row) => `${recurringAssignmentRenewalKey(row)}|${row.start_window}`));
   const horizon = addDays(new Date(), 14);
   return Array.from(groups.values()).map((row) => {
     const next = nextAssignmentWindow(row);
     if (!next || next.start > horizon) return null;
     const recurrenceEnd = parseDate(row.recurrence_end_date);
     if (recurrenceEnd && next.start > endOfDate(recurrenceEnd)) return null;
-    const groupKey = row.recurring_group_id || row.id;
+    const groupKey = recurringAssignmentRenewalKey(row);
     if (existingStarts.has(`${groupKey}|${next.start.toISOString()}`)) return null;
     return renewedAssignmentPayload(row, next);
   }).filter(Boolean);
+}
+
+function recurringAssignmentRenewalKey(row) {
+  const groupId = row.recurring_group_id || row.id;
+  const frequency = assignmentFrequencyKey(row.recurrence_frequency || row.assignment_type);
+  const metadata = assignmentMetadata(row);
+  const weekdayCount = Array.isArray(metadata.recurrence_weekdays) ? metadata.recurrence_weekdays.length : 0;
+  if (frequency === "weekly" && weekdayCount > 1) {
+    const start = parseDate(row.start_window);
+    return `${groupId}:${start ? start.getDay() : "weekly"}`;
+  }
+  return groupId;
 }
 
 function renewedAssignmentPayload(row, window) {
@@ -6337,13 +6382,17 @@ function renewedAssignmentPayload(row, window) {
     preferred_until: null,
     visibility: preferredFirst ? "preferred" : "open",
     declined_contractor_ids: [],
+    metadata: assignmentMetadata(row),
     created_by: assignmentState.user?.id || row.created_by || null,
     start_window: window.start.toISOString(),
     end_window: window.end.toISOString()
   };
 }
 
-function buildAssignmentWindows(start, end, frequency, recurrenceEnd) {
+function buildAssignmentWindows(start, end, frequency, recurrenceEnd, weekdays = []) {
+  if (frequency === "weekly" && weekdays.length) {
+    return buildWeeklyAssignmentWindows(start, end, recurrenceEnd, weekdays);
+  }
   const windows = [];
   let cursorStart = new Date(start);
   let cursorEnd = new Date(end);
@@ -6357,6 +6406,27 @@ function buildAssignmentWindows(start, end, frequency, recurrenceEnd) {
     cursorEnd = next.end;
   }
   return windows;
+}
+
+function buildWeeklyAssignmentWindows(start, end, recurrenceEnd, weekdays) {
+  const windows = [];
+  const selectedDays = new Set(weekdays.map(Number).filter((day) => day >= 0 && day <= 6));
+  if (!selectedDays.size) return windows;
+  const durationMs = end.getTime() - start.getTime();
+  const cutoff = endOfDate(recurrenceEnd || start);
+  const cursor = new Date(start);
+  cursor.setHours(0, 0, 0, 0);
+  while (windows.length < 366 && cursor <= cutoff) {
+    if (selectedDays.has(cursor.getDay())) {
+      const windowStart = new Date(cursor);
+      windowStart.setHours(start.getHours(), start.getMinutes(), start.getSeconds(), start.getMilliseconds());
+      if (windowStart >= start && windowStart <= cutoff) {
+        windows.push({ start: windowStart, end: new Date(windowStart.getTime() + durationMs) });
+      }
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return windows.sort((a, b) => a.start - b.start);
 }
 
 function advanceAssignmentWindow(start, end, frequency) {
@@ -6406,6 +6476,9 @@ function updateAssignmentRecurrenceVisibility() {
   document.querySelectorAll("[data-assignment-recurrence-field]").forEach((field) => {
     field.hidden = !isRecurring;
   });
+  const weekdayField = document.querySelector("[data-assignment-weekday-field]");
+  if (weekdayField) weekdayField.hidden = frequency !== "weekly";
+  if (frequency === "weekly") ensureDefaultAssignmentWeekday();
   const endDate = document.getElementById("recurrence_end_date");
   if (endDate) {
     endDate.required = isRecurring;
@@ -6414,6 +6487,44 @@ function updateAssignmentRecurrenceVisibility() {
     }
     if (!isRecurring) endDate.value = "";
   }
+}
+
+function selectedAssignmentWeekdays(startDate = null) {
+  const selected = Array.from(document.querySelectorAll("[data-assignment-weekday]:checked"))
+    .map((input) => Number(input.value))
+    .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6);
+  if (selected.length) return [...new Set(selected)].sort((a, b) => a - b);
+  const fallback = startDate instanceof Date && !Number.isNaN(startDate.getTime())
+    ? startDate.getDay()
+    : (parseDate(assignmentValue("start_window")) || new Date()).getDay();
+  return [fallback];
+}
+
+function ensureDefaultAssignmentWeekday() {
+  const checkboxes = Array.from(document.querySelectorAll("[data-assignment-weekday]"));
+  if (!checkboxes.length || checkboxes.some((input) => input.checked)) return;
+  const start = parseDate(assignmentValue("start_window")) || new Date();
+  const defaultDay = start.getDay();
+  checkboxes.forEach((input) => {
+    input.checked = Number(input.value) === defaultDay;
+  });
+}
+
+function setAssignmentWeekdays(days = []) {
+  const selected = new Set((Array.isArray(days) ? days : []).map(Number));
+  document.querySelectorAll("[data-assignment-weekday]").forEach((input) => {
+    input.checked = selected.has(Number(input.value));
+  });
+}
+
+function assignmentFormMetadata(frequency, weekdays, currentRow = null) {
+  const metadata = currentRow ? { ...assignmentMetadata(currentRow) } : {};
+  if (frequency === "weekly") {
+    metadata.recurrence_weekdays = weekdays;
+  } else {
+    delete metadata.recurrence_weekdays;
+  }
+  return metadata;
 }
 
 function updateAssignmentContractorControls() {
@@ -6532,12 +6643,40 @@ function populateAssignmentStatusSelect(row = null) {
 
 function assignmentStatusCanShow(value, row = {}) {
   const status = assignmentStatusFormValue(value);
-  if (["claimed", "in_progress"].includes(status)) return Boolean(assignmentWorkerId(row));
+  if (["claimed", "in_progress"].includes(status)) return Boolean(assignmentClaimUser(row).id);
   return true;
 }
 
 function assignmentWorkerId(row = {}) {
   return row.claimed_by || row.assigned_to || "";
+}
+
+function assignmentClaimUser(row = {}) {
+  const workerId = assignmentWorkerId(row);
+  if (workerId) {
+    return {
+      id: workerId,
+      name: row.claimed_by_name || row.assigned_to_name || null,
+      email: row.claimed_by_email || row.assigned_to_email || null
+    };
+  }
+  return {
+    id: assignmentState.user?.id || "",
+    name: assignmentState.profile?.full_name || assignmentState.user?.user_metadata?.full_name || assignmentState.user?.email?.split("@")[0] || "Admin",
+    email: assignmentState.profile?.email || assignmentState.user?.email || null
+  };
+}
+
+function assignmentRowWithSelectedClaim(row = {}, contractors = []) {
+  if (assignmentWorkerId(row)) return row;
+  const contractor = contractors.find((option) => option.id);
+  if (!contractor) return row;
+  return {
+    ...row,
+    assigned_to: contractor.id,
+    assigned_to_name: contractor.name || null,
+    assigned_to_email: contractor.email || null
+  };
 }
 
 function assignmentCompletionUserId(row = {}) {
@@ -6559,11 +6698,8 @@ function assignmentAdminCompletionResponses(row = {}, now = new Date().toISOStri
 
 function assignmentStatusChangeError(value, row = {}) {
   const status = assignmentStatusFormValue(value);
-  if (status === "claimed" && !assignmentWorkerId(row)) {
-    return "Claimed requires a contractor first. Leave the job Open for contractors to claim, or assign a contractor before marking it claimed.";
-  }
-  if (status === "in_progress" && !assignmentWorkerId(row)) {
-    return "In Progress requires a claimed or assigned contractor first.";
+  if (["claimed", "in_progress"].includes(status) && !assignmentClaimUser(row).id) {
+    return `${titleCase(status)} requires a signed-in admin or contractor record.`;
   }
   if (status === "completed" && !assignmentCompletionUserId(row)) {
     return "Completed requires a signed-in admin or contractor record.";
@@ -6603,30 +6739,26 @@ function assignmentStatusPayload(value, currentRow = {}) {
   }
 
   if (status === "claimed") {
-    const workerId = assignmentWorkerId(currentRow);
+    const claimUser = assignmentClaimUser(currentRow);
     payload.visibility = "claimed";
-    if (workerId && !currentRow.claimed_by) {
-      payload.claimed_by = workerId;
-      payload.claimed_by_name = currentRow.claimed_by_name || currentRow.assigned_to_name || null;
-      payload.claimed_by_email = currentRow.claimed_by_email || currentRow.assigned_to_email || null;
-    }
+    payload.claimed_by = currentRow.claimed_by || claimUser.id || null;
+    payload.claimed_by_name = currentRow.claimed_by_name || claimUser.name || null;
+    payload.claimed_by_email = currentRow.claimed_by_email || claimUser.email || null;
     payload.claimed_at = currentRow.claimed_at || now;
     payload.accepted_at = currentRow.accepted_at || now;
     return payload;
   }
 
   if (status === "in_progress") {
-    const workerId = assignmentWorkerId(currentRow);
+    const claimUser = assignmentClaimUser(currentRow);
     payload.visibility = currentRow.visibility && currentRow.visibility !== "open" ? currentRow.visibility : "claimed";
-    if (workerId && !currentRow.claimed_by) {
-      payload.claimed_by = workerId;
-      payload.claimed_by_name = currentRow.claimed_by_name || currentRow.assigned_to_name || null;
-      payload.claimed_by_email = currentRow.claimed_by_email || currentRow.assigned_to_email || null;
-      payload.claimed_at = currentRow.claimed_at || now;
-      payload.accepted_at = currentRow.accepted_at || now;
-    }
+    payload.claimed_by = currentRow.claimed_by || claimUser.id || null;
+    payload.claimed_by_name = currentRow.claimed_by_name || claimUser.name || null;
+    payload.claimed_by_email = currentRow.claimed_by_email || claimUser.email || null;
+    payload.claimed_at = currentRow.claimed_at || now;
+    payload.accepted_at = currentRow.accepted_at || now;
     payload.started_at = currentRow.started_at || now;
-    payload.started_by = currentRow.started_by || workerId || null;
+    payload.started_by = currentRow.started_by || currentRow.claimed_by || claimUser.id || null;
     return payload;
   }
 
