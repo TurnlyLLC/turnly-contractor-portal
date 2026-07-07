@@ -108,6 +108,138 @@ function checklistTitle(assignment) {
   return /checklist/i.test(service) ? service : `${service} Checklist`;
 }
 
+function safeMediaFileName(name) {
+  return String(name || "upload")
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 90) || "upload";
+}
+
+function checklistMediaKind(item = {}) {
+  const raw = String(item.media_required || item.type || "").toLowerCase();
+  if (raw.includes("video")) return "video";
+  if (raw.includes("photo") || raw.includes("image")) return "photo";
+  return "";
+}
+
+function checklistMediaInput(item, index, kind) {
+  const accept = kind === "video" ? "video/*" : "image/*";
+  return `
+    <label class="tc-upload">
+      <span>Upload ${escapeHtml(kind === "video" ? "video" : "photo")}</span>
+      <input type="file" data-tc-media="${index}" accept="${escapeHtml(accept)}" />
+      <small data-tc-media-name>${escapeHtml(item.required === false ? "Optional file" : "Required file before completion")}</small>
+    </label>
+  `;
+}
+
+function fileDuration(file) {
+  return new Promise((resolve) => {
+    if (!file || !String(file.type || "").startsWith("video/")) {
+      resolve(null);
+      return;
+    }
+    const video = document.createElement("video");
+    const url = URL.createObjectURL(file);
+    video.preload = "metadata";
+    video.onloadedmetadata = () => {
+      URL.revokeObjectURL(url);
+      resolve(Number.isFinite(video.duration) ? video.duration : null);
+    };
+    video.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(null);
+    };
+    video.src = url;
+  });
+}
+
+function activeContractorName() {
+  return activeUser?.user_metadata?.full_name || activeUser?.email?.split("@")[0] || "Contractor";
+}
+
+function mediaAssignmentPropertyId(assignment = activeAssignment || {}) {
+  return assignment.property_id || assignment.portal_property_id || assignment.metadata?.property_id || assignment.metadata?.portal_property_id || null;
+}
+
+function checklistMediaBasePayload(item, file, kind, index, storagePath, completedAt, note) {
+  const label = item.task || item.label || `${kind === "video" ? "Video" : "Photo"} checklist item`;
+  return {
+    title: `${resolvedPropertyName(activeAssignment)} - ${label}`,
+    label,
+    property_id: mediaAssignmentPropertyId(),
+    property_name: resolvedPropertyName(activeAssignment),
+    unit_name: assignmentUnit(activeAssignment),
+    assignment_id: activeAssignment?.id || null,
+    contractor_id: activeUser?.id || null,
+    contractor_name: activeContractorName(),
+    recorded_at: completedAt,
+    notes: note || "",
+    tags: ["checklist", kind],
+    storage_bucket: kind === "video" ? "qa-videos" : "qa-photos",
+    storage_path: storagePath,
+    file_name: file.name || "",
+    mime_type: file.type || "",
+    file_size: file.size || 0,
+    uploaded_by: activeUser?.id || null,
+    uploaded_by_name: activeUser?.email || activeContractorName(),
+    source: "contractor_checklist",
+    metadata: {
+      checklist_index: index,
+      checklist_task: label,
+      checklist_category: item.category || "General",
+      checklist_item_id: item.id || item.source_item_id || "",
+      module_id: item.module_id || "",
+      module_name: item.module_name || "",
+      module_instance: item.module_instance || null,
+      original_file_name: file.name || "",
+      upload_user_agent: navigator.userAgent || ""
+    }
+  };
+}
+
+async function uploadChecklistMedia(item, file, kind, index, completedAt, note) {
+  const bucket = kind === "video" ? "qa-videos" : "qa-photos";
+  const table = kind === "video" ? "qa_videos" : "qa_photos";
+  const datePath = new Date().toISOString().slice(0, 10);
+  const path = `${activeUser.id}/${datePath}/${activeAssignment.id}-${index + 1}-${kind}-${Date.now()}-${safeMediaFileName(file.name)}`;
+
+  const uploadResult = await supabase.storage
+    .from(bucket)
+    .upload(path, file, {
+      contentType: file.type || (kind === "video" ? "video/mp4" : "image/jpeg"),
+      upsert: false
+    });
+  if (uploadResult.error) throw uploadResult.error;
+
+  const payload = checklistMediaBasePayload(item, file, kind, index, path, completedAt, note);
+  if (kind === "video") {
+    payload.video_phase = "other";
+    payload.duration_seconds = await fileDuration(file);
+  } else {
+    payload.photo_phase = "other";
+  }
+
+  const insertResult = await supabase
+    .from(table)
+    .insert(payload)
+    .select("*")
+    .single();
+  if (insertResult.error) throw insertResult.error;
+
+  return {
+    kind,
+    table,
+    id: insertResult.data?.id || "",
+    bucket,
+    path,
+    file_name: file.name || "",
+    mime_type: file.type || "",
+    file_size: file.size || 0
+  };
+}
+
 function description(assignment) {
   return assignment?.scope ||
     assignment?.description ||
@@ -837,6 +969,32 @@ function injectStyles() {
         padding: 8px 10px;
         text-transform: capitalize;
       }
+      .tc-upload {
+        background: rgba(5, 14, 24, .58);
+        border: 1px dashed rgba(50, 170, 255, .4);
+        border-radius: 8px;
+        color: #d8e2ee;
+        display: grid;
+        font-weight: 800;
+        gap: 8px;
+        padding: 12px;
+      }
+      .tc-upload input {
+        background: rgba(5, 14, 24, .88);
+        border: 1px solid rgba(144, 164, 183, .22);
+        border-radius: 8px;
+        color: #eef5fb;
+        font: inherit;
+        min-height: 42px;
+        padding: 9px;
+        width: 100%;
+      }
+      .tc-upload small {
+        color: var(--admin-muted, #9aaabc);
+        display: block;
+        font-size: 12px;
+        font-weight: 700;
+      }
       .tj-active-panel {
         margin: 10px 0 18px;
       }
@@ -1171,6 +1329,12 @@ function ensureChecklistModal() {
     });
   });
   document.getElementById("tcComplete")?.addEventListener("click", completeJob);
+  modal.addEventListener("change", (event) => {
+    const input = event.target?.matches("[data-tc-media]") ? event.target : null;
+    if (!input) return;
+    const name = input.closest(".tc-upload")?.querySelector("[data-tc-media-name]");
+    if (name) name.textContent = input.files?.[0]?.name || "No file selected";
+  });
   return modal;
 }
 
@@ -1204,8 +1368,9 @@ async function openChecklistModal(assignmentOrId) {
     if (completeButton) completeButton.disabled = true;
   } else {
     form.innerHTML = items.map((item, index) => {
-      const media = item.media_required && item.media_required !== "none"
-        ? `<span class="tc-media">${escapeHtml(String(item.media_required).replace(/_/g, " "))}</span>`
+      const mediaKind = checklistMediaKind(item);
+      const media = mediaKind
+        ? `<span class="tc-media">${escapeHtml(mediaKind)}</span>`
         : "";
       return `
         <section class="tc-item">
@@ -1218,6 +1383,7 @@ async function openChecklistModal(assignmentOrId) {
             ${media}
           </label>
           ${item.notes ? `<p>${escapeHtml(item.notes)}</p>` : ""}
+          ${mediaKind ? checklistMediaInput(item, index, mediaKind) : ""}
           <label class="tc-note">
             Completion note
             <textarea rows="2" data-tc-note="${index}" placeholder="Notes, blocked areas, supply issues, etc."></textarea>
@@ -1235,29 +1401,60 @@ async function completeJob() {
   const button = document.getElementById("tcComplete");
   const message = document.getElementById("tcMessage");
   const items = await checklistItems(activeAssignment);
-  const responses = items.map((item, index) => {
+  const drafts = items.map((item, index) => {
     const completed = Boolean(document.querySelector(`[data-tc-check="${index}"]`)?.checked);
+    const mediaKind = checklistMediaKind(item);
+    const mediaFile = document.querySelector(`[data-tc-media="${index}"]`)?.files?.[0] || null;
+    const note = document.querySelector(`[data-tc-note="${index}"]`)?.value.trim() || "";
     return {
-      category: item.category || "General",
-      task: item.task || "Untitled task",
-      required: item.required !== false,
-      media_required: item.media_required || "none",
-      completed,
-      note: document.querySelector(`[data-tc-note="${index}"]`)?.value.trim() || "",
-      completed_at: completed ? new Date().toISOString() : null
+      item,
+      index,
+      mediaKind,
+      mediaFile,
+      response: {
+        category: item.category || "General",
+        task: item.task || "Untitled task",
+        required: item.required !== false,
+        media_required: item.media_required || "none",
+        completed,
+        note,
+        completed_at: completed ? new Date().toISOString() : null
+      }
     };
   });
 
-  const missing = responses.filter((item) => item.required && !item.completed);
+  const missing = drafts.filter((draft) => draft.response.required && !draft.response.completed);
   if (missing.length) {
     if (message) message.textContent = `Complete ${missing.length} required checklist item(s) before finishing the job.`;
     return;
   }
 
+  const missingMedia = drafts.filter((draft) => draft.mediaKind && draft.response.completed && !draft.mediaFile);
+  if (missingMedia.length) {
+    if (message) message.textContent = `Upload ${missingMedia.length} required photo/video file${missingMedia.length === 1 ? "" : "s"} before finishing the job.`;
+    return;
+  }
+
   if (button) button.disabled = true;
-  if (message) message.textContent = "Saving checklist and completing job...";
+  if (message) message.textContent = "Uploading checklist media...";
 
   const completedAt = new Date().toISOString();
+  const responses = [];
+  try {
+    for (const draft of drafts) {
+      const response = { ...draft.response };
+      if (draft.mediaKind && draft.response.completed && draft.mediaFile) {
+        response.media = await uploadChecklistMedia(draft.item, draft.mediaFile, draft.mediaKind, draft.index, completedAt, draft.response.note);
+      }
+      responses.push(response);
+    }
+  } catch (error) {
+    if (button) button.disabled = false;
+    if (message) message.textContent = "Unable to upload checklist media: " + (error?.message || "Unknown error");
+    return;
+  }
+
+  if (message) message.textContent = "Saving checklist and completing job...";
   const { error } = await supabase
     .from("assignment_blocks")
     .update({
