@@ -3,88 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Checklist Templates | Turnly</title>
+  <title>Checklists | Turnly Admin</title>
   <link rel="icon" href="/favicon.ico?v=20260624t" sizes="any" />
   <link rel="shortcut icon" href="/favicon.ico?v=20260624t" />
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=20260624t" />
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png?v=20260624t" />
-  <link rel="stylesheet" href="style.css" />
-  <link rel="stylesheet" href="checklist-templates.css" />
+  <link rel="stylesheet" href="admin-suite.css?v=20260707-checklists" />
 </head>
-<body>
-  <main class="template-workspace">
-    <aside class="template-iconbar" aria-label="Checklist navigation">
-      <div class="template-logo">T</div>
-      <a href="admin.html" title="Dashboard">D</a>
-      <a href="properties.html" title="Properties">P</a>
-      <a href="assignments.html" title="Assignments">A</a>
-      <a href="checklists.html" class="active" title="Checklists">C</a>
-    </aside>
-
-    <aside class="template-sections-panel">
-      <div class="sections-panel-header">
-        <h2>Sections</h2>
-        <button id="organizeSectionsBtn" type="button">Organize</button>
-      </div>
-
-      <label for="templateLibrarySelect">Template Library</label>
-      <select id="templateLibrarySelect"></select>
-
-      <div id="sectionNav" class="section-nav"></div>
-    </aside>
-
-    <section class="template-editor">
-      <div class="template-topbar">
-        <a href="admin.html" class="back-link">Back</a>
-        <div class="template-actions">
-          <button id="newTemplateBtn" type="button" class="secondary-btn small-btn">New Template</button>
-          <button type="submit" form="templateForm" class="small-btn">Save Template</button>
-        </div>
-      </div>
-
-      <form id="templateForm" class="template-header-form">
-        <input id="template_id" type="hidden" />
-
-        <label>Template Name</label>
-        <input id="template_name" required />
-
-        <div class="template-meta-grid">
-          <div>
-            <label>Department</label>
-            <input id="template_department" placeholder="Cleaning" />
-          </div>
-
-          <div>
-            <label>Subdepartment</label>
-            <input id="template_subdepartment" placeholder="Full Service Turnover" />
-          </div>
-
-          <div>
-            <label>Priority</label>
-            <select id="template_priority">
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
-            </select>
-          </div>
-        </div>
-
-        <label>Description</label>
-        <textarea id="template_description"></textarea>
-      </form>
-
-      <div class="section-composer">
-        <input id="newSectionTitle" placeholder="Add section, e.g. Before Clean Photos" />
-        <button id="addSectionBtn" type="button" class="secondary-btn small-btn">Add Section</button>
-      </div>
-
-      <div id="editorSections" class="editor-sections"></div>
-      <p id="templateMessage" class="status-message"></p>
-    </section>
-  </main>
+<body class="turnly-admin-suite" data-admin-page="checklists">
+  <div id="adminSuiteApp"></div>
 
   <script src="env.js"></script>
-  <script type="module" src="app.js"></script>
-  <script type="module" src="checklist-templates.js"></script>
+  <script type="module" src="admin-suite.js?v=20260707-checklists"></script>
 </body>
 </html>

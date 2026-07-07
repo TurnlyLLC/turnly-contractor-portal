@@ -177,7 +177,7 @@ function qualityTabs() {
     <div class='suite-tabs qa-checklist-tabs'>
       <a class='suite-tab' href='qa-queue.html'>QA Queue</a>
       <a class='suite-tab' href='qa-reviews.html'>QA Reviews</a>
-      <a class='suite-tab active' href='qa-checklists.html'>QA Checklists</a>
+      <a class='suite-tab active' href='checklists.html'>QA Checklists</a>
       <a class='suite-tab' href='qa-analytics.html'>QA Analytics</a>
       <a class='suite-tab' href='videos.html'>Video Library</a>
     </div>

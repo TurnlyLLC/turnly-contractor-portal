@@ -1,7 +1,7 @@
 const CHECKLIST_LINK = {
-  key: "qa-checklists",
-  label: "QA Checklists",
-  href: "qa-checklists.html"
+  key: "checklists",
+  label: "Checklists",
+  href: "checklists.html"
 };
 
 function checklistIcon() {

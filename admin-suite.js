@@ -46,6 +46,7 @@ const navSections = [
     title: "Quality",
     links: [
       { key: "qa-queue", label: "QA Queue", href: "qa-queue.html", icon: "message-square" },
+      { key: "checklists", label: "Checklists", href: "checklists.html", icon: "file-check" },
       { key: "qa-analytics", label: "QA Analytics", href: "qa-analytics.html", icon: "bar-chart" },
       { key: "videos", label: "Video Library", href: "videos.html", icon: "video" }
     ]
@@ -350,6 +351,7 @@ const assignmentState = {
   isBulkSaving: false
 };
 const propertyUnitsTable = "property_units";
+const checklistTemplatesTable = "checklist_templates";
 const propertyUnitState = {
   properties: [],
   units: [],
@@ -358,6 +360,18 @@ const propertyUnitState = {
   user: null,
   isSaving: false,
   isDeleting: false
+};
+const checklistState = {
+  templates: [],
+  properties: [],
+  units: [],
+  selectedTemplateId: "",
+  selectedPropertyId: "",
+  selectedUnitIds: new Set(),
+  builder: null,
+  user: null,
+  isSaving: false,
+  isApplying: false
 };
 const topbarState = {
   user: null,
@@ -429,6 +443,12 @@ const pages = {
     subtitle: "Select a property and manage unit pricing in one place",
     action: { label: "Add Unit", icon: "plus" },
     render: renderPropertyUnits
+  },
+  "checklists": {
+    title: "Checklists",
+    subtitle: "Build reusable QA checklists and assign them to properties or units",
+    action: { label: "New Template", icon: "plus" },
+    render: renderChecklists
   },
   "directory": {
     title: "Directory",
@@ -590,6 +610,11 @@ function esc(value) {
 function icon(name, className = "") {
   const path = iconPaths[name] || iconPaths.grid;
   return `<span class="suite-icon ${className}" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path}</svg></span>`;
+}
+
+function setText(id, value) {
+  const node = document.getElementById(id);
+  if (node) node.textContent = value ?? "";
 }
 
 function getPageKey() {
@@ -3649,6 +3674,920 @@ function setPropertyUnitFormSaving(form, isSaving) {
 
 function showPropertyUnitMessage(text, isError = false) {
   const message = document.getElementById("propertyUnitMessage");
+  if (!message) return;
+  message.textContent = text || "";
+  message.classList.toggle("error", Boolean(isError));
+}
+
+function renderChecklists() {
+  checklistState.builder = checklistState.builder || createBlankChecklistTemplate();
+  return `
+    <section class="checklist-builder-workspace" data-checklists-page>
+      <section class="suite-panel checklist-builder-library-panel">
+        <div class="panel-head">
+          <div>
+            <h2>Checklist Builder</h2>
+            <p>Create templates, then assign the current template to properties or individual units.</p>
+          </div>
+          <div class="panel-actions">
+            <button class="secondary-action" type="button" data-checklist-refresh>${icon("refresh")}<span>Refresh</span></button>
+            <button class="primary-action" type="button" data-checklist-new>${icon("plus")}<span>New Template</span></button>
+          </div>
+        </div>
+        <div class="checklist-builder-toolbar">
+          <label class="suite-field">
+            <span>Template Library</span>
+            <select id="checklistTemplateSelect">${checklistTemplateOptions()}</select>
+          </label>
+          <label class="inline-search checklist-template-search"><span class="sr-only">Search templates</span>${icon("search")}<input id="checklistTemplateSearch" type="search" placeholder="Search templates..." /></label>
+        </div>
+        <p id="checklistMessage" class="status-message" aria-live="polite"></p>
+      </section>
+      <section class="metric-strip four">
+        ${metric("Templates", "0", "saved in Supabase", "file-check", "green", 'id="checklistTemplateCount"')}
+        ${metric("Sections", "0", "in current template", "layout-grid", "blue", 'id="checklistSectionCount"')}
+        ${metric("Checklist Items", "0", "contractor requirements", "clipboard-list", "purple", 'id="checklistItemCount"')}
+        ${metric("Assigned", "0", "properties and units", "check", "orange", 'id="checklistAssignedCount"')}
+      </section>
+      <section class="checklist-builder-layout">
+        <section class="suite-panel checklist-editor-panel">
+          <div class="panel-head">
+            <div>
+              <h2>Template Details</h2>
+              <p>Build the sections contractors will complete during a job.</p>
+            </div>
+            <button class="primary-action" type="submit" form="checklistTemplateForm">${icon("check")}<span>Save Template</span></button>
+          </div>
+          <form id="checklistTemplateForm" class="checklist-template-form">
+            <input id="checklist_template_id" type="hidden" value="${esc(checklistState.builder.id || "")}" />
+            <label class="suite-field wide"><span>Template Name</span><input id="checklist_template_name" value="${esc(checklistState.builder.name || "")}" required placeholder="Apartment turnover QA checklist" /></label>
+            <label class="suite-field"><span>Department</span><input id="checklist_template_department" value="${esc(checklistState.builder.department || "")}" placeholder="Cleaning" /></label>
+            <label class="suite-field"><span>Subdepartment</span><input id="checklist_template_subdepartment" value="${esc(checklistState.builder.subdepartment || "")}" placeholder="Move-out, common area, office" /></label>
+            <label class="suite-field"><span>Priority</span><select id="checklist_template_priority">${checklistPriorityOptions(checklistState.builder.priority)}</select></label>
+            <label class="suite-field wide"><span>Description</span><textarea id="checklist_template_description" rows="3" placeholder="What this checklist should be used for">${esc(checklistState.builder.description || "")}</textarea></label>
+          </form>
+          <div class="checklist-section-composer">
+            <label class="suite-field"><span>Add Section</span><input id="newChecklistSectionTitle" placeholder="Kitchen, bathrooms, final QA, photos" /></label>
+            <button class="secondary-action" type="button" data-checklist-add-section>${icon("plus")}<span>Add Section</span></button>
+          </div>
+          <div id="checklistSections" class="checklist-section-list">${renderChecklistSectionsMarkup()}</div>
+        </section>
+        <aside class="suite-stack">
+          ${panel("Assign Template", `<div id="checklistAssignmentPanel">${checklistAssignmentPanelHtml()}</div>`, { className: "checklist-assignment-panel" })}
+          ${panel("Checklist Preview", `<div id="checklistPreview" class="checklist-preview-list">${checklistPreviewHtml()}</div>`)}
+          ${panel("Selected Property", `<div id="checklistPropertySummary" class="property-unit-summary">${checklistPropertySummaryHtml()}</div>`)}
+        </aside>
+      </section>
+    </section>
+  `;
+}
+
+function checklistUid(prefix = "checklist") {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function createChecklistItem(label = "", type = "check") {
+  return {
+    id: checklistUid("item"),
+    type,
+    label
+  };
+}
+
+function createChecklistRoom(title = "Room / Area") {
+  return {
+    id: checklistUid("room"),
+    title,
+    items: [createChecklistItem()]
+  };
+}
+
+function createChecklistSection(title = "General Service") {
+  return {
+    id: checklistUid("section"),
+    title,
+    items: [createChecklistItem()],
+    rooms: []
+  };
+}
+
+function createBlankChecklistTemplate() {
+  return {
+    id: "",
+    name: "New Checklist Template",
+    department: "Cleaning",
+    subdepartment: "",
+    priority: "medium",
+    description: "",
+    sections: [createChecklistSection()]
+  };
+}
+
+function checklistArray(value) {
+  if (Array.isArray(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+function normalizeChecklistItem(item = {}) {
+  return {
+    id: item.id || checklistUid("item"),
+    type: item.type || item.item_type || "check",
+    label: item.label || item.task || item.title || ""
+  };
+}
+
+function normalizeChecklistRoom(room = {}, index = 0) {
+  return {
+    id: room.id || checklistUid("room"),
+    title: room.title || room.name || `Room ${index + 1}`,
+    items: checklistArray(room.items).map(normalizeChecklistItem)
+  };
+}
+
+function normalizeChecklistSection(section = {}, index = 0) {
+  return {
+    id: section.id || checklistUid("section"),
+    title: section.title || section.name || `Section ${index + 1}`,
+    items: checklistArray(section.items).map(normalizeChecklistItem),
+    rooms: checklistArray(section.rooms).map(normalizeChecklistRoom)
+  };
+}
+
+function normalizeChecklistTemplate(row = {}) {
+  const sections = checklistArray(row.sections).map(normalizeChecklistSection);
+  return {
+    id: row.id || "",
+    name: row.name || "Untitled Checklist",
+    department: row.department || "Cleaning",
+    subdepartment: row.subdepartment || "",
+    priority: row.priority || "medium",
+    description: row.description || "",
+    sections: sections.length ? sections : [createChecklistSection()]
+  };
+}
+
+function cleanChecklistTemplateForSave(template) {
+  const normalized = normalizeChecklistTemplate(template);
+  const sections = normalized.sections
+    .map((section) => {
+      const items = section.items.filter((item) => item.label.trim());
+      const rooms = section.rooms
+        .map((room) => ({
+          ...room,
+          items: room.items.filter((item) => item.label.trim())
+        }))
+        .filter((room) => room.title.trim() || room.items.length);
+      return {
+        ...section,
+        title: section.title.trim() || "Untitled Section",
+        items,
+        rooms
+      };
+    })
+    .filter((section) => section.title.trim() || section.items.length || section.rooms.length);
+  return {
+    ...normalized,
+    name: normalized.name.trim(),
+    department: normalized.department.trim(),
+    subdepartment: normalized.subdepartment.trim(),
+    priority: normalized.priority || "medium",
+    description: normalized.description.trim(),
+    sections: sections.length ? sections : [createChecklistSection()]
+  };
+}
+
+function checklistPriorityOptions(value = "medium") {
+  return ["low", "medium", "high", "urgent"]
+    .map((priority) => `<option value="${esc(priority)}" ${priority === value ? "selected" : ""}>${esc(titleCase(priority))}</option>`)
+    .join("");
+}
+
+function checklistItemTypeOptions(value = "check") {
+  return [
+    ["check", "Check"],
+    ["photo", "Photo"],
+    ["video", "Video"],
+    ["note", "Note"],
+    ["optional", "Optional"]
+  ].map(([id, label]) => `<option value="${esc(id)}" ${id === value ? "selected" : ""}>${esc(label)}</option>`).join("");
+}
+
+function checklistTemplateOptions() {
+  const term = (document.getElementById("checklistTemplateSearch")?.value || "").trim().toLowerCase();
+  const templates = checklistState.templates
+    .filter((template) => !term || [template.name, template.department, template.subdepartment].some((value) => String(value || "").toLowerCase().includes(term)));
+  if (!templates.length) {
+    return `<option value="">${checklistState.templates.length ? "No matching templates" : "No saved templates yet"}</option>`;
+  }
+  return [
+    `<option value="">New unsaved template</option>`,
+    ...templates.map((template) => `<option value="${esc(template.id)}" ${template.id === checklistState.selectedTemplateId ? "selected" : ""}>${esc(template.name)}</option>`)
+  ].join("");
+}
+
+function renderChecklistSectionsMarkup() {
+  const template = checklistState.builder || createBlankChecklistTemplate();
+  return template.sections.map(renderChecklistSectionCard).join("");
+}
+
+function renderChecklistSectionCard(section, index) {
+  return `
+    <article class="checklist-section-card" data-checklist-section-id="${esc(section.id)}">
+      <div class="checklist-section-head">
+        <label class="suite-field"><span>Section ${index + 1}</span><input value="${esc(section.title || "")}" data-checklist-section-title placeholder="Section name" /></label>
+        <button class="ghost-icon-btn danger-btn" type="button" data-checklist-remove-section="${esc(section.id)}" aria-label="Remove section">${icon("trash")}</button>
+      </div>
+      <div class="checklist-item-list" data-checklist-section-items>
+        ${section.items.map((item) => renderChecklistItemRow(item, "section")).join("")}
+      </div>
+      <div class="checklist-row-actions">
+        <button class="secondary-action" type="button" data-checklist-add-item="${esc(section.id)}">${icon("plus")}<span>Add Item</span></button>
+        <button class="secondary-action" type="button" data-checklist-add-room="${esc(section.id)}">${icon("plus")}<span>Add Room</span></button>
+      </div>
+      <div class="checklist-room-list">
+        ${section.rooms.map((room) => renderChecklistRoomCard(section.id, room)).join("")}
+      </div>
+    </article>
+  `;
+}
+
+function renderChecklistRoomCard(sectionId, room) {
+  return `
+    <div class="checklist-room-card" data-checklist-room-id="${esc(room.id)}">
+      <div class="checklist-room-head">
+        <label class="suite-field"><span>Room / Area</span><input value="${esc(room.title || "")}" data-checklist-room-title placeholder="Bedroom, lobby, restroom" /></label>
+        <button class="ghost-icon-btn danger-btn" type="button" data-checklist-remove-room="${esc(sectionId)}:${esc(room.id)}" aria-label="Remove room">${icon("trash")}</button>
+      </div>
+      <div class="checklist-item-list">
+        ${room.items.map((item) => renderChecklistItemRow(item, "room")).join("")}
+      </div>
+      <button class="secondary-action" type="button" data-checklist-add-room-item="${esc(sectionId)}:${esc(room.id)}">${icon("plus")}<span>Add Room Item</span></button>
+    </div>
+  `;
+}
+
+function renderChecklistItemRow(item, scope) {
+  const attr = scope === "room" ? "data-checklist-room-item" : "data-checklist-section-item";
+  return `
+    <div class="checklist-item-row" ${attr} data-checklist-item-id="${esc(item.id)}">
+      <label class="suite-field"><span>Type</span><select data-checklist-item-type>${checklistItemTypeOptions(item.type)}</select></label>
+      <label class="suite-field"><span>Requirement</span><input value="${esc(item.label || "")}" data-checklist-item-label placeholder="Wipe counters, upload final photo, note damage" /></label>
+      <button class="ghost-icon-btn danger-btn" type="button" data-checklist-remove-item="${esc(item.id)}" aria-label="Remove item">${icon("trash")}</button>
+    </div>
+  `;
+}
+
+function initChecklists() {
+  const root = document.querySelector("[data-checklists-page]");
+  if (!root) return;
+
+  root.addEventListener("click", handleChecklistClick);
+  root.addEventListener("submit", handleChecklistSubmit);
+  root.addEventListener("input", handleChecklistInput);
+  root.addEventListener("change", handleChecklistChange);
+
+  const topbarNew = Array.from(document.querySelectorAll(".suite-topbar .primary-action"))
+    .find((link) => link.textContent?.trim() === "New Template");
+  topbarNew?.addEventListener("click", (event) => {
+    event.preventDefault();
+    startNewChecklistTemplate();
+  });
+
+  void loadChecklistData();
+  renderChecklistMetrics();
+}
+
+function handleChecklistClick(event) {
+  const refresh = event.target.closest("[data-checklist-refresh]");
+  if (refresh) {
+    void loadChecklistData();
+    return;
+  }
+
+  if (event.target.closest("[data-checklist-new]")) {
+    startNewChecklistTemplate();
+    return;
+  }
+
+  if (event.target.closest("[data-checklist-add-section]")) {
+    addChecklistSection();
+    return;
+  }
+
+  const addItem = event.target.closest("[data-checklist-add-item]");
+  if (addItem) {
+    addChecklistItem(addItem.dataset.checklistAddItem);
+    return;
+  }
+
+  const addRoom = event.target.closest("[data-checklist-add-room]");
+  if (addRoom) {
+    addChecklistRoom(addRoom.dataset.checklistAddRoom);
+    return;
+  }
+
+  const addRoomItem = event.target.closest("[data-checklist-add-room-item]");
+  if (addRoomItem) {
+    addChecklistRoomItem(addRoomItem.dataset.checklistAddRoomItem);
+    return;
+  }
+
+  const removeSection = event.target.closest("[data-checklist-remove-section]");
+  if (removeSection) {
+    removeChecklistSection(removeSection.dataset.checklistRemoveSection);
+    return;
+  }
+
+  const removeRoom = event.target.closest("[data-checklist-remove-room]");
+  if (removeRoom) {
+    removeChecklistRoom(removeRoom.dataset.checklistRemoveRoom);
+    return;
+  }
+
+  const removeItem = event.target.closest("[data-checklist-remove-item]");
+  if (removeItem) {
+    removeChecklistItem(removeItem.dataset.checklistRemoveItem);
+    return;
+  }
+
+  if (event.target.closest("[data-checklist-select-all-units]")) {
+    toggleChecklistUnitSelection();
+    return;
+  }
+
+  if (event.target.closest("[data-checklist-apply-property]")) {
+    void applyChecklistToProperty();
+    return;
+  }
+
+  if (event.target.closest("[data-checklist-apply-units]")) {
+    void applyChecklistToUnits();
+  }
+}
+
+function handleChecklistSubmit(event) {
+  const form = event.target.closest("#checklistTemplateForm");
+  if (!form) return;
+  event.preventDefault();
+  void saveChecklistTemplate();
+}
+
+function handleChecklistInput(event) {
+  if (event.target?.id === "checklistTemplateSearch") {
+    populateChecklistTemplateSelect();
+    return;
+  }
+  if (event.target.closest("#checklistTemplateForm, #checklistSections")) {
+    syncChecklistBuilderFromDom();
+    renderChecklistMetrics();
+    renderChecklistPreview();
+  }
+}
+
+function handleChecklistChange(event) {
+  const target = event.target;
+  if (target?.id === "checklistTemplateSelect") {
+    selectChecklistTemplate(target.value || "");
+    return;
+  }
+  if (target?.id === "checklistAssignmentPropertySelect") {
+    checklistState.selectedPropertyId = target.value || "";
+    checklistState.selectedUnitIds = new Set();
+    renderChecklistAssignmentPanel();
+    renderChecklistPropertySummary();
+    renderChecklistMetrics();
+    return;
+  }
+  if (target?.matches("[data-checklist-unit-option]")) {
+    if (target.checked) {
+      checklistState.selectedUnitIds.add(target.value);
+    } else {
+      checklistState.selectedUnitIds.delete(target.value);
+    }
+    renderChecklistAssignmentPanel();
+    return;
+  }
+  if (target.closest("#checklistTemplateForm, #checklistSections")) {
+    syncChecklistBuilderFromDom();
+    renderChecklistMetrics();
+    renderChecklistPreview();
+  }
+}
+
+async function loadChecklistData() {
+  if (!suiteSupabase) {
+    showChecklistMessage("Supabase config is missing. Add env.js values before using checklists.", true);
+    return;
+  }
+
+  showChecklistMessage("Loading checklists...");
+  const { data: userData } = await suiteSupabase.auth.getUser();
+  checklistState.user = userData?.user || null;
+
+  const [templatesResult, propertiesResult, unitsResult] = await Promise.all([
+    suiteSupabase.from(checklistTemplatesTable).select("*").order("updated_at", { ascending: false }),
+    suiteSupabase.from(leadTable).select("*").limit(1000),
+    suiteSupabase.from(propertyUnitsTable).select("*").order("unit_name", { ascending: true }).limit(3000)
+  ]);
+
+  if (templatesResult.error) {
+    showChecklistMessage("Unable to load checklist templates: " + templatesResult.error.message, true);
+    return;
+  }
+  if (propertiesResult.error) {
+    showChecklistMessage("Unable to load properties: " + propertiesResult.error.message, true);
+    return;
+  }
+
+  checklistState.templates = (templatesResult.data || []).map(normalizeChecklistTemplate);
+  checklistState.properties = (propertiesResult.data || [])
+    .filter((row) => propertyUnitPropertyTitle(row))
+    .sort((a, b) => propertyUnitPropertyTitle(a).localeCompare(propertyUnitPropertyTitle(b)));
+  checklistState.units = unitsResult.error ? [] : (unitsResult.data || []);
+
+  if (checklistState.selectedTemplateId) {
+    const selected = checklistState.templates.find((template) => template.id === checklistState.selectedTemplateId);
+    if (selected) checklistState.builder = normalizeChecklistTemplate(selected);
+  } else if (checklistState.templates[0] && !checklistState.builder?.id) {
+    checklistState.selectedTemplateId = checklistState.templates[0].id;
+    checklistState.builder = normalizeChecklistTemplate(checklistState.templates[0]);
+  }
+  if (!checklistState.selectedPropertyId && checklistState.properties[0]) {
+    checklistState.selectedPropertyId = checklistState.properties[0].id;
+  }
+
+  renderChecklistData();
+  showChecklistMessage(unitsResult.error
+    ? "Templates loaded. Unit assignments will be available after the property unit migration is applied."
+    : `${checklistState.templates.length.toLocaleString()} template${checklistState.templates.length === 1 ? "" : "s"} loaded.`);
+}
+
+function renderChecklistData() {
+  populateChecklistTemplateSelect();
+  renderChecklistForm();
+  renderChecklistAssignmentPanel();
+  renderChecklistPropertySummary();
+  renderChecklistMetrics();
+  renderChecklistPreview();
+}
+
+function populateChecklistTemplateSelect() {
+  const select = document.getElementById("checklistTemplateSelect");
+  if (!select) return;
+  select.innerHTML = checklistTemplateOptions();
+  select.value = checklistState.selectedTemplateId || "";
+}
+
+function renderChecklistForm() {
+  const template = checklistState.builder || createBlankChecklistTemplate();
+  const setValue = (id, value) => {
+    const field = document.getElementById(id);
+    if (field) field.value = value ?? "";
+  };
+  setValue("checklist_template_id", template.id || "");
+  setValue("checklist_template_name", template.name || "");
+  setValue("checklist_template_department", template.department || "");
+  setValue("checklist_template_subdepartment", template.subdepartment || "");
+  setValue("checklist_template_priority", template.priority || "medium");
+  setValue("checklist_template_description", template.description || "");
+  const sections = document.getElementById("checklistSections");
+  if (sections) sections.innerHTML = renderChecklistSectionsMarkup();
+}
+
+function syncChecklistBuilderFromDom() {
+  const current = checklistState.builder || createBlankChecklistTemplate();
+  const formValue = (id) => (document.getElementById(id)?.value || "").trim();
+  const sections = Array.from(document.querySelectorAll("[data-checklist-section-id]")).map((sectionNode, sectionIndex) => {
+    const sectionItems = Array.from(sectionNode.querySelectorAll("[data-checklist-section-item]")).map(readChecklistItemNode);
+    const rooms = Array.from(sectionNode.querySelectorAll("[data-checklist-room-id]")).map((roomNode, roomIndex) => ({
+      id: roomNode.dataset.checklistRoomId || checklistUid("room"),
+      title: roomNode.querySelector("[data-checklist-room-title]")?.value.trim() || `Room ${roomIndex + 1}`,
+      items: Array.from(roomNode.querySelectorAll("[data-checklist-room-item]")).map(readChecklistItemNode)
+    }));
+    return {
+      id: sectionNode.dataset.checklistSectionId || checklistUid("section"),
+      title: sectionNode.querySelector("[data-checklist-section-title]")?.value.trim() || `Section ${sectionIndex + 1}`,
+      items: sectionItems,
+      rooms
+    };
+  });
+
+  checklistState.builder = normalizeChecklistTemplate({
+    ...current,
+    name: formValue("checklist_template_name") || current.name,
+    department: formValue("checklist_template_department"),
+    subdepartment: formValue("checklist_template_subdepartment"),
+    priority: formValue("checklist_template_priority") || "medium",
+    description: formValue("checklist_template_description"),
+    sections
+  });
+  return checklistState.builder;
+}
+
+function readChecklistItemNode(node) {
+  return {
+    id: node.dataset.checklistItemId || checklistUid("item"),
+    type: node.querySelector("[data-checklist-item-type]")?.value || "check",
+    label: node.querySelector("[data-checklist-item-label]")?.value.trim() || ""
+  };
+}
+
+function selectChecklistTemplate(id) {
+  syncChecklistBuilderFromDom();
+  checklistState.selectedTemplateId = id || "";
+  const selected = checklistState.templates.find((template) => template.id === id);
+  checklistState.builder = selected ? normalizeChecklistTemplate(selected) : createBlankChecklistTemplate();
+  renderChecklistData();
+  showChecklistMessage(selected ? `Editing ${selected.name}.` : "Started a new unsaved checklist.");
+}
+
+function startNewChecklistTemplate() {
+  checklistState.selectedTemplateId = "";
+  checklistState.builder = createBlankChecklistTemplate();
+  renderChecklistData();
+  document.getElementById("checklist_template_name")?.focus();
+  showChecklistMessage("Started a new checklist template.");
+}
+
+function addChecklistSection() {
+  syncChecklistBuilderFromDom();
+  const title = (document.getElementById("newChecklistSectionTitle")?.value || "").trim() || "New Section";
+  checklistState.builder.sections.push(createChecklistSection(title));
+  const field = document.getElementById("newChecklistSectionTitle");
+  if (field) field.value = "";
+  renderChecklistForm();
+  renderChecklistMetrics();
+  renderChecklistPreview();
+}
+
+function findChecklistSection(sectionId) {
+  return checklistState.builder?.sections.find((section) => section.id === sectionId) || null;
+}
+
+function addChecklistItem(sectionId) {
+  syncChecklistBuilderFromDom();
+  const section = findChecklistSection(sectionId);
+  if (section) section.items.push(createChecklistItem());
+  renderChecklistForm();
+  renderChecklistMetrics();
+  renderChecklistPreview();
+}
+
+function addChecklistRoom(sectionId) {
+  syncChecklistBuilderFromDom();
+  const section = findChecklistSection(sectionId);
+  if (section) section.rooms.push(createChecklistRoom());
+  renderChecklistForm();
+  renderChecklistMetrics();
+  renderChecklistPreview();
+}
+
+function addChecklistRoomItem(value) {
+  syncChecklistBuilderFromDom();
+  const [sectionId, roomId] = String(value || "").split(":");
+  const room = findChecklistSection(sectionId)?.rooms.find((candidate) => candidate.id === roomId);
+  if (room) room.items.push(createChecklistItem());
+  renderChecklistForm();
+  renderChecklistMetrics();
+  renderChecklistPreview();
+}
+
+function removeChecklistSection(sectionId) {
+  syncChecklistBuilderFromDom();
+  checklistState.builder.sections = checklistState.builder.sections.filter((section) => section.id !== sectionId);
+  if (!checklistState.builder.sections.length) checklistState.builder.sections.push(createChecklistSection());
+  renderChecklistForm();
+  renderChecklistMetrics();
+  renderChecklistPreview();
+}
+
+function removeChecklistRoom(value) {
+  syncChecklistBuilderFromDom();
+  const [sectionId, roomId] = String(value || "").split(":");
+  const section = findChecklistSection(sectionId);
+  if (section) section.rooms = section.rooms.filter((room) => room.id !== roomId);
+  renderChecklistForm();
+  renderChecklistMetrics();
+  renderChecklistPreview();
+}
+
+function removeChecklistItem(itemId) {
+  syncChecklistBuilderFromDom();
+  checklistState.builder.sections.forEach((section) => {
+    section.items = section.items.filter((item) => item.id !== itemId);
+    section.rooms.forEach((room) => {
+      room.items = room.items.filter((item) => item.id !== itemId);
+    });
+  });
+  renderChecklistForm();
+  renderChecklistMetrics();
+  renderChecklistPreview();
+}
+
+async function saveChecklistTemplate(options = {}) {
+  if (!suiteSupabase || checklistState.isSaving) return null;
+  const template = cleanChecklistTemplateForSave(syncChecklistBuilderFromDom());
+  if (!template.name) {
+    showChecklistMessage("Template name is required.", true);
+    return null;
+  }
+
+  checklistState.isSaving = true;
+  setChecklistSaving(true);
+  if (!options.silent) showChecklistMessage(template.id ? "Saving template..." : "Creating template...");
+
+  const payload = {
+    name: template.name,
+    department: template.department,
+    subdepartment: template.subdepartment,
+    priority: template.priority,
+    description: template.description,
+    sections: template.sections
+  };
+  const result = template.id
+    ? await suiteSupabase.from(checklistTemplatesTable).update(payload).eq("id", template.id).select("*").single()
+    : await suiteSupabase.from(checklistTemplatesTable).insert({ ...payload, created_by: checklistState.user?.id || null }).select("*").single();
+
+  checklistState.isSaving = false;
+  setChecklistSaving(false);
+
+  if (result.error) {
+    showChecklistMessage("Unable to save checklist: " + result.error.message, true);
+    return null;
+  }
+
+  const saved = normalizeChecklistTemplate(result.data);
+  const index = checklistState.templates.findIndex((item) => item.id === saved.id);
+  if (index >= 0) {
+    checklistState.templates[index] = saved;
+  } else {
+    checklistState.templates.unshift(saved);
+  }
+  checklistState.selectedTemplateId = saved.id;
+  checklistState.builder = saved;
+  renderChecklistData();
+  if (!options.silent) showChecklistMessage("Checklist template saved.");
+  return saved;
+}
+
+function setChecklistSaving(isSaving) {
+  document.querySelectorAll('[form="checklistTemplateForm"], #checklistTemplateForm button[type="submit"]').forEach((button) => {
+    button.disabled = isSaving;
+    const label = button.querySelector("span");
+    if (label) label.textContent = isSaving ? "Saving..." : "Save Template";
+  });
+}
+
+async function ensureSavedChecklistTemplate() {
+  showChecklistMessage("Saving template before assigning...");
+  return saveChecklistTemplate({ silent: true });
+}
+
+async function applyChecklistToProperty() {
+  if (!suiteSupabase || checklistState.isApplying) return;
+  if (!checklistState.selectedPropertyId) {
+    showChecklistMessage("Select a property before assigning the checklist.", true);
+    return;
+  }
+
+  const template = await ensureSavedChecklistTemplate();
+  if (!template) return;
+
+  checklistState.isApplying = true;
+  showChecklistMessage("Assigning checklist to property...");
+  const payload = {
+    checklist_template_id: template.id,
+    checklist_items: flattenChecklistTemplate(template)
+  };
+  const result = await suiteSupabase
+    .from(leadTable)
+    .update(payload)
+    .eq("id", checklistState.selectedPropertyId)
+    .select("*")
+    .single();
+  checklistState.isApplying = false;
+
+  if (result.error) {
+    showChecklistMessage("Unable to assign checklist to property: " + result.error.message, true);
+    return;
+  }
+
+  const index = checklistState.properties.findIndex((property) => property.id === result.data.id);
+  if (index >= 0) checklistState.properties[index] = result.data;
+  renderChecklistData();
+  showChecklistMessage("Checklist assigned to property.");
+}
+
+async function applyChecklistToUnits() {
+  if (!suiteSupabase || checklistState.isApplying) return;
+  const ids = Array.from(checklistState.selectedUnitIds);
+  if (!ids.length) {
+    showChecklistMessage("Select at least one unit before assigning the checklist.", true);
+    return;
+  }
+
+  const template = await ensureSavedChecklistTemplate();
+  if (!template) return;
+
+  checklistState.isApplying = true;
+  showChecklistMessage(`Assigning checklist to ${ids.length} unit${ids.length === 1 ? "" : "s"}...`);
+  const payload = {
+    checklist_template_id: template.id,
+    checklist_items: flattenChecklistTemplate(template)
+  };
+  const result = await suiteSupabase
+    .from(propertyUnitsTable)
+    .update(payload)
+    .in("id", ids)
+    .select("*");
+  checklistState.isApplying = false;
+
+  if (result.error) {
+    showChecklistMessage("Unable to assign checklist to units: " + result.error.message, true);
+    return;
+  }
+
+  const updated = result.data || [];
+  updated.forEach((unit) => {
+    const index = checklistState.units.findIndex((row) => row.id === unit.id);
+    if (index >= 0) checklistState.units[index] = unit;
+  });
+  renderChecklistData();
+  showChecklistMessage(`Checklist assigned to ${updated.length || ids.length} unit${(updated.length || ids.length) === 1 ? "" : "s"}.`);
+}
+
+function flattenChecklistTemplate(template) {
+  const items = [];
+  normalizeChecklistTemplate(template).sections.forEach((section) => {
+    section.items.forEach((item) => {
+      const normalized = flattenChecklistItem(item, section.title);
+      if (normalized) items.push(normalized);
+    });
+    section.rooms.forEach((room) => {
+      room.items.forEach((item) => {
+        const normalized = flattenChecklistItem(item, `${section.title} / ${room.title}`);
+        if (normalized) items.push(normalized);
+      });
+    });
+  });
+  return items;
+}
+
+function flattenChecklistItem(item, category) {
+  const label = String(item.label || item.task || "").trim();
+  if (!label) return null;
+  const type = item.type || "check";
+  return {
+    id: item.id || checklistUid("item"),
+    category: category || "General",
+    task: label,
+    label,
+    type,
+    required: type !== "optional",
+    media_required: type === "photo" || type === "video" ? type : "none",
+    notes: type === "note" ? "Contractor should leave a completion note." : ""
+  };
+}
+
+function checklistAssignmentPanelHtml() {
+  const property = getChecklistSelectedProperty();
+  const units = getChecklistSelectedPropertyUnits();
+  const selectedCount = units.filter((unit) => checklistState.selectedUnitIds.has(unit.id)).length;
+  const allSelected = Boolean(units.length && selectedCount === units.length);
+  return `
+    <div class="checklist-assignment-stack">
+      <label class="suite-field">
+        <span>Property</span>
+        <select id="checklistAssignmentPropertySelect">
+          ${checklistState.properties.length
+            ? checklistState.properties.map((row) => `<option value="${esc(row.id)}" ${row.id === checklistState.selectedPropertyId ? "selected" : ""}>${esc(propertyUnitPropertyTitle(row))}</option>`).join("")
+            : `<option value="">No properties found</option>`}
+        </select>
+      </label>
+      <button class="primary-action full-width" type="button" data-checklist-apply-property ${property ? "" : "disabled"}>${icon("check")}<span>Apply to Property</span></button>
+      <div class="checklist-unit-toolbar">
+        <strong>Property Units</strong>
+        <button type="button" data-checklist-select-all-units ${units.length ? "" : "disabled"}>${allSelected ? "Clear" : "Select All"}</button>
+      </div>
+      <div class="checklist-unit-list">
+        ${units.length ? units.map(renderChecklistUnitOption).join("") : emptyState("building", "No units found", property ? "Add units on the Property Units page first." : "Select a property.")}
+      </div>
+      <button class="secondary-action full-width" type="button" data-checklist-apply-units ${selectedCount ? "" : "disabled"}>${icon("check")}<span>Apply to ${selectedCount || 0} Selected Unit${selectedCount === 1 ? "" : "s"}</span></button>
+    </div>
+  `;
+}
+
+function renderChecklistUnitOption(unit) {
+  const templateName = checklistTemplateName(unit.checklist_template_id);
+  return `
+    <label class="checklist-unit-option">
+      <input type="checkbox" value="${esc(unit.id)}" data-checklist-unit-option ${checklistState.selectedUnitIds.has(unit.id) ? "checked" : ""} />
+      <span>
+        <strong>${esc(unit.unit_name || "Unnamed unit")}</strong>
+        <small>${esc([unit.square_feet ? `${Number(unit.square_feet).toLocaleString()} sq ft` : "", templateName ? `Checklist: ${templateName}` : "No checklist assigned"].filter(Boolean).join(" - "))}</small>
+      </span>
+    </label>
+  `;
+}
+
+function renderChecklistAssignmentPanel() {
+  const panelNode = document.getElementById("checklistAssignmentPanel");
+  if (panelNode) panelNode.innerHTML = checklistAssignmentPanelHtml();
+}
+
+function checklistPropertySummaryHtml() {
+  const property = getChecklistSelectedProperty();
+  const units = getChecklistSelectedPropertyUnits();
+  if (!property) return emptyState("building", "No property selected");
+  const templateName = checklistTemplateName(property.checklist_template_id);
+  const unitAssignments = units.filter((unit) => unit.checklist_template_id).length;
+  return `
+    <strong>${esc(propertyUnitPropertyTitle(property))}</strong>
+    <p>${esc(propertyUnitPropertyAddress(property) || "No address on file")}</p>
+    <dl>
+      <div><dt>Property Checklist</dt><dd>${esc(templateName || "None")}</dd></div>
+      <div><dt>Units</dt><dd>${units.length.toLocaleString()}</dd></div>
+      <div><dt>Units Assigned</dt><dd>${unitAssignments.toLocaleString()}</dd></div>
+    </dl>
+  `;
+}
+
+function renderChecklistPropertySummary() {
+  const summary = document.getElementById("checklistPropertySummary");
+  if (summary) summary.innerHTML = checklistPropertySummaryHtml();
+}
+
+function checklistPreviewHtml() {
+  const items = flattenChecklistTemplate(checklistState.builder || createBlankChecklistTemplate());
+  if (!items.length) return emptyState("clipboard-list", "No requirements yet", "Add checklist items to preview what contractors will see.");
+  return items.slice(0, 12).map((item) => `
+    <div class="checklist-preview-item">
+      <span>${esc(item.category)}</span>
+      <strong>${esc(item.task)}</strong>
+      <small>${esc(item.media_required !== "none" ? `${titleCase(item.media_required)} required` : item.required ? "Required" : "Optional")}</small>
+    </div>
+  `).join("") + (items.length > 12 ? `<p class="checklist-preview-more">+${items.length - 12} more items</p>` : "");
+}
+
+function renderChecklistPreview() {
+  const preview = document.getElementById("checklistPreview");
+  if (preview) preview.innerHTML = checklistPreviewHtml();
+}
+
+function renderChecklistMetrics() {
+  const template = checklistState.builder || createBlankChecklistTemplate();
+  const sections = normalizeChecklistTemplate(template).sections;
+  const items = flattenChecklistTemplate(template);
+  const assignedProperties = checklistState.properties.filter((property) => property.checklist_template_id).length;
+  const assignedUnits = checklistState.units.filter((unit) => unit.checklist_template_id).length;
+  setText("checklistTemplateCount", checklistState.templates.length.toLocaleString());
+  setText("checklistSectionCount", sections.length.toLocaleString());
+  setText("checklistItemCount", items.length.toLocaleString());
+  setText("checklistAssignedCount", (assignedProperties + assignedUnits).toLocaleString());
+}
+
+function getChecklistSelectedProperty() {
+  return checklistState.properties.find((row) => row.id === checklistState.selectedPropertyId) || null;
+}
+
+function getChecklistSelectedPropertyUnitKeys() {
+  const property = getChecklistSelectedProperty();
+  return [checklistState.selectedPropertyId, property?.client_id].filter(Boolean).map(String);
+}
+
+function getChecklistSelectedPropertyUnits() {
+  const keys = getChecklistSelectedPropertyUnitKeys();
+  if (!keys.length) return [];
+  return checklistState.units
+    .filter((row) => keys.includes(String(row.property_id || "")))
+    .sort(propertyUnitSort);
+}
+
+function toggleChecklistUnitSelection() {
+  const units = getChecklistSelectedPropertyUnits();
+  const allSelected = units.length && units.every((unit) => checklistState.selectedUnitIds.has(unit.id));
+  checklistState.selectedUnitIds = allSelected
+    ? new Set()
+    : new Set(units.map((unit) => unit.id));
+  renderChecklistAssignmentPanel();
+}
+
+function checklistTemplateName(id) {
+  if (!id) return "";
+  return checklistState.templates.find((template) => template.id === id)?.name || "Assigned template";
+}
+
+function showChecklistMessage(text, isError = false) {
+  const message = document.getElementById("checklistMessage");
   if (!message) return;
   message.textContent = text || "";
   message.classList.toggle("error", Boolean(isError));
@@ -7987,6 +8926,9 @@ function renderApp() {
   }
   if (activeKey === "property-units") {
     initPropertyUnits();
+  }
+  if (activeKey === "checklists") {
+    initChecklists();
   }
   if (activeKey === "leads") {
     initLeads();

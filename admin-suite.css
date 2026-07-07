@@ -2223,6 +2223,196 @@ a {
   text-align: right;
 }
 
+.checklist-builder-workspace,
+.checklist-builder-layout,
+.checklist-assignment-stack,
+.checklist-section-list,
+.checklist-room-list,
+.checklist-preview-list {
+  display: grid;
+  gap: 14px;
+}
+
+.checklist-builder-layout {
+  align-items: start;
+  grid-template-columns: minmax(0, 1fr) 340px;
+}
+
+.checklist-builder-library-panel .panel-head {
+  align-items: center;
+}
+
+.checklist-builder-toolbar {
+  align-items: end;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(260px, 0.68fr) minmax(220px, 0.32fr);
+}
+
+.checklist-template-search {
+  min-height: 36px;
+  width: 100%;
+}
+
+.checklist-template-form {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.checklist-template-form .wide {
+  grid-column: 1 / -1;
+}
+
+.checklist-section-composer {
+  align-items: end;
+  background: rgba(0, 214, 163, 0.055);
+  border: 1px solid rgba(0, 214, 163, 0.18);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin: 14px 0;
+  padding: 12px;
+}
+
+.checklist-editor-panel {
+  min-width: 0;
+}
+
+.checklist-section-card,
+.checklist-room-card {
+  background: rgba(7, 18, 32, 0.54);
+  border: 1px solid var(--suite-border-soft);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+
+.checklist-room-card {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.checklist-section-head,
+.checklist-room-head,
+.checklist-item-row,
+.checklist-row-actions,
+.checklist-unit-toolbar,
+.checklist-unit-option {
+  align-items: end;
+  display: grid;
+  gap: 10px;
+}
+
+.checklist-section-head,
+.checklist-room-head {
+  grid-template-columns: minmax(0, 1fr) 36px;
+}
+
+.checklist-item-list {
+  display: grid;
+  gap: 8px;
+}
+
+.checklist-item-row {
+  grid-template-columns: minmax(112px, 0.28fr) minmax(220px, 1fr) 36px;
+}
+
+.checklist-row-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.checklist-assignment-stack .full-width {
+  margin-top: 0;
+}
+
+.checklist-unit-toolbar {
+  align-items: center;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.checklist-unit-toolbar strong {
+  font-size: 13px;
+}
+
+.checklist-unit-toolbar button {
+  background: transparent;
+  border: 0;
+  color: var(--suite-green);
+  font-size: 12px;
+  font-weight: 900;
+  padding: 0;
+}
+
+.checklist-unit-list {
+  border: 1px solid var(--suite-border-soft);
+  border-radius: 8px;
+  display: grid;
+  gap: 2px;
+  max-height: 280px;
+  overflow: auto;
+  padding: 6px;
+}
+
+.checklist-unit-option {
+  align-items: start;
+  border-radius: 6px;
+  color: var(--suite-text);
+  cursor: pointer;
+  grid-template-columns: 18px minmax(0, 1fr);
+  padding: 8px;
+}
+
+.checklist-unit-option:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.checklist-unit-option input {
+  margin-top: 2px;
+}
+
+.checklist-unit-option span,
+.checklist-preview-item {
+  min-width: 0;
+}
+
+.checklist-unit-option strong,
+.checklist-preview-item strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.checklist-unit-option small,
+.checklist-preview-item span,
+.checklist-preview-item small,
+.checklist-preview-more {
+  color: var(--suite-soft);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.checklist-preview-item {
+  background: rgba(7, 18, 32, 0.54);
+  border: 1px solid var(--suite-border-soft);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+}
+
+.checklist-preview-item span {
+  text-transform: uppercase;
+}
+
+.checklist-preview-more {
+  margin: 0;
+}
+
 .contract-list-card {
   min-height: 620px;
 }
@@ -3391,6 +3581,7 @@ a {
   .content-rail,
   .coverage-layout,
   .assignments-layout,
+  .checklist-builder-layout,
   .directory-layout,
   .property-units-layout,
   .availability-layout,
@@ -3507,6 +3698,17 @@ a {
   .property-unit-quick-form,
   .property-unit-row {
     grid-template-columns: 1fr;
+  }
+
+  .checklist-builder-toolbar,
+  .checklist-template-form,
+  .checklist-section-composer,
+  .checklist-item-row {
+    grid-template-columns: 1fr;
+  }
+
+  .checklist-item-row .ghost-icon-btn {
+    justify-self: start;
   }
 
   .property-unit-table-head {

@@ -158,6 +158,22 @@ function assignmentUnit(assignment) {
   return metadataValue(assignment, ["unit_name", "unit_number", "property_unit_name", "unit"]);
 }
 
+function assignmentUnitId(assignment) {
+  return metadataValue(assignment, ["unit_id", "property_unit_id", "unitId", "propertyUnitId"]);
+}
+
+function assignmentUnitPropertyKeys(assignment) {
+  const metadata = assignment?.metadata && typeof assignment.metadata === "object" ? assignment.metadata : {};
+  return [
+    assignment?.property_id,
+    assignment?.portal_property_id,
+    metadata.property_id,
+    metadata.portal_property_id,
+    activeDirectoryDetails?.portalProperty?.id,
+    activeDirectoryDetails?.portalProperty?.client_id
+  ].filter(Boolean).map(String).filter((value, index, values) => values.indexOf(value) === index);
+}
+
 function assignmentDirectoryNames(assignment) {
   return [
     assignment?.property_name,
@@ -397,19 +413,57 @@ async function checklistItems(assignment) {
   if (Array.isArray(assignment?.property_checklist_items) && assignment.property_checklist_items.length) {
     return assignment.property_checklist_items;
   }
-  if (!assignment?.property_id) return [];
+  const unitItems = await unitChecklistItems(assignment);
+  if (unitItems.length) return unitItems;
+  const propertyId = assignment?.property_id || assignment?.portal_property_id || assignment?.metadata?.property_id || assignment?.metadata?.portal_property_id || "";
+  if (!propertyId) return [];
 
   for (const table of ["portal_properties", "properties"]) {
     const { data, error } = await supabase
       .from(table)
       .select("checklist_items")
-      .eq("id", assignment.property_id)
+      .eq("id", propertyId)
       .maybeSingle();
 
     if (!error && Array.isArray(data?.checklist_items)) return data.checklist_items;
   }
 
   return [];
+}
+
+async function unitChecklistItems(assignment) {
+  if (!supabase) return [];
+  const unitId = assignmentUnitId(assignment);
+  if (unitId) {
+    const { data, error } = await supabase
+      .from("property_units")
+      .select("checklist_items")
+      .eq("id", unitId)
+      .maybeSingle();
+    if (!error && Array.isArray(data?.checklist_items) && data.checklist_items.length) {
+      return data.checklist_items;
+    }
+    if (error) console.warn("[contractor-job-flow] Unable to load unit checklist", error);
+  }
+
+  const unitLabel = normalizeText(assignmentUnit(assignment));
+  if (!unitLabel) return [];
+
+  let query = supabase
+    .from("property_units")
+    .select("property_id,unit_name,checklist_items")
+    .limit(500);
+  const propertyKeys = assignmentUnitPropertyKeys(assignment);
+  if (propertyKeys.length) query = query.in("property_id", propertyKeys);
+
+  const { data, error } = await query;
+  if (error) {
+    console.warn("[contractor-job-flow] Unable to search unit checklists", error);
+    return [];
+  }
+
+  const match = (data || []).find((row) => normalizeText(row.unit_name) === unitLabel && Array.isArray(row.checklist_items) && row.checklist_items.length);
+  return match?.checklist_items || [];
 }
 
 function showPageMessage(text) {
