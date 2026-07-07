@@ -37,6 +37,7 @@ function getPortalHome(role) {
 }
 
 function renderNotice(title, body) {
+  const portalRoot = document.getElementById("contractorPortalApp");
   const dashboardGrid = document.querySelector("#contractorDashboard .grid");
   const availableList = document.getElementById("contractorAssignments");
   const myList = document.getElementById("myAssignments");
@@ -47,7 +48,7 @@ function renderNotice(title, body) {
     </div>
   `;
 
-  [dashboardGrid, availableList, myList].forEach((target) => {
+  [portalRoot, dashboardGrid, availableList, myList].forEach((target) => {
     if (target) target.innerHTML = markup;
   });
 }
@@ -111,8 +112,8 @@ if (!supabase) {
         `Your contractor account is active, but it must be approved by Turnly before assignment data is visible.${setupNote}`
       );
     } else {
-      await import("./app.js?v=20260617g");
-      await import("./contractor-job-flow-mobile.js?v=20260617g");
+      await import("./contractor-portal.js?v=20260707a");
+      await import("./contractor-job-flow-mobile.js?v=20260707a");
     }
   }
 }

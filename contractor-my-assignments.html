@@ -3,60 +3,18 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>My Assignments | Turnly</title>
+  <title>My Jobs | Turnly</title>
   <link rel="icon" href="/favicon.ico?v=20260624t" sizes="any" />
   <link rel="shortcut icon" href="/favicon.ico?v=20260624t" />
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=20260624t" />
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png?v=20260624t" />
   <link rel="stylesheet" href="style.css" />
-  <link rel="stylesheet" href="admin-dashboard.css" />
+  <link rel="stylesheet" href="contractor-portal.css?v=20260707a" />
   <link rel="stylesheet" href="access-notice.css" />
 </head>
-<body class="admin-command-body">
-  <main class="admin-command">
-    <aside class="command-sidebar">
-      <div class="command-brand">
-        <div class="brand-mark">T</div>
-        <span>TURNLY</span>
-      </div>
-
-      <nav class="command-nav" aria-label="Contractor navigation">
-        <p>Work</p>
-        <a class="nav-link" href="contractor.html"><span>⌂</span>Dashboard</a>
-        <a class="nav-link" href="contractor-available.html"><span>▦</span>Available</a>
-        <a class="nav-link active" href="contractor-my-assignments.html"><span>✓</span>My Assignments</a>
-      </nav>
-
-      <button id="logoutBtn" class="admin-user-card" type="button">
-        <span class="avatar">CO</span>
-        <span>
-          <strong>Contractor</strong>
-          <small>Sign Out</small>
-        </span>
-        <span class="chevron">⌄</span>
-      </button>
-    </aside>
-
-    <section class="command-main wip-main">
-      <header class="command-header">
-        <div>
-          <h1>My Assignments</h1>
-          <p>Jobs you have claimed from the Turnly assignment board.</p>
-        </div>
-        <a href="contractor.html" class="secondary-command-btn">Back to Dashboard</a>
-      </header>
-
-      <section class="panel-card">
-        <div class="panel-heading">
-          <h2>Claimed Work</h2>
-        </div>
-        <p id="claimMessage" class="status-message" aria-live="polite"></p>
-        <div id="myAssignments" class="assignment-list"></div>
-      </section>
-    </section>
-  </main>
-
+<body class="contractor-portal-body" data-contractor-page="my-jobs">
+  <div id="contractorPortalApp"></div>
   <script src="env.js"></script>
-  <script type="module" src="contractor-access.js?v=20260617g"></script>
+  <script type="module" src="contractor-access.js?v=20260707a"></script>
 </body>
 </html>
