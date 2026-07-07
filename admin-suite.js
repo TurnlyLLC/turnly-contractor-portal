@@ -187,6 +187,12 @@ const walkthroughState = {
 const clientTable = "clients";
 const clientOptionalColumns = [
   "company_name",
+  "property_name",
+  "address",
+  "city",
+  "state",
+  "postal_code",
+  "access_notes",
   "primary_contact_name",
   "primary_contact_email",
   "primary_contact_phone",
@@ -4071,6 +4077,12 @@ function clientForm(mode = "edit", row = null) {
         leadInputField("clientRegion", "Region / Market"),
         leadInputField("clientProperties", "Properties", "number", { min: "0", step: "1" }),
         clientFormSection("Property Details"),
+        leadInputField("clientPropertyName", "Property Name"),
+        leadInputField("clientAddress", "Address", "text", { className: "wide" }),
+        leadInputField("clientCity", "City"),
+        leadInputField("clientState", "State"),
+        leadInputField("clientPostalCode", "Postal Code"),
+        leadTextareaField("clientAccessNotes", "Access Notes", "wide"),
         leadSelectField("clientServiceModel", "Service Model", clientServiceModelOptions, { required: true }),
         leadInputField("clientUnitCount", "Units", "number", { min: "0", step: "1", className: "client-unit-field" }),
         clientMonthlyTurnoversField(),
@@ -4509,6 +4521,12 @@ function getFilteredClients() {
       row.client_type,
       row.region,
       row.market,
+      row.property_name,
+      row.address,
+      row.city,
+      row.state,
+      row.postal_code,
+      row.access_notes,
       clientServiceModelLabel(row.service_model),
       row.unit_count,
       row.unit_notes,
@@ -4584,6 +4602,12 @@ function clearClientForm(options = {}) {
     client_type: "",
     region: "",
     property_count: 0,
+    property_name: "",
+    address: "",
+    city: "",
+    state: "",
+    postal_code: "",
+    access_notes: "",
     service_model: "apartment_turnover",
     unit_count: 0,
     unit_notes: "",
@@ -4615,6 +4639,12 @@ function fillClientForm(row) {
     client_type: row.client_type || "",
     region: row.region || row.market || "",
     property_count: row.property_count ?? 0,
+    property_name: row.property_name || "",
+    address: row.address || "",
+    city: row.city || "",
+    state: row.state || "",
+    postal_code: row.postal_code || "",
+    access_notes: row.access_notes || "",
     service_model: row.service_model || "apartment_turnover",
     unit_count: row.unit_count ?? 0,
     unit_notes: row.unit_notes || "",
@@ -4645,6 +4675,12 @@ function setClientFormValues(values) {
     clientType: values.client_type,
     clientRegion: values.region,
     clientProperties: values.property_count,
+    clientPropertyName: values.property_name,
+    clientAddress: values.address,
+    clientCity: values.city,
+    clientState: values.state,
+    clientPostalCode: values.postal_code,
+    clientAccessNotes: values.access_notes,
     clientServiceModel: values.service_model,
     clientUnitCount: values.unit_count,
     clientUnitNotes: values.unit_notes,
@@ -4877,6 +4913,12 @@ function collectClientPayload() {
     region: clientValue("clientRegion"),
     market: clientValue("clientRegion"),
     property_count: Number.isFinite(propertyCount) && propertyCount >= 0 ? Math.floor(propertyCount) : 0,
+    property_name: clientValue("clientPropertyName"),
+    address: clientValue("clientAddress"),
+    city: clientValue("clientCity"),
+    state: clientValue("clientState"),
+    postal_code: clientValue("clientPostalCode"),
+    access_notes: clientValue("clientAccessNotes"),
     service_model: serviceModel,
     unit_count: cleanUnitCount,
     unit_notes: clientValue("clientUnitNotes"),
@@ -5238,7 +5280,7 @@ function clientServiceModelLabel(value) {
 }
 
 function clientTitle(row) {
-  return row?.name || row?.company_name || "Untitled Client";
+  return row?.property_name || row?.name || row?.company_name || "Untitled Client";
 }
 
 function clientStatus(row) {
@@ -5251,7 +5293,8 @@ function clientStatusLabel(status) {
 }
 
 function clientRegionText(row) {
-  return [row?.client_type, row?.region || row?.market].filter(Boolean).join(" - ") || "No type or market";
+  const address = [row?.address, row?.city, row?.state, row?.postal_code].filter(Boolean).join(", ");
+  return address || [row?.client_type, row?.region || row?.market].filter(Boolean).join(" - ") || "No address, type, or market";
 }
 
 function clientMoney(value) {

@@ -228,7 +228,7 @@ function assignmentActions(item, mode) {
   if (mode === "open") {
     actions.push(`<button type="button" class="cp-action" data-claim-assignment-id="${esc(item.id)}">Claim</button>`);
   }
-  if (mode === "mine" && ["claimed", "scheduled"].includes(status)) {
+  if (mode === "mine" && ["open", "preferred-pending", "claimed", "scheduled"].includes(status)) {
     actions.push(`<button type="button" class="cp-action" data-start-assignment-id="${esc(item.id)}">Start</button>`);
   }
   if (mode === "mine" && status === "in-progress") {
@@ -836,7 +836,7 @@ async function loadMyAssignments() {
   const { data, error } = await supabase
     .from("assignment_blocks")
     .select("*")
-    .eq("claimed_by", state.user.id)
+    .or(`claimed_by.eq.${state.user.id},assigned_to.eq.${state.user.id}`)
     .order("start_window", { ascending: true });
 
   if (error) {

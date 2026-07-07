@@ -13,6 +13,8 @@ let activeUser = null;
 let activeSite = null;
 let activePosition = null;
 let activeChecklistItems = [];
+let activeDirectoryDetails = null;
+let activeIssueDraft = "";
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -21,6 +23,10 @@ function escapeHtml(value) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+}
+
+function selectorValue(value) {
+  return String(value ?? "").replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
 function toNumber(value) {
@@ -66,7 +72,7 @@ function getAssignmentCoordinates(assignment) {
 function getMapQuery(assignment) {
   const coordinates = getAssignmentCoordinates(assignment);
   if (coordinates) return `${coordinates.latitude},${coordinates.longitude}`;
-  return assignment?.address || assignment?.property_name || assignment?.title || "";
+  return resolvedAddress(assignment) || assignment?.address || assignment?.property_name || assignment?.title || "";
 }
 
 function mapUrl(assignment, embed = true) {
@@ -110,29 +116,6 @@ function description(assignment) {
     "Complete the assigned checklist for this property before finishing the job.";
 }
 
-function formatDateTime(value) {
-  if (!value) return "Not scheduled";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-  return date.toLocaleString([], {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit"
-  });
-}
-
-function formatMoney(value) {
-  const number = Number(value);
-  if (!Number.isFinite(number) || number <= 0) return "Not listed";
-  return number.toLocaleString(undefined, {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 2
-  });
-}
-
 function formatStatus(value) {
   return String(value || "Not set").replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
@@ -145,6 +128,117 @@ function metadataValue(assignment, keys) {
     if (value !== null && value !== undefined && String(value).trim()) return String(value);
   }
   return "";
+}
+
+function compactAddress(row) {
+  return [row?.address, row?.city, row?.state, row?.postal_code]
+    .map((part) => String(part || "").trim())
+    .filter(Boolean)
+    .join(", ") || String(row?.region || row?.market || "").trim();
+}
+
+function directoryTitle(row) {
+  return row?.property_name || row?.name || row?.company_name || row?.title || "";
+}
+
+function normalizeText(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function directoryAccessNotes(row) {
+  return row?.access_notes || row?.entry_notes || row?.gate_code || row?.special_instructions || row?.notes || "";
+}
+
+function assignmentUnit(assignment) {
+  return metadataValue(assignment, ["unit_name", "unit_number", "property_unit_name", "unit"]);
+}
+
+function assignmentDirectoryNames(assignment) {
+  return [
+    assignment?.property_name,
+    assignment?.title,
+    metadataValue(assignment, ["client_name", "company_name", "property_title"])
+  ].map(normalizeText).filter(Boolean);
+}
+
+function directoryMatchesAssignment(row, assignment) {
+  const assignmentNames = assignmentDirectoryNames(assignment);
+  if (!assignmentNames.length) return false;
+  const rowNames = [
+    row?.property_name,
+    row?.name,
+    row?.company_name,
+    row?.title
+  ].map(normalizeText).filter(Boolean);
+  return rowNames.some((name) => assignmentNames.includes(name));
+}
+
+async function fetchTableRow(table, column, value) {
+  if (!supabase || !value) return null;
+  const { data, error } = await supabase
+    .from(table)
+    .select("*")
+    .eq(column, value)
+    .maybeSingle();
+  if (error) {
+    console.warn(`[contractor-job-flow] Unable to load ${table}`, error);
+    return null;
+  }
+  return data || null;
+}
+
+async function fetchClientById(clientId) {
+  return fetchTableRow("clients", "id", clientId);
+}
+
+async function fetchDirectoryDetails(assignment) {
+  const details = { client: null, portalProperty: null };
+  const propertyId = assignment?.property_id || assignment?.portal_property_id || assignment?.metadata?.property_id || "";
+
+  if (propertyId) {
+    details.portalProperty = await fetchTableRow("portal_properties", "id", propertyId);
+    details.client = await fetchClientById(details.portalProperty?.client_id || propertyId);
+  }
+
+  if (!details.client) {
+    const { data, error } = await supabase
+      .from("clients")
+      .select("*")
+      .limit(500);
+    if (!error) {
+      details.client = (data || []).find((row) => directoryMatchesAssignment(row, assignment)) || null;
+    } else {
+      console.warn("[contractor-job-flow] Unable to search clients", error);
+    }
+  }
+
+  return details;
+}
+
+function resolvedPropertyName(assignment) {
+  return directoryTitle(activeDirectoryDetails?.client)
+    || directoryTitle(activeDirectoryDetails?.portalProperty)
+    || assignment?.property_name
+    || assignment?.title
+    || "Assignment";
+}
+
+function resolvedAddress(assignment) {
+  return compactAddress(activeDirectoryDetails?.client)
+    || compactAddress(activeDirectoryDetails?.portalProperty)
+    || assignment?.address
+    || "";
+}
+
+function resolvedAccessNotes(assignment) {
+  return directoryAccessNotes(activeDirectoryDetails?.client)
+    || directoryAccessNotes(activeDirectoryDetails?.portalProperty)
+    || metadataValue(assignment, ["access_notes", "entry_notes", "gate_code"]);
 }
 
 function detailGrid(rows) {
@@ -169,18 +263,17 @@ function detailNote(label, value, fallback = "Not listed") {
   `;
 }
 
-function detailTags(tags) {
-  const cleanTags = tags
-    .map((tag) => String(tag || "").trim())
-    .filter(Boolean);
-  return cleanTags.length
-    ? `<div class="tj-tag-list">${cleanTags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join("")}</div>`
-    : detailNote("Tags", "", "No tags have been added to this task.");
+function detailTextarea(label, id, value, placeholder) {
+  return `
+    <label class="tj-detail-field">
+      <span>${escapeHtml(label)}</span>
+      <textarea id="${escapeHtml(id)}" rows="4" placeholder="${escapeHtml(placeholder)}">${escapeHtml(value || "")}</textarea>
+    </label>
+  `;
 }
 
 function startDetailContent(tabKey) {
   const assignment = activeAssignment || {};
-  const checklistCount = activeChecklistItems.length;
   const issueText = metadataValue(assignment, [
     "issue_notes",
     "issues",
@@ -189,11 +282,8 @@ function startDetailContent(tabKey) {
     "access_issue",
     "property_issue"
   ]);
-  const unit = metadataValue(assignment, ["unit_name", "unit_number", "property_unit_name", "unit"]);
-  const customerCharge = metadataValue(assignment, ["customer_charge", "client_charge"]);
-  const materialCost = metadataValue(assignment, ["material_cost", "supplies_cost", "expense_amount"]);
+  const unit = assignmentUnit(assignment);
   const attachmentCount = getDetailCount(assignment, ["attachments", "files", "photos", "videos"]);
-  const commentCount = getDetailCount(assignment, ["comments", "notes_thread", "messages"]);
 
   if (tabKey === "issues") {
     return `
@@ -203,94 +293,23 @@ function startDetailContent(tabKey) {
         ["Blocked Areas", metadataValue(assignment, ["blocked_areas"]) || "None logged"],
         ["Attachments", String(attachmentCount)]
       ])}
-      ${detailNote("Issue Notes", issueText, "No open property issues have been logged for this assignment.")}
-      ${assignment.special_instructions ? detailNote("Special Instructions", assignment.special_instructions) : ""}
+      ${detailNote("Known Issues", issueText, "No known property issues have been logged for this assignment.")}
+      ${detailTextarea("Report Issues Found So Far", "tjIssueNotes", activeIssueDraft, "Leaks, damage, access problems, safety concerns, missing supplies, etc.")}
     `;
   }
 
   if (tabKey === "property") {
     return `
       ${detailGrid([
-        ["Property", assignment.property_name || assignment.title || "Assignment"],
+        ["Property Name", resolvedPropertyName(assignment)],
         ["Unit", unit || "No unit selected"],
-        ["Address", assignment.address || "Address not set"],
-        ["Map", getMapQuery(assignment) || "No map location available"]
+        ["Address", resolvedAddress(assignment) || "Address not set"]
       ])}
-      ${detailNote("Access Notes", metadataValue(assignment, ["access_notes", "entry_notes", "gate_code"]), "No access notes are listed.")}
+      ${detailNote("Access Notes", resolvedAccessNotes(assignment), "No access notes are listed.")}
     `;
   }
 
-  if (tabKey === "costs") {
-    return `
-      ${detailGrid([
-        ["Contractor Pay", formatMoney(assignment.pay_amount || assignment.contractor_pay)],
-        ["Customer Charge", customerCharge ? formatMoney(customerCharge) : "Not listed"],
-        ["Material Cost", materialCost ? formatMoney(materialCost) : "Not listed"],
-        ["Service Type", assignment.service_type || "Not listed"]
-      ])}
-      ${detailNote("Cost Notes", metadataValue(assignment, ["cost_notes", "expense_notes"]), "No added cost notes for this job.")}
-    `;
-  }
-
-  if (tabKey === "supplies") {
-    return `
-      ${detailGrid([
-        ["Service Type", assignment.service_type || "Not listed"],
-        ["Checklist Items", `${checklistCount} assigned`],
-        ["Required Media", requiredMediaSummary(activeChecklistItems)],
-        ["Supply Status", metadataValue(assignment, ["supply_status"]) || "Review notes"]
-      ])}
-      ${detailNote("Supplies Notes", assignment.supplies_notes || metadataValue(assignment, ["supplies"]), "No supplies notes are listed for this job.")}
-    `;
-  }
-
-  if (tabKey === "task") {
-    return `
-      ${detailGrid([
-        ["Service", assignment.service_type || "Not listed"],
-        ["Schedule", `${formatDateTime(assignment.start_window)} - ${formatDateTime(assignment.end_window)}`],
-        ["Checklist", `${checklistCount} item(s)`],
-        ["Status", formatStatus(assignment.status)]
-      ])}
-      ${detailNote("Scope of Work", assignment.scope || assignment.description, "No scope is listed.")}
-      ${detailNote("Special Instructions", assignment.special_instructions, "No special instructions are listed.")}
-    `;
-  }
-
-  if (tabKey === "tags") {
-    return detailTags([
-      assignment.priority,
-      assignment.status,
-      assignment.service_type,
-      assignment.assignment_type,
-      assignment.recurrence_frequency,
-      unit,
-      ...(Array.isArray(assignment.tags) ? assignment.tags : []),
-      ...(Array.isArray(assignment.metadata?.tags) ? assignment.metadata.tags : [])
-    ]);
-  }
-
-  return `
-    ${detailGrid([
-      ["Property", assignment.property_name || assignment.title || "Assignment"],
-      ["Window", `${formatDateTime(assignment.start_window)} - ${formatDateTime(assignment.end_window)}`],
-      ["Pay", formatMoney(assignment.pay_amount || assignment.contractor_pay)],
-      ["Checklist", `${checklistCount} item(s)`],
-      ["Attachments", String(attachmentCount)],
-      ["Comments", String(commentCount)]
-    ])}
-    ${detailNote("Summary", description(assignment))}
-  `;
-}
-
-function requiredMediaSummary(items) {
-  const counts = items.reduce((summary, item) => {
-    const media = item.media_required && item.media_required !== "none" ? item.media_required : "";
-    if (media) summary[media] = (summary[media] || 0) + 1;
-    return summary;
-  }, {});
-  const labels = Object.entries(counts).map(([key, count]) => `${count} ${key.replace(/_/g, " ")}`);
-  return labels.join(", ") || "None required";
+  return "";
 }
 
 function getDetailCount(assignment, keys) {
@@ -304,35 +323,25 @@ function getDetailCount(assignment, keys) {
   return 0;
 }
 
-function setStartDetailPanel(tabKey = "summary") {
-  const panel = document.getElementById("tjDetailPanel");
-  if (!panel || !activeAssignment) return;
+function setStartDetailPanel(tabKey = "property", forceOpen = true) {
+  if (!activeAssignment) return;
+  const targetButton = document.querySelector(`[data-tj-detail="${selectorValue(tabKey)}"]`);
+  const isCurrentlyOpen = targetButton?.getAttribute("aria-expanded") === "true";
+  const shouldOpenTarget = forceOpen || !isCurrentlyOpen;
 
   document.querySelectorAll("[data-tj-detail]").forEach((button) => {
-    const isActive = button.dataset.tjDetail === tabKey;
+    const key = button.dataset.tjDetail;
+    const panel = document.querySelector(`[data-tj-panel="${selectorValue(key)}"]`);
+    const isActive = key === tabKey && shouldOpenTarget;
     button.classList.toggle("active", isActive);
     button.setAttribute("aria-expanded", String(isActive));
+    if (panel) {
+      panel.hidden = !isActive;
+      panel.innerHTML = isActive
+        ? `<div class="tj-detail-panel-inner">${startDetailContent(key)}</div>`
+        : "";
+    }
   });
-
-  const label = {
-    issues: "Issues",
-    property: "Property Details",
-    costs: "Costs",
-    supplies: "Supplies",
-    task: "Task Details",
-    tags: "Task Tags",
-    summary: "Summary"
-  }[tabKey] || "Summary";
-
-  panel.innerHTML = `
-    <div class="tj-detail-panel-inner">
-      <div class="tj-detail-panel-head">
-        <span>Details</span>
-        <strong>${escapeHtml(label)}</strong>
-      </div>
-      ${startDetailContent(tabKey)}
-    </div>
-  `;
 }
 
 async function geocodeAddress(address) {
@@ -363,7 +372,7 @@ async function geocodeAddress(address) {
 function resolveSite(assignment) {
   activeSite = getAssignmentCoordinates(assignment);
   if (!activeSite) {
-    geocodeAddress(assignment?.address).then((site) => {
+    geocodeAddress(resolvedAddress(assignment) || assignment?.address).then((site) => {
       if (site) activeSite = site;
     });
   }
@@ -390,13 +399,17 @@ async function checklistItems(assignment) {
   }
   if (!assignment?.property_id) return [];
 
-  const { data } = await supabase
-    .from("properties")
-    .select("checklist_items")
-    .eq("id", assignment.property_id)
-    .maybeSingle();
+  for (const table of ["portal_properties", "properties"]) {
+    const { data, error } = await supabase
+      .from(table)
+      .select("checklist_items")
+      .eq("id", assignment.property_id)
+      .maybeSingle();
 
-  return Array.isArray(data?.checklist_items) ? data.checklist_items : [];
+    if (!error && Array.isArray(data?.checklist_items)) return data.checklist_items;
+  }
+
+  return [];
 }
 
 function showPageMessage(text) {
@@ -601,14 +614,16 @@ function injectStyles() {
       .tj-row span {
         color: var(--admin-muted, #9aaabc);
         font-size: 20px;
+        transition: transform .16s ease, color .16s ease;
       }
       .tj-row.active span {
         color: var(--admin-green, #1fe28a);
+        transform: rotate(90deg);
       }
       .tj-detail-panel {
-        border-top: 1px solid rgba(255, 255, 255, .08);
-        padding-top: 14px;
+        padding: 0 0 10px;
       }
+      .tj-detail-panel[hidden] { display: none; }
       .tj-detail-panel-inner {
         background: rgba(255, 255, 255, .045);
         border: 1px solid rgba(255, 255, 255, .08);
@@ -617,14 +632,9 @@ function injectStyles() {
         gap: 12px;
         padding: 14px;
       }
-      .tj-detail-panel-head {
-        display: flex;
-        gap: 10px;
-        justify-content: space-between;
-      }
-      .tj-detail-panel-head span,
       .tj-detail-grid span,
-      .tj-detail-note span {
+      .tj-detail-note span,
+      .tj-detail-field span {
         color: var(--admin-muted, #9aaabc);
         font-size: 12px;
         font-weight: 900;
@@ -651,19 +661,9 @@ function injectStyles() {
         line-height: 1.55;
         margin: 6px 0 0;
       }
-      .tj-tag-list {
-        display: flex;
-        flex-wrap: wrap;
+      .tj-detail-field {
+        display: grid;
         gap: 8px;
-      }
-      .tj-tag-list span {
-        background: rgba(31, 226, 138, .13);
-        border: 1px solid rgba(31, 226, 138, .3);
-        border-radius: 999px;
-        color: var(--admin-green, #1fe28a);
-        font-size: 12px;
-        font-weight: 900;
-        padding: 7px 10px;
       }
       .tj-actions {
         background: rgba(7, 16, 27, .96);
@@ -676,6 +676,25 @@ function injectStyles() {
         display: grid;
         font-weight: 800;
         gap: 8px;
+      }
+      .tj-note textarea,
+      .tc-note textarea,
+      .tj-detail-field textarea {
+        background: rgba(5, 14, 24, .86);
+        border: 1px solid rgba(144, 164, 183, .22);
+        border-radius: 8px;
+        color: #eef5fb;
+        font: inherit;
+        line-height: 1.45;
+        min-height: 96px;
+        padding: 12px;
+        resize: vertical;
+        width: 100%;
+      }
+      .tj-note textarea::placeholder,
+      .tc-note textarea::placeholder,
+      .tj-detail-field textarea::placeholder {
+        color: rgba(154, 170, 188, .8);
       }
       .tj-action-row,
       .tc-action-row,
@@ -866,19 +885,11 @@ function ensureStartModal() {
 
           <div class="tj-section">
             <h3>Property</h3>
-            <button class="tj-row" type="button" data-tj-detail="issues" aria-expanded="false"><strong>Issues</strong><span>&rsaquo;</span></button>
-            <button class="tj-row" type="button" data-tj-detail="property" aria-expanded="false"><strong>Property details</strong><span>&rsaquo;</span></button>
+            <button class="tj-row" type="button" data-tj-detail="issues" aria-expanded="false" aria-controls="tjIssuesPanel"><strong>Issues</strong><span class="tj-row-arrow" aria-hidden="true">&rsaquo;</span></button>
+            <div id="tjIssuesPanel" class="tj-detail-panel" data-tj-panel="issues" hidden></div>
+            <button class="tj-row" type="button" data-tj-detail="property" aria-expanded="false" aria-controls="tjPropertyPanel"><strong>Property details</strong><span class="tj-row-arrow" aria-hidden="true">&rsaquo;</span></button>
+            <div id="tjPropertyPanel" class="tj-detail-panel" data-tj-panel="property" hidden></div>
           </div>
-
-          <div class="tj-section">
-            <h3>Task</h3>
-            <button class="tj-row" type="button" data-tj-detail="costs" aria-expanded="false"><strong>Costs</strong><span>&rsaquo;</span></button>
-            <button class="tj-row" type="button" data-tj-detail="supplies" aria-expanded="false"><strong>Supplies</strong><span>&rsaquo;</span></button>
-            <button class="tj-row" type="button" data-tj-detail="task" aria-expanded="false"><strong>Task details</strong><span>&rsaquo;</span></button>
-            <button class="tj-row" type="button" data-tj-detail="tags" aria-expanded="false"><strong>Task tags</strong><span>&rsaquo;</span></button>
-            <button class="tj-row" type="button" data-tj-detail="summary" aria-expanded="false"><strong>Summary</strong><span>&rsaquo;</span></button>
-          </div>
-          <div id="tjDetailPanel" class="tj-detail-panel" aria-live="polite"></div>
         </section>
 
         <section class="tj-actions">
@@ -909,7 +920,12 @@ function ensureStartModal() {
   modal.addEventListener("click", (event) => {
     const detailButton = event.target.closest("[data-tj-detail]");
     if (detailButton && modal.contains(detailButton)) {
-      setStartDetailPanel(detailButton.dataset.tjDetail);
+      setStartDetailPanel(detailButton.dataset.tjDetail, false);
+    }
+  });
+  modal.addEventListener("input", (event) => {
+    if (event.target?.id === "tjIssueNotes") {
+      activeIssueDraft = event.target.value || "";
     }
   });
   return modal;
@@ -951,15 +967,18 @@ async function captureLocation() {
 
 async function openStartModal(assignmentId) {
   activeUser = await currentUser();
-  if (!activeUser) return;
+  if (!activeUser) throw new Error("Please sign in again before starting this job.");
 
   activeAssignment = await fetchAssignment(assignmentId);
+  if (!activeAssignment) throw new Error("This assignment could not be loaded.");
   activePosition = null;
   activeSite = null;
+  activeDirectoryDetails = await fetchDirectoryDetails(activeAssignment);
+  activeIssueDraft = "";
   const items = await checklistItems(activeAssignment);
   activeChecklistItems = items;
-  const property = activeAssignment.property_name || activeAssignment.title || "Assignment";
-  const address = activeAssignment.address || "Address not set";
+  const property = resolvedPropertyName(activeAssignment);
+  const address = resolvedAddress(activeAssignment) || "Address not set";
   const embed = mapUrl(activeAssignment, true);
 
   const modal = ensureStartModal();
@@ -979,7 +998,7 @@ async function openStartModal(assignmentId) {
   document.getElementById("tjStartNotes").value = "";
   document.getElementById("tjMessage").textContent = "";
   document.getElementById("tjLocation").textContent = "Location is optional. You can start this job now.";
-  setStartDetailPanel("summary");
+  setStartDetailPanel("property");
   modal.hidden = false;
   resolveSite(activeAssignment);
 }
@@ -988,6 +1007,8 @@ function closeStartModal() {
   const modal = document.getElementById("turnlyMobileStartModal");
   if (modal) modal.hidden = true;
   activeChecklistItems = [];
+  activeDirectoryDetails = null;
+  activeIssueDraft = "";
 }
 
 async function startJob() {
@@ -1001,12 +1022,30 @@ async function startJob() {
   if (button) button.disabled = true;
   if (message) message.textContent = "Starting job...";
 
+  const now = new Date().toISOString();
+  const issueNotes = (document.getElementById("tjIssueNotes")?.value || activeIssueDraft || "").trim();
+  const userName = activeUser.user_metadata?.full_name || activeUser.email?.split("@")[0] || "Contractor";
   const payload = {
     status: "in_progress",
-    started_at: new Date().toISOString(),
+    claimed_by: activeUser.id,
+    claimed_by_name: userName,
+    claimed_by_email: activeUser.email || null,
+    claimed_at: activeAssignment.claimed_at || now,
+    started_at: now,
     started_by: activeUser.id,
     start_notes: document.getElementById("tjStartNotes")?.value.trim() || null
   };
+
+  if (issueNotes) {
+    const metadata = activeAssignment.metadata && typeof activeAssignment.metadata === "object"
+      ? { ...activeAssignment.metadata }
+      : {};
+    metadata.contractor_start_issues = issueNotes;
+    metadata.latest_contractor_issue = issueNotes;
+    metadata.issue_reported_at = now;
+    metadata.issue_reported_by = activeUser.id;
+    payload.metadata = metadata;
+  }
 
   if (activePosition) {
     payload.start_latitude = activePosition.latitude;
@@ -1025,8 +1064,8 @@ async function startJob() {
     .from("assignment_blocks")
     .update(payload)
     .eq("id", activeAssignment.id)
-    .eq("claimed_by", activeUser.id)
-    .in("status", ["claimed", "scheduled"])
+    .or(`claimed_by.eq.${activeUser.id},assigned_to.eq.${activeUser.id}`)
+    .in("status", ["claimed", "scheduled", "open", "preferred_pending"])
     .select("*")
     .maybeSingle();
 
@@ -1036,7 +1075,7 @@ async function startJob() {
     return;
   }
   if (!data) {
-    if (message) message.textContent = "This job could not be started from its current status.";
+    if (message) message.textContent = "This job could not be started from its current status or owner. Refresh My Jobs and try again.";
     return;
   }
 
@@ -1086,12 +1125,13 @@ async function openChecklistModal(assignmentOrId) {
   if (!activeUser) return;
 
   activeAssignment = typeof assignmentOrId === "string" ? await fetchAssignment(assignmentOrId) : assignmentOrId;
+  activeDirectoryDetails = await fetchDirectoryDetails(activeAssignment);
   const items = await checklistItems(activeAssignment);
   const modal = ensureChecklistModal();
 
   document.getElementById("tcSummary").innerHTML = `
-    <div><span>Property</span><strong>${escapeHtml(activeAssignment.property_name || activeAssignment.title || "Assignment")}</strong></div>
-    <div><span>Address</span><strong>${escapeHtml(activeAssignment.address || "Address not set")}</strong></div>
+    <div><span>Property</span><strong>${escapeHtml(resolvedPropertyName(activeAssignment))}</strong></div>
+    <div><span>Address</span><strong>${escapeHtml(resolvedAddress(activeAssignment) || activeAssignment.address || "Address not set")}</strong></div>
     <div><span>Status</span><strong>${escapeHtml(activeAssignment.status || "in progress")}</strong></div>
     <div><span>Checklist</span><strong>${items.length} item(s)</strong></div>
   `;
@@ -1195,7 +1235,7 @@ async function renderActiveChecklistPanel() {
   const { data } = await supabase
     .from("assignment_blocks")
     .select("id, title, property_name")
-    .eq("claimed_by", user.id)
+    .or(`claimed_by.eq.${user.id},assigned_to.eq.${user.id}`)
     .eq("status", "in_progress")
     .order("started_at", { ascending: false });
 
@@ -1221,7 +1261,17 @@ document.addEventListener("click", async (event) => {
   if (startButton) {
     event.preventDefault();
     event.stopImmediatePropagation();
-    await openStartModal(startButton.dataset.startAssignmentId);
+    startButton.disabled = true;
+    showPageMessage("Opening job details...");
+    try {
+      await openStartModal(startButton.dataset.startAssignmentId);
+      showPageMessage("");
+    } catch (error) {
+      console.error("[contractor-job-flow] Unable to open start modal", error);
+      showPageMessage("Unable to open job details: " + (error?.message || "Unknown error"));
+    } finally {
+      startButton.disabled = false;
+    }
     return;
   }
 
