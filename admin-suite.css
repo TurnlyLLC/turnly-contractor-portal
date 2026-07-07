@@ -2514,6 +2514,111 @@ a {
   min-height: auto;
 }
 
+.schedule-live-page .schedule-event-card {
+  cursor: pointer;
+}
+
+.schedule-live-page .schedule-event-card:hover,
+.schedule-live-page .schedule-event-card:focus-visible {
+  border-color: rgba(0, 214, 163, 0.42);
+}
+
+.schedule-live-page .schedule-event-card:focus-visible {
+  outline: 2px solid rgba(0, 214, 163, 0.42);
+  outline-offset: 2px;
+}
+
+.schedule-assignment-panel {
+  max-width: min(920px, calc(100vw - 32px));
+}
+
+.schedule-assignment-detail {
+  display: grid;
+  gap: 14px;
+}
+
+.schedule-assignment-hero {
+  align-items: flex-start;
+  background: rgba(7, 18, 32, 0.58);
+  border: 1px solid var(--suite-border-soft);
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-width: 0;
+  padding: 14px;
+}
+
+.schedule-assignment-hero span,
+.schedule-assignment-detail-grid span,
+.schedule-assignment-notes span {
+  color: var(--suite-soft);
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.schedule-assignment-hero h3 {
+  color: var(--suite-text);
+  font-size: 18px;
+  line-height: 1.25;
+  margin: 3px 0;
+}
+
+.schedule-assignment-hero p {
+  color: var(--suite-soft);
+  font-size: 12px;
+  margin: 0;
+}
+
+.schedule-assignment-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.schedule-assignment-detail-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.schedule-assignment-detail-grid > div,
+.schedule-assignment-notes > div {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(124, 151, 176, 0.14);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px;
+}
+
+.schedule-assignment-detail-grid strong {
+  color: var(--suite-text);
+  font-size: 13px;
+  line-height: 1.25;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.schedule-assignment-detail-grid small,
+.schedule-assignment-notes p {
+  color: var(--suite-soft);
+  font-size: 11px;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.schedule-assignment-notes {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .filter-card {
   padding: 14px;
 }
@@ -3393,6 +3498,11 @@ a {
     grid-template-columns: 1fr;
   }
 
+  .schedule-assignment-detail-grid,
+  .schedule-assignment-notes {
+    grid-template-columns: 1fr;
+  }
+
   .property-unit-selector-grid,
   .property-unit-quick-form,
   .property-unit-row {
@@ -3470,6 +3580,14 @@ a {
 
   .command-customize-bar .secondary-action {
     width: 100%;
+  }
+
+  .schedule-assignment-hero {
+    display: grid;
+  }
+
+  .schedule-assignment-badges {
+    justify-content: flex-start;
   }
 
   .command-widget-catalog {

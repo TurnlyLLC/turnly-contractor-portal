@@ -75,6 +75,19 @@ function mountScheduleShell() {
           </aside>
         </aside>
       </section>
+      <div id="scheduleAssignmentModal" class="client-modal schedule-assignment-modal" role="dialog" aria-modal="true" aria-labelledby="scheduleAssignmentModalTitle" hidden>
+        <button class="client-modal-backdrop" type="button" aria-label="Close assignment details" data-schedule-detail-close></button>
+        <section class="client-modal-panel schedule-assignment-panel">
+          <div class="client-modal-header">
+            <div>
+              <p>Schedule Assignment</p>
+              <h2 id="scheduleAssignmentModalTitle">Assignment Details</h2>
+            </div>
+            <button class="client-modal-close" type="button" aria-label="Close assignment details" data-schedule-detail-close>&times;</button>
+          </div>
+          <div id="scheduleAssignmentModalBody"></div>
+        </section>
+      </div>
     </section>
   `;
 }
@@ -100,6 +113,18 @@ function bindScheduleEvents() {
   root.dataset.bound = "true";
 
   root.addEventListener("click", (event) => {
+    const closeDetail = event.target.closest("[data-schedule-detail-close]");
+    if (closeDetail) {
+      closeScheduleAssignmentModal();
+      return;
+    }
+
+    const assignmentCard = event.target.closest("[data-schedule-assignment-id]");
+    if (assignmentCard) {
+      openScheduleAssignmentModal(assignmentCard.dataset.scheduleAssignmentId);
+      return;
+    }
+
     const viewButtonEl = event.target.closest("[data-schedule-view]");
     if (viewButtonEl) {
       state.view = viewButtonEl.dataset.scheduleView || "week";
@@ -129,6 +154,18 @@ function bindScheduleEvents() {
       state.filters = { property: "all", contractor: "all", service: "all", status: "all" };
       renderSchedule();
     }
+  });
+
+  root.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeScheduleAssignmentModal();
+      return;
+    }
+    if (!["Enter", " "].includes(event.key)) return;
+    const assignmentCard = event.target.closest("[data-schedule-assignment-id]");
+    if (!assignmentCard) return;
+    event.preventDefault();
+    openScheduleAssignmentModal(assignmentCard.dataset.scheduleAssignmentId);
   });
 
   root.addEventListener("change", (event) => {
@@ -346,8 +383,9 @@ function eventCard(row, options = {}) {
   const title = row.property_name || row.title || "Scheduled assignment";
   const unit = unitLabel(row);
   const subtitle = [unit !== "No unit" ? `Unit ${unit}` : "", row.service_type].filter(Boolean).join(" - ");
+  const id = String(row.id || "");
   return `
-    <article class="schedule-event-card ${options.compact ? "compact" : ""}">
+    <article class="schedule-event-card ${options.compact ? "compact" : ""}" data-schedule-assignment-id="${escapeHtml(id)}" role="button" tabindex="0" aria-label="View details for ${escapeHtml(title)}">
       <div class="schedule-event-time">${escapeHtml(eventTime(row))}</div>
       <strong>${escapeHtml(title)}</strong>
       ${options.compact ? "" : `<p>${escapeHtml(subtitle || row.title || "Assignment")}</p>`}
@@ -378,6 +416,126 @@ function eventTime(row) {
   const startText = start.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   if (!end) return startText;
   return `${startText} - ${end.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+}
+
+function openScheduleAssignmentModal(id) {
+  const row = state.rows.find((item) => String(item.id || "") === String(id || ""));
+  const modal = document.getElementById("scheduleAssignmentModal");
+  const body = document.getElementById("scheduleAssignmentModalBody");
+  if (!row || !modal || !body) return;
+  body.innerHTML = scheduleAssignmentDetail(row);
+  modal.hidden = false;
+  modal.querySelector("[data-schedule-detail-close]")?.focus();
+}
+
+function closeScheduleAssignmentModal() {
+  const modal = document.getElementById("scheduleAssignmentModal");
+  if (modal) modal.hidden = true;
+}
+
+function scheduleAssignmentDetail(row) {
+  const accepted = acceptanceStatus(row);
+  const title = row.property_name || row.title || "Scheduled assignment";
+  const unit = unitLabel(row);
+  const notes = assignmentNotes(row);
+  const detailItems = [
+    ["Property Name", title, row.address || "No address"],
+    ["Unit Number", unit, assignmentUnitMeta(row)],
+    ["Schedule", assignmentDateWindow(row), assignmentFrequencyLabel(row)],
+    ["Contractor Routing", contractorText(row), assignmentRoutingMeta(row)],
+    ["Contractor Pay", assignmentMoney(row.pay_amount), row.service_type || "No service type"],
+    ["Special Notes", notes.special || notes.scope || "No special notes", notes.special ? "Special instructions" : "Scope"]
+  ];
+  return `
+    <section class="schedule-assignment-detail">
+      <div class="schedule-assignment-hero">
+        <div>
+          <span>${escapeHtml(assignmentShortId(row))}</span>
+          <h3>${escapeHtml(row.title || title)}</h3>
+          <p>${escapeHtml([row.address, row.service_type].filter(Boolean).join(" - ") || "Assignment details")}</p>
+        </div>
+        <div class="schedule-assignment-badges">
+          <span class="status-badge status-${escapeHtml(statusKey(row.status || "scheduled"))}">${escapeHtml(titleCase(row.status || "scheduled"))}</span>
+          <span class="status-badge schedule-acceptance-badge is-${escapeHtml(accepted.tone)}">${escapeHtml(accepted.label)}</span>
+        </div>
+      </div>
+      <div class="schedule-assignment-detail-grid">
+        ${detailItems.map(([label, value, meta]) => `
+          <div>
+            <span>${escapeHtml(label)}</span>
+            <strong>${escapeHtml(value)}</strong>
+            <small>${escapeHtml(meta)}</small>
+          </div>
+        `).join("")}
+      </div>
+      <div class="schedule-assignment-notes">
+        <div><span>Scope of Work</span><p>${escapeHtml(notes.scope || "No scope entered.")}</p></div>
+        <div><span>Supplies Notes</span><p>${escapeHtml(notes.supplies || "No supplies notes entered.")}</p></div>
+        <div><span>Special Instructions</span><p>${escapeHtml(notes.special || "No special instructions entered.")}</p></div>
+      </div>
+    </section>
+  `;
+}
+
+function assignmentDateWindow(row) {
+  const start = parseDate(row.start_window);
+  const end = parseDate(row.end_window);
+  if (!start) return "No start time";
+  const startText = start.toLocaleString([], { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+  if (!end) return startText;
+  const sameDate = sameDay(start, end);
+  const endText = end.toLocaleString([], sameDate
+    ? { hour: "numeric", minute: "2-digit" }
+    : { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+  return `${startText} - ${endText}`;
+}
+
+function assignmentFrequencyLabel(row) {
+  const value = row?.recurrence_frequency || row?.assignment_type || "one_time";
+  return titleCase(value || "one_time");
+}
+
+function assignmentRoutingMeta(row) {
+  const names = Array.isArray(row?.preferred_contractor_names) ? row.preferred_contractor_names.filter(Boolean) : [];
+  if (row?.assigned_to || row?.assigned_to_name || row?.assigned_to_email) return "Assigned contractor";
+  if (row?.claimed_by || row?.claimed_by_name || row?.claimed_by_email) return "Claimed contractor";
+  if (names.length) return `${names.length} preferred contractor${names.length === 1 ? "" : "s"}`;
+  return "Open to contractors";
+}
+
+function assignmentMoney(value) {
+  const amount = Number(value || 0);
+  return amount.toLocaleString([], { style: "currency", currency: "USD", maximumFractionDigits: amount % 1 ? 2 : 0 });
+}
+
+function assignmentNotes(row) {
+  const metadata = assignmentMetadata(row);
+  return {
+    scope: row?.scope || "",
+    supplies: row?.supplies_notes || "",
+    special: row?.special_instructions || metadata.unit_notes || ""
+  };
+}
+
+function assignmentUnitMeta(row) {
+  const metadata = assignmentMetadata(row);
+  const feet = metadata.square_feet || metadata.sq_ft || row?.square_feet || row?.sq_ft;
+  return feet ? `${feet} sq ft` : "Unit details";
+}
+
+function assignmentMetadata(row) {
+  const metadata = row?.metadata;
+  if (!metadata) return {};
+  if (typeof metadata === "object") return metadata;
+  try {
+    return JSON.parse(metadata) || {};
+  } catch {
+    return {};
+  }
+}
+
+function assignmentShortId(row) {
+  return row?.id ? `A-${String(row.id).slice(0, 8).toUpperCase()}` : "Assignment";
 }
 
 function periodRange() {
