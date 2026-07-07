@@ -368,6 +368,8 @@ const checklistState = {
   selectedTemplateId: "",
   selectedPropertyId: "",
   selectedUnitIds: new Set(),
+  defaultModuleCounts: {},
+  unitModuleCounts: {},
   builder: null,
   user: null,
   isSaving: false,
@@ -3687,7 +3689,7 @@ function renderChecklists() {
         <div class="panel-head">
           <div>
             <h2>Checklist Builder</h2>
-            <p>Create templates, then assign the current template to properties or individual units.</p>
+            <p>Create reusable modules like Bedroom or Kitchen, then assign module counts by property unit.</p>
           </div>
           <div class="panel-actions">
             <button class="secondary-action" type="button" data-checklist-refresh>${icon("refresh")}<span>Refresh</span></button>
@@ -3705,7 +3707,7 @@ function renderChecklists() {
       </section>
       <section class="metric-strip four">
         ${metric("Templates", "0", "saved in Supabase", "file-check", "green", 'id="checklistTemplateCount"')}
-        ${metric("Sections", "0", "in current template", "layout-grid", "blue", 'id="checklistSectionCount"')}
+        ${metric("Modules", "0", "in current template", "layout-grid", "blue", 'id="checklistSectionCount"')}
         ${metric("Checklist Items", "0", "contractor requirements", "clipboard-list", "purple", 'id="checklistItemCount"')}
         ${metric("Assigned", "0", "properties and units", "check", "orange", 'id="checklistAssignedCount"')}
       </section>
@@ -3714,7 +3716,7 @@ function renderChecklists() {
           <div class="panel-head">
             <div>
               <h2>Template Details</h2>
-              <p>Build the sections contractors will complete during a job.</p>
+              <p>Build modules contractors will complete during a job.</p>
             </div>
             <button class="primary-action" type="submit" form="checklistTemplateForm">${icon("check")}<span>Save Template</span></button>
           </div>
@@ -3727,8 +3729,8 @@ function renderChecklists() {
             <label class="suite-field wide"><span>Description</span><textarea id="checklist_template_description" rows="3" placeholder="What this checklist should be used for">${esc(checklistState.builder.description || "")}</textarea></label>
           </form>
           <div class="checklist-section-composer">
-            <label class="suite-field"><span>Add Section</span><input id="newChecklistSectionTitle" placeholder="Kitchen, bathrooms, final QA, photos" /></label>
-            <button class="secondary-action" type="button" data-checklist-add-section>${icon("plus")}<span>Add Section</span></button>
+            <label class="suite-field"><span>Add Module</span><input id="newChecklistSectionTitle" placeholder="Bedroom, kitchen, bathroom, final QA" /></label>
+            <button class="secondary-action" type="button" data-checklist-add-section>${icon("plus")}<span>Add Module</span></button>
           </div>
           <div id="checklistSections" class="checklist-section-list">${renderChecklistSectionsMarkup()}</div>
         </section>
@@ -3780,7 +3782,10 @@ function createBlankChecklistTemplate() {
     subdepartment: "",
     priority: "medium",
     description: "",
-    sections: [createChecklistSection()]
+    sections: [
+      createChecklistSection("Bedroom"),
+      createChecklistSection("Kitchen")
+    ]
   };
 }
 
@@ -3816,7 +3821,7 @@ function normalizeChecklistRoom(room = {}, index = 0) {
 function normalizeChecklistSection(section = {}, index = 0) {
   return {
     id: section.id || checklistUid("section"),
-    title: section.title || section.name || `Section ${index + 1}`,
+    title: section.title || section.name || `Module ${index + 1}`,
     items: checklistArray(section.items).map(normalizeChecklistItem),
     rooms: checklistArray(section.rooms).map(normalizeChecklistRoom)
   };
@@ -3848,7 +3853,7 @@ function cleanChecklistTemplateForSave(template) {
         .filter((room) => room.title.trim() || room.items.length);
       return {
         ...section,
-        title: section.title.trim() || "Untitled Section",
+        title: section.title.trim() || "Untitled Module",
         items,
         rooms
       };
@@ -3881,6 +3886,70 @@ function checklistItemTypeOptions(value = "check") {
   ].map(([id, label]) => `<option value="${esc(id)}" ${id === value ? "selected" : ""}>${esc(label)}</option>`).join("");
 }
 
+function checklistModules(template = checklistState.builder || createBlankChecklistTemplate()) {
+  return normalizeChecklistTemplate(template).sections;
+}
+
+function checklistModuleCountValue(value, fallback = 1) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.max(0, Math.min(50, Math.floor(number)));
+}
+
+function checklistJsonObject(value) {
+  if (value && typeof value === "object" && !Array.isArray(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+function normalizeChecklistModuleCounts(counts = {}, template = checklistState.builder || createBlankChecklistTemplate(), fallback = null) {
+  const source = checklistJsonObject(counts);
+  const fallbackSource = fallback ? checklistJsonObject(fallback) : {};
+  return checklistModules(template).reduce((normalized, module) => {
+    const titleKey = normalizeToken(module.title);
+    const raw = source[module.id] ?? source[titleKey] ?? source[module.title] ?? fallbackSource[module.id] ?? fallbackSource[titleKey] ?? fallbackSource[module.title] ?? 1;
+    normalized[module.id] = checklistModuleCountValue(raw, 1);
+    return normalized;
+  }, {});
+}
+
+function ensureChecklistDefaultModuleCounts(template = checklistState.builder || createBlankChecklistTemplate()) {
+  checklistState.defaultModuleCounts = normalizeChecklistModuleCounts(checklistState.defaultModuleCounts, template);
+  return checklistState.defaultModuleCounts;
+}
+
+function checklistCountsMatchTemplate(row = {}) {
+  return Boolean(row?.checklist_template_id && checklistState.builder?.id && row.checklist_template_id === checklistState.builder.id);
+}
+
+function getChecklistUnitModuleCounts(unit = {}, options = {}) {
+  const current = checklistState.unitModuleCounts[unit.id] || {};
+  const stored = checklistCountsMatchTemplate(unit) ? unit.checklist_module_counts : {};
+  const fallback = Object.keys(current).length ? current : Object.keys(checklistJsonObject(stored)).length ? stored : ensureChecklistDefaultModuleCounts();
+  const counts = normalizeChecklistModuleCounts(fallback);
+  if (unit.id && options.persist !== false) checklistState.unitModuleCounts[unit.id] = counts;
+  return counts;
+}
+
+function setChecklistDefaultModuleCount(moduleId, value) {
+  checklistState.defaultModuleCounts = ensureChecklistDefaultModuleCounts();
+  checklistState.defaultModuleCounts[moduleId] = checklistModuleCountValue(value, 1);
+}
+
+function setChecklistUnitModuleCount(unitId, moduleId, value) {
+  const unit = checklistState.units.find((row) => row.id === unitId) || { id: unitId };
+  const counts = getChecklistUnitModuleCounts(unit);
+  counts[moduleId] = checklistModuleCountValue(value, 1);
+  checklistState.unitModuleCounts[unitId] = counts;
+}
+
 function checklistTemplateOptions() {
   const term = (document.getElementById("checklistTemplateSearch")?.value || "").trim().toLowerCase();
   const templates = checklistState.templates
@@ -3903,15 +3972,15 @@ function renderChecklistSectionCard(section, index) {
   return `
     <article class="checklist-section-card" data-checklist-section-id="${esc(section.id)}">
       <div class="checklist-section-head">
-        <label class="suite-field"><span>Section ${index + 1}</span><input value="${esc(section.title || "")}" data-checklist-section-title placeholder="Section name" /></label>
-        <button class="ghost-icon-btn danger-btn" type="button" data-checklist-remove-section="${esc(section.id)}" aria-label="Remove section">${icon("trash")}</button>
+        <label class="suite-field"><span>Module ${index + 1}</span><input value="${esc(section.title || "")}" data-checklist-section-title placeholder="Bedroom, kitchen, bathroom" /></label>
+        <button class="ghost-icon-btn danger-btn" type="button" data-checklist-remove-section="${esc(section.id)}" aria-label="Remove module">${icon("trash")}</button>
       </div>
       <div class="checklist-item-list" data-checklist-section-items>
         ${section.items.map((item) => renderChecklistItemRow(item, "section")).join("")}
       </div>
       <div class="checklist-row-actions">
-        <button class="secondary-action" type="button" data-checklist-add-item="${esc(section.id)}">${icon("plus")}<span>Add Item</span></button>
-        <button class="secondary-action" type="button" data-checklist-add-room="${esc(section.id)}">${icon("plus")}<span>Add Room</span></button>
+        <button class="secondary-action" type="button" data-checklist-add-item="${esc(section.id)}">${icon("plus")}<span>Add Checklist Item</span></button>
+        <button class="secondary-action" type="button" data-checklist-add-room="${esc(section.id)}">${icon("plus")}<span>Add Sub-Area</span></button>
       </div>
       <div class="checklist-room-list">
         ${section.rooms.map((room) => renderChecklistRoomCard(section.id, room)).join("")}
@@ -3924,13 +3993,13 @@ function renderChecklistRoomCard(sectionId, room) {
   return `
     <div class="checklist-room-card" data-checklist-room-id="${esc(room.id)}">
       <div class="checklist-room-head">
-        <label class="suite-field"><span>Room / Area</span><input value="${esc(room.title || "")}" data-checklist-room-title placeholder="Bedroom, lobby, restroom" /></label>
-        <button class="ghost-icon-btn danger-btn" type="button" data-checklist-remove-room="${esc(sectionId)}:${esc(room.id)}" aria-label="Remove room">${icon("trash")}</button>
+        <label class="suite-field"><span>Sub-Area</span><input value="${esc(room.title || "")}" data-checklist-room-title placeholder="Closet, shower, appliance area" /></label>
+        <button class="ghost-icon-btn danger-btn" type="button" data-checklist-remove-room="${esc(sectionId)}:${esc(room.id)}" aria-label="Remove sub-area">${icon("trash")}</button>
       </div>
       <div class="checklist-item-list">
         ${room.items.map((item) => renderChecklistItemRow(item, "room")).join("")}
       </div>
-      <button class="secondary-action" type="button" data-checklist-add-room-item="${esc(sectionId)}:${esc(room.id)}">${icon("plus")}<span>Add Room Item</span></button>
+      <button class="secondary-action" type="button" data-checklist-add-room-item="${esc(sectionId)}:${esc(room.id)}">${icon("plus")}<span>Add Sub-Area Item</span></button>
     </div>
   `;
 }
@@ -3940,7 +4009,7 @@ function renderChecklistItemRow(item, scope) {
   return `
     <div class="checklist-item-row" ${attr} data-checklist-item-id="${esc(item.id)}">
       <label class="suite-field"><span>Type</span><select data-checklist-item-type>${checklistItemTypeOptions(item.type)}</select></label>
-      <label class="suite-field"><span>Requirement</span><input value="${esc(item.label || "")}" data-checklist-item-label placeholder="Wipe counters, upload final photo, note damage" /></label>
+      <label class="suite-field"><span>Checklist Item</span><input value="${esc(item.label || "")}" data-checklist-item-label placeholder="Make bed, wipe counters, upload final photo" /></label>
       <button class="ghost-icon-btn danger-btn" type="button" data-checklist-remove-item="${esc(item.id)}" aria-label="Remove item">${icon("trash")}</button>
     </div>
   `;
@@ -4046,8 +4115,20 @@ function handleChecklistInput(event) {
     populateChecklistTemplateSelect();
     return;
   }
+  if (event.target?.matches("[data-checklist-default-module-count]")) {
+    setChecklistDefaultModuleCount(event.target.dataset.moduleId, event.target.value);
+    renderChecklistMetrics();
+    renderChecklistPreview();
+    return;
+  }
+  if (event.target?.matches("[data-checklist-unit-module-count]")) {
+    setChecklistUnitModuleCount(event.target.dataset.unitId, event.target.dataset.moduleId, event.target.value);
+    return;
+  }
   if (event.target.closest("#checklistTemplateForm, #checklistSections")) {
     syncChecklistBuilderFromDom();
+    ensureChecklistDefaultModuleCounts();
+    renderChecklistAssignmentPanel();
     renderChecklistMetrics();
     renderChecklistPreview();
   }
@@ -4062,6 +4143,7 @@ function handleChecklistChange(event) {
   if (target?.id === "checklistAssignmentPropertySelect") {
     checklistState.selectedPropertyId = target.value || "";
     checklistState.selectedUnitIds = new Set();
+    checklistState.unitModuleCounts = {};
     renderChecklistAssignmentPanel();
     renderChecklistPropertySummary();
     renderChecklistMetrics();
@@ -4070,6 +4152,8 @@ function handleChecklistChange(event) {
   if (target?.matches("[data-checklist-unit-option]")) {
     if (target.checked) {
       checklistState.selectedUnitIds.add(target.value);
+      const unit = checklistState.units.find((row) => row.id === target.value);
+      if (unit) getChecklistUnitModuleCounts(unit);
     } else {
       checklistState.selectedUnitIds.delete(target.value);
     }
@@ -4078,6 +4162,8 @@ function handleChecklistChange(event) {
   }
   if (target.closest("#checklistTemplateForm, #checklistSections")) {
     syncChecklistBuilderFromDom();
+    ensureChecklistDefaultModuleCounts();
+    renderChecklistAssignmentPanel();
     renderChecklistMetrics();
     renderChecklistPreview();
   }
@@ -4132,6 +4218,7 @@ async function loadChecklistData() {
 }
 
 function renderChecklistData() {
+  ensureChecklistDefaultModuleCounts();
   populateChecklistTemplateSelect();
   renderChecklistForm();
   renderChecklistAssignmentPanel();
@@ -4206,6 +4293,8 @@ function selectChecklistTemplate(id) {
   checklistState.selectedTemplateId = id || "";
   const selected = checklistState.templates.find((template) => template.id === id);
   checklistState.builder = selected ? normalizeChecklistTemplate(selected) : createBlankChecklistTemplate();
+  checklistState.defaultModuleCounts = {};
+  checklistState.unitModuleCounts = {};
   renderChecklistData();
   showChecklistMessage(selected ? `Editing ${selected.name}.` : "Started a new unsaved checklist.");
 }
@@ -4213,6 +4302,8 @@ function selectChecklistTemplate(id) {
 function startNewChecklistTemplate() {
   checklistState.selectedTemplateId = "";
   checklistState.builder = createBlankChecklistTemplate();
+  checklistState.defaultModuleCounts = {};
+  checklistState.unitModuleCounts = {};
   renderChecklistData();
   document.getElementById("checklist_template_name")?.focus();
   showChecklistMessage("Started a new checklist template.");
@@ -4220,11 +4311,13 @@ function startNewChecklistTemplate() {
 
 function addChecklistSection() {
   syncChecklistBuilderFromDom();
-  const title = (document.getElementById("newChecklistSectionTitle")?.value || "").trim() || "New Section";
+  const title = (document.getElementById("newChecklistSectionTitle")?.value || "").trim() || "New Module";
   checklistState.builder.sections.push(createChecklistSection(title));
+  ensureChecklistDefaultModuleCounts();
   const field = document.getElementById("newChecklistSectionTitle");
   if (field) field.value = "";
   renderChecklistForm();
+  renderChecklistAssignmentPanel();
   renderChecklistMetrics();
   renderChecklistPreview();
 }
@@ -4238,6 +4331,7 @@ function addChecklistItem(sectionId) {
   const section = findChecklistSection(sectionId);
   if (section) section.items.push(createChecklistItem());
   renderChecklistForm();
+  renderChecklistAssignmentPanel();
   renderChecklistMetrics();
   renderChecklistPreview();
 }
@@ -4265,7 +4359,10 @@ function removeChecklistSection(sectionId) {
   syncChecklistBuilderFromDom();
   checklistState.builder.sections = checklistState.builder.sections.filter((section) => section.id !== sectionId);
   if (!checklistState.builder.sections.length) checklistState.builder.sections.push(createChecklistSection());
+  delete checklistState.defaultModuleCounts[sectionId];
+  Object.values(checklistState.unitModuleCounts).forEach((counts) => delete counts[sectionId]);
   renderChecklistForm();
+  renderChecklistAssignmentPanel();
   renderChecklistMetrics();
   renderChecklistPreview();
 }
@@ -4364,9 +4461,11 @@ async function applyChecklistToProperty() {
 
   checklistState.isApplying = true;
   showChecklistMessage("Assigning checklist to property...");
+  const moduleCounts = ensureChecklistDefaultModuleCounts(template);
   const payload = {
     checklist_template_id: template.id,
-    checklist_items: flattenChecklistTemplate(template)
+    checklist_items: flattenChecklistTemplate(template, moduleCounts),
+    checklist_module_counts: moduleCounts
   };
   const result = await suiteSupabase
     .from(leadTable)
@@ -4400,23 +4499,30 @@ async function applyChecklistToUnits() {
 
   checklistState.isApplying = true;
   showChecklistMessage(`Assigning checklist to ${ids.length} unit${ids.length === 1 ? "" : "s"}...`);
-  const payload = {
-    checklist_template_id: template.id,
-    checklist_items: flattenChecklistTemplate(template)
-  };
-  const result = await suiteSupabase
-    .from(propertyUnitsTable)
-    .update(payload)
-    .in("id", ids)
-    .select("*");
+  const updates = await Promise.all(ids.map(async (id) => {
+    const unit = checklistState.units.find((row) => row.id === id) || { id };
+    const moduleCounts = getChecklistUnitModuleCounts(unit);
+    const payload = {
+      checklist_template_id: template.id,
+      checklist_items: flattenChecklistTemplate(template, moduleCounts),
+      checklist_module_counts: moduleCounts
+    };
+    return suiteSupabase
+      .from(propertyUnitsTable)
+      .update(payload)
+      .eq("id", id)
+      .select("*")
+      .single();
+  }));
   checklistState.isApplying = false;
 
-  if (result.error) {
-    showChecklistMessage("Unable to assign checklist to units: " + result.error.message, true);
+  const failed = updates.find((result) => result.error);
+  if (failed) {
+    showChecklistMessage("Unable to assign checklist to units: " + failed.error.message, true);
     return;
   }
 
-  const updated = result.data || [];
+  const updated = updates.map((result) => result.data).filter(Boolean);
   updated.forEach((unit) => {
     const index = checklistState.units.findIndex((row) => row.id === unit.id);
     if (index >= 0) checklistState.units[index] = unit;
@@ -4425,33 +4531,42 @@ async function applyChecklistToUnits() {
   showChecklistMessage(`Checklist assigned to ${updated.length || ids.length} unit${(updated.length || ids.length) === 1 ? "" : "s"}.`);
 }
 
-function flattenChecklistTemplate(template) {
+function flattenChecklistTemplate(template, moduleCounts = null) {
   const items = [];
+  const counts = moduleCounts ? normalizeChecklistModuleCounts(moduleCounts, template) : normalizeChecklistModuleCounts({}, template);
   normalizeChecklistTemplate(template).sections.forEach((section) => {
-    section.items.forEach((item) => {
-      const normalized = flattenChecklistItem(item, section.title);
-      if (normalized) items.push(normalized);
-    });
-    section.rooms.forEach((room) => {
-      room.items.forEach((item) => {
-        const normalized = flattenChecklistItem(item, `${section.title} / ${room.title}`);
+    const count = counts[section.id] ?? 1;
+    for (let instance = 1; instance <= count; instance += 1) {
+      const moduleLabel = count > 1 ? `${section.title} ${instance}` : section.title;
+      section.items.forEach((item) => {
+        const normalized = flattenChecklistItem(item, moduleLabel, section, instance);
         if (normalized) items.push(normalized);
       });
-    });
+      section.rooms.forEach((room) => {
+        room.items.forEach((item) => {
+          const normalized = flattenChecklistItem(item, `${moduleLabel} / ${room.title}`, section, instance);
+          if (normalized) items.push(normalized);
+        });
+      });
+    }
   });
   return items;
 }
 
-function flattenChecklistItem(item, category) {
+function flattenChecklistItem(item, category, module = {}, moduleInstance = 1) {
   const label = String(item.label || item.task || "").trim();
   if (!label) return null;
   const type = item.type || "check";
   return {
-    id: item.id || checklistUid("item"),
+    id: `${item.id || checklistUid("item")}-${moduleInstance}`,
     category: category || "General",
     task: label,
     label,
     type,
+    module_id: module.id || "",
+    module_name: module.title || "",
+    module_instance: moduleInstance,
+    source_item_id: item.id || "",
     required: type !== "optional",
     media_required: type === "photo" || type === "video" ? type : "none",
     notes: type === "note" ? "Contractor should leave a completion note." : ""
@@ -4473,6 +4588,7 @@ function checklistAssignmentPanelHtml() {
             : `<option value="">No properties found</option>`}
         </select>
       </label>
+      ${checklistModuleDefaultsHtml()}
       <button class="primary-action full-width" type="button" data-checklist-apply-property ${property ? "" : "disabled"}>${icon("check")}<span>Apply to Property</span></button>
       <div class="checklist-unit-toolbar">
         <strong>Property Units</strong>
@@ -4486,15 +4602,60 @@ function checklistAssignmentPanelHtml() {
   `;
 }
 
+function checklistModuleDefaultsHtml() {
+  const modules = checklistModules();
+  const counts = ensureChecklistDefaultModuleCounts();
+  if (!modules.length) return "";
+  return `
+    <div class="checklist-module-defaults">
+      <div>
+        <strong>Default Module Counts</strong>
+        <small>Use 0 to skip a module. Units can override these counts below.</small>
+      </div>
+      <div class="checklist-module-count-grid">
+        ${modules.map((module) => checklistModuleCountInput(module, counts[module.id], {
+          attr: "data-checklist-default-module-count",
+          moduleId: module.id
+        })).join("")}
+      </div>
+    </div>
+  `;
+}
+
 function renderChecklistUnitOption(unit) {
   const templateName = checklistTemplateName(unit.checklist_template_id);
+  const selected = checklistState.selectedUnitIds.has(unit.id);
+  const counts = getChecklistUnitModuleCounts(unit, { persist: selected });
   return `
-    <label class="checklist-unit-option">
-      <input type="checkbox" value="${esc(unit.id)}" data-checklist-unit-option ${checklistState.selectedUnitIds.has(unit.id) ? "checked" : ""} />
-      <span>
-        <strong>${esc(unit.unit_name || "Unnamed unit")}</strong>
-        <small>${esc([unit.square_feet ? `${Number(unit.square_feet).toLocaleString()} sq ft` : "", templateName ? `Checklist: ${templateName}` : "No checklist assigned"].filter(Boolean).join(" - "))}</small>
-      </span>
+    <div class="checklist-unit-option ${selected ? "is-selected" : ""}">
+      <label class="checklist-unit-select">
+        <input type="checkbox" value="${esc(unit.id)}" data-checklist-unit-option ${selected ? "checked" : ""} />
+        <span>
+          <strong>${esc(unit.unit_name || "Unnamed unit")}</strong>
+          <small>${esc([unit.square_feet ? `${Number(unit.square_feet).toLocaleString()} sq ft` : "", templateName ? `Checklist: ${templateName}` : "No checklist assigned"].filter(Boolean).join(" - "))}</small>
+        </span>
+      </label>
+      <div class="checklist-unit-module-counts" ${selected ? "" : "hidden"}>
+        ${checklistModules().map((module) => checklistModuleCountInput(module, counts[module.id], {
+          attr: "data-checklist-unit-module-count",
+          moduleId: module.id,
+          unitId: unit.id
+        })).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function checklistModuleCountInput(module, value, options = {}) {
+  const attrs = [
+    options.attr || "",
+    options.moduleId ? `data-module-id="${esc(options.moduleId)}"` : "",
+    options.unitId ? `data-unit-id="${esc(options.unitId)}"` : ""
+  ].filter(Boolean).join(" ");
+  return `
+    <label class="checklist-module-count-field">
+      <span>${esc(module.title || "Module")}</span>
+      <input type="number" min="0" max="50" step="1" value="${esc(checklistModuleCountValue(value, 1))}" ${attrs} />
     </label>
   `;
 }
@@ -4527,8 +4688,9 @@ function renderChecklistPropertySummary() {
 }
 
 function checklistPreviewHtml() {
-  const items = flattenChecklistTemplate(checklistState.builder || createBlankChecklistTemplate());
-  if (!items.length) return emptyState("clipboard-list", "No requirements yet", "Add checklist items to preview what contractors will see.");
+  const template = checklistState.builder || createBlankChecklistTemplate();
+  const items = flattenChecklistTemplate(template, ensureChecklistDefaultModuleCounts(template));
+  if (!items.length) return emptyState("clipboard-list", "No requirements yet", "Add module counts and checklist items to preview what contractors will see.");
   return items.slice(0, 12).map((item) => `
     <div class="checklist-preview-item">
       <span>${esc(item.category)}</span>
@@ -4546,7 +4708,7 @@ function renderChecklistPreview() {
 function renderChecklistMetrics() {
   const template = checklistState.builder || createBlankChecklistTemplate();
   const sections = normalizeChecklistTemplate(template).sections;
-  const items = flattenChecklistTemplate(template);
+  const items = flattenChecklistTemplate(template, ensureChecklistDefaultModuleCounts(template));
   const assignedProperties = checklistState.properties.filter((property) => property.checklist_template_id).length;
   const assignedUnits = checklistState.units.filter((unit) => unit.checklist_template_id).length;
   setText("checklistTemplateCount", checklistState.templates.length.toLocaleString());

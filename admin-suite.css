@@ -2329,13 +2329,58 @@ a {
   margin-top: 0;
 }
 
+.checklist-module-defaults {
+  background: rgba(0, 214, 163, 0.055);
+  border: 1px solid rgba(0, 214, 163, 0.16);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+}
+
+.checklist-module-defaults strong,
+.checklist-unit-toolbar strong {
+  font-size: 13px;
+}
+
+.checklist-module-defaults small {
+  color: var(--suite-soft);
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  margin-top: 3px;
+}
+
+.checklist-module-count-grid,
+.checklist-unit-module-counts {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.checklist-module-count-field {
+  color: #d9e8f6;
+  display: grid;
+  font-size: 10px;
+  font-weight: 900;
+  gap: 5px;
+  text-transform: uppercase;
+}
+
+.checklist-module-count-field input {
+  background: rgba(7, 18, 32, 0.88);
+  border: 1px solid var(--suite-border-soft);
+  border-radius: 6px;
+  color: var(--suite-text);
+  min-height: 32px;
+  min-width: 0;
+  padding: 7px 8px;
+  width: 100%;
+}
+
 .checklist-unit-toolbar {
   align-items: center;
   grid-template-columns: minmax(0, 1fr) auto;
-}
-
-.checklist-unit-toolbar strong {
-  font-size: 13px;
 }
 
 .checklist-unit-toolbar button {
@@ -2351,27 +2396,45 @@ a {
   border: 1px solid var(--suite-border-soft);
   border-radius: 8px;
   display: grid;
-  gap: 2px;
-  max-height: 280px;
+  gap: 8px;
+  max-height: 420px;
   overflow: auto;
   padding: 6px;
 }
 
 .checklist-unit-option {
-  align-items: start;
+  align-items: stretch;
   border-radius: 6px;
   color: var(--suite-text);
-  cursor: pointer;
-  grid-template-columns: 18px minmax(0, 1fr);
+  grid-template-columns: 1fr;
   padding: 8px;
 }
 
-.checklist-unit-option:hover {
+.checklist-unit-option:hover,
+.checklist-unit-option.is-selected {
   background: rgba(255, 255, 255, 0.04);
 }
 
-.checklist-unit-option input {
+.checklist-unit-select {
+  align-items: start;
+  cursor: pointer;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 18px minmax(0, 1fr);
+}
+
+.checklist-unit-select input {
   margin-top: 2px;
+}
+
+.checklist-unit-module-counts {
+  border-top: 1px solid var(--suite-border-soft);
+  margin-top: 10px;
+  padding-top: 10px;
+}
+
+.checklist-unit-module-counts[hidden] {
+  display: none !important;
 }
 
 .checklist-unit-option span,
@@ -3703,6 +3766,8 @@ a {
   .checklist-builder-toolbar,
   .checklist-template-form,
   .checklist-section-composer,
+  .checklist-module-count-grid,
+  .checklist-unit-module-counts,
   .checklist-item-row {
     grid-template-columns: 1fr;
   }
