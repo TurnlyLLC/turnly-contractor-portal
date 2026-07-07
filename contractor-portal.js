@@ -9,16 +9,16 @@ const root = document.getElementById("contractorPortalApp");
 const pageKey = document.body?.dataset?.contractorPage || "dashboard";
 
 const navItems = [
-  ["dashboard", "Dashboard", "D", "contractor.html"],
-  ["my-jobs", "My Jobs", "J", "contractor-my-assignments.html"],
-  ["schedule", "Schedule", "S", "contractor-schedule.html"],
-  ["resources", "Resources", "R", "contractor-resources.html"],
-  ["messages", "Messages", "M", "contractor-messages.html"],
-  ["documents", "Documents", "F", "contractor-documents.html"],
-  ["payments", "Payments", "$", "contractor-payments.html"],
-  ["performance", "Performance", "P", "contractor-performance-portal.html"],
-  ["job-board", "Job Board", "B", "contractor-available.html"],
-  ["video-library", "Video Library", "V", "contractor-video-library.html"]
+  ["dashboard", "Dashboard", "contractor.html"],
+  ["my-jobs", "My Jobs", "contractor-my-assignments.html"],
+  ["schedule", "Schedule", "contractor-schedule.html"],
+  ["resources", "Resources", "contractor-resources.html"],
+  ["messages", "Messages", "contractor-messages.html"],
+  ["documents", "Documents", "contractor-documents.html"],
+  ["payments", "Payments", "contractor-payments.html"],
+  ["performance", "Performance", "contractor-performance-portal.html"],
+  ["job-board", "Job Board", "contractor-available.html"],
+  ["video-library", "Video Library", "contractor-video-library.html"]
 ];
 
 const pageMeta = {
@@ -297,9 +297,8 @@ function sidebar() {
       </a>
       <nav class="cp-nav" aria-label="Contractor navigation">
         <p class="cp-nav-title">Contractor Portal</p>
-        ${navItems.map(([key, label, icon, href]) => `
+        ${navItems.map(([key, label, href]) => `
           <a class="cp-nav-link ${key === pageKey ? "active" : ""}" href="${esc(href)}">
-            <span class="cp-icon">${esc(icon)}</span>
             <span>${esc(label)}</span>
           </a>
         `).join("")}

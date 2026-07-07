@@ -51,7 +51,6 @@
 
 .cp-brand-mark,
 .cp-profile-avatar,
-.cp-icon,
 .cp-metric-icon,
 .cp-play {
   align-items: center;
@@ -86,9 +85,7 @@
   align-items: center;
   border-radius: 8px;
   color: #d8e2ee;
-  display: grid;
-  gap: 10px;
-  grid-template-columns: 24px 1fr;
+  display: flex;
   padding: 10px 12px;
   text-decoration: none;
 }
@@ -101,23 +98,6 @@
 
 .cp-nav-link.active {
   box-shadow: inset 3px 0 0 var(--cp-green);
-}
-
-.cp-icon {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 6px;
-  color: var(--cp-muted);
-  font-size: 11px;
-  font-weight: 900;
-  height: 24px;
-  letter-spacing: 0;
-  width: 24px;
-}
-
-.cp-nav-link.active .cp-icon,
-.cp-nav-link:hover .cp-icon {
-  border-color: rgba(18, 217, 155, 0.3);
-  color: var(--cp-green);
 }
 
 .cp-support,

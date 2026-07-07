@@ -12,6 +12,7 @@ let activeAssignment = null;
 let activeUser = null;
 let activeSite = null;
 let activePosition = null;
+let activeChecklistItems = [];
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -107,6 +108,231 @@ function description(assignment) {
     assignment?.special_instructions ||
     assignment?.notes ||
     "Complete the assigned checklist for this property before finishing the job.";
+}
+
+function formatDateTime(value) {
+  if (!value) return "Not scheduled";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  });
+}
+
+function formatMoney(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return "Not listed";
+  return number.toLocaleString(undefined, {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 2
+  });
+}
+
+function formatStatus(value) {
+  return String(value || "Not set").replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function metadataValue(assignment, keys) {
+  const metadata = assignment?.metadata && typeof assignment.metadata === "object" ? assignment.metadata : {};
+  for (const key of keys) {
+    const value = assignment?.[key] ?? metadata[key];
+    if (Array.isArray(value) && value.length) return value.join(", ");
+    if (value !== null && value !== undefined && String(value).trim()) return String(value);
+  }
+  return "";
+}
+
+function detailGrid(rows) {
+  return `
+    <div class="tj-detail-grid">
+      ${rows.map(([label, value]) => `
+        <div>
+          <span>${escapeHtml(label)}</span>
+          <strong>${escapeHtml(value || "Not listed")}</strong>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+function detailNote(label, value, fallback = "Not listed") {
+  return `
+    <div class="tj-detail-note">
+      <span>${escapeHtml(label)}</span>
+      <p>${escapeHtml(value || fallback)}</p>
+    </div>
+  `;
+}
+
+function detailTags(tags) {
+  const cleanTags = tags
+    .map((tag) => String(tag || "").trim())
+    .filter(Boolean);
+  return cleanTags.length
+    ? `<div class="tj-tag-list">${cleanTags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join("")}</div>`
+    : detailNote("Tags", "", "No tags have been added to this task.");
+}
+
+function startDetailContent(tabKey) {
+  const assignment = activeAssignment || {};
+  const checklistCount = activeChecklistItems.length;
+  const issueText = metadataValue(assignment, [
+    "issue_notes",
+    "issues",
+    "damage_notes",
+    "blocked_areas",
+    "access_issue",
+    "property_issue"
+  ]);
+  const unit = metadataValue(assignment, ["unit_name", "unit_number", "property_unit_name", "unit"]);
+  const customerCharge = metadataValue(assignment, ["customer_charge", "client_charge"]);
+  const materialCost = metadataValue(assignment, ["material_cost", "supplies_cost", "expense_amount"]);
+  const attachmentCount = getDetailCount(assignment, ["attachments", "files", "photos", "videos"]);
+  const commentCount = getDetailCount(assignment, ["comments", "notes_thread", "messages"]);
+
+  if (tabKey === "issues") {
+    return `
+      ${detailGrid([
+        ["Current Status", formatStatus(assignment.status)],
+        ["Priority", formatStatus(assignment.priority || "normal")],
+        ["Blocked Areas", metadataValue(assignment, ["blocked_areas"]) || "None logged"],
+        ["Attachments", String(attachmentCount)]
+      ])}
+      ${detailNote("Issue Notes", issueText, "No open property issues have been logged for this assignment.")}
+      ${assignment.special_instructions ? detailNote("Special Instructions", assignment.special_instructions) : ""}
+    `;
+  }
+
+  if (tabKey === "property") {
+    return `
+      ${detailGrid([
+        ["Property", assignment.property_name || assignment.title || "Assignment"],
+        ["Unit", unit || "No unit selected"],
+        ["Address", assignment.address || "Address not set"],
+        ["Map", getMapQuery(assignment) || "No map location available"]
+      ])}
+      ${detailNote("Access Notes", metadataValue(assignment, ["access_notes", "entry_notes", "gate_code"]), "No access notes are listed.")}
+    `;
+  }
+
+  if (tabKey === "costs") {
+    return `
+      ${detailGrid([
+        ["Contractor Pay", formatMoney(assignment.pay_amount || assignment.contractor_pay)],
+        ["Customer Charge", customerCharge ? formatMoney(customerCharge) : "Not listed"],
+        ["Material Cost", materialCost ? formatMoney(materialCost) : "Not listed"],
+        ["Service Type", assignment.service_type || "Not listed"]
+      ])}
+      ${detailNote("Cost Notes", metadataValue(assignment, ["cost_notes", "expense_notes"]), "No added cost notes for this job.")}
+    `;
+  }
+
+  if (tabKey === "supplies") {
+    return `
+      ${detailGrid([
+        ["Service Type", assignment.service_type || "Not listed"],
+        ["Checklist Items", `${checklistCount} assigned`],
+        ["Required Media", requiredMediaSummary(activeChecklistItems)],
+        ["Supply Status", metadataValue(assignment, ["supply_status"]) || "Review notes"]
+      ])}
+      ${detailNote("Supplies Notes", assignment.supplies_notes || metadataValue(assignment, ["supplies"]), "No supplies notes are listed for this job.")}
+    `;
+  }
+
+  if (tabKey === "task") {
+    return `
+      ${detailGrid([
+        ["Service", assignment.service_type || "Not listed"],
+        ["Schedule", `${formatDateTime(assignment.start_window)} - ${formatDateTime(assignment.end_window)}`],
+        ["Checklist", `${checklistCount} item(s)`],
+        ["Status", formatStatus(assignment.status)]
+      ])}
+      ${detailNote("Scope of Work", assignment.scope || assignment.description, "No scope is listed.")}
+      ${detailNote("Special Instructions", assignment.special_instructions, "No special instructions are listed.")}
+    `;
+  }
+
+  if (tabKey === "tags") {
+    return detailTags([
+      assignment.priority,
+      assignment.status,
+      assignment.service_type,
+      assignment.assignment_type,
+      assignment.recurrence_frequency,
+      unit,
+      ...(Array.isArray(assignment.tags) ? assignment.tags : []),
+      ...(Array.isArray(assignment.metadata?.tags) ? assignment.metadata.tags : [])
+    ]);
+  }
+
+  return `
+    ${detailGrid([
+      ["Property", assignment.property_name || assignment.title || "Assignment"],
+      ["Window", `${formatDateTime(assignment.start_window)} - ${formatDateTime(assignment.end_window)}`],
+      ["Pay", formatMoney(assignment.pay_amount || assignment.contractor_pay)],
+      ["Checklist", `${checklistCount} item(s)`],
+      ["Attachments", String(attachmentCount)],
+      ["Comments", String(commentCount)]
+    ])}
+    ${detailNote("Summary", description(assignment))}
+  `;
+}
+
+function requiredMediaSummary(items) {
+  const counts = items.reduce((summary, item) => {
+    const media = item.media_required && item.media_required !== "none" ? item.media_required : "";
+    if (media) summary[media] = (summary[media] || 0) + 1;
+    return summary;
+  }, {});
+  const labels = Object.entries(counts).map(([key, count]) => `${count} ${key.replace(/_/g, " ")}`);
+  return labels.join(", ") || "None required";
+}
+
+function getDetailCount(assignment, keys) {
+  const metadata = assignment?.metadata && typeof assignment.metadata === "object" ? assignment.metadata : {};
+  for (const key of keys) {
+    const value = assignment?.[key] ?? metadata[key];
+    if (Array.isArray(value)) return value.length;
+    if (value && typeof value === "object") return Object.keys(value).length;
+    if (Number.isFinite(Number(value))) return Number(value);
+  }
+  return 0;
+}
+
+function setStartDetailPanel(tabKey = "summary") {
+  const panel = document.getElementById("tjDetailPanel");
+  if (!panel || !activeAssignment) return;
+
+  document.querySelectorAll("[data-tj-detail]").forEach((button) => {
+    const isActive = button.dataset.tjDetail === tabKey;
+    button.classList.toggle("active", isActive);
+    button.setAttribute("aria-expanded", String(isActive));
+  });
+
+  const label = {
+    issues: "Issues",
+    property: "Property Details",
+    costs: "Costs",
+    supplies: "Supplies",
+    task: "Task Details",
+    tags: "Task Tags",
+    summary: "Summary"
+  }[tabKey] || "Summary";
+
+  panel.innerHTML = `
+    <div class="tj-detail-panel-inner">
+      <div class="tj-detail-panel-head">
+        <span>Details</span>
+        <strong>${escapeHtml(label)}</strong>
+      </div>
+      ${startDetailContent(tabKey)}
+    </div>
+  `;
 }
 
 async function geocodeAddress(address) {
@@ -352,15 +578,92 @@ function injectStyles() {
       }
       .tj-row {
         align-items: center;
+        background: transparent;
         border-bottom: 1px solid rgba(255, 255, 255, .08);
+        border-left: 0;
+        border-right: 0;
+        border-top: 0;
+        color: #fff;
+        cursor: pointer;
         display: grid;
-        gap: 14px;
-        grid-template-columns: 34px minmax(0, 1fr) auto;
+        font: inherit;
+        gap: 12px;
+        grid-template-columns: minmax(0, 1fr) auto;
         min-height: 60px;
+        padding: 0;
+        text-align: left;
+        width: 100%;
+      }
+      .tj-row:hover,
+      .tj-row.active {
+        color: var(--admin-green, #1fe28a);
       }
       .tj-row span {
         color: var(--admin-muted, #9aaabc);
-        font-size: 22px;
+        font-size: 20px;
+      }
+      .tj-row.active span {
+        color: var(--admin-green, #1fe28a);
+      }
+      .tj-detail-panel {
+        border-top: 1px solid rgba(255, 255, 255, .08);
+        padding-top: 14px;
+      }
+      .tj-detail-panel-inner {
+        background: rgba(255, 255, 255, .045);
+        border: 1px solid rgba(255, 255, 255, .08);
+        border-radius: 8px;
+        display: grid;
+        gap: 12px;
+        padding: 14px;
+      }
+      .tj-detail-panel-head {
+        display: flex;
+        gap: 10px;
+        justify-content: space-between;
+      }
+      .tj-detail-panel-head span,
+      .tj-detail-grid span,
+      .tj-detail-note span {
+        color: var(--admin-muted, #9aaabc);
+        font-size: 12px;
+        font-weight: 900;
+        text-transform: uppercase;
+      }
+      .tj-detail-grid {
+        display: grid;
+        gap: 10px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .tj-detail-grid div,
+      .tj-detail-note {
+        background: rgba(5, 14, 24, .56);
+        border: 1px solid rgba(255, 255, 255, .055);
+        border-radius: 8px;
+        padding: 12px;
+      }
+      .tj-detail-grid strong {
+        display: block;
+        margin-top: 5px;
+      }
+      .tj-detail-note p {
+        color: #d8e2ee;
+        line-height: 1.55;
+        margin: 6px 0 0;
+      }
+      .tj-tag-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .tj-tag-list span {
+        background: rgba(31, 226, 138, .13);
+        border: 1px solid rgba(31, 226, 138, .3);
+        border-radius: 999px;
+        color: var(--admin-green, #1fe28a);
+        font-size: 12px;
+        font-weight: 900;
+        padding: 7px 10px;
       }
       .tj-actions {
         background: rgba(7, 16, 27, .96);
@@ -498,6 +801,7 @@ function injectStyles() {
         }
         .tj-title,
         .tj-stats,
+        .tj-detail-grid,
         .tc-summary,
         .tc-task,
         .tj-action-row,
@@ -556,24 +860,25 @@ function ensureStartModal() {
 
           <div class="tj-stats">
             <div class="tj-stat"><strong id="tjRequirements">0/0</strong><span>Requirements</span></div>
-            <div class="tj-stat"><strong>0</strong><span>Attachments</span></div>
-            <div class="tj-stat"><strong>0</strong><span>Comments</span></div>
+            <div class="tj-stat"><strong id="tjAttachments">0</strong><span>Attachments</span></div>
+            <div class="tj-stat"><strong id="tjComments">0</strong><span>Comments</span></div>
           </div>
 
           <div class="tj-section">
             <h3>Property</h3>
-            <div class="tj-row"><span>!</span><strong>Issues</strong><span>&rsaquo;</span></div>
-            <div class="tj-row"><span>H</span><strong>Property details</strong><span>&rsaquo;</span></div>
+            <button class="tj-row" type="button" data-tj-detail="issues" aria-expanded="false"><strong>Issues</strong><span>&rsaquo;</span></button>
+            <button class="tj-row" type="button" data-tj-detail="property" aria-expanded="false"><strong>Property details</strong><span>&rsaquo;</span></button>
           </div>
 
           <div class="tj-section">
             <h3>Task</h3>
-            <div class="tj-row"><span>$</span><strong>Costs</strong><span>&rsaquo;</span></div>
-            <div class="tj-row"><span>□</span><strong>Supplies</strong><span>&rsaquo;</span></div>
-            <div class="tj-row"><span>i</span><strong>Task details</strong><span>&rsaquo;</span></div>
-            <div class="tj-row"><span>#</span><strong>Task tags</strong><span>&rsaquo;</span></div>
-            <div class="tj-row"><span>=</span><strong>Summary</strong><span>&rsaquo;</span></div>
+            <button class="tj-row" type="button" data-tj-detail="costs" aria-expanded="false"><strong>Costs</strong><span>&rsaquo;</span></button>
+            <button class="tj-row" type="button" data-tj-detail="supplies" aria-expanded="false"><strong>Supplies</strong><span>&rsaquo;</span></button>
+            <button class="tj-row" type="button" data-tj-detail="task" aria-expanded="false"><strong>Task details</strong><span>&rsaquo;</span></button>
+            <button class="tj-row" type="button" data-tj-detail="tags" aria-expanded="false"><strong>Task tags</strong><span>&rsaquo;</span></button>
+            <button class="tj-row" type="button" data-tj-detail="summary" aria-expanded="false"><strong>Summary</strong><span>&rsaquo;</span></button>
           </div>
+          <div id="tjDetailPanel" class="tj-detail-panel" aria-live="polite"></div>
         </section>
 
         <section class="tj-actions">
@@ -601,6 +906,12 @@ function ensureStartModal() {
   });
   document.getElementById("tjUseLocation")?.addEventListener("click", captureLocation);
   document.getElementById("tjStart")?.addEventListener("click", startJob);
+  modal.addEventListener("click", (event) => {
+    const detailButton = event.target.closest("[data-tj-detail]");
+    if (detailButton && modal.contains(detailButton)) {
+      setStartDetailPanel(detailButton.dataset.tjDetail);
+    }
+  });
   return modal;
 }
 
@@ -646,6 +957,7 @@ async function openStartModal(assignmentId) {
   activePosition = null;
   activeSite = null;
   const items = await checklistItems(activeAssignment);
+  activeChecklistItems = items;
   const property = activeAssignment.property_name || activeAssignment.title || "Assignment";
   const address = activeAssignment.address || "Address not set";
   const embed = mapUrl(activeAssignment, true);
@@ -662,9 +974,12 @@ async function openStartModal(assignmentId) {
   document.getElementById("tjDue").textContent = dueLabel(activeAssignment);
   document.getElementById("tjDescription").textContent = description(activeAssignment);
   document.getElementById("tjRequirements").textContent = `${items.length}/${items.length}`;
+  document.getElementById("tjAttachments").textContent = String(getDetailCount(activeAssignment, ["attachments", "files", "photos", "videos"]));
+  document.getElementById("tjComments").textContent = String(getDetailCount(activeAssignment, ["comments", "notes_thread", "messages"]));
   document.getElementById("tjStartNotes").value = "";
   document.getElementById("tjMessage").textContent = "";
   document.getElementById("tjLocation").textContent = "Location is optional. You can start this job now.";
+  setStartDetailPanel("summary");
   modal.hidden = false;
   resolveSite(activeAssignment);
 }
@@ -672,6 +987,7 @@ async function openStartModal(assignmentId) {
 function closeStartModal() {
   const modal = document.getElementById("turnlyMobileStartModal");
   if (modal) modal.hidden = true;
+  activeChecklistItems = [];
 }
 
 async function startJob() {
