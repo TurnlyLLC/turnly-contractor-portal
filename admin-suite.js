@@ -304,6 +304,7 @@ const assignmentPriorityOptions = [
   ["high", "High"],
   ["urgent", "Urgent"]
 ];
+const assignmentPageSizeOptions = [30, 50, 100];
 const assignmentState = {
   rows: [],
   properties: [],
@@ -314,6 +315,8 @@ const assignmentState = {
   statusFilter: "open",
   frequencyFilter: "all",
   contractorFilter: "all",
+  pageSize: 30,
+  currentPage: 1,
   editingId: null,
   isSaving: false,
   isGenerating: false
@@ -3135,6 +3138,7 @@ function renderAssignments() {
           </div>
           ${assignmentToolbar}
           <p id="assignmentMessage" class="status-message table-status-message" aria-live="polite"></p>
+          <div id="assignmentPaginationControls" class="assignment-pagination-controls"></div>
           <div id="adminAssignments" class="assignment-open-list">
             ${emptyState("calendar", "No active assignments", "Assignments from Supabase will appear here.", assignmentNewButton("New Assignment", "assignmentEmptyNewBtn"))}
           </div>
@@ -5454,18 +5458,22 @@ function initAssignments() {
   root.addEventListener("submit", saveAssignmentForm);
   root.querySelector("#assignmentSearchInput")?.addEventListener("input", (event) => {
     assignmentState.search = event.target.value || "";
+    assignmentState.currentPage = 1;
     renderAssignmentData();
   });
   root.querySelector("#assignmentStatusFilter")?.addEventListener("change", (event) => {
     assignmentState.statusFilter = event.target.value || "all";
+    assignmentState.currentPage = 1;
     renderAssignmentData();
   });
   root.querySelector("#assignmentFrequencyFilter")?.addEventListener("change", (event) => {
     assignmentState.frequencyFilter = event.target.value || "all";
+    assignmentState.currentPage = 1;
     renderAssignmentData();
   });
   root.querySelector("#assignmentContractorFilter")?.addEventListener("change", (event) => {
     assignmentState.contractorFilter = event.target.value || "all";
+    assignmentState.currentPage = 1;
     renderAssignmentData();
   });
 
@@ -5614,6 +5622,7 @@ function handleAssignmentClick(event) {
   const statusTab = event.target.closest("[data-assignment-status-tab]");
   if (statusTab) {
     assignmentState.statusFilter = statusTab.dataset.assignmentStatusTab || "all";
+    assignmentState.currentPage = 1;
     renderAssignmentData();
     return;
   }
@@ -5624,6 +5633,14 @@ function handleAssignmentClick(event) {
     assignmentState.statusFilter = "open";
     assignmentState.frequencyFilter = "all";
     assignmentState.contractorFilter = "all";
+    assignmentState.currentPage = 1;
+    renderAssignmentData();
+    return;
+  }
+
+  const pageButton = event.target.closest("[data-assignment-page]");
+  if (pageButton) {
+    assignmentState.currentPage = Number(pageButton.dataset.assignmentPage) || 1;
     renderAssignmentData();
     return;
   }
@@ -5665,6 +5682,12 @@ function handleAssignmentChange(event) {
   const statusSelect = event.target.closest("[data-assignment-status-select]");
   if (statusSelect) {
     void updateAssignmentStatusValue(statusSelect.dataset.assignmentStatusSelect, statusSelect.value);
+    return;
+  }
+  if (event.target.matches("#assignmentPageSizeSelect")) {
+    assignmentState.pageSize = Number(event.target.value) || assignmentPageSizeOptions[0];
+    assignmentState.currentPage = 1;
+    renderAssignmentData();
     return;
   }
   if (event.target.matches("#propertySelect")) {
@@ -5780,6 +5803,8 @@ function renderAssignmentFilterControls() {
   if (frequency && frequency.value !== assignmentState.frequencyFilter) frequency.value = assignmentState.frequencyFilter;
   const contractor = document.getElementById("assignmentContractorFilter");
   if (contractor && contractor.value !== assignmentState.contractorFilter) contractor.value = assignmentState.contractorFilter;
+  const pageSize = document.getElementById("assignmentPageSizeSelect");
+  if (pageSize && Number(pageSize.value) !== assignmentState.pageSize) pageSize.value = String(assignmentState.pageSize);
   document.querySelectorAll("[data-assignment-status-tab]").forEach((button) => {
     button.classList.toggle("active", button.dataset.assignmentStatusTab === assignmentState.statusFilter);
   });
@@ -5842,14 +5867,61 @@ function renderAssignmentTable() {
   const body = document.getElementById("adminAssignments");
   if (!body) return;
   const rows = getFilteredAssignments();
+  const pagination = getAssignmentPagination(rows);
+  const controls = document.getElementById("assignmentPaginationControls");
+  if (controls) controls.innerHTML = renderAssignmentPaginationControls(rows.length, pagination);
   const count = document.getElementById("assignmentListCount");
   if (count) {
     const label = assignmentState.statusFilter === "open" ? "board assignments" : "assignments";
-    count.textContent = `Showing ${rows.length.toLocaleString()} ${label}`;
+    count.textContent = rows.length
+      ? `Showing ${(pagination.startIndex + 1).toLocaleString()}-${pagination.endIndex.toLocaleString()} of ${rows.length.toLocaleString()} ${label}`
+      : `Showing 0 ${label}`;
   }
-  body.innerHTML = rows.length
-    ? rows.map(renderAssignmentRow).join("")
+  body.innerHTML = pagination.rows.length
+    ? pagination.rows.map(renderAssignmentRow).join("")
     : emptyState("calendar", assignmentState.statusFilter === "open" ? "No active assignments" : "No assignments found", "Assignments from Supabase will appear here.", assignmentNewButton("New Assignment", "assignmentEmptyNewBtn"));
+}
+
+function getAssignmentPagination(rows) {
+  const pageSize = assignmentPageSizeOptions.includes(Number(assignmentState.pageSize))
+    ? Number(assignmentState.pageSize)
+    : assignmentPageSizeOptions[0];
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const currentPage = Math.min(Math.max(1, Number(assignmentState.currentPage) || 1), totalPages);
+  const startIndex = rows.length ? (currentPage - 1) * pageSize : 0;
+  const endIndex = Math.min(startIndex + pageSize, rows.length);
+  assignmentState.pageSize = pageSize;
+  assignmentState.currentPage = currentPage;
+  return {
+    pageSize,
+    totalPages,
+    currentPage,
+    startIndex,
+    endIndex,
+    rows: rows.slice(startIndex, endIndex)
+  };
+}
+
+function renderAssignmentPaginationControls(totalRows, pagination) {
+  const firstVisible = totalRows ? pagination.startIndex + 1 : 0;
+  const lastVisible = totalRows ? pagination.endIndex : 0;
+  const previousPage = Math.max(1, pagination.currentPage - 1);
+  const nextPage = Math.min(pagination.totalPages, pagination.currentPage + 1);
+  return `
+    <div class="assignment-page-size">
+      <label for="assignmentPageSizeSelect">Show</label>
+      <select id="assignmentPageSizeSelect" aria-label="Assignments per page">
+        ${assignmentPageSizeOptions.map((size) => `<option value="${size}" ${size === pagination.pageSize ? "selected" : ""}>${size}</option>`).join("")}
+      </select>
+      <span>per page</span>
+    </div>
+    <span class="assignment-page-status">${firstVisible.toLocaleString()}-${lastVisible.toLocaleString()} of ${totalRows.toLocaleString()}</span>
+    <div class="assignment-page-actions">
+      <button class="secondary-action icon-only" type="button" data-assignment-page="${previousPage}" ${pagination.currentPage <= 1 ? "disabled" : ""} aria-label="Previous assignment page">${icon("chevron-right", "flip")}</button>
+      <span>Page ${pagination.currentPage.toLocaleString()} of ${pagination.totalPages.toLocaleString()}</span>
+      <button class="secondary-action icon-only" type="button" data-assignment-page="${nextPage}" ${pagination.currentPage >= pagination.totalPages ? "disabled" : ""} aria-label="Next assignment page">${icon("chevron-right")}</button>
+    </div>
+  `;
 }
 
 function renderAssignmentRow(row) {
@@ -5865,7 +5937,7 @@ function renderAssignmentRow(row) {
     ["Special Notes", assignmentSpecialNotes(row), assignmentSpecialNotesMeta(row), "document"]
   ];
   return `
-    <article class="assignment-list-item ${overdue ? "is-overdue" : ""}" data-assignment-row-id="${id}" data-assignment-start="${esc(row.start_window || "")}" data-assignment-end="${esc(row.end_window || "")}" role="button" tabindex="0" aria-label="Edit ${esc(row.title || row.property_name || "assignment")}">
+    <article class="assignment-list-item ${overdue ? "is-overdue" : ""}" data-assignment-row-id="${id}" role="button" tabindex="0" aria-label="Edit ${esc(row.title || row.property_name || "assignment")}">
       <header class="assignment-list-item-header">
         <div class="assignment-title-block">
           <span class="assignment-short-id">${esc(assignmentShortId(row))}</span>
@@ -5942,7 +6014,7 @@ function getFilteredAssignments() {
   const term = assignmentState.search.trim().toLowerCase();
   const statusFilter = normalizeToken(assignmentState.statusFilter);
   const frequencyFilter = assignmentFrequencyKey(assignmentState.frequencyFilter);
-  return assignmentState.rows.filter((row) => {
+  const rows = assignmentState.rows.filter((row) => {
     if (statusFilter && statusFilter !== "all") {
       if (statusFilter === "open") {
         if (!isAssignmentOpen(row)) return false;
@@ -5970,6 +6042,17 @@ function getFilteredAssignments() {
       assignmentContractorText(row),
       assignmentFrequencyLabel(row)
     ].some((value) => String(value || "").toLowerCase().includes(term));
+  });
+  return sortAssignmentsByDate(rows);
+}
+
+function sortAssignmentsByDate(rows) {
+  return [...rows].sort((a, b) => {
+    const startDiff = dateValue(a?.start_window) - dateValue(b?.start_window);
+    if (startDiff) return startDiff;
+    const endDiff = dateValue(a?.end_window) - dateValue(b?.end_window);
+    if (endDiff) return endDiff;
+    return String(a?.property_name || a?.title || "").localeCompare(String(b?.property_name || b?.title || ""), undefined, { sensitivity: "base" });
   });
 }
 
