@@ -110,11 +110,23 @@ const commandCenterState = {
 };
 const leadTable = "portal_properties";
 const leadOptionalColumns = [
+  "company_name",
+  "contact_name",
+  "contact_phone",
+  "contact_email",
   "property_type",
   "city",
   "state",
   "postal_code",
-  "expected_close_date"
+  "lead_source",
+  "lead_notes",
+  "expected_close_date",
+  "lead_value",
+  "sales_owner_id",
+  "sales_owner_name",
+  "next_step",
+  "next_step_due_at",
+  "last_activity_at"
 ];
 const leadSourceOptions = ["", "Website", "Referral", "Outbound", "Property Manager", "Google", "Existing Client", "Other"];
 const leadPropertyTypeOptions = ["", "Office", "Retail", "Medical", "Multifamily", "Industrial", "Mixed Use", "Other"];
@@ -131,11 +143,19 @@ const leadState = {
   isSaving: false
 };
 const walkthroughOptionalColumns = [
+  "company_name",
+  "contact_name",
+  "contact_email",
+  "sales_owner_id",
+  "sales_owner_name",
   "walkthrough_type",
   "walkthrough_location",
+  "walkthrough_at",
   "walkthrough_end_at",
   "walkthrough_assigned_to",
-  "walkthrough_status"
+  "walkthrough_status",
+  "walkthrough_notes",
+  "last_activity_at"
 ];
 const walkthroughTypeOptions = [
   "",
@@ -1709,6 +1729,41 @@ function handleLeadClick(event) {
   }
 }
 
+async function loadPortalPropertyRows(limit = 300) {
+  const orderColumns = ["last_activity_at", "updated_at", "created_at", ""];
+  let lastError = null;
+  for (const orderColumn of orderColumns) {
+    let query = suiteSupabase
+      .from(leadTable)
+      .select("*")
+      .limit(limit);
+    if (orderColumn) {
+      query = query.order(orderColumn, { ascending: false });
+    }
+    const result = await query;
+    if (!result.error) {
+      return {
+        data: result.data || [],
+        error: null,
+        usedFallback: orderColumn !== orderColumns[0]
+      };
+    }
+    lastError = result.error;
+    if (!shouldRetryPortalPropertyLoad(result.error)) break;
+  }
+  return { data: [], error: lastError, usedFallback: false };
+}
+
+function shouldRetryPortalPropertyLoad(error) {
+  const message = String(error?.message || "").toLowerCase();
+  return message.includes("schema cache")
+    || message.includes("could not find")
+    || message.includes("column")
+    || message.includes("last_activity_at")
+    || message.includes("updated_at")
+    || message.includes("created_at");
+}
+
 async function loadLeads() {
   if (!suiteSupabase) {
     showLeadMessage("Supabase config is missing. Add env.js values before using leads.", true);
@@ -1728,11 +1783,7 @@ async function loadLeads() {
     leadState.profile = profile || null;
   }
 
-  const { data, error } = await suiteSupabase
-    .from(leadTable)
-    .select("*")
-    .order("last_activity_at", { ascending: false })
-    .limit(250);
+  const { data, error, usedFallback } = await loadPortalPropertyRows(250);
 
   if (error) {
     showLeadMessage("Unable to load leads: " + error.message, true);
@@ -1747,7 +1798,9 @@ async function loadLeads() {
   }
   populateLeadOwnerFilter();
   renderLeadData();
-  showLeadMessage(leadState.rows.length ? `${leadState.rows.length} lead${leadState.rows.length === 1 ? "" : "s"} synced from Supabase.` : "Synced with Supabase. No leads yet.");
+  showLeadMessage(leadState.rows.length
+    ? `${leadState.rows.length} lead${leadState.rows.length === 1 ? "" : "s"} synced from Supabase${usedFallback ? " with compatible sorting" : ""}.`
+    : "Synced with Supabase. No leads yet.");
 }
 
 function renderLeadData() {
@@ -2071,22 +2124,31 @@ async function moveSelectedLeadToStage(stage) {
 async function moveLeadToStage(id, stage) {
   if (!suiteSupabase || !id || !stage) return;
   showLeadMessage(`Moving lead to ${leadStageLabel(stage)}...`);
-  const { data, error } = await suiteSupabase
+  const payload = { pipeline_stage: stage, last_activity_at: new Date().toISOString() };
+  let result = await suiteSupabase
     .from(leadTable)
-    .update({ pipeline_stage: stage, last_activity_at: new Date().toISOString() })
+    .update(payload)
     .eq("id", id)
     .select("*")
     .maybeSingle();
+  if (result.error && isMissingLeadOptionalColumn(result.error)) {
+    result = await suiteSupabase
+      .from(leadTable)
+      .update({ pipeline_stage: stage })
+      .eq("id", id)
+      .select("*")
+      .maybeSingle();
+  }
 
-  if (error) {
-    showLeadMessage("Unable to move lead: " + error.message, true);
+  if (result.error) {
+    showLeadMessage("Unable to move lead: " + result.error.message, true);
     return;
   }
 
   const index = leadState.rows.findIndex((row) => row.id === id);
-  if (index >= 0) leadState.rows[index] = data;
+  if (index >= 0) leadState.rows[index] = result.data;
   leadState.selectedId = id;
-  fillLeadForm(data);
+  fillLeadForm(result.data);
   renderLeadData();
   showLeadMessage(`Lead moved to ${leadStageLabel(stage)}.`);
 }
@@ -2391,11 +2453,7 @@ async function loadWalkthroughs() {
     walkthroughState.profile = profile || null;
   }
 
-  const { data, error } = await suiteSupabase
-    .from(leadTable)
-    .select("*")
-    .order("last_activity_at", { ascending: false })
-    .limit(300);
+  const { data, error, usedFallback } = await loadPortalPropertyRows(300);
 
   if (error) {
     showWalkthroughMessage("Unable to load walkthroughs: " + error.message, true);
@@ -2412,7 +2470,10 @@ async function loadWalkthroughs() {
   populateWalkthroughRecordSelect();
   populateWalkthroughAssigneeFilter();
   renderWalkthroughData();
-  showWalkthroughMessage(getWalkthroughRows().length ? `${getWalkthroughRows().length} walkthrough${getWalkthroughRows().length === 1 ? "" : "s"} synced from Supabase.` : "Synced with Supabase. No walkthroughs scheduled yet.");
+  const walkthroughCount = getWalkthroughRows().length;
+  showWalkthroughMessage(walkthroughCount
+    ? `${walkthroughCount} walkthrough${walkthroughCount === 1 ? "" : "s"} synced from Supabase${usedFallback ? " with compatible sorting" : ""}.`
+    : "Synced with Supabase. No walkthroughs scheduled yet.");
 }
 
 function renderWalkthroughData() {
@@ -2785,7 +2846,7 @@ async function moveSelectedWalkthroughToQuote(idOverride = "") {
   const payload = { pipeline_stage: "quote_sent", walkthrough_status: "completed", last_activity_at: new Date().toISOString() };
   let result = await suiteSupabase.from(leadTable).update(payload).eq("id", id).select("*").maybeSingle();
   if (result.error && isMissingWalkthroughOptionalColumn(result.error)) {
-    result = await suiteSupabase.from(leadTable).update({ pipeline_stage: "quote_sent", last_activity_at: payload.last_activity_at }).eq("id", id).select("*").maybeSingle();
+    result = await suiteSupabase.from(leadTable).update({ pipeline_stage: "quote_sent" }).eq("id", id).select("*").maybeSingle();
   }
   if (result.error) {
     showWalkthroughMessage("Unable to move walkthrough: " + result.error.message, true);
