@@ -2316,7 +2316,55 @@ a {
 }
 
 .checklist-item-row {
-  grid-template-columns: minmax(112px, 0.28fr) minmax(220px, 1fr) 36px;
+  grid-template-columns: minmax(112px, 0.22fr) minmax(220px, 1fr) minmax(190px, 0.34fr) 36px;
+}
+
+.checklist-media-option {
+  align-self: stretch;
+  background: rgba(7, 18, 32, 0.88);
+  border: 1px solid var(--suite-border-soft);
+  border-radius: 8px;
+  color: var(--suite-text);
+  display: grid;
+  gap: 3px;
+  min-height: 58px;
+  min-width: 0;
+  padding: 8px 10px;
+}
+
+.checklist-media-option span {
+  align-items: center;
+  color: var(--suite-soft);
+  display: flex;
+  font-size: 10px;
+  font-weight: 900;
+  gap: 5px;
+  text-transform: uppercase;
+}
+
+.checklist-media-option strong {
+  color: var(--suite-text);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.checklist-media-option small {
+  color: var(--suite-soft);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.checklist-media-option.is-active {
+  background: rgba(0, 214, 163, 0.08);
+  border-color: rgba(0, 214, 163, 0.34);
+}
+
+.checklist-media-option.is-active span,
+.checklist-media-option.is-active strong {
+  color: var(--suite-green);
 }
 
 .checklist-row-actions {

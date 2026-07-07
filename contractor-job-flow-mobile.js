@@ -117,10 +117,31 @@ function safeMediaFileName(name) {
 }
 
 function checklistMediaKind(item = {}) {
-  const raw = String(item.media_required || item.type || "").toLowerCase();
+  const raw = String([item.media_required, item.type, item.item_type].find((candidate) => {
+    const normalized = String(candidate || "").trim().toLowerCase();
+    return normalized && normalized !== "none" && normalized !== "false" && normalized !== "no";
+  }) || "").toLowerCase();
   if (raw.includes("video")) return "video";
   if (raw.includes("photo") || raw.includes("image")) return "photo";
   return "";
+}
+
+function normalizeChecklistItem(item = {}) {
+  const mediaKind = checklistMediaKind(item);
+  const task = item.task || item.label || item.title || "Untitled task";
+  const type = String(item.type || item.item_type || mediaKind || "check").toLowerCase();
+  return {
+    ...item,
+    task,
+    label: item.label || task,
+    type,
+    required: item.required === false || type === "optional" ? false : true,
+    media_required: mediaKind || "none"
+  };
+}
+
+function normalizeChecklistItems(items) {
+  return Array.isArray(items) ? items.map(normalizeChecklistItem) : [];
 }
 
 function checklistMediaInput(item, index, kind) {
@@ -543,10 +564,10 @@ async function fetchAssignment(assignmentId) {
 
 async function checklistItems(assignment) {
   if (Array.isArray(assignment?.property_checklist_items) && assignment.property_checklist_items.length) {
-    return assignment.property_checklist_items;
+    return normalizeChecklistItems(assignment.property_checklist_items);
   }
   const unitItems = await unitChecklistItems(assignment);
-  if (unitItems.length) return unitItems;
+  if (unitItems.length) return normalizeChecklistItems(unitItems);
   const propertyId = assignment?.property_id || assignment?.portal_property_id || assignment?.metadata?.property_id || assignment?.metadata?.portal_property_id || "";
   if (!propertyId) return [];
 
@@ -557,7 +578,7 @@ async function checklistItems(assignment) {
       .eq("id", propertyId)
       .maybeSingle();
 
-    if (!error && Array.isArray(data?.checklist_items)) return data.checklist_items;
+    if (!error && Array.isArray(data?.checklist_items)) return normalizeChecklistItems(data.checklist_items);
   }
 
   return [];

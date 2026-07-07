@@ -3803,9 +3803,10 @@ function checklistArray(value) {
 }
 
 function normalizeChecklistItem(item = {}) {
+  const type = checklistItemType(item.type || item.item_type || item.media_required || "check");
   return {
     id: item.id || checklistUid("item"),
-    type: item.type || item.item_type || "check",
+    type,
     label: item.label || item.task || item.title || ""
   };
 }
@@ -3884,6 +3885,53 @@ function checklistItemTypeOptions(value = "check") {
     ["note", "Note"],
     ["optional", "Optional"]
   ].map(([id, label]) => `<option value="${esc(id)}" ${id === value ? "selected" : ""}>${esc(label)}</option>`).join("");
+}
+
+function checklistItemType(value = "check") {
+  const raw = String(value || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  if (raw.includes("video")) return "video";
+  if (raw.includes("photo") || raw.includes("image")) return "photo";
+  if (raw.includes("note")) return "note";
+  if (raw.includes("optional")) return "optional";
+  return "check";
+}
+
+function checklistItemMediaKind(value = {}) {
+  const candidates = typeof value === "string"
+    ? [value]
+    : [value.media_required, value.type, value.item_type];
+  const raw = candidates.find((candidate) => {
+    const normalized = String(candidate || "").trim().toLowerCase();
+    return normalized && normalized !== "none" && normalized !== "false" && normalized !== "no";
+  }) || "";
+  const type = checklistItemType(raw);
+  return type === "photo" || type === "video" ? type : "";
+}
+
+function checklistMediaNoticeHtml(value = {}) {
+  const kind = checklistItemMediaKind(value);
+  if (!kind) {
+    return `
+      <div class="checklist-media-option is-empty" data-checklist-media-notice>
+        <span>Upload</span>
+        <strong>No file required</strong>
+        <small>Choose Photo or Video to require proof from the contractor phone.</small>
+      </div>
+    `;
+  }
+  const label = kind === "video" ? "Video" : "Photo";
+  return `
+    <div class="checklist-media-option is-active" data-checklist-media-notice>
+      <span>${icon("upload")}Upload</span>
+      <strong>${esc(label)} required</strong>
+      <small>Contractor will see a ${esc(kind)} upload field before completion.</small>
+    </div>
+  `;
+}
+
+function updateChecklistMediaNotice(row, value) {
+  const notice = row?.querySelector("[data-checklist-media-notice]");
+  if (notice) notice.outerHTML = checklistMediaNoticeHtml(value);
 }
 
 function checklistModules(template = checklistState.builder || createBlankChecklistTemplate()) {
@@ -4010,6 +4058,7 @@ function renderChecklistItemRow(item, scope) {
     <div class="checklist-item-row" ${attr} data-checklist-item-id="${esc(item.id)}">
       <label class="suite-field"><span>Type</span><select data-checklist-item-type>${checklistItemTypeOptions(item.type)}</select></label>
       <label class="suite-field"><span>Checklist Item</span><input value="${esc(item.label || "")}" data-checklist-item-label placeholder="Make bed, wipe counters, upload final photo" /></label>
+      ${checklistMediaNoticeHtml(item)}
       <button class="ghost-icon-btn danger-btn" type="button" data-checklist-remove-item="${esc(item.id)}" aria-label="Remove item">${icon("trash")}</button>
     </div>
   `;
@@ -4160,6 +4209,9 @@ function handleChecklistChange(event) {
     renderChecklistAssignmentPanel();
     return;
   }
+  if (target?.matches("[data-checklist-item-type]")) {
+    updateChecklistMediaNotice(target.closest("[data-checklist-item-id]"), target.value);
+  }
   if (target.closest("#checklistTemplateForm, #checklistSections")) {
     syncChecklistBuilderFromDom();
     ensureChecklistDefaultModuleCounts();
@@ -4281,9 +4333,10 @@ function syncChecklistBuilderFromDom() {
 }
 
 function readChecklistItemNode(node) {
+  const type = checklistItemType(node.querySelector("[data-checklist-item-type]")?.value || "check");
   return {
     id: node.dataset.checklistItemId || checklistUid("item"),
-    type: node.querySelector("[data-checklist-item-type]")?.value || "check",
+    type,
     label: node.querySelector("[data-checklist-item-label]")?.value.trim() || ""
   };
 }
@@ -4556,7 +4609,8 @@ function flattenChecklistTemplate(template, moduleCounts = null) {
 function flattenChecklistItem(item, category, module = {}, moduleInstance = 1) {
   const label = String(item.label || item.task || "").trim();
   if (!label) return null;
-  const type = item.type || "check";
+  const type = checklistItemType(item.type || item.media_required || "check");
+  const mediaKind = checklistItemMediaKind(type);
   return {
     id: `${item.id || checklistUid("item")}-${moduleInstance}`,
     category: category || "General",
@@ -4568,7 +4622,7 @@ function flattenChecklistItem(item, category, module = {}, moduleInstance = 1) {
     module_instance: moduleInstance,
     source_item_id: item.id || "",
     required: type !== "optional",
-    media_required: type === "photo" || type === "video" ? type : "none",
+    media_required: mediaKind || "none",
     notes: type === "note" ? "Contractor should leave a completion note." : ""
   };
 }
