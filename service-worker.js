@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-contractor-pwa-v20260708g";
+const CACHE_NAME = "turnly-contractor-pwa-v20260708h";
 
 const PRECACHE_URLS = [
   "/",
@@ -59,6 +59,13 @@ function normalizedCacheKey(request) {
 function isStaticAsset(request) {
   const pathname = new URL(request.url).pathname;
   return STATIC_EXTENSIONS.some((extension) => pathname.endsWith(extension));
+}
+
+function isAdminRuntimeAsset(request) {
+  const pathname = new URL(request.url).pathname;
+  return pathname === "/admin-suite.js"
+    || pathname.startsWith("/admin-suite-")
+    || pathname === "/app.js";
 }
 
 async function putIfCacheable(cache, key, response) {
@@ -126,6 +133,6 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (isStaticAsset(request)) {
-    event.respondWith(staleWhileRevalidate(request));
+    event.respondWith(isAdminRuntimeAsset(request) ? networkFirst(request) : staleWhileRevalidate(request));
   }
 });
