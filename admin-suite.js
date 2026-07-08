@@ -327,6 +327,9 @@ const assignmentStatusOptions = [
   ["draft", "Draft"]
 ];
 const assignmentBoardStatusFilter = "board";
+const assignmentClaimedHistoryStatusFilter = "claimed-history";
+const assignmentDefaultStatusFilter = "all";
+const assignmentFetchPageSize = 1000;
 const assignmentPriorityOptions = [
   ["normal", "Normal"],
   ["high", "High"],
@@ -340,7 +343,7 @@ const assignmentState = {
   user: null,
   profile: null,
   search: "",
-  statusFilter: assignmentBoardStatusFilter,
+  statusFilter: assignmentDefaultStatusFilter,
   frequencyFilter: "all",
   contractorFilter: "all",
   pageSize: 30,
@@ -3214,16 +3217,16 @@ function renderAssignments() {
   const assignmentToolbar = toolbar(
     `<div class="suite-tabs" role="tablist">
       ${[
+        [assignmentDefaultStatusFilter, "All"],
         [assignmentBoardStatusFilter, "Job Board"],
+        [assignmentClaimedHistoryStatusFilter, "Claimed Jobs"],
         ["open", "Open"],
         ["preferred_pending", "Preferred"],
-        ["claimed", "Claimed"],
         ["in_progress", "In Progress"],
         ["upcoming", "Upcoming"],
         ["overdue", "Overdue"],
-        ["completed", "Completed"],
-        ["all", "All"]
-      ].map(([key, label]) => `<button class="suite-tab assignment-status-tab ${key === assignmentBoardStatusFilter ? "active" : ""}" type="button" data-assignment-status-tab="${esc(key)}">${esc(label)}</button>`).join("")}
+        ["completed", "Completed"]
+      ].map(([key, label]) => `<button class="suite-tab assignment-status-tab ${key === assignmentDefaultStatusFilter ? "active" : ""}" type="button" data-assignment-status-tab="${esc(key)}">${esc(label)}</button>`).join("")}
     </div>`,
     `<label class="inline-search"><span class="sr-only">Search assignments</span>${icon("search")}<input id="assignmentSearchInput" type="search" placeholder="Search assignments..." /></label><button class="secondary-action" type="button" data-assignment-clear-filters>${icon("x")}<span>Clear</span></button>`
   );
@@ -3240,8 +3243,8 @@ function renderAssignments() {
         <section class="suite-panel assignment-list-panel">
           <div class="panel-head assignment-list-head">
             <div>
-              <h2>Assignment Job Board</h2>
-              <p>Synced from Supabase</p>
+              <h2>Assignment Admin Board</h2>
+              <p>All assignment history synced from Supabase</p>
             </div>
             ${assignmentNewButton("New Assignment", "assignmentPanelNewBtn")}
           </div>
@@ -3250,9 +3253,9 @@ function renderAssignments() {
           <p id="assignmentMessage" class="status-message table-status-message" aria-live="polite"></p>
           <div id="assignmentPaginationControls" class="assignment-pagination-controls"></div>
           <div id="adminAssignments" class="assignment-open-list">
-            ${emptyState("calendar", "No active assignments", "Assignments from Supabase will appear here.", assignmentNewButton("New Assignment", "assignmentEmptyNewBtn"))}
+            ${emptyState("calendar", "No assignments found", "Assignments from Supabase will appear here.", assignmentNewButton("New Assignment", "assignmentEmptyNewBtn"))}
           </div>
-          <div class="table-foot"><span id="assignmentListCount">Showing 0 board assignments</span></div>
+          <div class="table-foot"><span id="assignmentListCount">Showing 0 assignments</span></div>
         </section>
       </div>
       <aside class="suite-stack">
@@ -5316,7 +5319,7 @@ function assignmentFilterPanel() {
     <aside class="filter-card assignment-filter-card">
       <div class="filter-head"><h2>Filters</h2><button type="button" data-assignment-clear-filters>Clear All</button></div>
       <div class="filter-grid">
-        <label class="suite-field"><span>Status</span><select id="assignmentStatusFilter"><option value="${esc(assignmentBoardStatusFilter)}">Job Board</option><option value="all">All Statuses</option>${assignmentStatusOptions.map(([value, label]) => `<option value="${esc(value)}">${esc(label)}</option>`).join("")}<option value="overdue">Overdue</option></select></label>
+        <label class="suite-field"><span>Status</span><select id="assignmentStatusFilter"><option value="all">All Statuses</option><option value="${esc(assignmentBoardStatusFilter)}">Job Board</option><option value="${esc(assignmentClaimedHistoryStatusFilter)}">Claimed Jobs</option>${assignmentStatusOptions.map(([value, label]) => `<option value="${esc(value)}">${esc(label)}</option>`).join("")}<option value="overdue">Overdue</option></select></label>
         <label class="suite-field"><span>Block Type</span><select id="assignmentFrequencyFilter"><option value="all">All Blocks</option>${assignmentFrequencyOptions.map(([value, label]) => `<option value="${esc(value)}">${esc(label)}</option>`).join("")}</select></label>
         <label class="suite-field"><span>Contractor</span><select id="assignmentContractorFilter"><option value="all">All Contractors</option></select></label>
       </div>
@@ -7509,7 +7512,7 @@ function handleAssignmentClick(event) {
   const clearFilters = event.target.closest("[data-assignment-clear-filters]");
   if (clearFilters) {
     assignmentState.search = "";
-    assignmentState.statusFilter = assignmentBoardStatusFilter;
+    assignmentState.statusFilter = assignmentDefaultStatusFilter;
     assignmentState.frequencyFilter = "all";
     assignmentState.contractorFilter = "all";
     assignmentState.currentPage = 1;
@@ -7637,12 +7640,13 @@ async function loadAssignments() {
   assignmentState.contractors = contractorsResult;
   assignmentState.rows = assignmentsResult.rows;
   renderAssignmentData();
+  const totalCount = assignmentState.rows.length;
   const boardCount = assignmentState.rows.filter(isAssignmentOpen).length;
   showAssignmentMessage(assignmentsResult.error
-    ? "Assignments are ready once the Supabase migration is applied."
-    : boardCount
-      ? `${boardCount} board assignment${boardCount === 1 ? "" : "s"} synced from Supabase.`
-      : "Synced with Supabase. No active assignments yet.");
+    ? `Loaded ${totalCount.toLocaleString()} assignment${totalCount === 1 ? "" : "s"} before Supabase returned an error.`
+    : totalCount
+      ? `${totalCount.toLocaleString()} total assignment${totalCount === 1 ? "" : "s"} synced from Supabase. ${boardCount.toLocaleString()} on the job board.`
+      : "Synced with Supabase. No assignments have been created yet.");
 }
 
 async function loadAssignmentProperties() {
@@ -7676,16 +7680,21 @@ async function loadAssignmentContractors() {
 }
 
 async function loadAssignmentRows() {
-  const { data, error } = await suiteSupabase
-    .from(assignmentTable)
-    .select("*")
-    .order("start_window", { ascending: true })
-    .limit(1000);
-  if (error) {
-    console.warn("[admin-suite] Unable to load assignments", error);
-    return { rows: [], error };
+  const rows = [];
+  for (let from = 0; ; from += assignmentFetchPageSize) {
+    const { data, error } = await suiteSupabase
+      .from(assignmentTable)
+      .select("*")
+      .order("created_at", { ascending: false })
+      .range(from, from + assignmentFetchPageSize - 1);
+    if (error) {
+      console.warn("[admin-suite] Unable to load assignments", error);
+      return { rows, error };
+    }
+    rows.push(...(data || []));
+    if (!data || data.length < assignmentFetchPageSize) break;
   }
-  return { rows: data || [], error: null };
+  return { rows, error: null };
 }
 
 function renderAssignmentData() {
@@ -7977,6 +7986,8 @@ function getFilteredAssignments() {
     if (statusFilter && statusFilter !== "all") {
       if (statusFilter === assignmentBoardStatusFilter) {
         if (!isAssignmentOpen(row)) return false;
+      } else if (statusFilter === assignmentClaimedHistoryStatusFilter) {
+        if (!isAssignmentClaimedHistory(row)) return false;
       } else if (statusFilter === "upcoming") {
         if (!isAssignmentUpcoming(row)) return false;
       } else if (statusFilter === "overdue") {
@@ -9052,6 +9063,21 @@ function assignmentRoutingMeta(row) {
 
 function assignmentHasContractor(row) {
   return Boolean(row?.assigned_to || row?.claimed_by || assignmentPreferredIds(row).length || row?.assigned_to_name || row?.claimed_by_name);
+}
+
+function isAssignmentClaimedHistory(row) {
+  const status = assignmentStatusKey(row?.status);
+  return ["claimed", "in-progress"].includes(status)
+    || Boolean(
+      row?.claimed_by
+      || row?.assigned_to
+      || row?.claimed_by_name
+      || row?.claimed_by_email
+      || row?.assigned_to_name
+      || row?.assigned_to_email
+      || row?.claimed_at
+      || row?.accepted_at
+    );
 }
 
 function assignmentMatchesContractor(row, contractorId) {

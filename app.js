@@ -24,6 +24,7 @@ const addChecklistItemBtn = document.getElementById("addChecklistItemBtn");
 const checklistBuilder = document.getElementById("checklistBuilder");
 const propertiesList = document.getElementById("propertiesList");
 const propertySelect = document.getElementById("propertySelect");
+const assignmentFetchPageSize = 1000;
 
 let checklistDraft = [];
 let savedProperties = [];
@@ -51,6 +52,15 @@ function escapeHtml(value) {
 
 function formatDateTime(value) {
   return value ? new Date(value).toLocaleString() : "Not set";
+}
+
+function dateTime(value) {
+  const date = value ? new Date(value) : null;
+  return date && !Number.isNaN(date.getTime()) ? date.getTime() : 0;
+}
+
+function statusToken(value) {
+  return String(value || "open").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
 }
 
 function formatTimeOnly(value) {
@@ -750,13 +760,41 @@ if (claimedAdminAssignments) {
   }
 }
 
+async function fetchAllAssignmentBlocks(orderColumn = "created_at", ascending = false) {
+  const rows = [];
+  for (let from = 0; ; from += assignmentFetchPageSize) {
+    const { data, error } = await supabase
+      .from("assignment_blocks")
+      .select("*")
+      .order(orderColumn, { ascending })
+      .range(from, from + assignmentFetchPageSize - 1);
+
+    if (error) return { data: rows, error };
+    rows.push(...(data || []));
+    if (!data || data.length < assignmentFetchPageSize) break;
+  }
+  return { data: rows, error: null };
+}
+
+function isClaimedAdminAssignment(item) {
+  const status = statusToken(item?.status);
+  return ["claimed", "in_progress"].includes(status)
+    || Boolean(
+      item?.claimed_by
+      || item?.assigned_to
+      || item?.claimed_by_name
+      || item?.claimed_by_email
+      || item?.assigned_to_name
+      || item?.assigned_to_email
+      || item?.claimed_at
+      || item?.accepted_at
+    );
+}
+
 async function loadAdminAssignments() {
   if (!adminAssignments) return;
 
-  const { data, error } = await supabase
-    .from("assignment_blocks")
-    .select("*")
-    .order("created_at", { ascending: false });
+  const { data, error } = await fetchAllAssignmentBlocks("created_at", false);
 
   if (error) {
     adminAssignments.innerHTML = `<p>${escapeHtml(error.message)}</p>`;
@@ -776,23 +814,23 @@ async function loadAdminAssignments() {
 async function loadClaimedAdminAssignments() {
   if (!claimedAdminAssignments) return;
 
-  const { data, error } = await supabase
-    .from("assignment_blocks")
-    .select("*")
-    .not("claimed_by", "is", null)
-    .order("claimed_at", { ascending: false });
+  const { data, error } = await fetchAllAssignmentBlocks("created_at", false);
 
   if (error) {
     claimedAdminAssignments.innerHTML = `<p>${escapeHtml(error.message)}</p>`;
     return;
   }
 
-  if (!data.length) {
+  const claimedRows = (data || [])
+    .filter(isClaimedAdminAssignment)
+    .sort((a, b) => dateTime(b.claimed_at || b.accepted_at || b.created_at) - dateTime(a.claimed_at || a.accepted_at || a.created_at));
+
+  if (!claimedRows.length) {
     claimedAdminAssignments.innerHTML = "<p>No assignments have been claimed yet.</p>";
     return;
   }
 
-  claimedAdminAssignments.innerHTML = data
+  claimedAdminAssignments.innerHTML = claimedRows
     .map((item) => renderAssignmentCard(item, { mode: "admin" }))
     .join("");
 }
