@@ -35,6 +35,7 @@ function init() {
 
 function mount(root) {
   if (root.dataset.scheduleAddAssignmentMounted) return;
+  if (root.querySelector("[data-schedule-new-assignment]") && $("scheduleAssignmentModal")) return;
   root.dataset.scheduleAddAssignmentMounted = "true";
   const toolbar = root.querySelector(".toolbar-right");
   if (toolbar && !toolbar.querySelector("[data-schedule-new-assignment]")) {
