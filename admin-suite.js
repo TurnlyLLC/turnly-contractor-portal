@@ -3879,7 +3879,9 @@ function normalizeChecklistTemplate(row = {}) {
     subdepartment: row.subdepartment || "",
     priority: row.priority || "medium",
     description: row.description || "",
-    sections: sections.length ? sections : [createChecklistSection()]
+    sections: sections.length ? sections : [createChecklistSection()],
+    created_by: row.created_by || null,
+    updated_at: row.updated_at || row.created_at || null
   };
 }
 
@@ -4106,8 +4108,44 @@ function normalizeSavedChecklistModule(row = {}) {
       title: section.title || row.name || "Untitled Module"
     },
     created_by: row.created_by || null,
-    updated_at: row.updated_at || row.created_at || null
+    updated_at: row.updated_at || row.created_at || null,
+    source_template_id: row.source_template_id || "",
+    source: row.source || "checklist_modules"
   };
+}
+
+function savedChecklistModulesFromTemplates(templates = checklistState.templates) {
+  const modules = [];
+  templates.forEach((template) => {
+    const normalizedTemplate = normalizeChecklistTemplate(template);
+    normalizedTemplate.sections.forEach((section) => {
+      if (!section.saved_module_id) return;
+      modules.push(normalizeSavedChecklistModule({
+        id: section.saved_module_id,
+        name: section.title,
+        department: normalizedTemplate.department,
+        subdepartment: normalizedTemplate.subdepartment,
+        description: section.description || normalizedTemplate.description || "",
+        section,
+        created_by: template.created_by || null,
+        updated_at: template.updated_at || template.created_at || null,
+        source_template_id: normalizedTemplate.id,
+        source: "checklist_templates"
+      }));
+    });
+  });
+  return modules;
+}
+
+function mergeSavedChecklistModules(moduleRows = [], templates = checklistState.templates) {
+  const merged = new Map();
+  savedChecklistModulesFromTemplates(templates).forEach((module) => {
+    if (module.id) merged.set(module.id, module);
+  });
+  (moduleRows || []).map(normalizeSavedChecklistModule).forEach((module) => {
+    if (module.id) merged.set(module.id, module);
+  });
+  return Array.from(merged.values()).sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
 }
 
 function checklistSavedModuleOptions() {
@@ -4447,7 +4485,9 @@ async function loadChecklistData() {
   }
 
   checklistState.templates = (templatesResult.data || []).map(normalizeChecklistTemplate);
-  checklistState.savedModules = modulesResult.error ? [] : (modulesResult.data || []).map(normalizeSavedChecklistModule);
+  checklistState.savedModules = modulesResult.error
+    ? savedChecklistModulesFromTemplates(checklistState.templates)
+    : mergeSavedChecklistModules(modulesResult.data || [], checklistState.templates);
   checklistState.properties = (propertiesResult.data || [])
     .filter((row) => propertyUnitPropertyTitle(row))
     .sort((a, b) => propertyUnitPropertyTitle(a).localeCompare(propertyUnitPropertyTitle(b)));
@@ -4524,10 +4564,12 @@ async function refreshSavedChecklistModules(options = {}) {
     .select("*")
     .order("updated_at", { ascending: false });
   if (result.error) {
+    checklistState.savedModules = savedChecklistModulesFromTemplates(checklistState.templates);
     if (!options.silent) showChecklistMessage("Unable to load saved modules: " + result.error.message, true);
+    renderChecklistModuleImporter();
     return false;
   }
-  checklistState.savedModules = (result.data || []).map(normalizeSavedChecklistModule);
+  checklistState.savedModules = mergeSavedChecklistModules(result.data || [], checklistState.templates);
   if (Object.prototype.hasOwnProperty.call(options, "selectedId")) {
     checklistState.selectedModuleId = options.selectedId || "";
   } else if (checklistState.selectedModuleId && !checklistState.savedModules.some((module) => module.id === checklistState.selectedModuleId)) {
@@ -4787,17 +4829,41 @@ async function saveChecklistModule(sectionId) {
     ...cleanSection,
     saved_module_id: moduleId
   });
-  const payload = {
-    name: moduleSection.title,
-    department: builder.department || "",
-    subdepartment: builder.subdepartment || "",
-    description: moduleSection.description || (builder.name ? `Saved from ${builder.name}` : ""),
-    section: moduleSection
-  };
+  const currentSection = findChecklistSection(sectionId);
+  if (currentSection) {
+    currentSection.title = moduleSection.title;
+    currentSection.description = moduleSection.description;
+    currentSection.saved_module_id = moduleId;
+    currentSection.sort_order = moduleSection.sort_order;
+    currentSection.items = moduleSection.items;
+    currentSection.rooms = moduleSection.rooms;
+  }
+  const sectionNode = document.querySelector(`[data-checklist-section-id="${selectorValue(sectionId)}"]`);
+  if (sectionNode) sectionNode.dataset.checklistSavedModuleId = moduleId;
 
   checklistState.isSavingModule = true;
   setChecklistModuleSaving(sectionId, true);
-  showChecklistMessage(existingModuleId ? "Saving module..." : "Creating saved module...");
+  showChecklistMessage(existingModuleId ? "Saving checklist and module..." : "Creating saved module...");
+
+  const savedChecklist = await saveChecklistTemplate({ silent: true });
+  if (!savedChecklist) {
+    checklistState.isSavingModule = false;
+    setChecklistModuleSaving(sectionId, false);
+    return;
+  }
+
+  const savedSection = savedChecklist.sections.find((candidate) => candidate.saved_module_id === moduleId || candidate.id === sectionId) || moduleSection;
+  const savedModuleSection = cleanChecklistSectionForSave({
+    ...savedSection,
+    saved_module_id: moduleId
+  });
+  const payload = {
+    name: savedModuleSection.title,
+    department: savedChecklist.department || builder.department || "",
+    subdepartment: savedChecklist.subdepartment || builder.subdepartment || "",
+    description: savedModuleSection.description || (savedChecklist.name ? `Saved from ${savedChecklist.name}` : ""),
+    section: savedModuleSection
+  };
 
   const result = await suiteSupabase
     .from(checklistModulesTable)
@@ -4809,7 +4875,10 @@ async function saveChecklistModule(sectionId) {
   setChecklistModuleSaving(sectionId, false);
 
   if (result.error) {
-    showChecklistMessage("Unable to save module: " + result.error.message, true);
+    checklistState.savedModules = mergeSavedChecklistModules([], checklistState.templates);
+    checklistState.selectedModuleId = moduleId;
+    renderChecklistModuleImporter();
+    showChecklistMessage("Checklist saved, but the saved module table did not update: " + result.error.message, true);
     return;
   }
 
@@ -4817,7 +4886,7 @@ async function saveChecklistModule(sectionId) {
     id: moduleId,
     ...payload,
     ...(result.data || {}),
-    section: result.data?.section || moduleSection
+    section: result.data?.section || savedModuleSection
   });
   const index = checklistState.savedModules.findIndex((module) => module.id === saved.id);
   if (index >= 0) {
@@ -4826,22 +4895,8 @@ async function saveChecklistModule(sectionId) {
     checklistState.savedModules.unshift(saved);
   }
   checklistState.selectedModuleId = saved.id;
-  const currentSection = findChecklistSection(sectionId);
-  if (currentSection) {
-    currentSection.title = moduleSection.title;
-    currentSection.description = moduleSection.description;
-    currentSection.saved_module_id = saved.id;
-    currentSection.sort_order = moduleSection.sort_order;
-    currentSection.items = moduleSection.items;
-    currentSection.rooms = moduleSection.rooms;
-  }
-  const sectionNode = document.querySelector(`[data-checklist-section-id="${selectorValue(sectionId)}"]`);
-  if (sectionNode) sectionNode.dataset.checklistSavedModuleId = saved.id;
 
   await refreshSavedChecklistModules({ selectedId: saved.id, silent: true });
-
-  const savedChecklist = await saveChecklistTemplate({ silent: true });
-  if (!savedChecklist) return;
 
   showChecklistMessage(`${saved.name} saved as a reusable module and checklist saved.`);
 }
