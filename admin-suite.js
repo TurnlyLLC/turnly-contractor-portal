@@ -3728,7 +3728,7 @@ function renderChecklists() {
               <h2>Checklist Details</h2>
               <p>Build modules contractors will complete during a job.</p>
             </div>
-            <button class="primary-action" type="submit" form="checklistTemplateForm">${icon("check")}<span>Save Checklist</span></button>
+            <button class="primary-action" type="submit" form="checklistTemplateForm">${icon("check")}<span data-action-label>Save Checklist</span></button>
           </div>
           <form id="checklistTemplateForm" class="checklist-template-form">
             <input id="checklist_template_id" type="hidden" value="${esc(checklistState.builder.id || "")}" />
@@ -4101,7 +4101,7 @@ function renderChecklistSectionCard(section, index) {
       <div class="checklist-section-head">
         <span class="checklist-drag-handle" role="button" tabindex="0" draggable="true" data-checklist-drag-handle aria-label="Drag module to reorder">${icon("grip")}</span>
         <label class="suite-field"><span>Module ${index + 1}</span><input value="${esc(section.title || "")}" data-checklist-section-title placeholder="Bedroom, kitchen, bathroom" /></label>
-        <button class="secondary-action checklist-save-module-btn" type="button" data-checklist-save-section="${esc(section.id)}">${icon("check")}<span>Save Module</span></button>
+        <button class="secondary-action checklist-save-module-btn" type="button" data-checklist-save-section="${esc(section.id)}">${icon("check")}<span data-action-label>Save Module</span></button>
         <button class="ghost-icon-btn danger-btn" type="button" data-checklist-remove-section="${esc(section.id)}" aria-label="Remove module">${icon("trash")}</button>
       </div>
       <div class="checklist-item-list" data-checklist-section-items>
@@ -4807,14 +4807,14 @@ function setChecklistModuleSaving(sectionId, isSaving) {
   const button = document.querySelector(`[data-checklist-save-section="${selectorValue(sectionId)}"]`);
   if (!button) return;
   button.disabled = isSaving;
-  const label = button.querySelector("span");
+  const label = button.querySelector("[data-action-label]");
   if (label) label.textContent = isSaving ? "Saving..." : "Save Module";
 }
 
 function setChecklistSaving(isSaving) {
   document.querySelectorAll('[form="checklistTemplateForm"], #checklistTemplateForm button[type="submit"]').forEach((button) => {
     button.disabled = isSaving;
-    const label = button.querySelector("span");
+    const label = button.querySelector("[data-action-label]");
     if (label) label.textContent = isSaving ? "Saving..." : "Save Checklist";
   });
 }
