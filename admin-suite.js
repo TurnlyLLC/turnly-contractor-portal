@@ -3775,7 +3775,9 @@ function createChecklistItem(label = "", type = "check", required = true) {
     id: checklistUid("item"),
     type,
     required,
-    label
+    label,
+    description: "",
+    sort_order: 0
   };
 }
 
@@ -3825,33 +3827,44 @@ function checklistArray(value) {
   return [];
 }
 
-function normalizeChecklistItem(item = {}) {
-  const type = checklistItemType(item.type || item.item_type || item.media_required || "check");
-  const required = Object.prototype.hasOwnProperty.call(item, "required")
-    ? item.required !== false
+function normalizeChecklistItem(item = {}, index = 0) {
+  const source = typeof item === "string" ? { label: item } : checklistJsonObject(item);
+  const type = checklistItemType(source.type || source.item_type || source.media_required || "check");
+  const required = Object.prototype.hasOwnProperty.call(source, "required")
+    ? source.required !== false
     : type !== "optional";
   return {
-    id: item.id || checklistUid("item"),
+    ...source,
+    id: source.id || checklistUid("item"),
     type,
     required,
-    label: item.label || item.task || item.title || ""
+    label: source.label || source.task || source.title || "",
+    description: source.description || source.notes || source.instructions || "",
+    sort_order: Number.isFinite(Number(source.sort_order ?? source.order)) ? Number(source.sort_order ?? source.order) : index
   };
 }
 
 function normalizeChecklistRoom(room = {}, index = 0) {
+  const source = checklistJsonObject(room);
   return {
-    id: room.id || checklistUid("room"),
-    title: room.title || room.name || `Room ${index + 1}`,
-    items: checklistArray(room.items).map(normalizeChecklistItem)
+    ...source,
+    id: source.id || checklistUid("room"),
+    title: source.title || source.name || `Room ${index + 1}`,
+    description: source.description || source.notes || "",
+    sort_order: Number.isFinite(Number(source.sort_order ?? source.order)) ? Number(source.sort_order ?? source.order) : index,
+    items: checklistArray(source.items).map(normalizeChecklistItem)
   };
 }
 
 function normalizeChecklistSection(section = {}, index = 0) {
   const source = checklistJsonObject(section);
   return {
+    ...source,
     id: source.id || checklistUid("section"),
     title: source.title || source.name || `Module ${index + 1}`,
+    description: source.description || source.notes || "",
     saved_module_id: source.saved_module_id || source.module_template_id || "",
+    sort_order: Number.isFinite(Number(source.sort_order ?? source.order)) ? Number(source.sort_order ?? source.order) : index,
     items: checklistArray(source.items).map(normalizeChecklistItem),
     rooms: checklistArray(source.rooms).map(normalizeChecklistRoom)
   };
@@ -3870,20 +3883,41 @@ function normalizeChecklistTemplate(row = {}) {
   };
 }
 
+function cleanChecklistItemsForSave(items = []) {
+  return checklistArray(items)
+    .map(normalizeChecklistItem)
+    .map((item, index) => {
+      const label = String(item.label || "").trim();
+      const description = String(item.description || "").trim();
+      return {
+        ...item,
+        label: label || description,
+        description,
+        sort_order: index
+      };
+    })
+    .filter((item) => item.label || item.description);
+}
+
 function cleanChecklistTemplateForSave(template) {
   const normalized = normalizeChecklistTemplate(template);
   const sections = normalized.sections
-    .map((section) => {
-      const items = section.items.filter((item) => item.label.trim());
+    .map((section, sectionIndex) => {
+      const items = cleanChecklistItemsForSave(section.items);
       const rooms = section.rooms
-        .map((room) => ({
+        .map((room, roomIndex) => ({
           ...room,
-          items: room.items.filter((item) => item.label.trim())
+          title: String(room.title || "").trim(),
+          description: String(room.description || "").trim(),
+          sort_order: roomIndex,
+          items: cleanChecklistItemsForSave(room.items)
         }))
         .filter((room) => room.title.trim() || room.items.length);
       return {
         ...section,
         title: section.title.trim() || "Untitled Module",
+        description: String(section.description || "").trim(),
+        sort_order: sectionIndex,
         items,
         rooms
       };
@@ -4114,6 +4148,7 @@ function renderChecklistSectionCard(section, index) {
         <button class="secondary-action checklist-save-module-btn" type="button" data-checklist-save-section="${esc(section.id)}">${icon("check")}<span data-action-label>Save Module</span></button>
         <button class="ghost-icon-btn danger-btn" type="button" data-checklist-remove-section="${esc(section.id)}" aria-label="Remove module">${icon("trash")}</button>
       </div>
+      <label class="suite-field checklist-module-description"><span>Module Description</span><input value="${esc(section.description || "")}" data-checklist-section-description placeholder="Reusable notes, room context, service expectations" /></label>
       <div class="checklist-item-list" data-checklist-section-items>
         ${section.items.map((item) => renderChecklistItemRow(item, "section")).join("")}
       </div>
@@ -4150,6 +4185,7 @@ function renderChecklistItemRow(item, scope) {
       ${checklistRequiredControlHtml(item)}
       <label class="suite-field"><span>Type</span><select data-checklist-item-type>${checklistItemTypeOptions(item.type)}</select></label>
       <label class="suite-field"><span>Checklist Item</span><input value="${esc(item.label || "")}" data-checklist-item-label placeholder="Make bed, wipe counters, upload final photo" /></label>
+      <label class="suite-field checklist-item-description"><span>Item Description</span><input value="${esc(item.description || "")}" data-checklist-item-description placeholder="Extra detail, proof notes, contractor instructions" /></label>
       ${checklistMediaNoticeHtml(item)}
       <button class="ghost-icon-btn danger-btn" type="button" data-checklist-remove-item="${esc(item.id)}" aria-label="Remove item">${icon("trash")}</button>
     </div>
@@ -4248,7 +4284,7 @@ function handleChecklistClick(event) {
   }
 
   if (event.target.closest("[data-checklist-import-module]")) {
-    importSavedChecklistModule();
+    void importSavedChecklistModule();
     return;
   }
 
@@ -4481,6 +4517,26 @@ function renderChecklistModuleImporter() {
   if (button) button.disabled = !checklistState.savedModules.length;
 }
 
+async function refreshSavedChecklistModules(options = {}) {
+  if (!suiteSupabase) return false;
+  const result = await suiteSupabase
+    .from(checklistModulesTable)
+    .select("*")
+    .order("updated_at", { ascending: false });
+  if (result.error) {
+    if (!options.silent) showChecklistMessage("Unable to load saved modules: " + result.error.message, true);
+    return false;
+  }
+  checklistState.savedModules = (result.data || []).map(normalizeSavedChecklistModule);
+  if (Object.prototype.hasOwnProperty.call(options, "selectedId")) {
+    checklistState.selectedModuleId = options.selectedId || "";
+  } else if (checklistState.selectedModuleId && !checklistState.savedModules.some((module) => module.id === checklistState.selectedModuleId)) {
+    checklistState.selectedModuleId = "";
+  }
+  renderChecklistModuleImporter();
+  return true;
+}
+
 function syncChecklistBuilderFromDom() {
   const current = checklistState.builder || createBlankChecklistTemplate();
   const formValue = (id) => (document.getElementById(id)?.value || "").trim();
@@ -4489,12 +4545,15 @@ function syncChecklistBuilderFromDom() {
     const rooms = Array.from(sectionNode.querySelectorAll("[data-checklist-room-id]")).map((roomNode, roomIndex) => ({
       id: roomNode.dataset.checklistRoomId || checklistUid("room"),
       title: roomNode.querySelector("[data-checklist-room-title]")?.value.trim() || `Room ${roomIndex + 1}`,
+      sort_order: roomIndex,
       items: Array.from(roomNode.querySelectorAll("[data-checklist-room-item]")).map(readChecklistItemNode)
     }));
     return {
       id: sectionNode.dataset.checklistSectionId || checklistUid("section"),
       saved_module_id: sectionNode.dataset.checklistSavedModuleId || "",
       title: sectionNode.querySelector("[data-checklist-section-title]")?.value.trim() || `Section ${sectionIndex + 1}`,
+      description: sectionNode.querySelector("[data-checklist-section-description]")?.value.trim() || "",
+      sort_order: sectionIndex,
       items: sectionItems,
       rooms
     };
@@ -4518,7 +4577,8 @@ function readChecklistItemNode(node) {
     id: node.dataset.checklistItemId || checklistUid("item"),
     type,
     required: Boolean(node.querySelector("[data-checklist-item-required]")?.checked),
-    label: node.querySelector("[data-checklist-item-label]")?.value.trim() || ""
+    label: node.querySelector("[data-checklist-item-label]")?.value.trim() || "",
+    description: node.querySelector("[data-checklist-item-description]")?.value.trim() || ""
   };
 }
 
@@ -4586,24 +4646,16 @@ function cloneChecklistSection(section = {}) {
 
 function cleanChecklistSectionForSave(section = {}) {
   const normalized = normalizeChecklistSection(section);
-  const items = normalized.items
-    .map((item) => ({
-      ...item,
-      label: String(item.label || "").trim()
-    }))
-    .filter((item) => item.label);
+  const items = cleanChecklistItemsForSave(normalized.items);
   const rooms = normalized.rooms
-    .map((room) => {
+    .map((room, roomIndex) => {
       const title = String(room.title || "").trim();
-      const items = room.items
-        .map((item) => ({
-          ...item,
-          label: String(item.label || "").trim()
-        }))
-        .filter((item) => item.label);
+      const items = cleanChecklistItemsForSave(room.items);
       return {
         ...room,
         title,
+        description: String(room.description || "").trim(),
+        sort_order: roomIndex,
         items
       };
     })
@@ -4615,14 +4667,16 @@ function cleanChecklistSectionForSave(section = {}) {
   return {
     ...normalized,
     title: String(normalized.title || "").trim() || "Untitled Module",
+    description: String(normalized.description || "").trim(),
     items,
     rooms
   };
 }
 
-function importSavedChecklistModule() {
+async function importSavedChecklistModule() {
   syncChecklistBuilderFromDom();
   const id = document.getElementById("checklistModuleImportSelect")?.value || checklistState.selectedModuleId || "";
+  if (id) await refreshSavedChecklistModules({ selectedId: id, silent: true });
   const savedModule = checklistState.savedModules.find((module) => module.id === id);
   if (!savedModule) {
     showChecklistMessage("Select a saved module before importing.", true);
@@ -4737,7 +4791,7 @@ async function saveChecklistModule(sectionId) {
     name: moduleSection.title,
     department: builder.department || "",
     subdepartment: builder.subdepartment || "",
-    description: builder.name ? `Saved from ${builder.name}` : "",
+    description: moduleSection.description || (builder.name ? `Saved from ${builder.name}` : ""),
     section: moduleSection
   };
 
@@ -4745,9 +4799,11 @@ async function saveChecklistModule(sectionId) {
   setChecklistModuleSaving(sectionId, true);
   showChecklistMessage(existingModuleId ? "Saving module..." : "Creating saved module...");
 
-  const result = existingModuleId
-    ? await suiteSupabase.from(checklistModulesTable).update(payload).eq("id", moduleId).select("*").single()
-    : await suiteSupabase.from(checklistModulesTable).insert({ id: moduleId, ...payload, created_by: checklistState.user?.id || null }).select("*").single();
+  const result = await suiteSupabase
+    .from(checklistModulesTable)
+    .upsert({ id: moduleId, ...payload, created_by: checklistState.user?.id || null }, { onConflict: "id" })
+    .select("*")
+    .single();
 
   checklistState.isSavingModule = false;
   setChecklistModuleSaving(sectionId, false);
@@ -4772,12 +4828,17 @@ async function saveChecklistModule(sectionId) {
   checklistState.selectedModuleId = saved.id;
   const currentSection = findChecklistSection(sectionId);
   if (currentSection) {
+    currentSection.title = moduleSection.title;
+    currentSection.description = moduleSection.description;
     currentSection.saved_module_id = saved.id;
+    currentSection.sort_order = moduleSection.sort_order;
     currentSection.items = moduleSection.items;
     currentSection.rooms = moduleSection.rooms;
   }
   const sectionNode = document.querySelector(`[data-checklist-section-id="${selectorValue(sectionId)}"]`);
   if (sectionNode) sectionNode.dataset.checklistSavedModuleId = saved.id;
+
+  await refreshSavedChecklistModules({ selectedId: saved.id, silent: true });
 
   const savedChecklist = await saveChecklistTemplate({ silent: true });
   if (!savedChecklist) return;

@@ -2373,7 +2373,11 @@ a {
 }
 
 .checklist-item-row {
-  grid-template-columns: minmax(96px, 0.14fr) minmax(112px, 0.18fr) minmax(220px, 1fr) minmax(210px, 0.34fr) 36px;
+  grid-template-columns: minmax(96px, 0.13fr) minmax(112px, 0.15fr) minmax(190px, 0.8fr) minmax(190px, 0.8fr) minmax(210px, 0.34fr) 36px;
+}
+
+.checklist-module-description {
+  margin-top: -2px;
 }
 
 .checklist-required-toggle {
