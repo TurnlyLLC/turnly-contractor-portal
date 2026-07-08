@@ -347,7 +347,6 @@ function renderShell() {
     <main class="cp-shell">
       ${sidebar()}
       <section class="cp-main" id="${pageKey === "dashboard" ? "contractorDashboard" : "contractorPortalMain"}">
-        ${topbar()}
         ${renderPage()}
       </section>
       ${mobileNav()}
