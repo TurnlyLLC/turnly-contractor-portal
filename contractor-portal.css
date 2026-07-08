@@ -43,6 +43,10 @@
   display: none;
 }
 
+.cp-mobile-more-panel {
+  display: none;
+}
+
 .cp-install-action[hidden] {
   display: none !important;
 }
@@ -824,7 +828,50 @@
     z-index: 60;
   }
 
-  .cp-mobile-nav a {
+  .cp-mobile-more-panel {
+    background: rgba(5, 14, 24, 0.98);
+    border: 1px solid var(--cp-line);
+    border-radius: 8px;
+    bottom: calc(78px + env(safe-area-inset-bottom));
+    box-shadow: 0 18px 42px rgba(0, 0, 0, 0.32);
+    display: block;
+    left: 10px;
+    padding: 10px;
+    position: fixed;
+    right: 10px;
+    z-index: 58;
+  }
+
+  .cp-mobile-more-panel[hidden] {
+    display: none;
+  }
+
+  .cp-mobile-more-grid {
+    display: grid;
+    gap: 8px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cp-mobile-more-link {
+    background: rgba(255, 255, 255, 0.055);
+    border: 1px solid var(--cp-line);
+    border-radius: 8px;
+    color: var(--cp-text);
+    font-size: 13px;
+    font-weight: 900;
+    min-height: 42px;
+    padding: 12px 10px;
+    text-align: center;
+    text-decoration: none;
+  }
+
+  .cp-mobile-more-link.active {
+    background: rgba(18, 217, 155, 0.13);
+    color: var(--cp-green);
+  }
+
+  .cp-mobile-nav a,
+  .cp-mobile-nav button {
     align-items: center;
     border-radius: 8px;
     color: var(--cp-muted);
@@ -836,25 +883,21 @@
     text-decoration: none;
   }
 
-  .cp-mobile-nav a.active {
+  .cp-mobile-nav button {
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  .cp-mobile-nav a.active,
+  .cp-mobile-nav button.active,
+  .cp-mobile-nav button[aria-expanded="true"] {
     background: rgba(18, 217, 155, 0.13);
     color: var(--cp-green);
   }
 
-  .cp-mobile-nav span {
-    align-items: center;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid var(--cp-line);
-    border-radius: 8px;
-    display: inline-flex;
-    font-size: 12px;
-    font-weight: 900;
-    height: 26px;
-    justify-content: center;
-    width: 26px;
-  }
-
   .cp-mobile-nav strong {
-    font-size: 11px;
+    font-size: 13px;
   }
 }

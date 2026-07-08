@@ -25,8 +25,16 @@ const mobileNavItems = [
   ["dashboard", "Today", "contractor.html"],
   ["my-jobs", "Jobs", "contractor-my-assignments.html"],
   ["schedule", "Schedule", "contractor-schedule.html"],
+  ["payments", "Pay", "contractor-payments.html"]
+];
+
+const mobileMoreItems = [
   ["messages", "Messages", "contractor-messages.html"],
-  ["resources", "More", "contractor-resources.html"]
+  ["resources", "Resources", "contractor-resources.html"],
+  ["documents", "Documents", "contractor-documents.html"],
+  ["job-board", "Job Board", "contractor-available.html"],
+  ["performance", "Performance", "contractor-performance-portal.html"],
+  ["video-library", "Videos", "contractor-video-library.html"]
 ];
 
 const pageMeta = {
@@ -329,14 +337,25 @@ function sidebar() {
 }
 
 function mobileNav() {
+  const moreIsActive = mobileMoreItems.some(([key]) => key === pageKey);
+  const moreOpen = document.body?.classList.contains("cp-mobile-more-open");
   return `
+    <div class="cp-mobile-more-panel" id="cpMobileMorePanel" ${moreOpen ? "" : "hidden"}>
+      <div class="cp-mobile-more-grid">
+        ${mobileMoreItems.map(([key, label, href]) => `
+          <a class="cp-mobile-more-link ${key === pageKey ? "active" : ""}" href="${esc(href)}">${esc(label)}</a>
+        `).join("")}
+      </div>
+    </div>
     <nav class="cp-mobile-nav" aria-label="Contractor mobile navigation">
       ${mobileNavItems.map(([key, label, href]) => `
         <a class="${key === pageKey ? "active" : ""}" href="${esc(href)}">
-          <span aria-hidden="true">${esc(label.slice(0, 1))}</span>
           <strong>${esc(label)}</strong>
         </a>
       `).join("")}
+      <button class="${moreIsActive ? "active" : ""}" type="button" aria-expanded="${moreOpen ? "true" : "false"}" aria-controls="cpMobileMorePanel" data-mobile-more-toggle>
+        <strong>...</strong>
+      </button>
     </nav>
   `;
 }
@@ -957,6 +976,25 @@ function refreshFilterOnly() {
 
 function attachEvents() {
   root?.addEventListener("click", async (event) => {
+    const mobileMoreButton = event.target.closest("[data-mobile-more-toggle]");
+    if (mobileMoreButton) {
+      const open = mobileMoreButton.getAttribute("aria-expanded") !== "true";
+      document.body.classList.toggle("cp-mobile-more-open", open);
+      mobileMoreButton.setAttribute("aria-expanded", String(open));
+      const panel = document.getElementById("cpMobileMorePanel");
+      if (panel) panel.hidden = !open;
+      return;
+    }
+
+    if (document.body.classList.contains("cp-mobile-more-open") &&
+      !event.target.closest(".cp-mobile-more-panel") &&
+      !event.target.closest(".cp-mobile-nav")) {
+      document.body.classList.remove("cp-mobile-more-open");
+      const panel = document.getElementById("cpMobileMorePanel");
+      if (panel) panel.hidden = true;
+      document.querySelector("[data-mobile-more-toggle]")?.setAttribute("aria-expanded", "false");
+    }
+
     const logoutButton = event.target.closest("#logoutBtn");
     if (logoutButton) {
       await supabase?.auth.signOut();
