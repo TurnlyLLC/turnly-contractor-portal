@@ -4751,10 +4751,13 @@ async function saveChecklistModule(sectionId) {
   checklistState.selectedModuleId = saved.id;
   const currentSection = findChecklistSection(sectionId);
   if (currentSection) currentSection.saved_module_id = saved.id;
-  renderChecklistForm();
-  renderChecklistModuleImporter();
-  renderChecklistMetrics();
-  showChecklistMessage(`${saved.name} saved as a reusable module.`);
+  const sectionNode = document.querySelector(`[data-checklist-section-id="${selectorValue(sectionId)}"]`);
+  if (sectionNode) sectionNode.dataset.checklistSavedModuleId = saved.id;
+
+  const savedChecklist = await saveChecklistTemplate({ silent: true });
+  if (!savedChecklist) return;
+
+  showChecklistMessage(`${saved.name} saved as a reusable module and checklist saved.`);
 }
 
 async function saveChecklistTemplate(options = {}) {
