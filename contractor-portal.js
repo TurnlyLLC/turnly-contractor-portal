@@ -23,22 +23,22 @@ const navItems = [
 
 const mobileNavItems = [
   ["dashboard", "Today", "contractor.html"],
-  ["my-jobs", "Jobs", "contractor-my-assignments.html"],
+  ["job-board", "Jobs", "contractor-available.html"],
   ["schedule", "Schedule", "contractor-schedule.html"],
   ["payments", "Pay", "contractor-payments.html"]
 ];
 
 const mobileMoreItems = [
+  ["my-jobs", "My Jobs", "contractor-my-assignments.html"],
   ["messages", "Messages", "contractor-messages.html"],
   ["resources", "Resources", "contractor-resources.html"],
   ["documents", "Documents", "contractor-documents.html"],
-  ["job-board", "Job Board", "contractor-available.html"],
   ["performance", "Performance", "contractor-performance-portal.html"],
   ["video-library", "Videos", "contractor-video-library.html"]
 ];
 
 const pageMeta = {
-  dashboard: ["Dashboard", "Good morning, Contractor"],
+  dashboard: ["Today", "Jobs and scheduling for today."],
   "my-jobs": ["My Jobs", "View and manage all jobs assigned to you."],
   schedule: ["Schedule", "Track upcoming assignments and manage availability."],
   resources: ["Resources", "Access important files, forms, and resources."],
@@ -189,7 +189,7 @@ function todayAssignments() {
   return activeAssignments().filter((item) => {
     const date = item.start_window ? new Date(item.start_window) : null;
     return date && isSameDay(date, today);
-  });
+  }).sort((a, b) => dateValue(a.start_window) - dateValue(b.start_window));
 }
 
 function nextAssignments(limit = 6) {
@@ -416,29 +416,82 @@ function renderMetrics() {
 }
 
 function renderDashboard() {
-  const upcoming = nextAssignments(5);
+  const today = todayAssignments();
   return `
-    ${renderMetrics()}
+    ${renderTodayMetrics(today)}
     <section class="cp-dashboard-grid">
       <div class="cp-stack">
-        ${panel("Upcoming Assignments", upcoming.length ? `<div class="cp-job-list">${upcoming.map((item) => assignmentRow(item, "mine")).join("")}</div>` : emptyState("No upcoming assignments."), {
-          action: `<a class="cp-ghost-action" href="contractor-my-assignments.html">View All</a>`
+        ${panel("Today's Jobs", today.length ? `<div class="cp-job-list">${today.map((item) => assignmentRow(item, "mine")).join("")}</div>` : emptyState("No jobs scheduled for today."), {
+          action: `<a class="cp-ghost-action" href="contractor-schedule.html">Week View</a>`
         })}
-        ${panel("Earnings Overview", renderChart(completedAssignments(60)), { kicker: "Payments" })}
+        ${panel("Today's Schedule", renderTodaySchedule(today), { kicker: new Date().toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" }) })}
       </div>
       <div class="cp-stack">
-        ${panel("Announcements", renderAnnouncements())}
-        ${panel("Tasks", emptyState("No critical tasks due right now."))}
-        ${panel("Quick Actions", `
+        ${panel("Route Summary", renderTodayRouteSummary(today))}
+        ${panel("Today's Tasks", renderTodayTasks(today))}
+        ${panel("Actions", `
           <div class="cp-quick-grid">
-            <a class="cp-action" href="contractor-available.html">Find Jobs</a>
-            <a class="cp-ghost-action" href="contractor-schedule.html">Open Schedule</a>
-            <a class="cp-ghost-action" href="contractor-documents.html">Documents</a>
-            <a class="cp-ghost-action" href="contractor-payments.html">Payments</a>
+            <a class="cp-action" href="contractor-my-assignments.html">My Jobs</a>
+            <a class="cp-ghost-action" href="contractor-available.html">Find Jobs</a>
+            <a class="cp-ghost-action" href="contractor-schedule.html">Schedule</a>
+            <a class="cp-ghost-action" href="contractor-messages.html">Messages</a>
           </div>
         `)}
       </div>
     </section>
+  `;
+}
+
+function renderTodayMetrics(today) {
+  const inProgress = today.filter((item) => normalizeToken(item.status) === "in-progress").length;
+  const next = today.find((item) => dateValue(item.start_window) >= Date.now()) || today[0];
+  return `
+    <section class="cp-metric-strip">
+      ${metric("Today's Jobs", String(today.length), "scheduled today", "T")}
+      ${metric("In Progress", String(inProgress), "currently active", "A")}
+      ${metric("Today's Pay", money(totalPay(today)), "scheduled earnings", "$")}
+      ${metric("Next Start", next ? formatTime(next.start_window, "Anytime") : "None", next ? assignmentTitle(next) : "no jobs today", "N")}
+      ${metric("Open Jobs", String(state.openAssignments.length), "available to claim", "J")}
+    </section>
+  `;
+}
+
+function renderTodaySchedule(rows) {
+  if (!rows.length) return emptyState("No scheduled times for today.");
+  return `
+    <div class="cp-mini-list">
+      ${rows.map((item) => `
+        <div class="cp-mini-row">
+          <span>${esc(formatTime(item.start_window, "Anytime"))}</span>
+          <strong>${esc(assignmentTitle(item))}</strong>
+          <small>${esc([item.address, item.service_type, money(item.pay_amount)].filter(Boolean).join(" - "))}</small>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderTodayRouteSummary(rows) {
+  const first = rows[0];
+  const last = rows[rows.length - 1];
+  return `
+    <div class="cp-mini-list">
+      <div class="cp-mini-row"><span>First Stop</span><strong>${esc(first ? assignmentTitle(first) : "None")}</strong><small>${esc(first ? formatWindow(first) : "No jobs today")}</small></div>
+      <div class="cp-mini-row"><span>Last Stop</span><strong>${esc(last ? assignmentTitle(last) : "None")}</strong><small>${esc(last ? formatWindow(last) : "No jobs today")}</small></div>
+      <div class="cp-mini-row"><span>Total Pay</span><strong>${esc(money(totalPay(rows)))}</strong><small>for today's scheduled jobs</small></div>
+    </div>
+  `;
+}
+
+function renderTodayTasks(rows) {
+  if (!rows.length) return emptyState("Nothing is scheduled for today.");
+  const checklistCount = rows.filter((item) => ["in-progress", "claimed", "scheduled"].includes(normalizeToken(item.status))).length;
+  return `
+    <div class="cp-mini-list">
+      <div class="cp-mini-row"><strong>Review access notes</strong><small>${rows.length} job(s) scheduled today.</small></div>
+      <div class="cp-mini-row"><strong>Complete checklist proof</strong><small>${checklistCount} active job(s) may need photos or QA video.</small></div>
+      <div class="cp-mini-row"><strong>Message Turnly if delayed</strong><small>Use Messages for schedule changes or access issues.</small></div>
+    </div>
   `;
 }
 
@@ -522,10 +575,10 @@ function renderJobSummary() {
 
 function renderJobBoard() {
   const rows = filteredOpenAssignments();
-  const preferred = rows.filter((item) => normalizeToken(item.visibility) === "preferred" || item.preferred_first);
+  const preferred = rows.filter(isPreferredOffer);
   return `
     <section class="cp-job-board-layout">
-      ${panel("Available Jobs", `
+      ${panel("Jobs", `
         <div class="cp-filter-row">
           <label class="cp-search"><span>Search</span><input id="cpBoardSearch" type="search" value="${esc(state.filters.search)}" placeholder="Search jobs..." /></label>
           <select id="cpJobType" class="cp-select" aria-label="Job type">
@@ -542,7 +595,7 @@ function renderJobBoard() {
           </select>
         </div>
         ${preferred.length ? `<p class="cp-muted">${preferred.length} preferred job(s) are visible to you.</p>` : ""}
-        <div id="contractorAssignments" class="cp-job-list">${rows.length ? rows.map((item) => assignmentRow(item, "open")).join("") : emptyState("No open assignments available right now.")}</div>
+        <div id="contractorAssignments">${renderJobBoardList(rows)}</div>
       `)}
       <aside class="cp-stack">
         ${panel("Filters", renderBoardFilterSummary())}
@@ -562,6 +615,34 @@ function option(value, label, current) {
   return `<option value="${esc(value)}" ${value === current ? "selected" : ""}>${esc(label)}</option>`;
 }
 
+function isPreferredOffer(item) {
+  const preferredIds = Array.isArray(item.preferred_contractor_ids) ? item.preferred_contractor_ids : [];
+  return normalizeToken(item.visibility) === "preferred" ||
+    normalizeToken(item.status) === "preferred-pending" ||
+    item.preferred_first === true ||
+    preferredIds.includes(state.user?.id);
+}
+
+function renderJobBoardList(rows) {
+  if (!rows.length) return emptyState("No open assignments available right now.");
+  const preferred = rows.filter(isPreferredOffer);
+  const general = rows.filter((item) => !isPreferredOffer(item));
+  return `
+    ${preferred.length ? `
+      <div class="cp-job-list">
+        <p class="cp-panel-kicker">Preferred Jobs</p>
+        ${preferred.map((item) => assignmentRow(item, "open")).join("")}
+      </div>
+    ` : ""}
+    ${general.length ? `
+      <div class="cp-job-list ${preferred.length ? "cp-job-list-spaced" : ""}">
+        <p class="cp-panel-kicker">Available Jobs</p>
+        ${general.map((item) => assignmentRow(item, "open")).join("")}
+      </div>
+    ` : ""}
+  `;
+}
+
 function filteredOpenAssignments() {
   const term = state.filters.search.trim().toLowerCase();
   return state.openAssignments.filter((item) => {
@@ -574,7 +655,11 @@ function filteredOpenAssignments() {
     if (!term) return true;
     return [item.title, item.property_name, item.address, item.service_type, item.scope, item.special_instructions]
       .some((value) => String(value || "").toLowerCase().includes(term));
-  }).sort((a, b) => dateValue(a.start_window) - dateValue(b.start_window));
+  }).sort((a, b) => {
+    const preferredSort = Number(isPreferredOffer(b)) - Number(isPreferredOffer(a));
+    if (preferredSort) return preferredSort;
+    return dateValue(a.start_window) - dateValue(b.start_window);
+  });
 }
 
 function renderBoardFilterSummary() {
@@ -955,7 +1040,7 @@ function refreshFilterOnly() {
     const target = document.getElementById("contractorAssignments");
     if (target) {
       const rows = filteredOpenAssignments();
-      target.innerHTML = rows.length ? rows.map((item) => assignmentRow(item, "open")).join("") : emptyState("No open assignments available right now.");
+      target.innerHTML = renderJobBoardList(rows);
     }
   }
   if (pageKey === "my-jobs") {

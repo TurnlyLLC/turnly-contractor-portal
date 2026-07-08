@@ -363,6 +363,10 @@
   gap: 9px;
 }
 
+.cp-job-list-spaced {
+  margin-top: 14px;
+}
+
 .cp-job-row {
   align-items: center;
   background: rgba(6, 17, 29, 0.72);
@@ -811,7 +815,9 @@
   }
 
   .cp-calendar {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(7, minmax(112px, 1fr));
+    overflow-x: auto;
+    padding-bottom: 4px;
   }
 
   .cp-mobile-nav {
