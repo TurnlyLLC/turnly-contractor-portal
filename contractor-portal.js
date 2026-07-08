@@ -21,6 +21,14 @@ const navItems = [
   ["video-library", "Video Library", "contractor-video-library.html"]
 ];
 
+const mobileNavItems = [
+  ["dashboard", "Today", "contractor.html"],
+  ["my-jobs", "Jobs", "contractor-my-assignments.html"],
+  ["schedule", "Schedule", "contractor-schedule.html"],
+  ["messages", "Messages", "contractor-messages.html"],
+  ["resources", "More", "contractor-resources.html"]
+];
+
 const pageMeta = {
   dashboard: ["Dashboard", "Good morning, Contractor"],
   "my-jobs": ["My Jobs", "View and manage all jobs assigned to you."],
@@ -282,6 +290,7 @@ function topbar() {
         <option>Switch Property</option>
         ${Array.from(new Set(state.myAssignments.map((item) => item.property_name).filter(Boolean))).slice(0, 8).map((name) => `<option>${esc(name)}</option>`).join("")}
       </select>
+      <button id="installPwaBtn" class="cp-ghost-action cp-install-action" type="button" data-pwa-install hidden>Install App</button>
       <button id="logoutBtn" class="cp-ghost-action" type="button">Sign Out</button>
     </header>
     <p id="claimMessage" class="cp-status-message ${state.messageError ? "error" : ""}" aria-live="polite">${esc(state.message)}</p>
@@ -319,6 +328,19 @@ function sidebar() {
   `;
 }
 
+function mobileNav() {
+  return `
+    <nav class="cp-mobile-nav" aria-label="Contractor mobile navigation">
+      ${mobileNavItems.map(([key, label, href]) => `
+        <a class="${key === pageKey ? "active" : ""}" href="${esc(href)}">
+          <span aria-hidden="true">${esc(label.slice(0, 1))}</span>
+          <strong>${esc(label)}</strong>
+        </a>
+      `).join("")}
+    </nav>
+  `;
+}
+
 function renderShell() {
   if (!root) return;
   root.innerHTML = `
@@ -328,6 +350,7 @@ function renderShell() {
         ${topbar()}
         ${renderPage()}
       </section>
+      ${mobileNav()}
     </main>
   `;
 }
