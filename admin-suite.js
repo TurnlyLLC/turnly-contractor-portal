@@ -3889,6 +3889,7 @@ function normalizeChecklistTemplate(row = {}) {
 function cleanChecklistItemsForSave(items = []) {
   return checklistArray(items)
     .map(normalizeChecklistItem)
+    .sort((a, b) => Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0))
     .map((item, index) => {
       const label = String(item.label || "").trim();
       const description = String(item.description || "").trim();
@@ -4578,10 +4579,6 @@ function renderChecklistModuleImporter() {
 
 async function refreshSavedChecklistModules(options = {}) {
   if (!suiteSupabase) return false;
-  if (checklistState.moduleTableMissing) {
-    useChecklistTemplateModulesFallback(options.selectedId || "");
-    return false;
-  }
   const result = await suiteSupabase
     .from(checklistModulesTable)
     .select("*")
@@ -4591,6 +4588,7 @@ async function refreshSavedChecklistModules(options = {}) {
     if (!options.silent && !isMissingChecklistModulesTableError(result.error)) showChecklistMessage("Unable to load saved modules: " + result.error.message, true);
     return false;
   }
+  checklistState.moduleTableMissing = false;
   checklistState.savedModules = mergeSavedChecklistModules(result.data || [], checklistState.templates);
   if (Object.prototype.hasOwnProperty.call(options, "selectedId")) {
     checklistState.selectedModuleId = options.selectedId || "";
@@ -4712,6 +4710,8 @@ function cleanChecklistSectionForSave(section = {}) {
   const normalized = normalizeChecklistSection(section);
   const items = cleanChecklistItemsForSave(normalized.items);
   const rooms = normalized.rooms
+    .slice()
+    .sort((a, b) => Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0))
     .map((room, roomIndex) => {
       const title = String(room.title || "").trim();
       const items = cleanChecklistItemsForSave(room.items);
@@ -4746,10 +4746,16 @@ async function importSavedChecklistModule() {
     showChecklistMessage("Select a saved module before importing.", true);
     return;
   }
+  const savedSection = cleanChecklistSectionForSave(savedModule.section);
+  const savedItemCount = savedSection.items.length + savedSection.rooms.reduce((total, room) => total + room.items.length, 0);
+  if (!savedItemCount) {
+    showChecklistMessage(`${savedModule.name} is saved, but it does not have checklist items to import yet.`, true);
+    return;
+  }
   const imported = cloneChecklistSection({
-    ...savedModule.section,
+    ...savedSection,
     saved_module_id: savedModule.id,
-    title: savedModule.section.title || savedModule.name
+    title: savedSection.title || savedModule.name
   });
   checklistState.builder.sections.push(imported);
   checklistState.selectedModuleId = savedModule.id;
@@ -4758,7 +4764,7 @@ async function importSavedChecklistModule() {
   renderChecklistAssignmentPanel();
   renderChecklistMetrics();
   renderChecklistPreview();
-  showChecklistMessage(`${savedModule.name} imported into this checklist.`);
+  showChecklistMessage(`${savedModule.name} imported with ${savedItemCount.toLocaleString()} checklist item${savedItemCount === 1 ? "" : "s"}.`);
 }
 
 function findChecklistSection(sectionId) {
@@ -4886,14 +4892,6 @@ async function saveChecklistModule(sectionId) {
     description: savedModuleSection.description || (savedChecklist.name ? `Saved from ${savedChecklist.name}` : ""),
     section: savedModuleSection
   };
-
-  if (checklistState.moduleTableMissing) {
-    checklistState.isSavingModule = false;
-    setChecklistModuleSaving(sectionId, false);
-    useChecklistTemplateModulesFallback(moduleId);
-    showChecklistMessage(`${payload.name} saved as a reusable module.`);
-    return;
-  }
 
   const result = await suiteSupabase
     .from(checklistModulesTable)
