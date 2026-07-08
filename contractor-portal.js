@@ -64,6 +64,8 @@ const state = {
     jobType: "all",
     payRange: "all",
     myStatus: "active",
+    payoutSearch: "",
+    payoutWeek: "",
     videoPhase: "all"
   },
   scheduleCursor: startOfWeek(new Date())
@@ -116,6 +118,13 @@ function formatTime(value, fallback = "") {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return fallback;
   return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+function formatShortDate(value, fallback = "Not scheduled") {
+  if (!value) return fallback;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return fallback;
+  return date.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
 function formatWindow(item) {
@@ -201,6 +210,131 @@ function nextAssignments(limit = 6) {
 
 function totalPay(rows) {
   return rows.reduce((sum, item) => sum + (Number(item.pay_amount) || 0), 0);
+}
+
+function currentYear() {
+  return new Date().getFullYear();
+}
+
+function isCurrentYear(value) {
+  const date = new Date(value);
+  return !Number.isNaN(date.getTime()) && date.getFullYear() === currentYear();
+}
+
+function assignmentPaidDate(item = {}) {
+  return item.paid_at ||
+    item.payout_at ||
+    item.payout_date ||
+    item.payout_completed_at ||
+    item.payment_sent_at ||
+    item.statement_paid_at ||
+    item.paid_on ||
+    "";
+}
+
+function assignmentPaymentStatus(item) {
+  return normalizeToken(item.payment_status || item.pay_status || item.payout_status || item.invoice_status || "");
+}
+
+function isPaidAssignment(item) {
+  const status = assignmentPaymentStatus(item);
+  return Boolean(
+    assignmentPaidDate(item) ||
+    item.paid === true ||
+    item.is_paid === true ||
+    item.paid_out === true ||
+    ["paid", "paid-out", "payout-paid", "payout-sent", "settled"].includes(status)
+  );
+}
+
+function acceptedPayAssignments() {
+  return activeAssignments()
+    .filter((item) => Number(item.pay_amount) > 0)
+    .sort((a, b) => dateValue(a.start_window || a.accepted_at || a.claimed_at) - dateValue(b.start_window || b.accepted_at || b.claimed_at));
+}
+
+function completedPayAssignments() {
+  return state.myAssignments
+    .filter((item) => normalizeToken(item.status) === "completed")
+    .sort((a, b) => dateValue(b.completed_at || b.updated_at) - dateValue(a.completed_at || a.updated_at));
+}
+
+function completedOwedAssignments() {
+  return completedPayAssignments().filter((item) => !isPaidAssignment(item));
+}
+
+function paidAssignments() {
+  return completedPayAssignments().filter(isPaidAssignment);
+}
+
+function isoWeekInputValue(value) {
+  const source = new Date(value);
+  if (Number.isNaN(source.getTime())) return "";
+  const date = new Date(Date.UTC(source.getFullYear(), source.getMonth(), source.getDate()));
+  const day = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const week = Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
+  return `${date.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
+}
+
+function weekRangeLabel(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Week not recorded";
+  const start = startOfWeek(date);
+  const end = addDays(start, 6);
+  return `${formatShortDate(start)} - ${formatDate(end)}`;
+}
+
+function payoutGroups() {
+  const groups = new Map();
+  paidAssignments().forEach((item) => {
+    const paidDate = assignmentPaidDate(item) || item.completed_at || item.updated_at;
+    const weekKey = isoWeekInputValue(paidDate) || "unknown";
+    const group = groups.get(weekKey) || {
+      amount: 0,
+      count: 0,
+      items: [],
+      latestDate: 0,
+      paidDate,
+      weekKey,
+      weekLabel: weekRangeLabel(paidDate)
+    };
+    group.amount += Number(item.pay_amount) || 0;
+    group.count += 1;
+    group.items.push(item);
+    if (dateValue(paidDate) > group.latestDate) {
+      group.latestDate = dateValue(paidDate);
+      group.paidDate = paidDate;
+      group.weekLabel = weekRangeLabel(paidDate);
+    }
+    groups.set(weekKey, group);
+  });
+
+  const ascending = Array.from(groups.values()).sort((a, b) => dateValue(a.paidDate) - dateValue(b.paidDate));
+  let runningYtd = 0;
+  ascending.forEach((group) => {
+    if (isCurrentYear(group.paidDate)) {
+      runningYtd += group.amount;
+      group.runningYtd = runningYtd;
+    } else {
+      group.runningYtd = null;
+    }
+  });
+  return ascending.reverse();
+}
+
+function filteredPayoutGroups() {
+  const term = state.filters.payoutSearch.trim().toLowerCase();
+  return payoutGroups().filter((group) => {
+    if (state.filters.payoutWeek && group.weekKey !== state.filters.payoutWeek) return false;
+    if (!term) return true;
+    return [
+      group.weekKey,
+      group.weekLabel,
+      ...group.items.flatMap((item) => [assignmentTitle(item), item.property_name, item.address, item.service_type])
+    ].some((value) => String(value || "").toLowerCase().includes(term));
+  });
 }
 
 function metric(label, value, subtext, icon) {
@@ -667,7 +801,6 @@ function renderBoardFilterSummary() {
   return `
     <div class="cp-mini-list">
       <div class="cp-mini-row"><span>Showing</span><strong>${rows.length} jobs</strong></div>
-      <div class="cp-mini-row"><span>Average Pay</span><strong>${esc(money(rows.length ? totalPay(rows) / rows.length : 0))}</strong></div>
       <div class="cp-mini-row"><span>Next Available</span><strong>${esc(formatDate(rows[0]?.start_window, "None"))}</strong></div>
     </div>
   `;
@@ -714,7 +847,7 @@ function renderCalendar(start) {
             ${rows.map((item) => `
               <a class="cp-calendar-event" href="contractor-my-assignments.html">
                 <strong>${esc(assignmentTitle(item))}</strong>
-                <small>${esc(formatTime(item.start_window))} ${esc(money(item.pay_amount))}</small>
+                <small>${esc(formatTime(item.start_window, "Time pending"))}</small>
               </a>
             `).join("") || `<small class="cp-muted">No jobs</small>`}
           </section>
@@ -787,31 +920,104 @@ function renderDocuments() {
 }
 
 function renderPayments() {
-  const completed = completedAssignments(365).sort((a, b) => dateValue(b.completed_at) - dateValue(a.completed_at));
+  const accepted = acceptedPayAssignments();
+  const owed = completedOwedAssignments();
+  const paid = paidAssignments();
+  const completedYtd = completedPayAssignments().filter((item) => isCurrentYear(item.completed_at || item.updated_at));
   return `
-    ${renderMetrics()}
+    ${renderPayMetrics({ accepted, owed, paid, completedYtd })}
     <section class="cp-payments-layout">
       <div class="cp-stack">
-        ${panel("Earnings Overview", renderChart(completed))}
-        ${panel("Transaction History", renderPaymentTable(completed))}
+        ${panel("Accepted Job Pay", renderPayJobList(accepted, "No accepted jobs with pay yet."))}
+        ${panel("Completed Owed", renderPayJobList(owed, "No completed jobs are waiting on payout."))}
+        ${panel("Previous Payouts", `
+          <div class="cp-filter-row">
+            <label class="cp-search"><span>Week</span><input id="cpPayoutWeek" type="week" value="${esc(state.filters.payoutWeek)}" /></label>
+            <label class="cp-search"><span>Search</span><input id="cpPayoutSearch" type="search" value="${esc(state.filters.payoutSearch)}" placeholder="Search payouts..." /></label>
+            <button class="cp-ghost-action" type="button" data-clear-payout-week>Clear</button>
+          </div>
+          <div id="cpPayoutHistory">${renderPayoutHistory(filteredPayoutGroups())}</div>
+        `)}
       </div>
       <aside class="cp-stack">
-        ${panel("Payment Methods", emptyState("No payment methods added."))}
-        ${panel("Quick Actions", `<div class="cp-mini-list"><a class="cp-ghost-action" href="#">View Invoices</a><a class="cp-ghost-action" href="#">Download Statements</a><a class="cp-ghost-action" href="#">Payment Help</a></div>`)}
+        ${panel("Year to Date", renderYearToDateSummary(completedYtd, paid, owed))}
+        ${panel("Payout Summary", renderPayoutSummary(paid, owed))}
       </aside>
     </section>
   `;
 }
 
-function renderPaymentTable(rows) {
-  if (!rows.length) return emptyState("No completed payment history yet.");
+function renderPayMetrics({ accepted, owed, paid, completedYtd }) {
+  const paidYtd = paid.filter((item) => isCurrentYear(assignmentPaidDate(item) || item.completed_at || item.updated_at));
   return `
-    <table class="cp-table">
-      <thead><tr><th>Job</th><th>Date</th><th>Status</th><th>Amount</th></tr></thead>
-      <tbody>
-        ${rows.slice(0, 12).map((item) => `<tr><td>${esc(assignmentTitle(item))}</td><td>${esc(formatDate(item.completed_at || item.updated_at))}</td><td>${esc(titleCase(item.status))}</td><td>${esc(money(item.pay_amount))}</td></tr>`).join("")}
-      </tbody>
-    </table>
+    <section class="cp-payment-grid">
+      ${metric("Accepted Job Pay", money(totalPay(accepted)), `${accepted.length} active job(s)`, "$")}
+      ${metric("Completed Owed", money(totalPay(owed)), "not paid out yet", "O")}
+      ${metric("Previous Payouts", money(totalPay(paidYtd)), `${currentYear()} paid out`, "P")}
+      ${metric("Year-to-Date Pay", money(totalPay(completedYtd)), `${completedYtd.length} completed job(s)`, "Y")}
+    </section>
+  `;
+}
+
+function renderPayJobList(rows, emptyText) {
+  if (!rows.length) return emptyState(emptyText);
+  return `
+    <div class="cp-pay-card-list">
+      ${rows.slice(0, 12).map((item) => `
+        <article class="cp-pay-card">
+          <div>
+            <strong>${esc(assignmentTitle(item))}</strong>
+            <small>${esc([formatWindow(item), titleCase(item.status)].filter(Boolean).join(" - "))}</small>
+          </div>
+          <strong>${esc(money(item.pay_amount))}</strong>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderPayoutHistory(groups) {
+  if (!groups.length) return emptyState("No previous payouts match this week.");
+  return `
+    <div class="cp-table-wrap">
+      <table class="cp-table">
+        <thead><tr><th>Week</th><th>Jobs</th><th>Paid On</th><th>Payout</th><th>YTD Total</th></tr></thead>
+        <tbody>
+          ${groups.map((group) => `
+            <tr>
+              <td><strong>${esc(group.weekLabel)}</strong><small>${esc(group.weekKey)}</small></td>
+              <td>${esc(String(group.count))}</td>
+              <td>${esc(formatDate(group.paidDate, "Pending"))}</td>
+              <td>${esc(money(group.amount))}</td>
+              <td>${group.runningYtd == null ? "--" : esc(money(group.runningYtd))}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderYearToDateSummary(completedYtd, paid, owed) {
+  const paidYtd = paid.filter((item) => isCurrentYear(assignmentPaidDate(item) || item.completed_at || item.updated_at));
+  const owedYtd = owed.filter((item) => isCurrentYear(item.completed_at || item.updated_at));
+  return `
+    <div class="cp-mini-list">
+      <div class="cp-mini-row"><span>Completed Pay</span><strong>${esc(money(totalPay(completedYtd)))}</strong><small>${currentYear()} running total</small></div>
+      <div class="cp-mini-row"><span>Paid Out</span><strong>${esc(money(totalPay(paidYtd)))}</strong><small>${paidYtd.length} payout job(s)</small></div>
+      <div class="cp-mini-row"><span>Still Owed</span><strong>${esc(money(totalPay(owedYtd)))}</strong><small>${owedYtd.length} completed job(s)</small></div>
+    </div>
+  `;
+}
+
+function renderPayoutSummary(paid, owed) {
+  const latest = paid[0];
+  return `
+    <div class="cp-mini-list">
+      <div class="cp-mini-row"><span>Latest Payout</span><strong>${esc(money(latest?.pay_amount))}</strong><small>${esc(formatDate(assignmentPaidDate(latest), "No payout recorded"))}</small></div>
+      <div class="cp-mini-row"><span>Pending Total</span><strong>${esc(money(totalPay(owed)))}</strong><small>completed, not paid out</small></div>
+      <div class="cp-mini-row"><span>Accepted Total</span><strong>${esc(money(totalPay(acceptedPayAssignments())))}</strong><small>scheduled or in progress</small></div>
+    </div>
   `;
 }
 
@@ -833,7 +1039,7 @@ function renderPerformance() {
           <div class="cp-mini-list">
             <div class="cp-mini-row"><span>Completed Jobs</span><strong>${completed.length}</strong></div>
             <div class="cp-mini-row"><span>Active Jobs</span><strong>${active.length}</strong></div>
-            <div class="cp-mini-row"><span>Average Pay</span><strong>${esc(money(completed.length ? totalPay(completed) / completed.length : 0))}</strong></div>
+            <div class="cp-mini-row"><span>Completed Pay</span><strong>${esc(money(totalPay(completed)))}</strong></div>
           </div>
         `)}
         ${panel("Next Goal", `<div class="cp-mini-row"><strong>Complete active jobs cleanly</strong><small>Keep checklist notes updated for each site.</small></div>`)}
@@ -1057,6 +1263,10 @@ function refreshFilterOnly() {
       target.innerHTML = rows.length ? rows.map(renderVideoCard).join("") : renderVideoPlaceholders();
     }
   }
+  if (pageKey === "payments") {
+    const target = document.getElementById("cpPayoutHistory");
+    if (target) target.innerHTML = renderPayoutHistory(filteredPayoutGroups());
+  }
 }
 
 function attachEvents() {
@@ -1109,11 +1319,23 @@ function attachEvents() {
       if (action === "next") state.scheduleCursor = addDays(state.scheduleCursor, 7);
       renderShell();
     }
+
+    const clearPayoutWeek = event.target.closest("[data-clear-payout-week]");
+    if (clearPayoutWeek) {
+      state.filters.payoutWeek = "";
+      state.filters.payoutSearch = "";
+      renderShell();
+      return;
+    }
   });
 
   root?.addEventListener("input", (event) => {
     if (event.target.matches("#cpGlobalSearch, #cpBoardSearch, #cpVideoSearch")) {
       state.filters.search = event.target.value;
+      refreshFilterOnly();
+    }
+    if (event.target.matches("#cpPayoutSearch")) {
+      state.filters.payoutSearch = event.target.value;
       refreshFilterOnly();
     }
   });
@@ -1130,6 +1352,10 @@ function attachEvents() {
     if (event.target.matches("#cpVideoPhase")) {
       state.filters.videoPhase = event.target.value;
       renderShell();
+    }
+    if (event.target.matches("#cpPayoutWeek")) {
+      state.filters.payoutWeek = event.target.value;
+      refreshFilterOnly();
     }
   });
 }

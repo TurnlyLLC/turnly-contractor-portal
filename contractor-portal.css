@@ -481,6 +481,10 @@
   min-height: 16px;
 }
 
+.cp-payment-grid {
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
+}
+
 .cp-two-column,
 .cp-job-board-layout,
 .cp-schedule-layout,
@@ -652,9 +656,40 @@
   padding: 10px;
 }
 
-.cp-payment-grid,
 .cp-performance-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.cp-pay-card-list {
+  display: grid;
+  gap: 9px;
+}
+
+.cp-pay-card {
+  align-items: center;
+  background: rgba(6, 17, 29, 0.66);
+  border: 1px solid rgba(144, 164, 183, 0.11);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 10px;
+}
+
+.cp-pay-card > strong {
+  color: var(--cp-green);
+  font-size: 18px;
+  white-space: nowrap;
+}
+
+.cp-pay-card small {
+  color: var(--cp-muted);
+  display: block;
+  margin-top: 3px;
+}
+
+.cp-table-wrap {
+  overflow-x: auto;
 }
 
 .cp-table {
@@ -671,6 +706,12 @@
 
 .cp-table td {
   color: var(--cp-text);
+}
+
+.cp-table td small {
+  color: var(--cp-muted);
+  display: block;
+  margin-top: 3px;
 }
 
 .cp-video-grid {
@@ -811,6 +852,10 @@
   }
 
   .cp-job-row {
+    grid-template-columns: 1fr;
+  }
+
+  .cp-pay-card {
     grid-template-columns: 1fr;
   }
 
