@@ -838,11 +838,24 @@ a {
   border: 1px solid var(--suite-border);
   border-radius: 7px;
   color: var(--suite-text);
+  cursor: pointer;
   display: inline-flex;
   height: 34px;
   justify-content: center;
   text-decoration: none;
   width: 34px;
+}
+
+.dashboard-approve-action {
+  background: rgba(0, 214, 166, 0.14);
+  border-color: rgba(0, 214, 166, 0.48);
+  color: var(--suite-green);
+}
+
+.dashboard-item-action:disabled,
+.dashboard-item-action.is-loading {
+  cursor: wait;
+  opacity: 0.62;
 }
 
 .empty-state {
