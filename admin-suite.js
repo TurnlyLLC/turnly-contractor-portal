@@ -326,6 +326,7 @@ const assignmentStatusOptions = [
   ["declined", "Declined"],
   ["draft", "Draft"]
 ];
+const assignmentBoardStatusFilter = "board";
 const assignmentPriorityOptions = [
   ["normal", "Normal"],
   ["high", "High"],
@@ -339,7 +340,7 @@ const assignmentState = {
   user: null,
   profile: null,
   search: "",
-  statusFilter: "open",
+  statusFilter: assignmentBoardStatusFilter,
   frequencyFilter: "all",
   contractorFilter: "all",
   pageSize: 30,
@@ -3213,7 +3214,8 @@ function renderAssignments() {
   const assignmentToolbar = toolbar(
     `<div class="suite-tabs" role="tablist">
       ${[
-        ["open", "Job Board"],
+        [assignmentBoardStatusFilter, "Job Board"],
+        ["open", "Open"],
         ["preferred_pending", "Preferred"],
         ["claimed", "Claimed"],
         ["in_progress", "In Progress"],
@@ -3221,7 +3223,7 @@ function renderAssignments() {
         ["overdue", "Overdue"],
         ["completed", "Completed"],
         ["all", "All"]
-      ].map(([key, label]) => `<button class="suite-tab assignment-status-tab ${key === "open" ? "active" : ""}" type="button" data-assignment-status-tab="${esc(key)}">${esc(label)}</button>`).join("")}
+      ].map(([key, label]) => `<button class="suite-tab assignment-status-tab ${key === assignmentBoardStatusFilter ? "active" : ""}" type="button" data-assignment-status-tab="${esc(key)}">${esc(label)}</button>`).join("")}
     </div>`,
     `<label class="inline-search"><span class="sr-only">Search assignments</span>${icon("search")}<input id="assignmentSearchInput" type="search" placeholder="Search assignments..." /></label><button class="secondary-action" type="button" data-assignment-clear-filters>${icon("x")}<span>Clear</span></button>`
   );
@@ -5314,7 +5316,7 @@ function assignmentFilterPanel() {
     <aside class="filter-card assignment-filter-card">
       <div class="filter-head"><h2>Filters</h2><button type="button" data-assignment-clear-filters>Clear All</button></div>
       <div class="filter-grid">
-        <label class="suite-field"><span>Status</span><select id="assignmentStatusFilter"><option value="all">All Statuses</option>${assignmentStatusOptions.map(([value, label]) => `<option value="${esc(value)}">${esc(label)}</option>`).join("")}<option value="overdue">Overdue</option></select></label>
+        <label class="suite-field"><span>Status</span><select id="assignmentStatusFilter"><option value="${esc(assignmentBoardStatusFilter)}">Job Board</option><option value="all">All Statuses</option>${assignmentStatusOptions.map(([value, label]) => `<option value="${esc(value)}">${esc(label)}</option>`).join("")}<option value="overdue">Overdue</option></select></label>
         <label class="suite-field"><span>Block Type</span><select id="assignmentFrequencyFilter"><option value="all">All Blocks</option>${assignmentFrequencyOptions.map(([value, label]) => `<option value="${esc(value)}">${esc(label)}</option>`).join("")}</select></label>
         <label class="suite-field"><span>Contractor</span><select id="assignmentContractorFilter"><option value="all">All Contractors</option></select></label>
       </div>
@@ -7507,7 +7509,7 @@ function handleAssignmentClick(event) {
   const clearFilters = event.target.closest("[data-assignment-clear-filters]");
   if (clearFilters) {
     assignmentState.search = "";
-    assignmentState.statusFilter = "open";
+    assignmentState.statusFilter = assignmentBoardStatusFilter;
     assignmentState.frequencyFilter = "all";
     assignmentState.contractorFilter = "all";
     assignmentState.currentPage = 1;
@@ -7777,14 +7779,14 @@ function renderAssignmentTable() {
   if (controls) controls.innerHTML = renderAssignmentPaginationControls(rows.length, pagination);
   const count = document.getElementById("assignmentListCount");
   if (count) {
-    const label = assignmentState.statusFilter === "open" ? "board assignments" : "assignments";
+    const label = assignmentState.statusFilter === assignmentBoardStatusFilter ? "board assignments" : "assignments";
     count.textContent = rows.length
       ? `Showing ${(pagination.startIndex + 1).toLocaleString()}-${pagination.endIndex.toLocaleString()} of ${rows.length.toLocaleString()} ${label}`
       : `Showing 0 ${label}`;
   }
   body.innerHTML = pagination.rows.length
     ? pagination.rows.map(renderAssignmentRow).join("")
-    : emptyState("calendar", assignmentState.statusFilter === "open" ? "No active assignments" : "No assignments found", "Assignments from Supabase will appear here.", assignmentNewButton("New Assignment", "assignmentEmptyNewBtn"));
+    : emptyState("calendar", assignmentState.statusFilter === assignmentBoardStatusFilter ? "No active assignments" : "No assignments found", "Assignments from Supabase will appear here.", assignmentNewButton("New Assignment", "assignmentEmptyNewBtn"));
 }
 
 function getCurrentAssignmentPageRows() {
@@ -7973,7 +7975,7 @@ function getFilteredAssignments() {
   const frequencyFilter = assignmentFrequencyKey(assignmentState.frequencyFilter);
   const rows = assignmentState.rows.filter((row) => {
     if (statusFilter && statusFilter !== "all") {
-      if (statusFilter === "open") {
+      if (statusFilter === assignmentBoardStatusFilter) {
         if (!isAssignmentOpen(row)) return false;
       } else if (statusFilter === "upcoming") {
         if (!isAssignmentUpcoming(row)) return false;
