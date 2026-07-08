@@ -130,12 +130,15 @@ function normalizeChecklistItem(item = {}) {
   const mediaKind = checklistMediaKind(item);
   const task = item.task || item.label || item.title || "Untitled task";
   const type = String(item.type || item.item_type || mediaKind || "check").toLowerCase();
+  const required = Object.prototype.hasOwnProperty.call(item, "required")
+    ? item.required !== false
+    : type !== "optional";
   return {
     ...item,
     task,
     label: item.label || task,
     type,
-    required: item.required === false || type === "optional" ? false : true,
+    required,
     media_required: mediaKind || "none"
   };
 }
