@@ -378,6 +378,7 @@ const checklistState = {
   isSaving: false,
   isSavingModule: false,
   isApplying: false,
+  moduleTableMissing: false,
   draggingSectionId: ""
 };
 const topbarState = {
@@ -4148,6 +4149,23 @@ function mergeSavedChecklistModules(moduleRows = [], templates = checklistState.
   return Array.from(merged.values()).sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
 }
 
+function isMissingChecklistModulesTableError(error = {}) {
+  const text = `${error.code || ""} ${error.message || ""} ${error.details || ""}`.toLowerCase();
+  return text.includes("checklist_modules") && (
+    text.includes("could not find the table") ||
+    text.includes("schema cache") ||
+    text.includes("42p01") ||
+    text.includes("pgrst205")
+  );
+}
+
+function useChecklistTemplateModulesFallback(selectedId = "") {
+  checklistState.moduleTableMissing = true;
+  checklistState.savedModules = savedChecklistModulesFromTemplates(checklistState.templates);
+  if (selectedId) checklistState.selectedModuleId = selectedId;
+  renderChecklistModuleImporter();
+}
+
 function checklistSavedModuleOptions() {
   if (!checklistState.savedModules.length) return `<option value="">No saved modules yet</option>`;
   return [
@@ -4485,6 +4503,7 @@ async function loadChecklistData() {
   }
 
   checklistState.templates = (templatesResult.data || []).map(normalizeChecklistTemplate);
+  checklistState.moduleTableMissing = Boolean(modulesResult.error && isMissingChecklistModulesTableError(modulesResult.error));
   checklistState.savedModules = modulesResult.error
     ? savedChecklistModulesFromTemplates(checklistState.templates)
     : mergeSavedChecklistModules(modulesResult.data || [], checklistState.templates);
@@ -4507,7 +4526,7 @@ async function loadChecklistData() {
   renderChecklistData();
   const loadNotes = [];
   if (unitsResult.error) loadNotes.push("Unit assignments will be available after the property unit migration is applied.");
-  if (modulesResult.error) loadNotes.push("Saved modules will be available after the checklist module migration is applied.");
+  if (modulesResult.error && !checklistState.moduleTableMissing) loadNotes.push("Saved modules will be available after the checklist module migration is applied.");
   showChecklistMessage(loadNotes.length
     ? `Checklists loaded. ${loadNotes.join(" ")}`
     : `${checklistState.templates.length.toLocaleString()} checklist${checklistState.templates.length === 1 ? "" : "s"} and ${checklistState.savedModules.length.toLocaleString()} saved module${checklistState.savedModules.length === 1 ? "" : "s"} loaded.`);
@@ -4559,14 +4578,17 @@ function renderChecklistModuleImporter() {
 
 async function refreshSavedChecklistModules(options = {}) {
   if (!suiteSupabase) return false;
+  if (checklistState.moduleTableMissing) {
+    useChecklistTemplateModulesFallback(options.selectedId || "");
+    return false;
+  }
   const result = await suiteSupabase
     .from(checklistModulesTable)
     .select("*")
     .order("updated_at", { ascending: false });
   if (result.error) {
-    checklistState.savedModules = savedChecklistModulesFromTemplates(checklistState.templates);
-    if (!options.silent) showChecklistMessage("Unable to load saved modules: " + result.error.message, true);
-    renderChecklistModuleImporter();
+    useChecklistTemplateModulesFallback(options.selectedId || "");
+    if (!options.silent && !isMissingChecklistModulesTableError(result.error)) showChecklistMessage("Unable to load saved modules: " + result.error.message, true);
     return false;
   }
   checklistState.savedModules = mergeSavedChecklistModules(result.data || [], checklistState.templates);
@@ -4865,6 +4887,14 @@ async function saveChecklistModule(sectionId) {
     section: savedModuleSection
   };
 
+  if (checklistState.moduleTableMissing) {
+    checklistState.isSavingModule = false;
+    setChecklistModuleSaving(sectionId, false);
+    useChecklistTemplateModulesFallback(moduleId);
+    showChecklistMessage(`${payload.name} saved as a reusable module.`);
+    return;
+  }
+
   const result = await suiteSupabase
     .from(checklistModulesTable)
     .upsert({ id: moduleId, ...payload, created_by: checklistState.user?.id || null }, { onConflict: "id" })
@@ -4875,6 +4905,11 @@ async function saveChecklistModule(sectionId) {
   setChecklistModuleSaving(sectionId, false);
 
   if (result.error) {
+    if (isMissingChecklistModulesTableError(result.error)) {
+      useChecklistTemplateModulesFallback(moduleId);
+      showChecklistMessage(`${payload.name} saved as a reusable module.`);
+      return;
+    }
     checklistState.savedModules = mergeSavedChecklistModules([], checklistState.templates);
     checklistState.selectedModuleId = moduleId;
     renderChecklistModuleImporter();
