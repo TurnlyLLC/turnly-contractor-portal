@@ -377,7 +377,8 @@ const checklistState = {
   user: null,
   isSaving: false,
   isSavingModule: false,
-  isApplying: false
+  isApplying: false,
+  draggingSectionId: ""
 };
 const topbarState = {
   user: null,
@@ -575,6 +576,7 @@ const iconPaths = {
   "file-check": '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="m9 15 2 2 4-5"/>',
   "file-signature": '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8 18c2-4 4-4 6 0"/><path d="M8 14h6"/>',
   filter: '<path d="M22 3H2l8 9v7l4 2v-9Z"/>',
+  grip: '<circle cx="9" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="19" r="1"/>',
   grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>',
   home: '<path d="m3 11 9-8 9 8"/><path d="M5 10v11h14V10"/><path d="M9 21v-7h6v7"/>',
   "layout-grid": '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>',
@@ -3953,10 +3955,7 @@ function checklistRequiredControlHtml(item = {}) {
   return `
     <label class="checklist-required-toggle">
       <input type="checkbox" data-checklist-item-required ${required ? "checked" : ""} />
-      <span>
-        <strong>${required ? "Required" : "Optional"}</strong>
-        <small>${required ? "Must be completed before job closeout" : "Can be skipped if it does not apply"}</small>
-      </span>
+      <span>${required ? "Required" : "Optional"}</span>
     </label>
   `;
 }
@@ -3968,10 +3967,8 @@ function updateChecklistMediaNotice(row, value = {}) {
 
 function updateChecklistRequiredControl(row) {
   const input = row?.querySelector("[data-checklist-item-required]");
-  const label = row?.querySelector(".checklist-required-toggle strong");
-  const hint = row?.querySelector(".checklist-required-toggle small");
+  const label = row?.querySelector(".checklist-required-toggle span");
   if (label && input) label.textContent = input.checked ? "Required" : "Optional";
-  if (hint && input) hint.textContent = input.checked ? "Must be completed before job closeout" : "Can be skipped if it does not apply";
 }
 
 function checklistModules(template = checklistState.builder || createBlankChecklistTemplate()) {
@@ -4102,8 +4099,9 @@ function renderChecklistSectionCard(section, index) {
   return `
     <article class="checklist-section-card" data-checklist-section-id="${esc(section.id)}" data-checklist-saved-module-id="${esc(section.saved_module_id || "")}">
       <div class="checklist-section-head">
+        <span class="checklist-drag-handle" role="button" tabindex="0" draggable="true" data-checklist-drag-handle aria-label="Drag module to reorder">${icon("grip")}</span>
         <label class="suite-field"><span>Module ${index + 1}</span><input value="${esc(section.title || "")}" data-checklist-section-title placeholder="Bedroom, kitchen, bathroom" /></label>
-        <button class="secondary-action" type="button" data-checklist-save-section="${esc(section.id)}">${icon("check")}<span>Save Module</span></button>
+        <button class="secondary-action checklist-save-module-btn" type="button" data-checklist-save-section="${esc(section.id)}">${icon("check")}<span>Save Module</span></button>
         <button class="ghost-icon-btn danger-btn" type="button" data-checklist-remove-section="${esc(section.id)}" aria-label="Remove module">${icon("trash")}</button>
       </div>
       <div class="checklist-item-list" data-checklist-section-items>
@@ -4139,9 +4137,9 @@ function renderChecklistItemRow(item, scope) {
   const attr = scope === "room" ? "data-checklist-room-item" : "data-checklist-section-item";
   return `
     <div class="checklist-item-row" ${attr} data-checklist-item-id="${esc(item.id)}">
+      ${checklistRequiredControlHtml(item)}
       <label class="suite-field"><span>Type</span><select data-checklist-item-type>${checklistItemTypeOptions(item.type)}</select></label>
       <label class="suite-field"><span>Checklist Item</span><input value="${esc(item.label || "")}" data-checklist-item-label placeholder="Make bed, wipe counters, upload final photo" /></label>
-      ${checklistRequiredControlHtml(item)}
       ${checklistMediaNoticeHtml(item)}
       <button class="ghost-icon-btn danger-btn" type="button" data-checklist-remove-item="${esc(item.id)}" aria-label="Remove item">${icon("trash")}</button>
     </div>
@@ -4156,6 +4154,10 @@ function initChecklists() {
   root.addEventListener("submit", handleChecklistSubmit);
   root.addEventListener("input", handleChecklistInput);
   root.addEventListener("change", handleChecklistChange);
+  root.addEventListener("dragstart", handleChecklistDragStart);
+  root.addEventListener("dragover", handleChecklistDragOver);
+  root.addEventListener("drop", handleChecklistDrop);
+  root.addEventListener("dragend", handleChecklistDragEnd);
 
   const topbarNew = Array.from(document.querySelectorAll(".suite-topbar .primary-action"))
     .find((link) => link.textContent?.trim() === "New Checklist");
@@ -4166,6 +4168,56 @@ function initChecklists() {
 
   void loadChecklistData();
   renderChecklistMetrics();
+}
+
+function handleChecklistDragStart(event) {
+  const handle = event.target.closest("[data-checklist-drag-handle]");
+  if (!handle) return;
+  const section = handle.closest("[data-checklist-section-id]");
+  const id = section?.dataset.checklistSectionId || "";
+  if (!section || !id) return;
+  syncChecklistBuilderFromDom();
+  checklistState.draggingSectionId = id;
+  section.classList.add("is-dragging");
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", id);
+  }
+}
+
+function handleChecklistDragOver(event) {
+  const draggingId = checklistState.draggingSectionId;
+  if (!draggingId) return;
+  const target = event.target.closest("[data-checklist-section-id]");
+  const dragging = document.querySelector(`[data-checklist-section-id="${selectorValue(draggingId)}"]`);
+  if (!target || !dragging || target === dragging) return;
+  event.preventDefault();
+  const rect = target.getBoundingClientRect();
+  const placeAfter = event.clientY > rect.top + rect.height / 2;
+  target.parentNode.insertBefore(dragging, placeAfter ? target.nextSibling : target);
+}
+
+function handleChecklistDrop(event) {
+  if (!checklistState.draggingSectionId) return;
+  event.preventDefault();
+  finishChecklistModuleDrag(true);
+}
+
+function handleChecklistDragEnd() {
+  if (!checklistState.draggingSectionId) return;
+  finishChecklistModuleDrag(false);
+}
+
+function finishChecklistModuleDrag(showMessage = false) {
+  const dragging = document.querySelector(".checklist-section-card.is-dragging");
+  if (dragging) dragging.classList.remove("is-dragging");
+  checklistState.draggingSectionId = "";
+  syncChecklistBuilderFromDom();
+  ensureChecklistDefaultModuleCounts();
+  renderChecklistAssignmentPanel();
+  renderChecklistMetrics();
+  renderChecklistPreview();
+  if (showMessage) showChecklistMessage("Module order updated.");
 }
 
 function handleChecklistClick(event) {
