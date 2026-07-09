@@ -384,6 +384,20 @@ const checklistState = {
   moduleTableMissing: false,
   draggingSectionId: ""
 };
+const qaQueueState = {
+  items: [],
+  videos: [],
+  assignments: new Map(),
+  qaJobs: new Map(),
+  signedUrls: new Map(),
+  selectedKey: "",
+  search: "",
+  statusFilter: "pending",
+  loading: false,
+  message: "",
+  tone: "",
+  user: null
+};
 const topbarState = {
   user: null,
   profile: null,
@@ -5582,20 +5596,63 @@ function renderQaQueue() {
   return `
     ${qualityTabs("qa-queue")}
     <section class="metric-strip five">
-      ${metric("Total in Queue", "0", "all time", "briefcase", "blue")}
-      ${metric("Due Today", "0", "reviews", "clock", "yellow")}
-      ${metric("Due This Week", "0", "reviews", "calendar", "purple")}
-      ${metric("Overdue", "0", "reviews", "alert", "red")}
-      ${metric("Avg. Age in Queue", "0", "days", "activity", "blue")}
+      ${metric("Pending Review", "0", "QA jobs", "briefcase", "blue", 'id="qaQueuePendingMetric"')}
+      ${metric("Videos Ready", "0", "uploaded by contractors", "video", "purple", 'id="qaQueueVideoMetric"')}
+      ${metric("Approved for Pay", "0", "reviewed jobs", "check", "green", 'id="qaQueueApprovedMetric"')}
+      ${metric("Needs Rework", "0", "not approved", "alert", "red", 'id="qaQueueRejectedMetric"')}
+      ${metric("Avg. Age", "0", "days in queue", "activity", "yellow", 'id="qaQueueAgeMetric"')}
     </section>
-    <section class="content-rail">
-      ${tableFrame(["", "Review ID", "Property / Project", "Contractor", "Service Type", "Location", "Due Date", "Priority", "Status", "Actions"], emptyState("briefcase", "No reviews in queue", "QA reviews assigned to you or your team will appear here.", actionButton("View All Reviews", "line-chart")), {
-        checkbox: true,
-        toolbar: toolbar(`${searchBox("Search properties, contractors...")}${selectButton("All Statuses")}${selectButton("All Service Types")}${selectButton("All Reviewers")}${actionButton("Filters", "filter", "", "secondary")}`, selectButton("Bulk Actions")),
-        className: "span-main"
-      })}
-      ${filters("Filters", [inputControl("Date Range", "May 19 - May 25, 2025", "date"), selectControl("Status", ["Select status..."]), selectControl("Service Type", ["Select service type..."]), selectControl("Location", ["Select location..."]), inputControl("Contractor", "Search contractor..."), selectControl("Priority", ["Select priority..."]), selectControl("Reviewer", ["Select reviewer..."])])}
+    <section class="content-rail qa-queue-layout">
+      <div class="table-card span-main qa-queue-table-card">
+        <div class="suite-toolbar qa-queue-toolbar">
+          <label class="suite-search">
+            ${icon("search")}
+            <input id="qaQueueSearch" type="search" placeholder="Search property, unit, contractor..." value="${esc(qaQueueState.search)}" />
+          </label>
+          <div class="qa-queue-controls">
+            <select id="qaQueueStatusFilter" aria-label="QA queue status">
+              ${[
+                ["pending", "Pending Review"],
+                ["approved", "Approved for Pay"],
+                ["rework", "Needs Rework"],
+                ["all", "All QA Jobs"]
+              ].map(([value, label]) => `<option value="${esc(value)}" ${qaQueueState.statusFilter === value ? "selected" : ""}>${esc(label)}</option>`).join("")}
+            </select>
+            <button class="secondary-action" type="button" data-qa-queue-refresh>${icon("refresh")}<span>Refresh</span></button>
+          </div>
+        </div>
+        <div id="qaQueueMessage" class="qa-queue-message" aria-live="polite"></div>
+        <div class="table-scroll">
+          <table class="suite-table qa-queue-table">
+            <thead>
+              <tr>
+                <th>Job</th>
+                <th>Property / Unit</th>
+                <th>Contractor</th>
+                <th>Videos</th>
+                <th>Submitted</th>
+                <th>Status</th>
+                <th>Pay</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="qaQueueTableBody">
+              <tr><td colspan="8">${qaQueueState.loading ? "Loading QA queue..." : "QA reviews will appear here."}</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="table-foot"><span id="qaQueueFoot">Showing 0 QA jobs</span></div>
+      </div>
+      <aside class="filter-card qa-queue-side">
+        <div class="filter-head"><h2>Review Rules</h2></div>
+        <div class="qa-review-rule-list">
+          <span>${icon("video")} Contractor uploads are grouped by assignment.</span>
+          <span>${icon("message-square")} Review all videos before approving.</span>
+          <span>${icon("badge-dollar")} Approval marks the job approved for pay.</span>
+        </div>
+      </aside>
     </section>
+    <div id="qaReviewModal" class="client-modal qa-review-modal" hidden></div>
   `;
 }
 
@@ -5649,6 +5706,435 @@ function renderQaAnalytics() {
       ${panel("Insights", emptyState("activity", "No insights yet", "Insights and recommendations will appear here once data is available."))}
     </section>
   `;
+}
+
+function initQaQueue() {
+  const root = document.getElementById("adminSuiteApp");
+  if (!root) return;
+  root.addEventListener("click", handleQaQueueClick);
+  root.querySelector("#qaQueueSearch")?.addEventListener("input", (event) => {
+    qaQueueState.search = event.target.value || "";
+    renderQaQueueData();
+  });
+  root.querySelector("#qaQueueStatusFilter")?.addEventListener("change", (event) => {
+    qaQueueState.statusFilter = event.target.value || "pending";
+    renderQaQueueData();
+  });
+  void loadQaQueue();
+}
+
+function handleQaQueueClick(event) {
+  const refresh = event.target.closest("[data-qa-queue-refresh]");
+  if (refresh) {
+    event.preventDefault();
+    void loadQaQueue();
+    return;
+  }
+
+  const open = event.target.closest("[data-qa-review-open]");
+  if (open) {
+    event.preventDefault();
+    void openQaReviewModal(open.dataset.qaReviewOpen);
+    return;
+  }
+
+  const close = event.target.closest("[data-qa-review-close]");
+  if (close || event.target.classList?.contains("client-modal-backdrop")) {
+    closeQaReviewModal();
+    return;
+  }
+
+  const approve = event.target.closest("[data-qa-review-approve]");
+  if (approve) {
+    event.preventDefault();
+    void submitQaReviewDecision("approve");
+    return;
+  }
+
+  const rework = event.target.closest("[data-qa-review-rework]");
+  if (rework) {
+    event.preventDefault();
+    void submitQaReviewDecision("rework");
+  }
+}
+
+async function loadQaQueue() {
+  if (!suiteSupabase) {
+    qaQueueState.items = [];
+    setQaQueueMessage("Supabase is not configured for the admin portal.", "error");
+    renderQaQueueData();
+    return;
+  }
+
+  qaQueueState.loading = true;
+  setQaQueueMessage("Syncing QA videos from Supabase...");
+  renderQaQueueData();
+
+  const [videoResult, pendingAssignmentResult] = await Promise.all([
+    suiteSupabase
+      .from("qa_videos")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(500),
+    suiteSupabase
+      .from(assignmentTable)
+      .select("*")
+      .in("status", ["qa_pending"])
+      .order("completed_at", { ascending: false })
+      .limit(250)
+  ]);
+
+  if (videoResult.error) {
+    qaQueueState.loading = false;
+    qaQueueState.items = [];
+    setQaQueueMessage(`Unable to load QA videos: ${videoResult.error.message}`, "error");
+    renderQaQueueData();
+    return;
+  }
+
+  const videos = videoResult.data || [];
+  const pendingAssignments = pendingAssignmentResult.error ? [] : (pendingAssignmentResult.data || []);
+  const pendingAssignmentIds = new Set(pendingAssignments.map((row) => row.id).filter(Boolean));
+  const videoAssignmentIds = [...new Set(videos.map((row) => row.assignment_id).filter(Boolean))]
+    .filter((id) => !pendingAssignmentIds.has(id));
+  const qaJobIds = [...new Set(videos.map((row) => row.qa_job_id).filter(Boolean))];
+
+  const [videoAssignmentResult, qaJobResult] = await Promise.all([
+    videoAssignmentIds.length
+      ? suiteSupabase.from(assignmentTable).select("*").in("id", videoAssignmentIds)
+      : Promise.resolve({ data: [], error: null }),
+    qaJobIds.length
+      ? suiteSupabase.from("qa_jobs").select("*").in("id", qaJobIds)
+      : Promise.resolve({ data: [], error: null })
+  ]);
+
+  qaQueueState.loading = false;
+  if (pendingAssignmentResult.error) {
+    console.warn("[admin-suite] Unable to load QA pending assignments", pendingAssignmentResult.error);
+  }
+  if (videoAssignmentResult.error) {
+    console.warn("[admin-suite] Unable to load QA video assignments", videoAssignmentResult.error);
+  }
+  if (qaJobResult.error) {
+    console.warn("[admin-suite] Unable to load QA jobs", qaJobResult.error);
+  }
+
+  const assignments = [...pendingAssignments, ...(videoAssignmentResult.data || [])];
+  qaQueueState.videos = videos;
+  qaQueueState.assignments = new Map(assignments.map((row) => [row.id, row]));
+  qaQueueState.qaJobs = new Map((qaJobResult.data || []).map((row) => [row.id, row]));
+  qaQueueState.items = buildQaQueueItems(videos, assignments);
+  setQaQueueMessage(
+    qaQueueState.items.length
+      ? `${qaQueueState.items.length} QA job${qaQueueState.items.length === 1 ? "" : "s"} synced from Supabase.`
+      : "Synced with Supabase. No contractor QA videos are waiting for review.",
+    qaQueueState.items.length ? "success" : ""
+  );
+  renderQaQueueData();
+}
+
+function buildQaQueueItems(videos = [], assignments = []) {
+  const itemMap = new Map();
+  assignments.forEach((assignment) => {
+    if (!assignment?.id) return;
+    const key = qaQueueItemKey(assignment.id, assignment.metadata?.qa_job_id || "");
+    itemMap.set(key, createQaQueueItem(key, assignment, null));
+  });
+
+  videos.forEach((video) => {
+    const assignment = video.assignment_id ? qaQueueState.assignments.get(video.assignment_id) : null;
+    const key = qaQueueItemKey(video.assignment_id, video.qa_job_id || video.id);
+    if (!itemMap.has(key)) itemMap.set(key, createQaQueueItem(key, assignment, video));
+    const item = itemMap.get(key);
+    item.videos.push(video);
+    if (!item.qaJobId && video.qa_job_id) item.qaJobId = video.qa_job_id;
+    if (!item.assignmentId && video.assignment_id) item.assignmentId = video.assignment_id;
+  });
+
+  return [...itemMap.values()].sort((a, b) => dateValue(b.submittedAt, 0) - dateValue(a.submittedAt, 0));
+}
+
+function createQaQueueItem(key, assignment = null, video = null) {
+  const qaJobId = video?.qa_job_id || assignment?.metadata?.qa_job_id || "";
+  const qaJob = qaJobId ? qaQueueState.qaJobs.get(qaJobId) : null;
+  const submittedAt = assignment?.completed_at || assignment?.checklist_completed_at || video?.created_at || qaJob?.created_at || "";
+  return {
+    key,
+    assignmentId: assignment?.id || video?.assignment_id || "",
+    qaJobId,
+    assignment,
+    qaJob,
+    videos: [],
+    submittedAt,
+    propertyName: assignment?.property_name || video?.property_name || qaJob?.checklist_summary || "Property not set",
+    unitName: assignmentUnitNumber(assignment || video || {}) || video?.unit_name || "",
+    contractorName: assignment?.claimed_by_name || assignment?.assigned_to_name || video?.contractor_name || qaJob?.cleaner_name || "Contractor not set",
+    serviceType: assignment?.service_type || video?.metadata?.checklist_category || qaJob?.job_type || "QA Review",
+    payAmount: assignment?.pay_amount,
+    priority: assignment?.priority || "normal"
+  };
+}
+
+function qaQueueItemKey(assignmentId, fallbackId) {
+  return assignmentId ? `assignment:${assignmentId}` : `qa:${fallbackId || "unknown"}`;
+}
+
+function renderQaQueueData() {
+  renderQaQueueMetrics();
+  renderQaQueueMessage();
+  const body = document.getElementById("qaQueueTableBody");
+  const foot = document.getElementById("qaQueueFoot");
+  if (!body) return;
+
+  const rows = filteredQaQueueItems();
+  if (qaQueueState.loading) {
+    body.innerHTML = `<tr><td colspan="8">Loading QA queue...</td></tr>`;
+  } else if (!rows.length) {
+    body.innerHTML = `<tr><td colspan="8">${emptyState("video", "No QA jobs found", "Contractor video uploads will appear here for review.")}</td></tr>`;
+  } else {
+    body.innerHTML = rows.map(renderQaQueueRow).join("");
+  }
+  if (foot) foot.textContent = `Showing ${rows.length} of ${qaQueueState.items.length} QA jobs`;
+}
+
+function renderQaQueueMetrics() {
+  const pending = qaQueueState.items.filter((item) => qaQueueReviewStatus(item) === "pending").length;
+  const approved = qaQueueState.items.filter((item) => qaQueueReviewStatus(item) === "approved").length;
+  const rejected = qaQueueState.items.filter((item) => qaQueueReviewStatus(item) === "rework").length;
+  const videos = qaQueueState.items.reduce((sum, item) => sum + item.videos.length, 0);
+  const ages = qaQueueState.items
+    .filter((item) => qaQueueReviewStatus(item) === "pending")
+    .map((item) => qaQueueAgeDays(item))
+    .filter((value) => Number.isFinite(value));
+  const avgAge = ages.length ? Math.round(ages.reduce((sum, value) => sum + value, 0) / ages.length) : 0;
+  setText("qaQueuePendingMetric", pending);
+  setText("qaQueueVideoMetric", videos);
+  setText("qaQueueApprovedMetric", approved);
+  setText("qaQueueRejectedMetric", rejected);
+  setText("qaQueueAgeMetric", avgAge);
+}
+
+function renderQaQueueMessage() {
+  const node = document.getElementById("qaQueueMessage");
+  if (!node) return;
+  node.textContent = qaQueueState.message || "";
+  node.classList.toggle("error", qaQueueState.tone === "error");
+  node.classList.toggle("success", qaQueueState.tone === "success");
+}
+
+function renderQaQueueRow(item) {
+  const status = qaQueueReviewStatus(item);
+  return `
+    <tr class="qa-queue-row ${esc(status)}">
+      <td><strong>${esc(qaQueueReviewId(item))}</strong><small>${esc(item.serviceType)}</small></td>
+      <td><strong>${esc(item.propertyName)}</strong><small>${esc(item.unitName || "No unit listed")}</small></td>
+      <td>${esc(item.contractorName)}</td>
+      <td><strong>${item.videos.length}</strong><small>${esc(qaQueueVideoLabels(item))}</small></td>
+      <td>${esc(formatDashboardDate(item.submittedAt, "Not submitted"))}</td>
+      <td>${statusBadge(qaQueueStatusLabel(status))}</td>
+      <td><strong>${esc(assignmentMoney(item.payAmount))}</strong><small>${esc(qaQueuePayLabel(item))}</small></td>
+      <td><button class="secondary-action" type="button" data-qa-review-open="${esc(item.key)}">${icon("video")}<span>Review</span></button></td>
+    </tr>
+  `;
+}
+
+function filteredQaQueueItems() {
+  const term = qaQueueState.search.trim().toLowerCase();
+  return qaQueueState.items.filter((item) => {
+    const status = qaQueueReviewStatus(item);
+    if (qaQueueState.statusFilter === "pending" && status !== "pending") return false;
+    if (qaQueueState.statusFilter === "approved" && status !== "approved") return false;
+    if (qaQueueState.statusFilter === "rework" && status !== "rework") return false;
+    if (!term) return true;
+    return [
+      item.propertyName,
+      item.unitName,
+      item.contractorName,
+      item.serviceType,
+      item.assignmentId,
+      item.qaJobId,
+      ...item.videos.map((video) => `${video.label || ""} ${video.title || ""} ${video.file_name || ""}`)
+    ].some((value) => String(value || "").toLowerCase().includes(term));
+  });
+}
+
+function qaQueueReviewStatus(item) {
+  const jobStatus = normalizeToken(item.qaJob?.qa_status);
+  const assignmentStatus = normalizeToken(item.assignment?.status);
+  const paymentStatus = normalizeToken(item.assignment?.payment_status || item.assignment?.pay_status || item.assignment?.payout_status);
+  if (jobStatus === "approved" || paymentStatus === "approved-for-pay") return "approved";
+  if (["rejected", "needs-rework", "rework-requested"].includes(jobStatus) || ["qa-rejected", "needs-rework"].includes(paymentStatus)) return "rework";
+  if (assignmentStatus === "qa-pending" || ["in-review", "pending-upload", "pending-review", "pending-qa", "qa-review"].includes(jobStatus || paymentStatus)) return "pending";
+  return item.videos.length ? "pending" : "rework";
+}
+
+function qaQueueStatusLabel(status) {
+  if (status === "approved") return "Approved For Pay";
+  if (status === "rework") return "Needs Rework";
+  return "Pending Review";
+}
+
+function qaQueuePayLabel(item) {
+  const paymentStatus = normalizeToken(item.assignment?.payment_status || item.assignment?.pay_status || item.assignment?.payout_status);
+  if (paymentStatus === "approved-for-pay") return "Approved for pay";
+  if (["pending-qa", "qa-review"].includes(paymentStatus)) return "Waiting on QA";
+  if (paymentStatus) return titleCase(paymentStatus);
+  return "Not approved yet";
+}
+
+function qaQueueVideoLabels(item) {
+  if (!item.videos.length) return "No videos attached";
+  const labels = item.videos.map((video) => video.room_name || video.label || video.video_phase || "QA video");
+  return [...new Set(labels)].slice(0, 3).join(", ");
+}
+
+function qaQueueReviewId(item) {
+  const id = item.assignmentId || item.qaJobId || item.key;
+  return `QA-${String(id).slice(0, 8).toUpperCase()}`;
+}
+
+function qaQueueAgeDays(item) {
+  const submitted = parseDate(item.submittedAt);
+  if (!submitted) return 0;
+  return Math.max(0, Math.floor((Date.now() - submitted.getTime()) / 86400000));
+}
+
+function setQaQueueMessage(text = "", tone = "") {
+  qaQueueState.message = text;
+  qaQueueState.tone = tone;
+  renderQaQueueMessage();
+}
+
+function qaQueueItemByKey(key) {
+  return qaQueueState.items.find((item) => item.key === key) || null;
+}
+
+async function openQaReviewModal(key) {
+  const item = qaQueueItemByKey(key);
+  if (!item) return;
+  qaQueueState.selectedKey = key;
+  renderQaReviewModal(item, true);
+  await Promise.all(item.videos.map((video) => qaQueueSignedUrl(video)));
+  renderQaReviewModal(item, false);
+}
+
+function closeQaReviewModal() {
+  qaQueueState.selectedKey = "";
+  const modal = document.getElementById("qaReviewModal");
+  if (modal) {
+    modal.hidden = true;
+    modal.innerHTML = "";
+  }
+}
+
+async function qaQueueSignedUrl(video) {
+  if (!video?.id || !video.storage_path) return "";
+  if (qaQueueState.signedUrls.has(video.id)) return qaQueueState.signedUrls.get(video.id);
+  const { data, error } = await suiteSupabase.storage
+    .from(video.storage_bucket || "qa-videos")
+    .createSignedUrl(video.storage_path, 60 * 60);
+  const url = error ? "" : (data?.signedUrl || "");
+  qaQueueState.signedUrls.set(video.id, url);
+  return url;
+}
+
+function renderQaReviewModal(item, loading = false) {
+  const modal = document.getElementById("qaReviewModal");
+  if (!modal) return;
+  const status = qaQueueReviewStatus(item);
+  const canApprove = Boolean(item.assignmentId) && status !== "approved" && item.videos.length > 0;
+  const checklist = Array.isArray(item.assignment?.checklist_responses) ? item.assignment.checklist_responses : [];
+  modal.hidden = false;
+  modal.innerHTML = `
+    <div class="client-modal-backdrop" data-qa-review-close></div>
+    <section class="client-modal-panel qa-review-panel" role="dialog" aria-modal="true" aria-labelledby="qaReviewTitle">
+      <header class="client-modal-header">
+        <div>
+          <p>QA Review</p>
+          <h2 id="qaReviewTitle">${esc(item.propertyName)}</h2>
+          <small>${esc([item.unitName, item.contractorName, formatDashboardDate(item.submittedAt, "Not submitted")].filter(Boolean).join(" - "))}</small>
+        </div>
+        <button class="client-modal-close" type="button" data-qa-review-close aria-label="Close QA review">${icon("x")}</button>
+      </header>
+      <div class="qa-review-summary">
+        <span>${statusBadge(qaQueueStatusLabel(status))}</span>
+        <span>${icon("video")}${item.videos.length} video${item.videos.length === 1 ? "" : "s"}</span>
+        <span>${icon("badge-dollar")}${esc(assignmentMoney(item.payAmount))} contractor pay</span>
+      </div>
+      <div class="qa-review-video-grid">
+        ${loading
+          ? `<div class="qa-review-empty">Preparing secure video previews...</div>`
+          : item.videos.map(renderQaReviewVideo).join("") || `<div class="qa-review-empty">No contractor QA videos are attached to this assignment yet.</div>`}
+      </div>
+      <details class="qa-review-checklist" ${checklist.length ? "" : "hidden"}>
+        <summary>Checklist responses (${checklist.length})</summary>
+        <div>
+          ${checklist.map((entry, index) => `
+            <span class="${entry.completed ? "done" : ""}">
+              <strong>${index + 1}. ${esc(entry.task || entry.label || "Checklist item")}</strong>
+              <small>${esc(entry.note || entry.category || "")}</small>
+            </span>
+          `).join("")}
+        </div>
+      </details>
+      <label class="suite-field qa-review-notes">
+        <span>Reviewer Notes</span>
+        <textarea id="qaReviewNotes" rows="3" placeholder="Add approval notes, rework instructions, or payment context">${esc(item.qaJob?.reviewer_notes || item.assignment?.qa_reviewer_notes || "")}</textarea>
+      </label>
+      <p id="qaReviewDecisionMessage" class="qa-queue-message" aria-live="polite"></p>
+      <div class="client-modal-actions">
+        <button class="secondary-action danger-btn" type="button" data-qa-review-rework ${item.assignmentId ? "" : "disabled"}>Request Rework</button>
+        <button class="primary-action" type="button" data-qa-review-approve ${canApprove ? "" : "disabled"}>${icon("check")}<span>Approve For Pay</span></button>
+      </div>
+    </section>
+  `;
+}
+
+function renderQaReviewVideo(video) {
+  const url = qaQueueState.signedUrls.get(video.id);
+  const label = video.room_name || video.label || video.title || video.file_name || "QA Video";
+  return `
+    <article class="qa-review-video-card">
+      ${url
+        ? `<video controls preload="metadata" src="${esc(url)}"></video>`
+        : `<div class="qa-review-empty">Preview unavailable</div>`}
+      <div>
+        <strong>${esc(label)}</strong>
+        <small>${esc([video.video_phase, video.file_name, formatDashboardDate(video.created_at, "")].filter(Boolean).join(" - "))}</small>
+        ${video.notes ? `<p>${esc(video.notes)}</p>` : ""}
+      </div>
+    </article>
+  `;
+}
+
+async function submitQaReviewDecision(decision) {
+  const item = qaQueueItemByKey(qaQueueState.selectedKey);
+  if (!suiteSupabase || !item?.assignmentId) return;
+  const message = document.getElementById("qaReviewDecisionMessage");
+  const notes = document.getElementById("qaReviewNotes")?.value.trim() || "";
+  const approving = decision === "approve";
+  const rpcName = approving ? "approve_assignment_qa" : "request_assignment_qa_revision";
+  if (approving && !item.videos.length) {
+    if (message) message.textContent = "At least one QA video must be attached before approving pay.";
+    return;
+  }
+  if (!window.confirm(approving ? "Approve this job for contractor pay?" : "Send this job back for QA rework?")) return;
+  if (message) message.textContent = approving ? "Approving job for pay..." : "Saving rework request...";
+
+  const { error } = await suiteSupabase.rpc(rpcName, {
+    target_assignment_id: item.assignmentId,
+    target_qa_job_id: item.qaJobId || null,
+    review_notes: notes || null
+  });
+
+  if (error) {
+    if (message) message.textContent = `Unable to update QA review: ${error.message}`;
+    return;
+  }
+
+  closeQaReviewModal();
+  setQaQueueMessage(approving ? "QA approved. Assignment is marked approved for pay." : "Rework request saved.", "success");
+  await loadQaQueue();
 }
 
 function renderVideoLibrary() {
@@ -9788,6 +10274,9 @@ function renderApp() {
   }
   if (activeKey === "checklists") {
     initChecklists();
+  }
+  if (activeKey === "qa-queue") {
+    initQaQueue();
   }
   if (activeKey === "leads") {
     initLeads();

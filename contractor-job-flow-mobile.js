@@ -466,6 +466,46 @@ async function ensureAssignmentQaJob() {
   return activeQaJobId;
 }
 
+async function submitAssignmentForQa(responses, completedAt) {
+  const qaJobId = await ensureAssignmentQaJob();
+  const { data, error } = await supabase.rpc("submit_assignment_for_qa", {
+    target_assignment_id: activeAssignment.id,
+    checklist_payload: responses,
+    submitted_at: completedAt
+  });
+  if (!error) {
+    activeQaJobId = data || qaJobId;
+    return;
+  }
+
+  console.warn("[contractor-job-flow] submit_assignment_for_qa fallback", error);
+  const metadata = activeAssignment.metadata && typeof activeAssignment.metadata === "object"
+    ? { ...activeAssignment.metadata }
+    : {};
+  metadata.qa_job_id = qaJobId;
+  metadata.qa_submitted_at = completedAt;
+
+  const fallbackResult = await supabase
+    .from("assignment_blocks")
+    .update({
+      status: "qa_pending",
+      visibility: "closed",
+      payment_status: "pending_qa",
+      pay_status: "pending_qa",
+      payout_status: "qa_review",
+      checklist_responses: responses,
+      checklist_completed_at: completedAt,
+      completed_at: completedAt,
+      completed_by: activeUser.id,
+      metadata
+    })
+    .eq("id", activeAssignment.id)
+    .eq("claimed_by", activeUser.id)
+    .eq("status", "in_progress");
+
+  if (fallbackResult.error) throw fallbackResult.error;
+}
+
 function checklistMediaBasePayload(item, file, kind, index, storagePath, completedAt, note) {
   const label = item.task || item.label || `${kind === "video" ? "Video" : "Photo"} checklist item`;
   return {
@@ -2200,27 +2240,21 @@ async function completeJob() {
     return;
   }
 
-  if (message) message.textContent = "Saving checklist and completing job...";
-  const { error } = await supabase
-    .from("assignment_blocks")
-    .update({
-      status: "completed",
-      checklist_responses: responses,
-      checklist_completed_at: completedAt,
-      completed_at: completedAt,
-      completed_by: activeUser.id
-    })
-    .eq("id", activeAssignment.id)
-    .eq("claimed_by", activeUser.id)
-    .eq("status", "in_progress");
+  if (message) message.textContent = "Submitting job to QA review...";
+  let submitError = null;
+  try {
+    await submitAssignmentForQa(responses, completedAt);
+  } catch (error) {
+    submitError = error;
+  }
 
   if (button) button.disabled = false;
-  if (error) {
-    if (message) message.textContent = "Error: " + error.message;
+  if (submitError) {
+    if (message) message.textContent = "Error: " + submitError.message;
     return;
   }
 
-  showPageMessage("Job completed and checklist saved.");
+  showPageMessage("Job submitted to QA for review.");
   window.location.reload();
 }
 

@@ -1882,6 +1882,197 @@ a {
   font-weight: 900;
 }
 
+.qa-queue-layout {
+  align-items: start;
+}
+
+.qa-queue-toolbar {
+  align-items: center;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.qa-queue-controls {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.qa-queue-controls select {
+  background: rgba(6, 18, 31, .9);
+  border: 1px solid var(--suite-border);
+  border-radius: 7px;
+  color: var(--suite-text);
+  font-weight: 800;
+  min-height: 36px;
+  padding: 0 10px;
+}
+
+.qa-queue-message {
+  color: var(--suite-soft);
+  font-size: 12px;
+  font-weight: 800;
+  min-height: 18px;
+  padding: 8px 16px 0;
+}
+
+.qa-queue-message.success {
+  color: var(--suite-green);
+}
+
+.qa-queue-message.error {
+  color: var(--suite-red);
+}
+
+.qa-queue-table td strong,
+.qa-queue-table td small {
+  display: block;
+}
+
+.qa-queue-table td small {
+  color: var(--suite-soft);
+  font-size: 10px;
+  margin-top: 4px;
+}
+
+.qa-review-rule-list {
+  display: grid;
+  gap: 10px;
+}
+
+.qa-review-rule-list span {
+  align-items: center;
+  color: #d9e8f6;
+  display: flex;
+  font-size: 12px;
+  font-weight: 800;
+  gap: 8px;
+}
+
+.qa-review-panel {
+  max-width: 1120px;
+}
+
+.qa-review-summary {
+  align-items: center;
+  border-bottom: 1px solid var(--suite-border-soft);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  padding: 0 0 12px;
+}
+
+.qa-review-summary > span {
+  align-items: center;
+  color: #d9e8f6;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 900;
+  gap: 7px;
+}
+
+.qa-review-video-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.qa-review-video-card {
+  background: rgba(4, 14, 25, .46);
+  border: 1px solid var(--suite-border-soft);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+}
+
+.qa-review-video-card video {
+  background: #020912;
+  border-radius: 7px;
+  display: block;
+  max-height: 280px;
+  width: 100%;
+}
+
+.qa-review-video-card strong,
+.qa-review-video-card small {
+  display: block;
+}
+
+.qa-review-video-card small,
+.qa-review-video-card p {
+  color: var(--suite-soft);
+  font-size: 11px;
+  margin: 4px 0 0;
+}
+
+.qa-review-empty {
+  align-items: center;
+  border: 1px dashed rgba(117, 143, 169, .28);
+  border-radius: 8px;
+  color: var(--suite-soft);
+  display: grid;
+  font-size: 12px;
+  font-weight: 800;
+  min-height: 180px;
+  padding: 20px;
+  text-align: center;
+}
+
+.qa-review-checklist {
+  background: rgba(4, 14, 25, .38);
+  border: 1px solid var(--suite-border-soft);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.qa-review-checklist summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.qa-review-checklist div {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.qa-review-checklist span {
+  border-top: 1px solid var(--suite-border-soft);
+  display: grid;
+  gap: 3px;
+  padding-top: 8px;
+}
+
+.qa-review-checklist span.done strong {
+  color: var(--suite-green);
+}
+
+.qa-review-checklist small {
+  color: var(--suite-soft);
+}
+
+.qa-review-notes {
+  width: 100%;
+}
+
+.qa-review-modal .client-modal-actions {
+  justify-content: flex-end;
+}
+
+@media (max-width: 980px) {
+  .qa-review-video-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .qa-queue-toolbar {
+    align-items: stretch;
+    display: grid;
+  }
+}
+
 .tall-table {
   min-height: 260px;
 }
