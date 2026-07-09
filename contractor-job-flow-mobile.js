@@ -16,6 +16,7 @@ let activeChecklistItems = [];
 let activeChecklistModules = [];
 let activeChecklistIndex = 0;
 let activeChecklistDrafts = [];
+let activeQaJobId = null;
 let activeDirectoryDetails = null;
 let activeIssueDraft = "";
 
@@ -446,6 +447,25 @@ function mediaAssignmentPropertyId(assignment = activeAssignment || {}) {
   return assignment.property_id || assignment.portal_property_id || assignment.metadata?.property_id || assignment.metadata?.portal_property_id || null;
 }
 
+function assignmentQaJobId(assignment = activeAssignment || {}) {
+  const metadata = assignment?.metadata && typeof assignment.metadata === "object" ? assignment.metadata : {};
+  return assignment?.qa_job_id || metadata.qa_job_id || "";
+}
+
+async function ensureAssignmentQaJob() {
+  if (activeQaJobId) return activeQaJobId;
+  if (!supabase || !activeAssignment?.id) throw new Error("Assignment is missing for QA upload.");
+
+  const { data, error } = await supabase.rpc("ensure_assignment_qa_job", {
+    target_assignment_id: activeAssignment.id
+  });
+  if (error) throw error;
+  if (!data) throw new Error("Supabase did not return a QA job for this assignment.");
+
+  activeQaJobId = data;
+  return activeQaJobId;
+}
+
 function checklistMediaBasePayload(item, file, kind, index, storagePath, completedAt, note) {
   const label = item.task || item.label || `${kind === "video" ? "Video" : "Photo"} checklist item`;
   return {
@@ -498,6 +518,9 @@ async function uploadChecklistMedia(item, file, kind, index, completedAt, note) 
 
   const payload = checklistMediaBasePayload(item, file, kind, index, path, completedAt, note);
   if (kind === "video") {
+    payload.qa_job_id = await ensureAssignmentQaJob();
+    payload.room_name = item.module_name || item.category || assignmentUnit(activeAssignment) || "";
+    payload.file_size_bytes = file.size || 0;
     payload.video_phase = "other";
     payload.duration_seconds = await fileDuration(file);
   } else {
@@ -1284,6 +1307,7 @@ function injectStyles() {
           radial-gradient(circle at 50% 10%, rgba(50, 170, 255, .16), transparent 34%);
         border: 1px solid rgba(144, 164, 183, .22);
         border-radius: 8px;
+        box-sizing: border-box;
         color: #f4f8fc;
         display: grid;
         grid-template-rows: auto 1fr auto;
@@ -1292,25 +1316,35 @@ function injectStyles() {
         overflow: hidden;
         padding: 0;
         position: relative;
-        width: min(100%, 560px);
+        width: min(100vw, 560px);
+      }
+      .tc-panel *,
+      .tc-panel *::before,
+      .tc-panel *::after {
+        box-sizing: border-box;
       }
       .tc-shell {
         display: grid;
         gap: 20px;
+        min-width: 0;
         overflow: auto;
         padding: 26px 18px 150px;
+        width: 100%;
       }
       .tc-topbar {
         align-items: center;
         display: grid;
         gap: 12px;
-        grid-template-columns: 58px minmax(0, 1fr) 58px;
+        grid-template-columns: 54px minmax(0, 1fr) 54px;
+        min-width: 0;
       }
       .tc-topbar h2 {
         color: #fff;
         font-size: clamp(28px, 7vw, 42px);
         line-height: 1.08;
         margin: 0;
+        min-width: 0;
+        overflow-wrap: anywhere;
         text-align: center;
       }
       .tc-icon-button {
@@ -1324,10 +1358,10 @@ function injectStyles() {
         font: inherit;
         font-size: 26px;
         font-weight: 900;
-        height: 58px;
+        height: 54px;
         justify-content: center;
         padding: 0;
-        width: 58px;
+        width: 54px;
       }
       .tc-icon-button:hover {
         border-color: rgba(18, 217, 155, .62);
@@ -1371,6 +1405,7 @@ function injectStyles() {
       .tc-step-content {
         display: grid;
         gap: 18px;
+        min-width: 0;
       }
       .tc-checklist-card,
       .tc-empty {
@@ -1380,6 +1415,7 @@ function injectStyles() {
         box-shadow: inset 0 1px 0 rgba(255, 255, 255, .03), 0 22px 70px rgba(0, 0, 0, .28);
         display: grid;
         gap: 18px;
+        min-width: 0;
         padding: 18px;
       }
       .tc-card-title {
@@ -1387,6 +1423,7 @@ function injectStyles() {
         display: grid;
         gap: 12px;
         grid-template-columns: 44px minmax(0, 1fr);
+        min-width: 0;
       }
       .tc-card-title strong {
         color: #fff;
@@ -1411,11 +1448,13 @@ function injectStyles() {
       }
       .tc-task-list {
         display: grid;
+        min-width: 0;
       }
       .tc-task-card {
         border-top: 1px solid rgba(144, 164, 183, .14);
         display: grid;
         gap: 12px;
+        min-width: 0;
         padding: 14px 0;
       }
       .tc-task-card:first-child {
@@ -1428,6 +1467,7 @@ function injectStyles() {
         display: grid;
         gap: 12px;
         grid-template-columns: 30px minmax(0, 1fr);
+        min-width: 0;
       }
       .tc-check-row input {
         height: 1px;
@@ -1452,6 +1492,7 @@ function injectStyles() {
         display: block;
         font-size: 20px;
         line-height: 1.35;
+        overflow-wrap: anywhere;
       }
       .tc-check-copy small,
       .tc-standard,
@@ -1497,6 +1538,7 @@ function injectStyles() {
         display: block;
         margin-top: 4px;
         padding: 14px;
+        width: 100%;
       }
       .tc-upload-card input {
         height: 1px;
@@ -1510,9 +1552,10 @@ function injectStyles() {
         border-radius: 8px;
         display: grid;
         justify-items: center;
-        min-height: 230px;
+        min-height: clamp(190px, 34vh, 230px);
         padding: 30px 18px;
         text-align: center;
+        width: 100%;
       }
       .tc-upload-icon {
         align-items: center;
@@ -1529,7 +1572,8 @@ function injectStyles() {
       }
       .tc-upload-frame strong {
         color: #fff;
-        font-size: 28px;
+        font-size: clamp(22px, 6vw, 28px);
+        overflow-wrap: anywhere;
       }
       .tc-upload-frame em,
       .tc-upload-frame small {
@@ -1551,11 +1595,12 @@ function injectStyles() {
         bottom: 0;
         display: grid;
         gap: 12px;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
         left: 0;
         padding: 28px 18px 20px;
         position: absolute;
         right: 0;
+        width: 100%;
       }
       .tc-step-actions button {
         align-items: center;
@@ -1563,11 +1608,13 @@ function injectStyles() {
         cursor: pointer;
         display: inline-flex;
         font: inherit;
-        font-size: 22px;
+        font-size: clamp(18px, 5.6vw, 22px);
         font-weight: 900;
         gap: 12px;
         justify-content: center;
         min-height: 68px;
+        min-width: 0;
+        white-space: nowrap;
       }
       .tc-step-actions button:disabled {
         cursor: not-allowed;
@@ -1662,9 +1709,25 @@ function injectStyles() {
         .tc-panel {
           border: 0;
           border-radius: 0;
-          height: 100vh;
-          max-height: 100vh;
-          width: 100%;
+          height: 100dvh;
+          max-height: 100dvh;
+          width: 100vw;
+        }
+        .tc-shell {
+          padding: calc(18px + env(safe-area-inset-top, 0px)) max(14px, env(safe-area-inset-right, 0px)) calc(132px + env(safe-area-inset-bottom, 0px)) max(14px, env(safe-area-inset-left, 0px));
+        }
+        .tc-topbar {
+          grid-template-columns: 50px minmax(0, 1fr) 50px;
+        }
+        .tc-icon-button {
+          height: 50px;
+          width: 50px;
+        }
+        .tc-step-actions {
+          padding: 22px max(14px, env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) max(14px, env(safe-area-inset-left, 0px));
+        }
+        .tc-step-actions button {
+          min-height: 62px;
         }
         .tj-map {
           min-height: 42vh;
@@ -1837,6 +1900,7 @@ async function openStartModal(assignmentId) {
   if (!activeAssignment) throw new Error("This assignment could not be loaded.");
   activePosition = null;
   activeSite = null;
+  activeQaJobId = assignmentQaJobId(activeAssignment);
   activeDirectoryDetails = await fetchDirectoryDetails(activeAssignment);
   activeIssueDraft = "";
   const items = await checklistItems(activeAssignment);
@@ -1871,6 +1935,9 @@ function closeStartModal() {
   const modal = document.getElementById("turnlyMobileStartModal");
   if (modal) modal.hidden = true;
   activeChecklistItems = [];
+  activeChecklistModules = [];
+  activeChecklistDrafts = [];
+  activeQaJobId = null;
   activeDirectoryDetails = null;
   activeIssueDraft = "";
 }
@@ -2056,6 +2123,7 @@ async function openChecklistModal(assignmentOrId) {
 
   activeAssignment = typeof assignmentOrId === "string" ? await fetchAssignment(assignmentOrId) : assignmentOrId;
   activeDirectoryDetails = await fetchDirectoryDetails(activeAssignment);
+  activeQaJobId = assignmentQaJobId(activeAssignment);
   activeChecklistItems = await checklistItems(activeAssignment);
   activeChecklistModules = buildChecklistModules(activeChecklistItems);
   activeChecklistIndex = 0;
