@@ -112,7 +112,7 @@ if (!supabase) {
         `Your contractor account is active, but it must be approved by Turnly before assignment data is visible.${setupNote}`
       );
     } else {
-      await import("./contractor-portal-20260708b.js");
+      await import("./contractor-portal.js");
       await import("./contractor-job-flow-mobile.js?v=20260708a");
     }
   }
