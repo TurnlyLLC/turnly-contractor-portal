@@ -4,6 +4,9 @@ const CHECKLIST_LINK = {
   href: "checklists.html"
 };
 
+const RETIRED_OPERATION_LINKS = ["contracts.html", "coverage-center.html"];
+const COMMAND_CENTER_STORAGE_KEY = "turnlyAdminCommandCenterWidgets";
+
 function checklistIcon() {
   return `
     <span class="suite-icon" aria-hidden="true">
@@ -93,10 +96,49 @@ function markChecklistActive() {
   revealQualitySection();
 }
 
+function removeRetiredOperationLinks() {
+  RETIRED_OPERATION_LINKS.forEach((href) => {
+    document.querySelectorAll(`.suite-nav a[href="${href}"], .topbar-dropdown a[href="${href}"], .topbar-search-results a[href="${href}"]`).forEach((link) => {
+      link.remove();
+    });
+  });
+}
+
+function removeCoverageWidgetPreference() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(COMMAND_CENTER_STORAGE_KEY) || "null");
+    if (!Array.isArray(saved) || !saved.includes("coverage-requests")) return;
+    localStorage.setItem(COMMAND_CENTER_STORAGE_KEY, JSON.stringify(saved.filter((id) => id !== "coverage-requests")));
+  } catch {
+    // Ignore stored dashboard preference parse errors.
+  }
+}
+
+function removeCoverageDashboardWidget() {
+  removeCoverageWidgetPreference();
+
+  document.querySelectorAll('[data-command-add-widget="coverage-requests"]').forEach((button) => {
+    button.remove();
+  });
+
+  const coverageList = document.getElementById("commandCoverageRequestsList");
+  coverageList?.closest(".suite-panel, .table-card, section")?.remove();
+
+  document.querySelectorAll('[data-widget-menu-toggle="coverage-requests"]').forEach((button) => {
+    button.closest(".suite-panel, .table-card, section")?.remove();
+  });
+}
+
+function syncAdminPortalCleanup() {
+  removeRetiredOperationLinks();
+  removeCoverageDashboardWidget();
+}
+
 function syncQaChecklistNavigation() {
   injectSidebarLink();
   injectQualityTabs();
   markChecklistActive();
+  syncAdminPortalCleanup();
 }
 
 let syncCount = 0;
