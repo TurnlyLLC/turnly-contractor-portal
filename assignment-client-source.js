@@ -13,6 +13,8 @@ let currentUnitPropertyId = "";
 let isLoadingUnits = false;
 let selectedUnitId = "";
 let unitLoadRequestId = 0;
+let pendingAssignmentUnitMetadata = null;
+let pendingAssignmentUnitMetadataTimer = 0;
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -38,7 +40,11 @@ function clientPropertyTitle(row) {
 }
 
 function clientPropertyAddress(row) {
-  return [row?.address, row?.city, row?.state, row?.postal_code].filter(Boolean).join(", ") || row?.region || row?.market || "";
+  const street = row?.address || row?.street_address || row?.property_address || row?.site_address || row?.service_address || "";
+  const city = row?.city || row?.property_city || row?.service_city || "";
+  const state = row?.state || row?.property_state || row?.service_state || "";
+  const postal = row?.postal_code || row?.zip || row?.zip_code || row?.property_zip || row?.service_zip || "";
+  return [street, city, state, postal].filter(Boolean).join(", ");
 }
 
 function serviceModelLabel(value) {
@@ -101,6 +107,91 @@ function selectedClient() {
 function selectedUnit() {
   if (!selectedUnitId) return null;
   return selectedPropertyUnits.find((unit) => unit.id === selectedUnitId) || null;
+}
+
+function unitSearchValue() {
+  return (document.getElementById("assignmentUnitSearch")?.value || "").trim();
+}
+
+function findUnitBySearch(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized) return null;
+  return selectedPropertyUnits.find((unit) => (
+    unitLabel(unit).toLowerCase() === normalized ||
+    String(unit?.unit_name || "").toLowerCase() === normalized
+  )) || selectedPropertyUnits.find((unit) => unitLabel(unit).toLowerCase().includes(normalized)) || null;
+}
+
+function assignmentUnitMetadata() {
+  const field = document.getElementById("assignmentUnitField");
+  if (field?.hidden) return null;
+
+  const searchText = unitSearchValue();
+  const unit = selectedUnit() || findUnitBySearch(searchText);
+  const unitName = unit?.unit_name || unit?.name || unit?.unit_number || searchText;
+  const unitId = unit?.id || selectedUnitId || "";
+
+  if (!unitName && !unitId) return null;
+
+  return {
+    unit_id: unitId || null,
+    unit_name: unitName || "",
+    unit_number: unitName || "",
+    unit_square_feet: unit?.square_feet ?? "",
+    unit_customer_price: unit?.customer_price ?? "",
+    unit_contractor_pay: unit?.contractor_pay ?? "",
+    unit_notes: unitInstructions(unit)
+  };
+}
+
+function captureAssignmentUnitMetadata() {
+  window.clearTimeout(pendingAssignmentUnitMetadataTimer);
+  pendingAssignmentUnitMetadata = assignmentUnitMetadata();
+  if (pendingAssignmentUnitMetadata) {
+    pendingAssignmentUnitMetadataTimer = window.setTimeout(() => {
+      pendingAssignmentUnitMetadata = null;
+    }, 15000);
+  }
+}
+
+function mergeAssignmentUnitMetadata(row, metadata) {
+  if (!row || typeof row !== "object" || Array.isArray(row)) return row;
+  const existing = row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+    ? row.metadata
+    : {};
+  return {
+    ...row,
+    metadata: {
+      ...existing,
+      ...metadata
+    }
+  };
+}
+
+function installAssignmentUnitInsertPatch() {
+  if (window.__turnlyAssignmentUnitInsertPatch || !window.fetch) return;
+  window.__turnlyAssignmentUnitInsertPatch = true;
+  const originalFetch = window.fetch.bind(window);
+
+  window.fetch = (input, init = {}) => {
+    const url = typeof input === "string" ? input : input?.url || "";
+    const method = String(init?.method || input?.method || "GET").toUpperCase();
+    const body = init?.body;
+
+    if (method === "POST" && /\/rest\/v1\/assignment_blocks/i.test(url) && body && pendingAssignmentUnitMetadata) {
+      try {
+        const parsed = JSON.parse(body);
+        const patchedBody = Array.isArray(parsed)
+          ? parsed.map((row) => mergeAssignmentUnitMetadata(row, pendingAssignmentUnitMetadata))
+          : mergeAssignmentUnitMetadata(parsed, pendingAssignmentUnitMetadata);
+        init = { ...init, body: JSON.stringify(patchedBody) };
+      } catch (error) {
+        console.warn("[assignments] Unable to attach unit metadata to assignment insert", error);
+      }
+    }
+
+    return originalFetch(input, init);
+  };
 }
 
 function injectUnitPickerStyles() {
@@ -176,6 +267,7 @@ function clearUnitPicker() {
   if (select) select.innerHTML = `<option value="">Choose a unit...</option>`;
   if (options) options.innerHTML = "";
   if (meta) meta.textContent = "";
+  pendingAssignmentUnitMetadata = null;
 }
 
 function renderUnitPicker(message = "", filter = "") {
@@ -276,13 +368,17 @@ async function loadPropertyUnitsForClient(client) {
 
 function handleUnitSearch(value) {
   renderUnitPicker("", value);
-  const normalized = value.trim().toLowerCase();
-  if (!normalized) return;
-  const match = selectedPropertyUnits.find((unit) => (
-    unitLabel(unit).toLowerCase() === normalized ||
-    String(unit?.unit_name || "").toLowerCase() === normalized
-  )) || selectedPropertyUnits.find((unit) => unitLabel(unit).toLowerCase().includes(normalized));
-  if (match) applySelectedUnit(match);
+  const normalized = value.trim();
+  if (!normalized) {
+    selectedUnitId = "";
+    return;
+  }
+  const match = findUnitBySearch(value);
+  if (match) {
+    applySelectedUnit(match);
+  } else {
+    selectedUnitId = "";
+  }
 }
 
 function fillAssignmentFromClient() {
@@ -406,11 +502,13 @@ function bindClientPropertySelect() {
     if (event.target?.id === "assignmentForm") {
       fillAssignmentFromClient();
       applySelectedUnit(selectedUnit());
+      captureAssignmentUnitMetadata();
     }
   }, true);
 }
 
 window.addEventListener("load", () => {
+  installAssignmentUnitInsertPatch();
   bindClientPropertySelect();
   void loadClientProperties();
   window.setTimeout(loadClientProperties, 700);
