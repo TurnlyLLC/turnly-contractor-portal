@@ -51,13 +51,25 @@ async function loadAddress(form) {
     .eq("id", clientId)
     .maybeSingle();
 
-  state.loading = false;
   if (error) {
     console.warn("[clients] Unable to load billing address", error);
-    return;
   }
 
-  const savedAddress = data?.billing_address || "";
+  let savedAddress = data?.billing_address || "";
+  if (!savedAddress) {
+    const { data: propertyData, error: propertyError } = await supabase
+      .from("portal_properties")
+      .select("address")
+      .eq("id", clientId)
+      .maybeSingle();
+
+    if (propertyError) {
+      console.warn("[clients] Unable to load portal property address", propertyError);
+    }
+    savedAddress = propertyData?.address || "";
+  }
+
+  state.loading = false;
   const nextAddress = pendingAddAddress && !savedAddress ? pendingAddAddress : savedAddress;
   input.value = nextAddress;
   state.lastSaved = savedAddress;
@@ -90,6 +102,10 @@ async function saveAddress(form, options = {}) {
   }
 
   state.lastSaved = address;
+  await supabase
+    .from("portal_properties")
+    .update({ address: address || null })
+    .eq("id", clientId);
 }
 
 function installClientFetchPatch() {
