@@ -56,6 +56,27 @@ const state = {
   openAssignments: [],
   myAssignments: [],
   videos: [],
+  availability: {
+    status: "available",
+    days: {
+      monday: true,
+      tuesday: true,
+      wednesday: true,
+      thursday: true,
+      friday: true,
+      saturday: false,
+      sunday: false
+    },
+    start_time: "08:00",
+    end_time: "17:00",
+    notes: "",
+    updated_at: ""
+  },
+  availabilityPersistence: "device",
+  availabilitySaving: false,
+  availabilityMessage: "",
+  availabilityError: false,
+  selectedBoardJobId: "",
   loading: true,
   message: "",
   messageError: false,
@@ -73,6 +94,20 @@ const state = {
 
 const boardVisibleStatuses = new Set(["open", "preferred-pending"]);
 const closedAssignmentStatuses = new Set(["completed", "complete", "closed", "done", "cancelled", "canceled", "declined", "qa-pending"]);
+const availabilityDays = [
+  ["monday", "Mon"],
+  ["tuesday", "Tue"],
+  ["wednesday", "Wed"],
+  ["thursday", "Thu"],
+  ["friday", "Fri"],
+  ["saturday", "Sat"],
+  ["sunday", "Sun"]
+];
+const availabilityStatuses = [
+  ["available", "Available"],
+  ["limited", "Limited"],
+  ["unavailable", "Unavailable"]
+];
 
 function esc(value) {
   return String(value ?? "")
@@ -373,6 +408,61 @@ function filteredPayoutGroups() {
   });
 }
 
+function availabilityStorageKey() {
+  return `turnly:contractor-availability:${state.user?.id || "anonymous"}`;
+}
+
+function normalizeAvailability(value = {}) {
+  const rawDays = value.days && typeof value.days === "object" ? value.days : {};
+  const hasDays = Object.keys(rawDays).length > 0;
+  const days = Object.fromEntries(availabilityDays.map(([key]) => [
+    key,
+    hasDays ? rawDays[key] === true : !["saturday", "sunday"].includes(key)
+  ]));
+  const status = availabilityStatuses.some(([key]) => key === normalizeToken(value.status))
+    ? normalizeToken(value.status)
+    : "available";
+  return {
+    status,
+    days,
+    start_time: String(value.preferred_start_time || value.start_time || "08:00").slice(0, 5),
+    end_time: String(value.preferred_end_time || value.end_time || "17:00").slice(0, 5),
+    notes: value.notes || "",
+    updated_at: value.updated_at || value.saved_at || ""
+  };
+}
+
+function readStoredAvailability() {
+  try {
+    const raw = window.localStorage?.getItem(availabilityStorageKey());
+    return raw ? normalizeAvailability(JSON.parse(raw)) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredAvailability(value) {
+  try {
+    window.localStorage?.setItem(availabilityStorageKey(), JSON.stringify(value));
+  } catch {
+    // Private browsing can block storage; database sync still works when available.
+  }
+}
+
+function availabilityStatusLabel(status) {
+  return availabilityStatuses.find(([key]) => key === status)?.[1] || "Available";
+}
+
+function availabilityDaySummary(days) {
+  const selected = availabilityDays.filter(([key]) => days[key]).map(([, label]) => label);
+  return selected.length ? selected.join(", ") : "No days selected";
+}
+
+function availabilityPersistenceLabel() {
+  if (state.availability.updated_at) return `Updated ${formatDate(state.availability.updated_at)}`;
+  return state.availabilityPersistence === "database" ? "Synced" : "Saved on this device";
+}
+
 function metric(label, value, subtext, icon) {
   return `
     <article class="cp-metric">
@@ -429,8 +519,9 @@ function assignmentActions(item, mode) {
 function assignmentRow(item, mode = "mine") {
   const status = item.status || "open";
   const actions = assignmentActions(item, mode);
+  const openDetails = mode === "open";
   return `
-    <article class="cp-job-row">
+    <article class="cp-job-row ${openDetails ? "cp-job-row-clickable" : ""}" ${openDetails ? `data-open-job-details-id="${esc(item.id)}" role="button" tabindex="0" aria-label="View details for ${esc(assignmentTitle(item))}"` : ""}>
       <div class="cp-job-main">
         <strong>${esc(assignmentTitle(item))}</strong>
         <small>${esc(assignmentSubtitle(item))}</small>
@@ -538,6 +629,7 @@ function renderShell() {
       <section class="cp-main" id="${pageKey === "dashboard" ? "contractorDashboard" : "contractorPortalMain"}">
         ${renderPage()}
       </section>
+      ${jobDetailDrawer()}
       ${mobileNav()}
     </main>
   `;
@@ -732,6 +824,40 @@ function renderSelectedJobDetail(item) {
   `;
 }
 
+function selectedBoardJob(rows = state.openAssignments) {
+  if (!state.selectedBoardJobId) return null;
+  return rows.find((item) => String(item.id) === String(state.selectedBoardJobId)) || null;
+}
+
+function renderBoardJobDetails(item) {
+  if (!item) return emptyState("Tap a job to view details.");
+  return `
+    ${renderSelectedJobDetail(item)}
+    <div class="cp-detail-actions">${assignmentActions(item, "open")}</div>
+  `;
+}
+
+function jobDetailDrawer() {
+  if (pageKey !== "job-board") return "";
+  const item = selectedBoardJob(filteredOpenAssignments());
+  if (!item) return "";
+  return `
+    <section class="cp-detail-drawer" role="dialog" aria-modal="true" aria-labelledby="cpBoardDetailTitle">
+      <button class="cp-detail-backdrop" type="button" aria-label="Close job details" data-close-board-details></button>
+      <article class="cp-detail-panel">
+        <div class="cp-detail-panel-head">
+          <div>
+            <p class="cp-panel-kicker">Job Details</p>
+            <h2 id="cpBoardDetailTitle">${esc(assignmentTitle(item))}</h2>
+          </div>
+          <button class="cp-ghost-action" type="button" data-close-board-details>Close</button>
+        </div>
+        ${renderBoardJobDetails(item)}
+      </article>
+    </section>
+  `;
+}
+
 function renderJobSummary() {
   const active = activeAssignments();
   return `
@@ -746,6 +872,7 @@ function renderJobSummary() {
 function renderJobBoard() {
   const rows = filteredOpenAssignments();
   const preferred = rows.filter(isPreferredOffer);
+  const selected = selectedBoardJob(rows);
   return `
     <section class="cp-job-board-layout">
       ${panel("Jobs", `
@@ -769,13 +896,7 @@ function renderJobBoard() {
       `)}
       <aside class="cp-stack">
         ${panel("Filters", renderBoardFilterSummary())}
-        ${panel("How It Works", `
-          <div class="cp-mini-list">
-            <div class="cp-mini-row"><strong>Claim</strong><small>Move open work into My Jobs.</small></div>
-            <div class="cp-mini-row"><strong>Start</strong><small>Start from My Jobs when you are ready.</small></div>
-            <div class="cp-mini-row"><strong>Complete</strong><small>Finish the checklist from the active job flow.</small></div>
-          </div>
-        `)}
+        ${panel("Job Details", renderBoardJobDetails(selected))}
       </aside>
     </section>
   `;
@@ -860,15 +981,62 @@ function renderSchedule() {
       <aside class="cp-stack">
         ${panel("Mini Calendar", renderMiniCalendar(new Date()))}
         ${panel("Upcoming Assignments", `<div class="cp-mini-list">${nextAssignments(5).map((item) => `<div class="cp-mini-row"><strong>${esc(assignmentTitle(item))}</strong><small>${esc(formatWindow(item))}</small></div>`).join("") || emptyState("No upcoming assignments.")}</div>`)}
-        ${panel("Availability", `
-          <div class="cp-mini-list">
-            <div class="cp-mini-row"><span>Monday</span><strong>Available</strong></div>
-            <div class="cp-mini-row"><span>Tuesday</span><strong>Available</strong></div>
-            <div class="cp-mini-row"><span>Weekend</span><strong>By assignment</strong></div>
-          </div>
-        `)}
+        ${panel("Availability", renderAvailabilityEditor())}
       </aside>
     </section>
+  `;
+}
+
+function renderAvailabilityEditor() {
+  const availability = state.availability;
+  const message = state.availabilityMessage
+    ? `<p class="cp-status-message ${state.availabilityError ? "error" : ""}" aria-live="polite">${esc(state.availabilityMessage)}</p>`
+    : "";
+  return `
+    <form id="cpAvailabilityForm" class="cp-availability-form">
+      <div class="cp-mini-list">
+        <div class="cp-mini-row">
+          <span>Status</span>
+          <strong>${esc(availabilityStatusLabel(availability.status))}</strong>
+          <small>${esc(availabilityPersistenceLabel())}</small>
+        </div>
+        <div class="cp-mini-row">
+          <span>Days</span>
+          <strong>${esc(availabilityDaySummary(availability.days))}</strong>
+          <small>${esc(availability.start_time)} - ${esc(availability.end_time)}</small>
+        </div>
+      </div>
+      <label class="cp-field">
+        <span>Status</span>
+        <select name="status">
+          ${availabilityStatuses.map(([value, label]) => option(value, label, availability.status)).join("")}
+        </select>
+      </label>
+      <div class="cp-day-toggle-grid" aria-label="Available days">
+        ${availabilityDays.map(([value, label]) => `
+          <label class="cp-day-toggle">
+            <input type="checkbox" name="available_days" value="${esc(value)}" ${availability.days[value] ? "checked" : ""} />
+            <span>${esc(label)}</span>
+          </label>
+        `).join("")}
+      </div>
+      <div class="cp-availability-time-grid">
+        <label class="cp-field">
+          <span>Start</span>
+          <input type="time" name="start_time" value="${esc(availability.start_time)}" />
+        </label>
+        <label class="cp-field">
+          <span>End</span>
+          <input type="time" name="end_time" value="${esc(availability.end_time)}" />
+        </label>
+      </div>
+      <label class="cp-field">
+        <span>Notes</span>
+        <textarea name="notes" rows="3" maxlength="240">${esc(availability.notes)}</textarea>
+      </label>
+      <button class="cp-action" type="submit" ${state.availabilitySaving ? "disabled" : ""}>${state.availabilitySaving ? "Saving..." : "Save Availability"}</button>
+      ${message}
+    </form>
   `;
 }
 
@@ -1166,6 +1334,7 @@ async function loadData() {
 
   await Promise.all([
     loadProfile(),
+    loadAvailability(),
     loadOpenAssignments(),
     loadMyAssignments(),
     loadVideos()
@@ -1181,6 +1350,23 @@ async function loadProfile() {
     .eq("id", state.user.id)
     .maybeSingle();
   state.profile = data || null;
+}
+
+async function loadAvailability() {
+  const stored = readStoredAvailability();
+  if (stored) state.availability = stored;
+
+  const { data, error } = await supabase
+    .from("contractor_availability")
+    .select("status,days,preferred_start_time,preferred_end_time,notes,updated_at")
+    .eq("contractor_id", state.user.id)
+    .maybeSingle();
+
+  if (!error && data) {
+    state.availability = normalizeAvailability(data);
+    state.availabilityPersistence = "database";
+    writeStoredAvailability(state.availability);
+  }
 }
 
 async function loadOpenAssignments() {
@@ -1278,6 +1464,56 @@ async function claimAssignment(assignmentId) {
   renderShell();
 }
 
+async function saveAvailability(form) {
+  const formData = new FormData(form);
+  const selectedDays = new Set(formData.getAll("available_days").map(String));
+  const next = normalizeAvailability({
+    status: formData.get("status"),
+    days: Object.fromEntries(availabilityDays.map(([key]) => [key, selectedDays.has(key)])),
+    start_time: formData.get("start_time") || "08:00",
+    end_time: formData.get("end_time") || "17:00",
+    notes: formData.get("notes") || "",
+    updated_at: new Date().toISOString()
+  });
+
+  state.availability = next;
+  state.availabilitySaving = true;
+  state.availabilityMessage = "Saving availability...";
+  state.availabilityError = false;
+  writeStoredAvailability(next);
+  renderShell();
+
+  const payload = {
+    contractor_id: state.user.id,
+    status: next.status,
+    days: next.days,
+    preferred_start_time: next.start_time || null,
+    preferred_end_time: next.end_time || null,
+    notes: next.notes,
+    updated_at: next.updated_at
+  };
+
+  const { data, error } = await supabase
+    .from("contractor_availability")
+    .upsert(payload, { onConflict: "contractor_id" })
+    .select("status,days,preferred_start_time,preferred_end_time,notes,updated_at")
+    .maybeSingle();
+
+  state.availabilitySaving = false;
+  if (error) {
+    state.availabilityPersistence = "device";
+    state.availabilityMessage = "Availability saved on this device.";
+    state.availabilityError = false;
+  } else {
+    state.availability = normalizeAvailability(data || payload);
+    state.availabilityPersistence = "database";
+    state.availabilityMessage = "Availability updated.";
+    state.availabilityError = false;
+    writeStoredAvailability(state.availability);
+  }
+  renderShell();
+}
+
 function refreshFilterOnly() {
   if (pageKey === "job-board") {
     const target = document.getElementById("contractorAssignments");
@@ -1341,6 +1577,20 @@ function attachEvents() {
       return;
     }
 
+    const closeBoardDetails = event.target.closest("[data-close-board-details]");
+    if (closeBoardDetails) {
+      state.selectedBoardJobId = "";
+      renderShell();
+      return;
+    }
+
+    const boardDetailTarget = event.target.closest("[data-open-job-details-id]");
+    if (boardDetailTarget && !event.target.closest("button, a, input, select, textarea, label")) {
+      state.selectedBoardJobId = boardDetailTarget.dataset.openJobDetailsId;
+      renderShell();
+      return;
+    }
+
     const statusButton = event.target.closest("[data-my-status]");
     if (statusButton) {
       state.filters.myStatus = statusButton.dataset.myStatus;
@@ -1393,6 +1643,26 @@ function attachEvents() {
     if (event.target.matches("#cpPayoutWeek")) {
       state.filters.payoutWeek = event.target.value;
       refreshFilterOnly();
+    }
+  });
+
+  root?.addEventListener("submit", async (event) => {
+    if (event.target.matches("#cpAvailabilityForm")) {
+      event.preventDefault();
+      await saveAvailability(event.target);
+    }
+  });
+
+  root?.addEventListener("keydown", (event) => {
+    const boardDetailTarget = event.target.closest?.("[data-open-job-details-id]");
+    if (boardDetailTarget && !event.target.closest("button, a, input, select, textarea, label") && ["Enter", " "].includes(event.key)) {
+      event.preventDefault();
+      state.selectedBoardJobId = boardDetailTarget.dataset.openJobDetailsId;
+      renderShell();
+    }
+    if (event.key === "Escape" && state.selectedBoardJobId) {
+      state.selectedBoardJobId = "";
+      renderShell();
     }
   });
 }

@@ -378,6 +378,16 @@
   padding: 10px;
 }
 
+.cp-job-row-clickable {
+  cursor: pointer;
+}
+
+.cp-job-row-clickable:hover,
+.cp-job-row-clickable:focus-visible {
+  border-color: rgba(18, 217, 155, 0.46);
+  outline: 0;
+}
+
 .cp-job-main strong,
 .cp-mini-row strong,
 .cp-video-card strong {
@@ -649,6 +659,43 @@
   gap: 6px;
 }
 
+.cp-availability-form {
+  display: grid;
+  gap: 12px;
+}
+
+.cp-availability-time-grid,
+.cp-day-toggle-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.cp-availability-time-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.cp-day-toggle-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.cp-day-toggle {
+  align-items: center;
+  background: rgba(6, 17, 29, 0.66);
+  border: 1px solid rgba(144, 164, 183, 0.14);
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  font-weight: 900;
+  gap: 6px;
+  justify-content: center;
+  min-height: 38px;
+  padding: 6px;
+}
+
+.cp-day-toggle input {
+  accent-color: var(--cp-green);
+}
+
 .cp-field input,
 .cp-field select,
 .cp-field textarea {
@@ -712,6 +759,51 @@
   color: var(--cp-muted);
   display: block;
   margin-top: 3px;
+}
+
+.cp-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.cp-detail-drawer {
+  bottom: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 480px);
+  left: 0;
+  position: fixed;
+  right: 0;
+  top: 0;
+  z-index: 90;
+}
+
+.cp-detail-backdrop {
+  background: rgba(2, 8, 15, 0.58);
+  border: 0;
+}
+
+.cp-detail-panel {
+  background: var(--cp-panel);
+  border-left: 1px solid var(--cp-line);
+  box-shadow: -24px 0 60px rgba(0, 0, 0, 0.32);
+  display: grid;
+  gap: 14px;
+  overflow: auto;
+  padding: 18px;
+}
+
+.cp-detail-panel-head {
+  align-items: start;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+}
+
+.cp-detail-panel-head h2 {
+  font-size: 20px;
+  margin: 0;
 }
 
 .cp-video-grid {
@@ -852,6 +944,30 @@
   }
 
   .cp-job-row {
+    grid-template-columns: 1fr;
+  }
+
+  .cp-detail-drawer {
+    grid-template-columns: 1fr;
+  }
+
+  .cp-detail-backdrop {
+    display: none;
+  }
+
+  .cp-detail-panel {
+    border-left: 0;
+    padding: calc(16px + env(safe-area-inset-top)) 14px calc(92px + env(safe-area-inset-bottom));
+  }
+
+  .cp-detail-panel-head {
+    align-items: stretch;
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .cp-availability-time-grid,
+  .cp-day-toggle-grid {
     grid-template-columns: 1fr;
   }
 
