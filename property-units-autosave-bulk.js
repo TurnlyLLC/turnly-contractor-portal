@@ -11,7 +11,6 @@ const bulkState = {
   units: [],
   selectedPropertyIds: new Set(),
   selectedUnitIds: new Set(),
-  autoSelectPropertyIds: new Set(),
   propertySearch: "",
   unitSearch: "",
   isLoadingUnits: false,
@@ -340,13 +339,10 @@ async function loadUnitsForSelection(selectAll = false) {
     if (!availableUnitIds.has(id)) bulkState.selectedUnitIds.delete(id);
   });
 
-  if (selectAll || bulkState.autoSelectPropertyIds.size) {
+  if (selectAll) {
     bulkState.units.forEach((unit) => {
-      if (selectAll || bulkState.autoSelectPropertyIds.has(unit.property_id)) {
-        bulkState.selectedUnitIds.add(unit.id);
-      }
+      bulkState.selectedUnitIds.add(unit.id);
     });
-    bulkState.autoSelectPropertyIds.clear();
   }
 
   renderUnitChoices();
@@ -363,7 +359,6 @@ async function openBulkModal() {
 
   bulkState.selectedPropertyIds.clear();
   bulkState.selectedUnitIds.clear();
-  bulkState.autoSelectPropertyIds.clear();
   bulkState.propertySearch = "";
   bulkState.unitSearch = "";
 
@@ -376,7 +371,6 @@ async function openBulkModal() {
     const selectedPropertyId = selectedPagePropertyId();
     if (selectedPropertyId && bulkState.properties.some((property) => property.id === selectedPropertyId)) {
       bulkState.selectedPropertyIds.add(selectedPropertyId);
-      bulkState.autoSelectPropertyIds.add(selectedPropertyId);
     }
     const search = document.getElementById("propertyUnitBulkPropertySearch");
     if (search) search.value = "";
@@ -528,7 +522,6 @@ function bindBulkEvents() {
       const propertyId = propertyInput.dataset.bulkPropertyId;
       if (propertyInput.checked) {
         bulkState.selectedPropertyIds.add(propertyId);
-        bulkState.autoSelectPropertyIds.add(propertyId);
       } else {
         bulkState.selectedPropertyIds.delete(propertyId);
         bulkState.units
