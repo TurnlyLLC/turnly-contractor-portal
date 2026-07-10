@@ -120,6 +120,22 @@ function bindScheduleEvents() {
       return;
     }
 
+    const editButton = event.target.closest("[data-schedule-assignment-edit]");
+    if (editButton) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const id = editButton.dataset.scheduleAssignmentEdit || "";
+      const row = state.rows.find((item) => String(item.id || "") === String(id));
+      closeScheduleAssignmentModal();
+      if (window.turnlyScheduleAssignmentEditor?.openEdit) {
+        window.turnlyScheduleAssignmentEditor.openEdit(row || id);
+      } else {
+        window.dispatchEvent(new CustomEvent("turnly:schedule-edit-assignment", { detail: { id, row } }));
+        showMessage("Opening assignment editor...");
+      }
+      return;
+    }
+
     const deleteButton = event.target.closest("[data-schedule-assignment-delete]");
     if (deleteButton) {
       event.preventDefault();
@@ -515,6 +531,9 @@ function scheduleAssignmentDetail(row) {
           </div>
         `).join("")}
       </div>
+      <div class="schedule-assignment-actions">
+        <button class="primary-action" type="button" data-schedule-assignment-edit="${escapeHtml(String(row.id || ""))}"><span>Edit Assignment</span></button>
+      </div>
       <div class="schedule-assignment-notes">
         <div><span>Scope of Work</span><p>${escapeHtml(notes.scope || "No scope entered.")}</p></div>
         <div><span>Supplies Notes</span><p>${escapeHtml(notes.supplies || "No supplies notes entered.")}</p></div>
@@ -740,7 +759,7 @@ function injectScheduleStyles() {
   if (!document.getElementById("scheduleLiveActionStyles")) {
     document.head.insertAdjacentHTML("beforeend", `
       <style id="scheduleLiveActionStyles">
-        .schedule-assignment-danger-zone{align-items:center;background:rgba(255,91,104,.06);border:1px solid rgba(255,91,104,.24);border-radius:8px;display:flex;gap:16px;justify-content:space-between;margin-top:16px;padding:14px}.schedule-assignment-danger-zone strong{color:#fff;display:block;font-size:13px}.schedule-assignment-danger-zone p{color:var(--suite-soft);font-size:12px;margin:4px 0 0}.schedule-assignment-danger-zone .danger-btn{border-color:rgba(255,91,104,.7);color:var(--suite-red);min-width:150px}.schedule-assignment-danger-zone .danger-btn:disabled{cursor:wait;opacity:.58}@media(max-width:620px){.schedule-assignment-danger-zone{align-items:stretch;flex-direction:column}.schedule-assignment-danger-zone .danger-btn{width:100%}}
+        .schedule-assignment-actions{display:flex;justify-content:flex-end;margin-top:14px}.schedule-assignment-actions .primary-action{min-width:150px}.schedule-assignment-danger-zone{align-items:center;background:rgba(255,91,104,.06);border:1px solid rgba(255,91,104,.24);border-radius:8px;display:flex;gap:16px;justify-content:space-between;margin-top:16px;padding:14px}.schedule-assignment-danger-zone strong{color:#fff;display:block;font-size:13px}.schedule-assignment-danger-zone p{color:var(--suite-soft);font-size:12px;margin:4px 0 0}.schedule-assignment-danger-zone .danger-btn{border-color:rgba(255,91,104,.7);color:var(--suite-red);min-width:150px}.schedule-assignment-danger-zone .danger-btn:disabled{cursor:wait;opacity:.58}@media(max-width:620px){.schedule-assignment-actions{display:grid}.schedule-assignment-danger-zone{align-items:stretch;flex-direction:column}.schedule-assignment-danger-zone .danger-btn{width:100%}}
       </style>
     `);
   }

@@ -14,7 +14,9 @@ const optionalColumns = [
   "visibility", "declined_contractor_ids", "created_by"
 ];
 
-const state = { properties: [], user: null, saving: false };
+const editorModalId = "scheduleAssignmentEditorModal";
+const editorTitleId = "scheduleAssignmentEditorTitle";
+const state = { properties: [], user: null, saving: false, editingId: "", editingRow: null };
 const $ = (id) => document.getElementById(id);
 
 function init() {
@@ -35,16 +37,20 @@ function init() {
 
 function mount(root) {
   if (root.dataset.scheduleAddAssignmentMounted) return;
-  if (root.querySelector("[data-schedule-new-assignment]") && $("scheduleAssignmentModal")) return;
   root.dataset.scheduleAddAssignmentMounted = "true";
   const toolbar = root.querySelector(".toolbar-right");
   if (toolbar && !toolbar.querySelector("[data-schedule-new-assignment]")) {
     toolbar.insertAdjacentHTML("afterbegin", `<button class="primary-action" type="button" data-schedule-new-assignment><span>New Assignment</span></button>`);
   }
-  if (!$("scheduleAssignmentModal")) root.insertAdjacentHTML("beforeend", modalHtml());
+  if (!$(editorModalId)) root.insertAdjacentHTML("beforeend", modalHtml());
   root.addEventListener("click", (event) => {
     if (event.target.closest("[data-schedule-new-assignment]")) {
       openModal();
+      return;
+    }
+    const editButton = event.target.closest("[data-schedule-assignment-edit]");
+    if (editButton) {
+      openEdit(editButton.dataset.scheduleAssignmentEdit || "");
       return;
     }
     if (event.target.closest("[data-schedule-assignment-close]")) closeModal();
@@ -58,17 +64,24 @@ function mount(root) {
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") closeModal();
   });
+  window.turnlyScheduleAssignmentEditor = {
+    openNew: () => openModal(),
+    openEdit: (rowOrId) => openEdit(rowOrId)
+  };
+  window.addEventListener("turnly:schedule-edit-assignment", (event) => {
+    openEdit(event.detail?.row || event.detail?.id || "");
+  });
   loadUser();
   loadProperties();
 }
 
 function modalHtml() {
   return `
-    <div id="scheduleAssignmentModal" class="client-modal assignment-modal" role="dialog" aria-modal="true" aria-labelledby="scheduleAssignmentModalTitle" hidden>
+    <div id="${editorModalId}" class="client-modal assignment-modal" role="dialog" aria-modal="true" aria-labelledby="${editorTitleId}" hidden>
       <button class="client-modal-backdrop" type="button" aria-label="Close assignment form" data-schedule-assignment-close></button>
       <section class="client-modal-panel assignment-modal-panel">
         <div class="client-modal-header">
-          <div><p>Schedule</p><h2 id="scheduleAssignmentModalTitle">New Assignment</h2></div>
+          <div><p>Schedule</p><h2 id="${editorTitleId}">New Assignment</h2></div>
           <button class="client-modal-close" type="button" aria-label="Close assignment form" data-schedule-assignment-close>&times;</button>
         </div>
         <form id="scheduleAssignmentForm" class="lead-form assignment-form assignment-modal-form">
@@ -83,7 +96,7 @@ function modalHtml() {
           <section class="assignment-form-section"><h3>Timing</h3><div class="form-grid assignment-form-grid">
             <label class="suite-field"><span>Start</span><input id="scheduleAssignmentStart" type="datetime-local" required /></label>
             <label class="suite-field"><span>End</span><input id="scheduleAssignmentEnd" type="datetime-local" required /></label>
-            <label class="suite-field"><span>Status</span><select id="scheduleAssignmentStatus"><option value="open">Open</option><option value="preferred_pending">Preferred Pending</option><option value="claimed">Claimed</option><option value="in_progress">In Progress</option></select></label>
+            <label class="suite-field"><span>Status</span><select id="scheduleAssignmentStatus"><option value="open">Open</option><option value="preferred_pending">Preferred Pending</option><option value="claimed">Claimed</option><option value="in_progress">In Progress</option><option value="completed">Completed</option><option value="qa_pending">QA Pending</option><option value="cancelled">Cancelled</option></select></label>
             <label class="suite-field"><span>Priority</span><select id="scheduleAssignmentPriority"><option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option></select></label>
           </div></section>
           <section class="assignment-form-section"><h3>Work Details</h3><div class="form-grid assignment-form-grid assignment-notes-grid">
@@ -91,7 +104,7 @@ function modalHtml() {
             <label class="suite-field wide"><span>Special Instructions</span><textarea id="scheduleAssignmentInstructions"></textarea></label>
           </div></section>
           <p id="scheduleAssignmentMessage" class="status-message"></p>
-          <div class="form-actions"><button id="scheduleAssignmentSave" type="submit" class="primary-action"><span>Post Assignment</span></button></div>
+          <div class="form-actions"><button id="scheduleAssignmentSave" type="submit" class="primary-action"><span data-schedule-assignment-save-label>Post Assignment</span></button></div>
         </form>
       </section>
     </div>
@@ -129,16 +142,57 @@ function populateProperties() {
 }
 
 async function openModal() {
+  state.editingId = "";
+  state.editingRow = null;
   clearForm();
   if (!state.properties.length) await loadProperties();
   populateProperties();
-  $("scheduleAssignmentModal").hidden = false;
+  updateEditorMode();
+  $(editorModalId).hidden = false;
   $("scheduleAssignmentProperty")?.focus();
 }
 
+async function openEdit(rowOrId) {
+  const row = await resolveAssignmentRow(rowOrId);
+  if (!row) return;
+  state.editingId = String(row.id || "");
+  state.editingRow = row;
+  clearForm();
+  if (!state.properties.length) await loadProperties();
+  populateProperties();
+  fillAssignment(row);
+  updateEditorMode();
+  $(editorModalId).hidden = false;
+  $("scheduleAssignmentTitle")?.focus();
+}
+
+async function resolveAssignmentRow(rowOrId) {
+  if (rowOrId && typeof rowOrId === "object") return rowOrId;
+  const id = String(rowOrId || "");
+  if (!id || !supabase) {
+    setScheduleMessage("Unable to open assignment editor. Assignment data is missing.", true);
+    return null;
+  }
+  const { data, error } = await supabase
+    .from("assignment_blocks")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) {
+    setScheduleMessage("Unable to load assignment for editing: " + error.message, true);
+    return null;
+  }
+  if (!data) setScheduleMessage("Assignment not found. Refresh the schedule and try again.", true);
+  return data || null;
+}
+
 function closeModal() {
-  const modal = $("scheduleAssignmentModal");
+  const modal = $(editorModalId);
   if (modal) modal.hidden = true;
+  state.editingId = "";
+  state.editingRow = null;
+  setSaving(false);
+  updateEditorMode();
 }
 
 function clearForm() {
@@ -167,20 +221,40 @@ function fillProperty(id) {
   if (!$("scheduleAssignmentInstructions")?.value) setValue("scheduleAssignmentInstructions", property.special_instructions || property.notes || "");
 }
 
+function fillAssignment(row) {
+  const propertyId = assignmentPropertyId(row);
+  setValue("scheduleAssignmentProperty", propertyId);
+  setValue("scheduleAssignmentTitle", row?.title || "");
+  setValue("scheduleAssignmentPropertyName", row?.property_name || propertyTitle(state.properties.find((property) => property.id === propertyId)));
+  setValue("scheduleAssignmentService", row?.service_type || "");
+  setValue("scheduleAssignmentAddress", row?.address || "");
+  setValue("scheduleAssignmentPay", row?.pay_amount ?? "");
+  setValue("scheduleAssignmentStart", datetimeInput(row?.start_window));
+  setValue("scheduleAssignmentEnd", datetimeInput(row?.end_window));
+  setValue("scheduleAssignmentStatus", normalizeStatusValue(row?.status || "open"));
+  setValue("scheduleAssignmentPriority", row?.priority || "normal");
+  setValue("scheduleAssignmentScope", row?.scope || "");
+  setValue("scheduleAssignmentInstructions", row?.special_instructions || "");
+  message("");
+}
+
 async function saveAssignment(event, root) {
   event.preventDefault();
   if (!supabase || state.saving) return;
   let payload;
+  const isEditing = Boolean(state.editingId);
   try {
-    payload = payloadFromForm();
+    payload = payloadFromForm({ includeDefaults: !isEditing });
   } catch (error) {
     message(error.message, true);
     return;
   }
   state.saving = true;
   setSaving(true);
-  message("Posting assignment to Supabase...");
-  const result = await insertWithFallback(payload);
+  message(isEditing ? "Saving assignment changes..." : "Posting assignment to Supabase...");
+  const result = isEditing
+    ? await updateWithFallback(state.editingId, payload)
+    : await insertWithFallback(payload);
   state.saving = false;
   setSaving(false);
   if (result.error) {
@@ -189,47 +263,53 @@ async function saveAssignment(event, root) {
   }
   closeModal();
   const scheduleMessage = $("scheduleLiveMessage");
-  if (scheduleMessage) scheduleMessage.textContent = "Assignment posted to Supabase.";
+  if (scheduleMessage) scheduleMessage.textContent = isEditing ? "Assignment updated in Supabase." : "Assignment posted to Supabase.";
   root.querySelector("[data-schedule-refresh]")?.click();
 }
 
-function payloadFromForm() {
+function payloadFromForm(options = {}) {
   const start = parseDate(value("scheduleAssignmentStart"));
   const end = parseDate(value("scheduleAssignmentEnd"));
   if (!start || !end) throw new Error("Start and End are required.");
   if (end <= start) throw new Error("End must be after Start.");
   const propertyId = value("scheduleAssignmentProperty");
   const property = state.properties.find((row) => row.id === propertyId);
+  const existingPropertyId = state.editingId ? state.editingRow?.property_id || null : null;
   const pay = Number(value("scheduleAssignmentPay"));
   const status = value("scheduleAssignmentStatus") || "open";
-  return {
+  const payload = {
     title: value("scheduleAssignmentTitle") || `Cleaning - ${value("scheduleAssignmentPropertyName") || propertyTitle(property) || "Scheduled Assignment"}`,
-    property_id: propertyId || null,
+    property_id: propertyId || existingPropertyId || null,
     property_name: value("scheduleAssignmentPropertyName") || propertyTitle(property),
     address: value("scheduleAssignmentAddress") || propertyAddress(property),
     service_type: value("scheduleAssignmentService") || propertyService(property),
     pay_amount: Number.isFinite(pay) && pay >= 0 ? pay : 0,
     scope: value("scheduleAssignmentScope"),
-    supplies_notes: "",
     special_instructions: value("scheduleAssignmentInstructions"),
     priority: value("scheduleAssignmentPriority") || "normal",
     status,
-    assignment_type: "one_time",
-    recurrence_frequency: "one_time",
-    recurrence_interval: 1,
-    recurrence_end_date: null,
-    auto_renewal: false,
-    recurring_group_id: null,
-    preferred_first: status === "preferred_pending",
-    preferred_contractor_ids: [],
-    preferred_contractor_names: [],
-    preferred_until: null,
-    visibility: status === "preferred_pending" ? "preferred" : "open",
-    declined_contractor_ids: [],
-    created_by: state.user?.id || null,
     start_window: start.toISOString(),
     end_window: end.toISOString()
   };
+  if (options.includeDefaults) {
+    Object.assign(payload, {
+      supplies_notes: "",
+      assignment_type: "one_time",
+      recurrence_frequency: "one_time",
+      recurrence_interval: 1,
+      recurrence_end_date: null,
+      auto_renewal: false,
+      recurring_group_id: null,
+      preferred_first: status === "preferred_pending",
+      preferred_contractor_ids: [],
+      preferred_contractor_names: [],
+      preferred_until: null,
+      visibility: status === "preferred_pending" ? "preferred" : "open",
+      declined_contractor_ids: [],
+      created_by: state.user?.id || null
+    });
+  }
+  return payload;
 }
 
 async function insertWithFallback(payload) {
@@ -250,6 +330,31 @@ async function insertWithFallback(payload) {
     return result;
   }
   return { data: null, error: new Error("Unable to save assignment because the assignment_blocks table schema is missing required columns.") };
+}
+
+async function updateWithFallback(id, payload) {
+  let nextPayload = { ...payload };
+  for (let attempt = 0; attempt < optionalColumns.length + 2; attempt += 1) {
+    const result = await supabase
+      .from("assignment_blocks")
+      .update(nextPayload)
+      .eq("id", id)
+      .select("*")
+      .maybeSingle();
+    if (!result.error) return result;
+    const missing = missingColumn(result.error);
+    if (missing && Object.prototype.hasOwnProperty.call(nextPayload, missing)) {
+      delete nextPayload[missing];
+      continue;
+    }
+    const optional = optionalColumns.find((column) => Object.prototype.hasOwnProperty.call(nextPayload, column) && isMissingColumn(result.error, column));
+    if (optional) {
+      delete nextPayload[optional];
+      continue;
+    }
+    return result;
+  }
+  return { data: null, error: new Error("Unable to update assignment because the assignment_blocks table schema is missing required columns.") };
 }
 
 function isMissingColumn(error, column) {
@@ -284,8 +389,12 @@ function setValue(id, text) {
 function setSaving(isSaving) {
   const button = $("scheduleAssignmentSave");
   if (!button) return;
+  const label = button.querySelector("[data-schedule-assignment-save-label]") || button.querySelector("span");
+  const isEditing = Boolean(state.editingId);
   button.disabled = isSaving;
-  button.querySelector("span").textContent = isSaving ? "Posting..." : "Post Assignment";
+  if (label) label.textContent = isSaving
+    ? (isEditing ? "Saving..." : "Posting...")
+    : (isEditing ? "Save Changes" : "Post Assignment");
 }
 
 function message(text, isError = false) {
@@ -293,6 +402,39 @@ function message(text, isError = false) {
   if (!field) return;
   field.textContent = text || "";
   field.classList.toggle("error", isError);
+}
+
+function setScheduleMessage(text, isError = false) {
+  const field = $("scheduleLiveMessage");
+  if (!field) return;
+  field.textContent = text || "";
+  field.classList.toggle("error", isError);
+}
+
+function updateEditorMode() {
+  const isEditing = Boolean(state.editingId);
+  const title = $(editorTitleId);
+  if (title) title.textContent = isEditing ? "Edit Assignment" : "New Assignment";
+  setSaving(state.saving);
+}
+
+function assignmentPropertyId(row) {
+  const direct = String(row?.property_id || "");
+  if (direct && state.properties.some((property) => String(property.id || "") === direct)) return direct;
+  const propertyName = token(row?.property_name || "");
+  const address = token(row?.address || "");
+  const match = state.properties.find((property) => {
+    const titleMatch = propertyName && token(propertyTitle(property)) === propertyName;
+    const addressMatch = address && token(propertyAddress(property)) === address;
+    return titleMatch || addressMatch;
+  });
+  return match?.id || "";
+}
+
+function normalizeStatusValue(value) {
+  const key = String(value || "open").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  const allowed = new Set(["open", "preferred_pending", "claimed", "in_progress", "completed", "qa_pending", "cancelled"]);
+  return allowed.has(key) ? key : "open";
 }
 
 function propertyTitle(row) {
@@ -314,6 +456,10 @@ function serviceModel(value) {
 
 function titleCase(value) {
   return String(value || "").replace(/[-_]+/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function token(value) {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
 function parseDate(text) {
