@@ -3766,7 +3766,7 @@ function propertyUnitMoney(value) {
 }
 
 function propertyUnitPropertyTitle(row) {
-  return row?.property_name || row?.name || row?.company_name || row?.title || "";
+  return row?.property_name || row?.company_name || row?.title || row?.name || "";
 }
 
 function propertyUnitPropertyAddress(row) {
@@ -9402,7 +9402,7 @@ function normalizeAssignmentContractorOption(profile) {
 }
 
 function assignmentPropertyTitle(row) {
-  return row?.property_name || row?.name || row?.company_name || row?.title || "";
+  return row?.property_name || row?.company_name || row?.title || row?.name || "";
 }
 
 function assignmentPropertyAddress(row) {

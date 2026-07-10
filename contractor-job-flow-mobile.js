@@ -615,8 +615,16 @@ function compactAddress(row) {
     .join(", ") || String(row?.region || row?.market || "").trim();
 }
 
-function directoryTitle(row) {
-  return row?.property_name || row?.name || row?.company_name || row?.title || "";
+function directoryPropertyTitle(row, includeName = false) {
+  return row?.property_name || row?.company_name || row?.property_title || row?.title || (includeName ? row?.name : "") || "";
+}
+
+function directoryPersonTitle(row) {
+  return row?.name || row?.primary_contact_name || row?.property_manager_name || row?.contact_name || "";
+}
+
+function assignmentPropertyTitle(assignment) {
+  return assignment?.property_name || metadataValue(assignment, ["property_title", "propertyName", "property_name", "company_name"]);
 }
 
 function normalizeText(value) {
@@ -715,9 +723,15 @@ async function fetchDirectoryDetails(assignment) {
 }
 
 function resolvedPropertyName(assignment) {
-  return directoryTitle(activeDirectoryDetails?.client)
-    || directoryTitle(activeDirectoryDetails?.portalProperty)
-    || assignment?.property_name
+  const portalTitle = directoryPropertyTitle(activeDirectoryDetails?.portalProperty, true);
+  const clientTitle = directoryPropertyTitle(activeDirectoryDetails?.client);
+  const assignmentTitle = assignmentPropertyTitle(assignment);
+  const clientPerson = directoryPersonTitle(activeDirectoryDetails?.client);
+  if (portalTitle) return portalTitle;
+  if (assignmentTitle && normalizeText(assignmentTitle) !== normalizeText(clientPerson)) return assignmentTitle;
+  return clientTitle
+    || assignmentTitle
+    || directoryPersonTitle(activeDirectoryDetails?.client)
     || assignment?.title
     || "Assignment";
 }
