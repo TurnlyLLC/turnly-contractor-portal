@@ -381,7 +381,9 @@ const checklistState = {
   isSavingModule: false,
   isApplying: false,
   moduleTableMissing: false,
-  draggingSectionId: ""
+  draggingSectionId: "",
+  draggingItemId: "",
+  collapsedSectionIds: new Set()
 };
 const qaQueueState = {
   items: [],
@@ -4277,24 +4279,31 @@ function renderChecklistSectionsMarkup() {
 }
 
 function renderChecklistSectionCard(section, index) {
+  const sectionItems = section.items || [];
+  const rooms = section.rooms || [];
+  const taskCount = sectionItems.length + rooms.reduce((total, room) => total + (room.items || []).length, 0);
+  const isCollapsed = checklistState.collapsedSectionIds.has(section.id);
   return `
-    <article class="checklist-section-card" data-checklist-section-id="${esc(section.id)}" data-checklist-saved-module-id="${esc(section.saved_module_id || "")}">
+    <article class="checklist-section-card ${isCollapsed ? "is-collapsed" : ""}" data-checklist-section-id="${esc(section.id)}" data-checklist-saved-module-id="${esc(section.saved_module_id || "")}">
       <div class="checklist-section-head">
+        <button class="ghost-icon-btn checklist-collapse-btn" type="button" data-checklist-toggle-section="${esc(section.id)}" aria-expanded="${isCollapsed ? "false" : "true"}" aria-label="${isCollapsed ? "Expand module" : "Collapse module"}">${icon(isCollapsed ? "chevron-right" : "chevron-down")}</button>
         <span class="checklist-drag-handle" role="button" tabindex="0" draggable="true" data-checklist-drag-handle aria-label="Drag module to reorder">${icon("grip")}</span>
-        <label class="suite-field"><span>Module ${index + 1}</span><input value="${esc(section.title || "")}" data-checklist-section-title placeholder="Bedroom, kitchen, bathroom" /></label>
+        <label class="suite-field"><span>Module ${index + 1} (${taskCount} task${taskCount === 1 ? "" : "s"})</span><input value="${esc(section.title || "")}" data-checklist-section-title placeholder="Bedroom, kitchen, bathroom" /></label>
         <button class="secondary-action checklist-save-module-btn" type="button" data-checklist-save-section="${esc(section.id)}">${icon("check")}<span data-action-label>Save Module</span></button>
         <button class="ghost-icon-btn danger-btn" type="button" data-checklist-remove-section="${esc(section.id)}" aria-label="Remove module">${icon("trash")}</button>
       </div>
-      <label class="suite-field checklist-module-description"><span>Module Description</span><input value="${esc(section.description || "")}" data-checklist-section-description placeholder="Reusable notes, room context, service expectations" /></label>
-      <div class="checklist-item-list" data-checklist-section-items>
-        ${section.items.map((item) => renderChecklistItemRow(item, "section")).join("")}
-      </div>
-      <div class="checklist-row-actions">
-        <button class="secondary-action" type="button" data-checklist-add-item="${esc(section.id)}">${icon("plus")}<span>Add Checklist Item</span></button>
-        <button class="secondary-action" type="button" data-checklist-add-room="${esc(section.id)}">${icon("plus")}<span>Add Sub-Area</span></button>
-      </div>
-      <div class="checklist-room-list">
-        ${section.rooms.map((room) => renderChecklistRoomCard(section.id, room)).join("")}
+      <div class="checklist-section-body" data-checklist-section-body ${isCollapsed ? "hidden" : ""}>
+        <label class="suite-field checklist-module-description"><span>Module Description</span><input value="${esc(section.description || "")}" data-checklist-section-description placeholder="Reusable notes, room context, service expectations" /></label>
+        <div class="checklist-item-list" data-checklist-item-list data-checklist-section-items>
+          ${sectionItems.map((item) => renderChecklistItemRow(item, "section")).join("")}
+        </div>
+        <div class="checklist-row-actions">
+          <button class="secondary-action" type="button" data-checklist-add-item="${esc(section.id)}">${icon("plus")}<span>Add Checklist Item</span></button>
+          <button class="secondary-action" type="button" data-checklist-add-room="${esc(section.id)}">${icon("plus")}<span>Add Sub-Area</span></button>
+        </div>
+        <div class="checklist-room-list">
+          ${rooms.map((room) => renderChecklistRoomCard(section.id, room)).join("")}
+        </div>
       </div>
     </article>
   `;
@@ -4307,7 +4316,7 @@ function renderChecklistRoomCard(sectionId, room) {
         <label class="suite-field"><span>Sub-Area</span><input value="${esc(room.title || "")}" data-checklist-room-title placeholder="Closet, shower, appliance area" /></label>
         <button class="ghost-icon-btn danger-btn" type="button" data-checklist-remove-room="${esc(sectionId)}:${esc(room.id)}" aria-label="Remove sub-area">${icon("trash")}</button>
       </div>
-      <div class="checklist-item-list">
+      <div class="checklist-item-list" data-checklist-item-list>
         ${room.items.map((item) => renderChecklistItemRow(item, "room")).join("")}
       </div>
       <button class="secondary-action" type="button" data-checklist-add-room-item="${esc(sectionId)}:${esc(room.id)}">${icon("plus")}<span>Add Sub-Area Item</span></button>
@@ -4319,6 +4328,7 @@ function renderChecklistItemRow(item, scope) {
   const attr = scope === "room" ? "data-checklist-room-item" : "data-checklist-section-item";
   return `
     <div class="checklist-item-row" ${attr} data-checklist-item-id="${esc(item.id)}">
+      <span class="checklist-drag-handle checklist-item-drag-handle" role="button" tabindex="0" draggable="true" data-checklist-item-drag-handle aria-label="Drag checklist item to reorder">${icon("grip")}</span>
       ${checklistRequiredControlHtml(item)}
       <label class="suite-field"><span>Type</span><select data-checklist-item-type>${checklistItemTypeOptions(item.type)}</select></label>
       <label class="suite-field"><span>Checklist Item</span><input value="${esc(item.label || "")}" data-checklist-item-label placeholder="Make bed, wipe counters, upload final photo" /></label>
@@ -4354,6 +4364,20 @@ function initChecklists() {
 }
 
 function handleChecklistDragStart(event) {
+  const itemHandle = event.target.closest("[data-checklist-item-drag-handle]");
+  if (itemHandle) {
+    const row = itemHandle.closest("[data-checklist-item-id]");
+    const id = row?.dataset.checklistItemId || "";
+    if (!row || !id) return;
+    checklistState.draggingItemId = id;
+    row.classList.add("is-dragging");
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", id);
+    }
+    return;
+  }
+
   const handle = event.target.closest("[data-checklist-drag-handle]");
   if (!handle) return;
   const section = handle.closest("[data-checklist-section-id]");
@@ -4369,6 +4393,21 @@ function handleChecklistDragStart(event) {
 }
 
 function handleChecklistDragOver(event) {
+  const draggingItemId = checklistState.draggingItemId;
+  if (draggingItemId) {
+    const dragging = document.querySelector(`[data-checklist-item-id="${selectorValue(draggingItemId)}"]`);
+    const targetList = event.target.closest("[data-checklist-item-list]");
+    const sourceList = dragging?.closest("[data-checklist-item-list]");
+    if (!dragging || !targetList || !sourceList || targetList !== sourceList) return;
+    event.preventDefault();
+    const target = event.target.closest("[data-checklist-item-id]");
+    if (!target || target === dragging || target.closest("[data-checklist-item-list]") !== sourceList) return;
+    const rect = target.getBoundingClientRect();
+    const placeAfter = event.clientY > rect.top + rect.height / 2;
+    target.parentNode.insertBefore(dragging, placeAfter ? target.nextSibling : target);
+    return;
+  }
+
   const draggingId = checklistState.draggingSectionId;
   if (!draggingId) return;
   const target = event.target.closest("[data-checklist-section-id]");
@@ -4381,14 +4420,36 @@ function handleChecklistDragOver(event) {
 }
 
 function handleChecklistDrop(event) {
+  if (checklistState.draggingItemId) {
+    event.preventDefault();
+    finishChecklistItemDrag(true);
+    return;
+  }
   if (!checklistState.draggingSectionId) return;
   event.preventDefault();
   finishChecklistModuleDrag(true);
 }
 
 function handleChecklistDragEnd() {
+  if (checklistState.draggingItemId) {
+    finishChecklistItemDrag(false);
+    return;
+  }
   if (!checklistState.draggingSectionId) return;
   finishChecklistModuleDrag(false);
+}
+
+function finishChecklistItemDrag(showMessage = false) {
+  const wasDragging = Boolean(checklistState.draggingItemId);
+  const dragging = document.querySelector(".checklist-item-row.is-dragging");
+  if (dragging) dragging.classList.remove("is-dragging");
+  checklistState.draggingItemId = "";
+  if (!wasDragging) return;
+  syncChecklistBuilderFromDom();
+  renderChecklistAssignmentPanel();
+  renderChecklistMetrics();
+  renderChecklistPreview();
+  if (showMessage) showChecklistMessage("Checklist item order updated.");
 }
 
 function finishChecklistModuleDrag(showMessage = false) {
@@ -4427,6 +4488,12 @@ function handleChecklistClick(event) {
   const saveSection = event.target.closest("[data-checklist-save-section]");
   if (saveSection) {
     void saveChecklistModule(saveSection.dataset.checklistSaveSection);
+    return;
+  }
+
+  const toggleSection = event.target.closest("[data-checklist-toggle-section]");
+  if (toggleSection) {
+    toggleChecklistSectionCollapse(toggleSection.dataset.checklistToggleSection);
     return;
   }
 
@@ -4478,6 +4545,27 @@ function handleChecklistClick(event) {
 
   if (event.target.closest("[data-checklist-apply-units]")) {
     void applyChecklistToUnits();
+  }
+}
+
+function toggleChecklistSectionCollapse(sectionId) {
+  if (!sectionId) return;
+  const section = document.querySelector(`[data-checklist-section-id="${selectorValue(sectionId)}"]`);
+  if (!section) return;
+  const body = section.querySelector("[data-checklist-section-body]");
+  const button = section.querySelector("[data-checklist-toggle-section]");
+  const isCollapsed = !section.classList.contains("is-collapsed");
+  section.classList.toggle("is-collapsed", isCollapsed);
+  if (body) body.hidden = isCollapsed;
+  if (isCollapsed) {
+    checklistState.collapsedSectionIds.add(sectionId);
+  } else {
+    checklistState.collapsedSectionIds.delete(sectionId);
+  }
+  if (button) {
+    button.setAttribute("aria-expanded", isCollapsed ? "false" : "true");
+    button.setAttribute("aria-label", isCollapsed ? "Expand module" : "Collapse module");
+    button.innerHTML = icon(isCollapsed ? "chevron-right" : "chevron-down");
   }
 }
 
@@ -4718,6 +4806,7 @@ function selectChecklistTemplate(id) {
   checklistState.selectedTemplateId = id || "";
   const selected = checklistState.templates.find((template) => template.id === id);
   checklistState.builder = selected ? normalizeChecklistTemplate(selected) : createBlankChecklistTemplate();
+  checklistState.collapsedSectionIds.clear();
   renderChecklistData();
   showChecklistMessage(selected ? `Editing ${selected.name}.` : "Started a new unsaved checklist.");
 }
@@ -4725,6 +4814,7 @@ function selectChecklistTemplate(id) {
 function startNewChecklistTemplate() {
   checklistState.selectedTemplateId = "";
   checklistState.builder = createBlankChecklistTemplate();
+  checklistState.collapsedSectionIds.clear();
   renderChecklistData();
   document.getElementById("checklist_template_name")?.focus();
   showChecklistMessage("Started a new checklist.");

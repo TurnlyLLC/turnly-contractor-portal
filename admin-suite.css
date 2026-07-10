@@ -2510,9 +2510,19 @@ a {
   padding: 12px;
 }
 
-.checklist-section-card.is-dragging {
+.checklist-section-card.is-dragging,
+.checklist-item-row.is-dragging {
   border-color: rgba(0, 214, 163, 0.58);
   opacity: 0.58;
+}
+
+.checklist-section-body {
+  display: grid;
+  gap: 12px;
+}
+
+.checklist-section-body[hidden] {
+  display: none;
 }
 
 .checklist-room-card {
@@ -2536,7 +2546,11 @@ a {
 }
 
 .checklist-section-head {
-  grid-template-columns: 36px minmax(0, 1fr) auto 36px;
+  grid-template-columns: 36px 36px minmax(0, 1fr) auto 36px;
+}
+
+.checklist-collapse-btn {
+  align-self: end;
 }
 
 .checklist-drag-handle {
@@ -2562,6 +2576,11 @@ a {
   color: var(--suite-green);
 }
 
+.checklist-item-drag-handle {
+  align-self: stretch;
+  min-height: 58px;
+}
+
 .checklist-save-module-btn {
   min-width: 138px;
   white-space: nowrap;
@@ -2577,7 +2596,7 @@ a {
 }
 
 .checklist-item-row {
-  grid-template-columns: minmax(96px, 0.13fr) minmax(112px, 0.15fr) minmax(190px, 0.8fr) minmax(190px, 0.8fr) minmax(210px, 0.34fr) 36px;
+  grid-template-columns: 36px minmax(96px, 0.13fr) minmax(112px, 0.15fr) minmax(190px, 0.8fr) minmax(190px, 0.8fr) minmax(210px, 0.34fr) 36px;
 }
 
 .checklist-module-description {
