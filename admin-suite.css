@@ -2314,7 +2314,7 @@ a {
 .property-unit-row {
   display: grid;
   gap: 10px;
-  grid-template-columns: minmax(160px, 1.3fr) minmax(104px, 0.7fr) minmax(126px, 0.85fr) minmax(126px, 0.85fr) minmax(96px, 0.7fr) minmax(160px, 0.9fr);
+  grid-template-columns: minmax(150px, 1.2fr) repeat(3, minmax(82px, 0.55fr)) minmax(116px, 0.8fr) minmax(116px, 0.8fr) minmax(92px, 0.6fr) minmax(150px, 0.9fr);
 }
 
 .property-unit-quick-form {
@@ -2322,7 +2322,7 @@ a {
   background: rgba(0, 214, 163, 0.055);
   border: 1px solid rgba(0, 214, 163, 0.18);
   border-radius: 8px;
-  grid-template-columns: minmax(160px, 1.3fr) minmax(104px, 0.7fr) minmax(126px, 0.85fr) minmax(126px, 0.85fr) minmax(128px, 0.8fr);
+  grid-template-columns: minmax(150px, 1.2fr) repeat(3, minmax(82px, 0.55fr)) minmax(116px, 0.8fr) minmax(116px, 0.8fr) minmax(128px, 0.8fr);
   padding: 12px;
 }
 
@@ -4035,7 +4035,7 @@ a {
   .property-unit-quick-form,
   .property-unit-table-head,
   .property-unit-row {
-    grid-template-columns: minmax(160px, 1.2fr) repeat(4, minmax(96px, 0.8fr));
+    grid-template-columns: minmax(150px, 1.2fr) repeat(4, minmax(84px, 0.75fr));
   }
 
   .property-unit-table-head span:last-child {

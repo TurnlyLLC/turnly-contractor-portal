@@ -177,6 +177,14 @@ function ensureBulkModal() {
                 <input name="square_feet" type="number" min="0" step="1" inputmode="decimal" />
               </label>
               <label class="property-unit-bulk-field">
+                <span><input type="checkbox" name="apply_bedroom_count" /> Bedrooms</span>
+                <input name="bedroom_count" type="number" min="0" step="1" inputmode="decimal" />
+              </label>
+              <label class="property-unit-bulk-field">
+                <span><input type="checkbox" name="apply_bathroom_count" /> Bathrooms</span>
+                <input name="bathroom_count" type="number" min="0" step="0.5" inputmode="decimal" />
+              </label>
+              <label class="property-unit-bulk-field">
                 <span><input type="checkbox" name="apply_customer_price" /> Customer Charge</span>
                 <input name="customer_price" type="number" min="0" step="0.01" inputmode="decimal" />
               </label>
@@ -256,7 +264,7 @@ function renderUnitChoices() {
             <input type="checkbox" data-bulk-unit-id="${escapeHtml(unit.id)}" ${bulkState.selectedUnitIds.has(unit.id) ? "checked" : ""} />
             <span>
               <strong>${escapeHtml(unit.unit_name || "Unnamed unit")}</strong>
-              <small>${escapeHtml(Number(unit.square_feet || 0).toLocaleString())} sq ft | ${escapeHtml(money(unit.customer_price))} customer | ${escapeHtml(money(unit.contractor_pay))} contractor</small>
+              <small>${escapeHtml(Number(unit.bedroom_count || 0).toLocaleString(undefined, { maximumFractionDigits: 1 }))} bed | ${escapeHtml(Number(unit.bathroom_count || 0).toLocaleString(undefined, { maximumFractionDigits: 1 }))} bath | ${escapeHtml(Number(unit.square_feet || 0).toLocaleString())} sq ft | ${escapeHtml(money(unit.customer_price))} customer | ${escapeHtml(money(unit.contractor_pay))} contractor</small>
             </span>
           </label>
         `).join("") : `<div class="property-unit-bulk-empty">No units found for this property.</div>`}
@@ -378,13 +386,19 @@ function parseBulkNumber(form, name, label) {
   if (!raw) throw new Error(`${label} needs a value.`);
   const number = Number(raw.replace(/[$,\s]/g, ""));
   if (!Number.isFinite(number) || number < 0) throw new Error(`${label} must be zero or higher.`);
-  return name === "square_feet" ? Math.round(number) : number;
+  return name === "square_feet" || name === "bedroom_count" ? Math.round(number) : number;
 }
 
 function collectBulkPayload(form) {
   const payload = {};
   if (form.elements.apply_square_feet?.checked) {
     payload.square_feet = parseBulkNumber(form, "square_feet", "Sq Ft");
+  }
+  if (form.elements.apply_bedroom_count?.checked) {
+    payload.bedroom_count = parseBulkNumber(form, "bedroom_count", "Bedrooms");
+  }
+  if (form.elements.apply_bathroom_count?.checked) {
+    payload.bathroom_count = parseBulkNumber(form, "bathroom_count", "Bathrooms");
   }
   if (form.elements.apply_customer_price?.checked) {
     payload.customer_price = parseBulkNumber(form, "customer_price", "Customer Charge");
@@ -528,7 +542,7 @@ function bindBulkEvents() {
       return;
     }
 
-    const field = event.target?.closest?.("#propertyUnitBulkForm input[name='square_feet'], #propertyUnitBulkForm input[name='customer_price'], #propertyUnitBulkForm input[name='contractor_pay']");
+    const field = event.target?.closest?.("#propertyUnitBulkForm input[name='square_feet'], #propertyUnitBulkForm input[name='bedroom_count'], #propertyUnitBulkForm input[name='bathroom_count'], #propertyUnitBulkForm input[name='customer_price'], #propertyUnitBulkForm input[name='contractor_pay']");
     if (field) {
       const form = document.getElementById("propertyUnitBulkForm");
       const checkboxName = field.name === "contractor_pay" ? "apply_contract_pay" : `apply_${field.name}`;
@@ -668,7 +682,7 @@ function installBulkStyles() {
     }
     .property-unit-bulk-unit-group-head > div { display: flex; gap: 6px; }
     .property-unit-bulk-unit span { display: grid; gap: 2px; min-width: 0; }
-    .property-unit-bulk-field-grid { display: grid; gap: 10px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .property-unit-bulk-field-grid { display: grid; gap: 10px; grid-template-columns: repeat(5, minmax(0, 1fr)); }
     .property-unit-bulk-field { color: var(--suite-text); display: grid; font-size: 12px; font-weight: 800; gap: 7px; }
     .property-unit-bulk-field > span { align-items: center; display: flex; gap: 7px; }
     .property-unit-bulk-feedback { margin: 0; min-height: 18px; }
