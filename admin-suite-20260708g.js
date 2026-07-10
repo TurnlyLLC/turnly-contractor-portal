@@ -8063,7 +8063,7 @@ function handleAssignmentClick(event) {
 
   const bulkDelete = event.target.closest("[data-assignment-bulk-delete]");
   if (bulkDelete) {
-    void deleteSelectedAssignments();
+    void deleteSelectedCompletedAssignments();
     return;
   }
 
@@ -8121,6 +8121,12 @@ function handleAssignmentClick(event) {
   const action = event.target.closest("[data-assignment-action]");
   if (action) {
     void updateAssignmentStatus(action.dataset.assignmentId, action.dataset.assignmentAction);
+    return;
+  }
+
+  const deleteCompleted = event.target.closest("[data-assignment-delete-completed]");
+  if (deleteCompleted) {
+    void deleteCompletedAssignment(deleteCompleted.dataset.assignmentDeleteCompleted);
     return;
   }
 
@@ -8421,6 +8427,8 @@ function renderAssignmentBulkControls(pageRows = []) {
   if (!target) return;
   const visibleIds = pageRows.map((row) => String(row.id || "")).filter(Boolean);
   const selectedRows = selectedAssignmentRows();
+  const selectedCompletedRows = selectedRows.filter(isCompletedContractorAssignment);
+  const canDeleteCompleted = Boolean(selectedRows.length && selectedCompletedRows.length === selectedRows.length && !assignmentState.isBulkSaving);
   const selectedVisibleCount = visibleIds.filter((id) => assignmentState.selectedIds.has(id)).length;
   const allVisibleSelected = Boolean(visibleIds.length && selectedVisibleCount === visibleIds.length);
   target.innerHTML = `
@@ -8435,7 +8443,7 @@ function renderAssignmentBulkControls(pageRows = []) {
       </div>
       <div class="assignment-bulk-button-row">
         <button class="secondary-action" type="button" data-assignment-bulk-edit ${selectedRows.length && !assignmentState.isBulkSaving ? "" : "disabled"}>${icon("settings")}<span>Bulk Edit</span></button>
-        <button class="secondary-action danger-action" type="button" data-assignment-bulk-delete ${selectedRows.length && !assignmentState.isBulkSaving ? "" : "disabled"}>${icon("trash")}<span>Bulk Delete</span></button>
+        <button class="secondary-action danger-action" type="button" data-assignment-bulk-delete ${canDeleteCompleted ? "" : "disabled"} title="Only completed contractor jobs can be deleted">${icon("trash")}<span>Delete Completed</span></button>
       </div>
     </div>
   `;
@@ -8546,6 +8554,7 @@ function assignmentNotesPreview(row) {
 
 function assignmentRowActions(row, status, id) {
   const actions = [];
+  const canDeleteCompleted = isCompletedContractorAssignment(row);
   if (status === "preferred-pending") {
     actions.push(["open", "Release"]);
   }
@@ -8561,10 +8570,12 @@ function assignmentRowActions(row, status, id) {
   if (["cancelled", "declined"].includes(status)) {
     actions.push(["reopen", "Reopen"]);
   }
-  const actionButtons = actions.length
-    ? actions.map(([action, label]) => `<button class="table-action-button" type="button" data-assignment-id="${id}" data-assignment-action="${esc(action)}">${esc(label)}</button>`).join("")
-    : `<span class="assignment-action-muted">Done</span>`;
-  return `${assignmentStatusInlineSelect(row, id)}${actionButtons}`;
+  const actionButtons = [
+    ...actions.map(([action, label]) => `<button class="table-action-button" type="button" data-assignment-id="${id}" data-assignment-action="${esc(action)}">${esc(label)}</button>`),
+    canDeleteCompleted ? `<button class="table-action-button danger-action" type="button" data-assignment-delete-completed="${esc(id)}">${icon("trash")}<span>Delete</span></button>` : ""
+  ].filter(Boolean).join("");
+  const doneText = !actions.length && !canDeleteCompleted ? `<span class="assignment-action-muted">Done</span>` : "";
+  return `${assignmentStatusInlineSelect(row, id)}${actionButtons}${doneText}`;
 }
 
 function assignmentStatusInlineSelect(row, id) {
@@ -8866,31 +8877,63 @@ async function saveAssignmentBulkForm(event) {
   showAssignmentMessage(`${rows.length} assignment${rows.length === 1 ? "" : "s"} updated in Supabase.`);
 }
 
-async function deleteSelectedAssignments() {
-  if (!suiteSupabase || assignmentState.isBulkSaving) return;
+async function deleteSelectedCompletedAssignments() {
   const rows = selectedAssignmentRows();
-  const ids = rows.map((row) => row.id).filter(Boolean);
-  if (!ids.length) {
-    showAssignmentMessage("Select one or more assignments first.", true);
+  if (!rows.length) {
+    showAssignmentMessage("Select one or more completed contractor jobs first.", true);
     return;
   }
-  const label = ids.length === 1
-    ? (rows[0].title || rows[0].property_name || assignmentShortId(rows[0]))
-    : `${ids.length} selected assignments`;
-  if (!window.confirm(`Delete ${label}? This cannot be undone.`)) return;
+  await deleteCompletedAssignments(rows);
+}
+
+async function deleteCompletedAssignment(id) {
+  const row = assignmentState.rows.find((item) => String(item.id || "") === String(id || ""));
+  if (!row) {
+    showAssignmentMessage("That assignment could not be found.", true);
+    return;
+  }
+  await deleteCompletedAssignments([row]);
+}
+
+async function deleteCompletedAssignments(rows = []) {
+  if (!suiteSupabase || assignmentState.isBulkSaving) return;
+  const ids = rows.map((row) => row.id).filter(Boolean);
+  const invalidRows = rows.filter((row) => !isCompletedContractorAssignment(row));
+  if (!ids.length) {
+    showAssignmentMessage("Choose a completed contractor job first.", true);
+    return;
+  }
+  if (invalidRows.length) {
+    showAssignmentMessage("Only completed contractor jobs can be deleted from this action.", true);
+    return;
+  }
+
+  const label = assignmentDeleteLabel(rows);
+  const firstConfirmed = window.confirm(
+    `Delete ${label}?\n\nThis permanently removes the completed contractor job from Supabase.`
+  );
+  if (!firstConfirmed) return;
+
+  const typed = window.prompt(
+    `Second confirmation required.\n\nType DELETE to permanently delete ${label}.`
+  );
+  if (typed !== "DELETE") {
+    showAssignmentMessage("Delete cancelled. The second confirmation did not match DELETE.", true);
+    return;
+  }
 
   assignmentState.isBulkSaving = true;
   renderAssignmentBulkControls(getCurrentAssignmentPageRows());
-  showAssignmentMessage(`Deleting ${ids.length} assignment${ids.length === 1 ? "" : "s"}...`);
-  const { error } = await suiteSupabase
-    .from(assignmentTable)
-    .delete()
-    .in("id", ids);
+  showAssignmentMessage(`Deleting ${ids.length} completed contractor job${ids.length === 1 ? "" : "s"}...`);
+  const { data, error } = await suiteSupabase.rpc("delete_completed_assignment_blocks", {
+    target_assignment_ids: ids,
+    confirmation_text: "DELETE"
+  });
   assignmentState.isBulkSaving = false;
 
   if (error) {
     renderAssignmentBulkControls(getCurrentAssignmentPageRows());
-    showAssignmentMessage("Unable to delete assignments: " + error.message, true);
+    showAssignmentMessage("Unable to delete completed jobs: " + error.message, true);
     return;
   }
 
@@ -8898,7 +8941,8 @@ async function deleteSelectedAssignments() {
   assignmentState.rows = assignmentState.rows.filter((row) => !deletedIds.has(String(row.id || "")));
   clearAssignmentSelection();
   renderAssignmentData();
-  showAssignmentMessage(`${ids.length} assignment${ids.length === 1 ? "" : "s"} deleted from Supabase.`);
+  const deletedCount = Number(data) || ids.length;
+  showAssignmentMessage(`${deletedCount} completed contractor job${deletedCount === 1 ? "" : "s"} deleted from Supabase.`);
 }
 
 async function saveAssignmentForm(event) {
@@ -9661,6 +9705,27 @@ function assignmentRoutingMeta(row) {
 
 function assignmentHasContractor(row) {
   return Boolean(row?.assigned_to || row?.claimed_by || assignmentPreferredIds(row).length || row?.assigned_to_name || row?.claimed_by_name);
+}
+
+function isCompletedContractorAssignment(row = {}) {
+  return assignmentStatusKey(row.status) === "completed"
+    && Boolean(
+      row.assigned_to
+      || row.claimed_by
+      || row.completed_by
+      || row.assigned_to_name
+      || row.claimed_by_name
+      || row.assigned_to_email
+      || row.claimed_by_email
+    );
+}
+
+function assignmentDeleteLabel(rows = []) {
+  if (rows.length === 1) {
+    const row = rows[0] || {};
+    return row.title || row.property_name || assignmentShortId(row) || "this completed contractor job";
+  }
+  return `${rows.length} completed contractor jobs`;
 }
 
 function isAssignmentClaimedHistory(row) {
