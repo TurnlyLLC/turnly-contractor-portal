@@ -13,6 +13,7 @@ const bulkState = {
   selectedUnitIds: new Set(),
   autoSelectPropertyIds: new Set(),
   propertySearch: "",
+  unitSearch: "",
   isLoadingUnits: false,
   isSaving: false,
   observer: null
@@ -163,6 +164,10 @@ function ensureBulkModal() {
               <button class="secondary-action" type="button" data-property-unit-select-visible>Select visible</button>
               <button class="secondary-action" type="button" data-property-unit-clear-visible>Clear visible</button>
             </div>
+            <label class="property-unit-bulk-search">
+              <span class="sr-only">Search unit number</span>
+              <input id="propertyUnitBulkUnitSearch" type="search" placeholder="Type a unit number..." />
+            </label>
             <div id="propertyUnitBulkUnits" class="property-unit-bulk-unit-list"></div>
           </section>
 
@@ -232,6 +237,7 @@ function renderUnitChoices() {
   if (!list) return;
 
   const propertyIds = Array.from(bulkState.selectedPropertyIds);
+  const unitSearch = bulkState.unitSearch.trim().toLowerCase();
   if (bulkState.isLoadingUnits) {
     list.innerHTML = `<div class="property-unit-bulk-empty">Loading units...</div>`;
     updateBulkSummary();
@@ -245,15 +251,13 @@ function renderUnitChoices() {
   }
 
   const html = propertyIds.map((propertyId) => {
-    const units = bulkState.units
-      .filter((unit) => unit.property_id === propertyId)
-      .sort((a, b) => String(a.unit_name || "").localeCompare(String(b.unit_name || ""), undefined, { numeric: true, sensitivity: "base" }));
+    const units = visibleBulkUnitsForProperty(propertyId);
 
     return `
       <section class="property-unit-bulk-unit-group">
         <div class="property-unit-bulk-unit-group-head">
           <strong>${escapeHtml(propertyTitle(propertyId))}</strong>
-          <span>${plural(units.length, "unit")}</span>
+          <span>${unitSearch ? `${plural(units.length, "match", "matches")}` : plural(units.length, "unit")}</span>
           <div>
             <button class="secondary-action" type="button" data-bulk-property-select-units="${escapeHtml(propertyId)}">All</button>
             <button class="secondary-action" type="button" data-bulk-property-clear-units="${escapeHtml(propertyId)}">None</button>
@@ -267,13 +271,21 @@ function renderUnitChoices() {
               <small>${escapeHtml(Number(unit.bedroom_count || 0).toLocaleString(undefined, { maximumFractionDigits: 1 }))} bed | ${escapeHtml(Number(unit.bathroom_count || 0).toLocaleString(undefined, { maximumFractionDigits: 1 }))} bath | ${escapeHtml(Number(unit.square_feet || 0).toLocaleString())} sq ft | ${escapeHtml(money(unit.customer_price))} customer | ${escapeHtml(money(unit.contractor_pay))} contractor</small>
             </span>
           </label>
-        `).join("") : `<div class="property-unit-bulk-empty">No units found for this property.</div>`}
+        `).join("") : `<div class="property-unit-bulk-empty">${unitSearch ? "No matching unit numbers for this property." : "No units found for this property."}</div>`}
       </section>
     `;
   }).join("");
 
   list.innerHTML = html;
   updateBulkSummary();
+}
+
+function visibleBulkUnitsForProperty(propertyId) {
+  const term = bulkState.unitSearch.trim().toLowerCase();
+  return bulkState.units
+    .filter((unit) => unit.property_id === propertyId)
+    .filter((unit) => !term || String(unit.unit_name || "").toLowerCase().includes(term))
+    .sort((a, b) => String(a.unit_name || "").localeCompare(String(b.unit_name || ""), undefined, { numeric: true, sensitivity: "base" }));
 }
 
 function updateBulkSummary() {
@@ -353,6 +365,7 @@ async function openBulkModal() {
   bulkState.selectedUnitIds.clear();
   bulkState.autoSelectPropertyIds.clear();
   bulkState.propertySearch = "";
+  bulkState.unitSearch = "";
 
   modal.hidden = false;
   document.body.classList.add("property-unit-bulk-open");
@@ -367,6 +380,8 @@ async function openBulkModal() {
     }
     const search = document.getElementById("propertyUnitBulkPropertySearch");
     if (search) search.value = "";
+    const unitSearch = document.getElementById("propertyUnitBulkUnitSearch");
+    if (unitSearch) unitSearch.value = "";
     renderPropertyChoices();
     setFeedback(selectedPropertyId ? "" : "Choose one or more properties to begin.");
     await loadUnitsForSelection();
@@ -459,12 +474,10 @@ function selectedVisibleUnitIds() {
 }
 
 function setPropertyUnitsSelected(propertyId, selected) {
-  bulkState.units
-    .filter((unit) => unit.property_id === propertyId)
-    .forEach((unit) => {
-      if (selected) bulkState.selectedUnitIds.add(unit.id);
-      else bulkState.selectedUnitIds.delete(unit.id);
-    });
+  visibleBulkUnitsForProperty(propertyId).forEach((unit) => {
+    if (selected) bulkState.selectedUnitIds.add(unit.id);
+    else bulkState.selectedUnitIds.delete(unit.id);
+  });
   renderUnitChoices();
 }
 
@@ -539,6 +552,12 @@ function bindBulkEvents() {
     if (event.target?.id === "propertyUnitBulkPropertySearch") {
       bulkState.propertySearch = event.target.value || "";
       renderPropertyChoices();
+      return;
+    }
+
+    if (event.target?.id === "propertyUnitBulkUnitSearch") {
+      bulkState.unitSearch = event.target.value || "";
+      renderUnitChoices();
       return;
     }
 
