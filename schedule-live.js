@@ -9,6 +9,7 @@ const state = {
   view: "week",
   dateCursor: new Date(),
   rows: [],
+  deletingAssignmentIds: new Set(),
   filters: {
     property: "all",
     contractor: "all",
@@ -112,10 +113,17 @@ function bindScheduleEvents() {
   if (!root || root.dataset.bound) return;
   root.dataset.bound = "true";
 
-  root.addEventListener("click", (event) => {
+  root.addEventListener("click", async (event) => {
     const closeDetail = event.target.closest("[data-schedule-detail-close]");
     if (closeDetail) {
       closeScheduleAssignmentModal();
+      return;
+    }
+
+    const deleteButton = event.target.closest("[data-schedule-assignment-delete]");
+    if (deleteButton) {
+      event.preventDefault();
+      await deleteScheduleAssignment(deleteButton.dataset.scheduleAssignmentDelete, deleteButton);
       return;
     }
 
@@ -207,6 +215,45 @@ async function loadScheduleRows() {
   showMessage(state.rows.length
     ? `${state.rows.length.toLocaleString()} assignment job${state.rows.length === 1 ? "" : "s"} synced from Supabase.`
     : "Synced with Supabase. No assignment jobs are scheduled yet.");
+  renderSchedule();
+}
+
+async function deleteScheduleAssignment(id, button = null) {
+  if (!id || state.deletingAssignmentIds.has(id)) return;
+  const row = state.rows.find((item) => String(item.id || "") === String(id));
+  const label = row?.title || row?.property_name || "this assignment";
+  const firstConfirm = window.confirm(`Delete ${label} from the schedule and all linked Supabase records? This cannot be undone.`);
+  if (!firstConfirm) return;
+  const typed = window.prompt("Type DELETE to permanently delete this assignment.");
+  if (typed !== "DELETE") {
+    showMessage("Delete cancelled. Type DELETE exactly to confirm.", true);
+    return;
+  }
+  if (!supabase) {
+    showMessage("Supabase config is missing. Unable to delete the assignment.", true);
+    return;
+  }
+
+  state.deletingAssignmentIds.add(id);
+  if (button) button.disabled = true;
+  showMessage("Deleting assignment from Supabase...");
+
+  const { data, error } = await supabase.rpc("delete_schedule_assignment_blocks", {
+    target_assignment_ids: [id],
+    confirmation_text: "DELETE"
+  });
+
+  state.deletingAssignmentIds.delete(id);
+  if (button) button.disabled = false;
+
+  if (error) {
+    showMessage("Unable to delete assignment: " + error.message, true);
+    return;
+  }
+
+  state.rows = state.rows.filter((item) => String(item.id || "") !== String(id));
+  closeScheduleAssignmentModal();
+  showMessage(`${Number(data || 1).toLocaleString()} assignment deleted from Supabase.`);
   renderSchedule();
 }
 
@@ -473,6 +520,13 @@ function scheduleAssignmentDetail(row) {
         <div><span>Supplies Notes</span><p>${escapeHtml(notes.supplies || "No supplies notes entered.")}</p></div>
         <div><span>Special Instructions</span><p>${escapeHtml(notes.special || "No special instructions entered.")}</p></div>
       </div>
+      <div class="schedule-assignment-danger-zone">
+        <div>
+          <strong>Delete Assignment</strong>
+          <p>Removes this calendar assignment and linked QA/job records from Supabase.</p>
+        </div>
+        <button class="secondary-action danger-btn" type="button" data-schedule-assignment-delete="${escapeHtml(String(row.id || ""))}"><span>Delete Assignment</span></button>
+      </div>
     </section>
   `;
 }
@@ -676,12 +730,20 @@ function escapeHtml(value) {
 }
 
 function injectScheduleStyles() {
-  if (document.getElementById("scheduleLiveStyles")) return;
-  document.head.insertAdjacentHTML("beforeend", `
-    <style id="scheduleLiveStyles">
+  if (!document.getElementById("scheduleLiveStyles")) {
+    document.head.insertAdjacentHTML("beforeend", `
+      <style id="scheduleLiveStyles">
       .schedule-live-panel{min-width:0}.schedule-live-controls{grid-template-columns:auto auto auto minmax(220px,1fr) auto}.schedule-live-controls .secondary-action{min-height:32px}.schedule-dynamic-calendar{min-width:0}.schedule-summary-list{display:grid;gap:8px}.schedule-summary-list>div{align-items:center;background:rgba(255,255,255,.035);border:1px solid var(--suite-border-soft);border-radius:8px;display:flex;justify-content:space-between;min-height:42px;padding:10px 12px}.schedule-summary-list span{color:var(--suite-soft);font-size:11px;font-weight:900;text-transform:uppercase}.schedule-summary-list strong{color:var(--suite-text);font-size:18px}.schedule-loading{border:1px solid var(--suite-border-soft);border-radius:8px;color:var(--suite-soft);padding:24px}.schedule-day-calendar{overflow:auto}.day-calendar .schedule-hour-row{display:grid;grid-template-columns:74px minmax(0,1fr);min-height:48px;padding:0}.schedule-hour-row time{align-items:start;border-right:1px solid var(--suite-border-soft);display:flex;justify-content:center;padding-top:10px}.schedule-hour-events,.schedule-day-events,.schedule-month-events{display:grid;gap:6px;min-width:0}.schedule-hour-events{align-content:start;padding:6px}.schedule-week-columns{grid-template-columns:repeat(7,minmax(172px,1fr));overflow-x:auto}.week-calendar.schedule-week-columns>div{display:flex;flex-direction:column;min-height:560px;padding:0}.schedule-week-day header{align-items:center;background:rgba(7,18,32,.68);border-bottom:1px solid var(--suite-border-soft);display:flex;justify-content:space-between;min-height:42px;padding:10px}.schedule-week-day.today header{color:var(--suite-green)}.schedule-week-day header span{color:var(--suite-soft);font-size:11px;font-weight:900}.schedule-day-events{align-content:start;flex:1;padding:8px}.schedule-day-events>p{color:var(--suite-soft);font-size:12px;margin:0}.schedule-event-card{background:rgba(4,14,25,.78);border:1px solid rgba(124,151,176,.16);border-left:3px solid rgba(57,169,255,.82);border-radius:7px;display:grid;gap:4px;padding:8px}.schedule-event-card strong,.schedule-event-card p,.schedule-event-card small{margin:0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.schedule-event-card strong{color:var(--suite-text);font-size:12px}.schedule-event-card p,.schedule-event-card small{color:var(--suite-soft);font-size:11px}.schedule-event-time{color:var(--suite-green);font-size:10px;font-weight:900;text-transform:uppercase}.schedule-event-badges{display:flex;flex-wrap:wrap;gap:4px}.schedule-event-badges .status-badge{font-size:9px;min-height:18px;padding:2px 6px}.schedule-acceptance-badge.is-accepted{background:rgba(0,214,163,.16);color:var(--suite-green)}.schedule-acceptance-badge.is-assigned,.schedule-acceptance-badge.is-pending{background:rgba(255,212,61,.14);color:var(--suite-yellow)}.schedule-acceptance-badge.is-not-accepted{background:rgba(255,91,104,.12);color:var(--suite-red)}.schedule-live-month .schedule-month-grid{min-width:980px;overflow-x:auto}.schedule-month-grid>.schedule-month-cell{border-bottom:1px solid var(--suite-border-soft);border-right:1px solid var(--suite-border-soft);padding:14px}.schedule-month-cell{align-content:start;color:#e3eef9;display:grid;gap:8px;min-height:132px}.schedule-month-cell>span{font-size:12px;font-weight:900}.schedule-month-cell.muted{color:rgba(227,238,249,.36)}.schedule-month-cell.today{background:rgba(0,214,163,.06);color:var(--suite-green)}.schedule-event-card.compact{border-left-width:2px;gap:2px;padding:5px 6px}.schedule-event-card.compact strong{font-size:10px}.schedule-event-card.compact .schedule-event-time{font-size:9px}.schedule-event-card.compact .schedule-event-badges .status-badge:not(.schedule-acceptance-badge){display:none}.schedule-month-events>small{color:var(--suite-soft);font-size:10px;font-weight:900}@media(max-width:620px){.schedule-live-controls{grid-template-columns:1fr}.schedule-week-columns{grid-template-columns:repeat(7,minmax(180px,1fr))}}
-    </style>
-  `);
+      </style>
+    `);
+  }
+  if (!document.getElementById("scheduleLiveActionStyles")) {
+    document.head.insertAdjacentHTML("beforeend", `
+      <style id="scheduleLiveActionStyles">
+        .schedule-assignment-danger-zone{align-items:center;background:rgba(255,91,104,.06);border:1px solid rgba(255,91,104,.24);border-radius:8px;display:flex;gap:16px;justify-content:space-between;margin-top:16px;padding:14px}.schedule-assignment-danger-zone strong{color:#fff;display:block;font-size:13px}.schedule-assignment-danger-zone p{color:var(--suite-soft);font-size:12px;margin:4px 0 0}.schedule-assignment-danger-zone .danger-btn{border-color:rgba(255,91,104,.7);color:var(--suite-red);min-width:150px}.schedule-assignment-danger-zone .danger-btn:disabled{cursor:wait;opacity:.58}@media(max-width:620px){.schedule-assignment-danger-zone{align-items:stretch;flex-direction:column}.schedule-assignment-danger-zone .danger-btn{width:100%}}
+      </style>
+    `);
+  }
 }
 
 if (document.readyState === "loading") {
