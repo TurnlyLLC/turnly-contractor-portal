@@ -113,7 +113,7 @@ if (!supabase) {
       );
     } else {
       await import("./contractor-portal.js");
-      await import("./contractor-job-flow-mobile.js?v=20260714-client-notes");
+      await import("./contractor-job-flow-mobile.js?v=20260714-satellite-map");
     }
   }
 }

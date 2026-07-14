@@ -84,7 +84,7 @@ function mapUrl(assignment, embed = true) {
   if (!query) return "";
   const encoded = encodeURIComponent(query);
   return embed
-    ? `https://www.google.com/maps?q=${encoded}&output=embed`
+    ? `https://www.google.com/maps?q=${encoded}&output=embed&t=k`
     : `https://www.google.com/maps/search/?api=1&query=${encoded}`;
 }
 

@@ -78,7 +78,7 @@ function getMapQuery(assignment) {
 
 function getMapEmbedUrl(assignment) {
   const query = getMapQuery(assignment);
-  return query ? `https://www.google.com/maps?q=${encodeURIComponent(query)}&output=embed` : "";
+  return query ? `https://www.google.com/maps?q=${encodeURIComponent(query)}&output=embed&t=k` : "";
 }
 
 async function geocodeAddress(address) {
