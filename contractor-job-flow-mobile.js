@@ -609,6 +609,7 @@ function metadataValue(assignment, keys) {
 }
 
 function compactAddress(row) {
+  if (row?.billing_address) return String(row.billing_address).trim();
   return [row?.address, row?.city, row?.state, row?.postal_code]
     .map((part) => String(part || "").trim())
     .filter(Boolean)
@@ -637,7 +638,7 @@ function normalizeText(value) {
 }
 
 function directoryAccessNotes(row) {
-  return row?.access_notes || row?.entry_notes || row?.gate_code || row?.special_instructions || row?.notes || "";
+  return row?.access_notes || row?.entry_notes || row?.gate_code || row?.special_instructions || "";
 }
 
 function assignmentUnit(assignment) {
@@ -748,9 +749,10 @@ function resolvedAddress(assignment) {
 }
 
 function resolvedAccessNotes(assignment) {
-  return directoryAccessNotes(activeDirectoryDetails?.client)
+  return metadataValue(assignment, ["access_notes", "entry_notes", "gate_code", "special_instructions"])
+    || directoryAccessNotes(activeDirectoryDetails?.client)
     || directoryAccessNotes(activeDirectoryDetails?.portalProperty)
-    || metadataValue(assignment, ["access_notes", "entry_notes", "gate_code"]);
+    || "";
 }
 
 function detailGrid(rows) {

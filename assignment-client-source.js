@@ -40,11 +40,17 @@ function clientPropertyTitle(row) {
 }
 
 function clientPropertyAddress(row) {
+  const billing = row?.billing_address || "";
+  if (billing) return billing;
   const street = row?.address || row?.street_address || row?.property_address || row?.site_address || row?.service_address || "";
   const city = row?.city || row?.property_city || row?.service_city || "";
   const state = row?.state || row?.property_state || row?.service_state || "";
   const postal = row?.postal_code || row?.zip || row?.zip_code || row?.property_zip || row?.service_zip || "";
   return [street, city, state, postal].filter(Boolean).join(", ");
+}
+
+function clientAccessNotes(row) {
+  return row?.access_notes || row?.entry_notes || row?.gate_code || "";
 }
 
 function serviceModelLabel(value) {
@@ -96,6 +102,15 @@ function unitInstructions(unit) {
 function setFieldValue(id, value) {
   const field = document.getElementById(id);
   if (field) field.value = value || "";
+}
+
+function setDefaultAccessNotes(value) {
+  const field = document.getElementById("special_instructions");
+  if (!field) return;
+  if (!field.value || field.dataset.clientGeneratedAccessNotes === "true") {
+    field.value = value || "";
+    field.dataset.clientGeneratedAccessNotes = value ? "true" : "";
+  }
 }
 
 function selectedClient() {
@@ -325,7 +340,9 @@ function applySelectedUnit(unit) {
   const baseScope = client?.default_scope || client?.unit_notes || "";
   const details = unitScopeDetails(unit);
   setFieldValue("scope", [baseScope, details].filter(Boolean).join("\n\n"));
-  setFieldValue("special_instructions", unitInstructions(unit));
+  const accessNotes = unitInstructions(unit) || clientAccessNotes(client);
+  setFieldValue("special_instructions", accessNotes);
+  document.getElementById("special_instructions")?.setAttribute("data-client-generated-access-notes", accessNotes ? "true" : "");
   if (unit?.contractor_pay !== undefined && unit?.contractor_pay !== null && unit?.contractor_pay !== "") {
     setFieldValue("pay_amount", unit.contractor_pay);
   }
@@ -392,7 +409,7 @@ function fillAssignmentFromClient() {
   setFieldValue("address", clientPropertyAddress(client));
   setFieldValue("service_type", service);
   setFieldValue("scope", client.default_scope || client.unit_notes || "");
-  setFieldValue("special_instructions", "");
+  setDefaultAccessNotes(clientAccessNotes(client));
 
   const titleField = document.getElementById("title");
   if (titleField && (!titleField.value || titleField.dataset.clientGeneratedTitle === "true")) {
@@ -495,6 +512,7 @@ function bindClientPropertySelect() {
 
   document.addEventListener("input", (event) => {
     if (event.target?.id === "title") event.target.dataset.clientGeneratedTitle = "false";
+    if (event.target?.id === "special_instructions") event.target.dataset.clientGeneratedAccessNotes = "false";
     if (event.target?.id === "assignmentUnitSearch") renderUnitPicker("", event.target.value || "");
   });
 

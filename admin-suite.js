@@ -184,6 +184,7 @@ const walkthroughState = {
 const clientTable = "clients";
 const clientOptionalColumns = [
   "company_name",
+  "billing_address",
   "property_name",
   "address",
   "city",
@@ -6400,13 +6401,10 @@ function clientForm(mode = "edit", row = null) {
         leadSelectField("clientType", "Client Type", clientTypeOptions, { emptyLabel: "Select type" }),
         leadInputField("clientRegion", "Region / Market"),
         leadInputField("clientProperties", "Properties", "number", { min: "0", step: "1" }),
-        clientFormSection("Property Details"),
-        leadInputField("clientPropertyName", "Property Name"),
-        leadInputField("clientAddress", "Address", "text", { className: "wide" }),
-        leadInputField("clientCity", "City"),
-        leadInputField("clientState", "State"),
-        leadInputField("clientPostalCode", "Postal Code"),
-        leadTextareaField("clientAccessNotes", "Access Notes", "wide"),
+        clientFormSection("Client Notes", "", "client-notes"),
+        leadTextareaField("clientNotes", "Private Client Notes", "wide"),
+        clientFormSection("Assignment Defaults", "", "assignment-defaults"),
+        leadTextareaField("clientAccessNotes", "Default Unit Access Notes", "wide"),
         leadSelectField("clientServiceModel", "Service Model", clientServiceModelOptions, { required: true }),
         leadInputField("clientUnitCount", "Units", "number", { min: "0", step: "1", className: "client-unit-field" }),
         clientMonthlyTurnoversField(),
@@ -6417,8 +6415,7 @@ function clientForm(mode = "edit", row = null) {
         leadInputField("clientContractStart", "Contract Start", "date"),
         leadInputField("clientRenewalDate", "Renewal Date", "date"),
         leadInputField("clientTags", "Tags", "text", { className: "wide", placeholder: "Separate tags with commas" }),
-        leadTextareaField("clientUnitNotes", "Unit Notes", "wide"),
-        leadTextareaField("clientNotes", "Notes", "wide")
+        leadTextareaField("clientUnitNotes", "Default Scope / Unit Notes", "wide")
       ])}
       <div class="lead-form-actions">
         ${isAdd ? "" : `<button id="clientDeleteBtn" class="secondary-action danger-action client-delete-action" type="button" data-client-delete-current>${icon("trash")}<span>Delete Client</span></button>`}
@@ -6846,6 +6843,7 @@ function getFilteredClients() {
       row.region,
       row.market,
       row.property_name,
+      row.billing_address,
       row.address,
       row.city,
       row.state,
@@ -7028,6 +7026,10 @@ function setClientFormValues(values) {
 
 function clientValue(id) {
   return (document.getElementById(id)?.value || "").trim();
+}
+
+function clientHasField(id) {
+  return Boolean(document.getElementById(id));
 }
 
 function clientServiceModelKey(value) {
@@ -7237,11 +7239,6 @@ function collectClientPayload() {
     region: clientValue("clientRegion"),
     market: clientValue("clientRegion"),
     property_count: Number.isFinite(propertyCount) && propertyCount >= 0 ? Math.floor(propertyCount) : 0,
-    property_name: clientValue("clientPropertyName"),
-    address: clientValue("clientAddress"),
-    city: clientValue("clientCity"),
-    state: clientValue("clientState"),
-    postal_code: clientValue("clientPostalCode"),
     access_notes: clientValue("clientAccessNotes"),
     service_model: serviceModel,
     unit_count: cleanUnitCount,
@@ -7261,6 +7258,15 @@ function collectClientPayload() {
     tags: clientValue("clientTags").split(",").map((tag) => tag.trim()).filter(Boolean),
     notes: clientValue("clientNotes")
   };
+  Object.entries({
+    property_name: "clientPropertyName",
+    address: "clientAddress",
+    city: "clientCity",
+    state: "clientState",
+    postal_code: "clientPostalCode"
+  }).forEach(([column, fieldId]) => {
+    if (clientHasField(fieldId)) payload[column] = clientValue(fieldId);
+  });
   if (!clientValue("clientId")) {
     payload.created_by = clientState.user?.id || null;
   }
@@ -7617,7 +7623,7 @@ function clientStatusLabel(status) {
 }
 
 function clientRegionText(row) {
-  const address = [row?.address, row?.city, row?.state, row?.postal_code].filter(Boolean).join(", ");
+  const address = row?.billing_address || [row?.address, row?.city, row?.state, row?.postal_code].filter(Boolean).join(", ");
   return address || [row?.client_type, row?.region || row?.market].filter(Boolean).join(" - ") || "No address, type, or market";
 }
 
@@ -8768,6 +8774,7 @@ function fillAssignmentFromProperty(propertyId) {
   setIfEmpty("property_name", assignmentPropertyTitle(row));
   setIfEmpty("address", assignmentPropertyAddress(row));
   setIfEmpty("service_type", row.service_type || row.property_type || "");
+  setIfEmpty("special_instructions", assignmentPropertyAccessNotes(row));
   const title = document.getElementById("title");
   if (title && !title.value) title.value = `${assignmentPropertyTitle(row)} Service`;
 }
@@ -8787,6 +8794,8 @@ function collectAssignmentPayloads() {
   const payAmount = Number(assignmentValue("pay_amount"));
   const groupId = frequency === "one_time" ? null : randomAssignmentGroupId();
   const status = preferredFirst ? "preferred_pending" : "open";
+  const selectedProperty = assignmentState.properties.find((item) => item.id === assignmentValue("property_id") || item.id === assignmentValue("propertySelect"));
+  const specialInstructions = assignmentValue("special_instructions") || assignmentPropertyAccessNotes(selectedProperty);
   const payload = {
     title: assignmentValue("title"),
     property_id: assignmentValue("property_id") || null,
@@ -8796,7 +8805,7 @@ function collectAssignmentPayloads() {
     pay_amount: Number.isFinite(payAmount) && payAmount >= 0 ? payAmount : 0,
     scope: assignmentValue("scope"),
     supplies_notes: assignmentValue("supplies_notes"),
-    special_instructions: assignmentValue("special_instructions"),
+    special_instructions: specialInstructions,
     priority: assignmentValue("priority") || "normal",
     status,
     assignment_type: frequency,
@@ -9514,7 +9523,11 @@ function assignmentPropertyTitle(row) {
 }
 
 function assignmentPropertyAddress(row) {
-  return [row?.address, row?.city, row?.state, row?.postal_code].filter(Boolean).join(", ");
+  return row?.billing_address || [row?.address, row?.city, row?.state, row?.postal_code].filter(Boolean).join(", ");
+}
+
+function assignmentPropertyAccessNotes(row) {
+  return row?.access_notes || row?.entry_notes || row?.gate_code || "";
 }
 
 function assignmentStatusKey(value) {

@@ -58,6 +58,11 @@ function mount(root) {
   root.addEventListener("change", (event) => {
     if (event.target?.id === "scheduleAssignmentProperty") fillProperty(event.target.value);
   });
+  root.addEventListener("input", (event) => {
+    if (event.target?.id === "scheduleAssignmentInstructions") {
+      event.target.dataset.generatedAccessNotes = "false";
+    }
+  });
   root.addEventListener("submit", (event) => {
     if (event.target?.id === "scheduleAssignmentForm") saveAssignment(event, root);
   });
@@ -218,7 +223,7 @@ function fillProperty(id) {
   setValue("scheduleAssignmentService", propertyService(property));
   if (!$("scheduleAssignmentTitle")?.value) setValue("scheduleAssignmentTitle", `Cleaning - ${title}`);
   if (!$("scheduleAssignmentScope")?.value) setValue("scheduleAssignmentScope", property.default_scope || property.unit_notes || "");
-  if (!$("scheduleAssignmentInstructions")?.value) setValue("scheduleAssignmentInstructions", property.special_instructions || property.notes || "");
+  setDefaultInstructions(propertyAccessNotes(property));
 }
 
 function fillAssignment(row) {
@@ -277,6 +282,7 @@ function payloadFromForm(options = {}) {
   const existingPropertyId = state.editingId ? state.editingRow?.property_id || null : null;
   const pay = Number(value("scheduleAssignmentPay"));
   const status = value("scheduleAssignmentStatus") || "open";
+  const specialInstructions = value("scheduleAssignmentInstructions") || propertyAccessNotes(property);
   const payload = {
     title: value("scheduleAssignmentTitle") || `Cleaning - ${value("scheduleAssignmentPropertyName") || propertyTitle(property) || "Scheduled Assignment"}`,
     property_id: propertyId || existingPropertyId || null,
@@ -285,7 +291,7 @@ function payloadFromForm(options = {}) {
     service_type: value("scheduleAssignmentService") || propertyService(property),
     pay_amount: Number.isFinite(pay) && pay >= 0 ? pay : 0,
     scope: value("scheduleAssignmentScope"),
-    special_instructions: value("scheduleAssignmentInstructions"),
+    special_instructions: specialInstructions,
     priority: value("scheduleAssignmentPriority") || "normal",
     status,
     start_window: start.toISOString(),
@@ -386,6 +392,15 @@ function setValue(id, text) {
   if (field) field.value = text ?? "";
 }
 
+function setDefaultInstructions(value) {
+  const field = $("scheduleAssignmentInstructions");
+  if (!field) return;
+  if (!field.value || field.dataset.generatedAccessNotes === "true") {
+    field.value = value || "";
+    field.dataset.generatedAccessNotes = value ? "true" : "";
+  }
+}
+
 function setSaving(isSaving) {
   const button = $("scheduleAssignmentSave");
   if (!button) return;
@@ -442,11 +457,15 @@ function propertyTitle(row) {
 }
 
 function propertyAddress(row) {
-  return [row?.address, row?.city, row?.state, row?.postal_code].filter(Boolean).join(", ") || row?.region || row?.market || "";
+  return row?.billing_address || [row?.address, row?.city, row?.state, row?.postal_code].filter(Boolean).join(", ") || row?.region || row?.market || "";
 }
 
 function propertyService(row) {
   return row?.default_service_type || row?.service_type || row?.property_type || serviceModel(row?.service_model) || row?.client_type || "";
+}
+
+function propertyAccessNotes(row) {
+  return row?.access_notes || row?.entry_notes || row?.gate_code || "";
 }
 
 function serviceModel(value) {
