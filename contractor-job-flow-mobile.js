@@ -648,6 +648,10 @@ function assignmentUnitId(assignment) {
   return metadataValue(assignment, ["unit_id", "property_unit_id", "unitId", "propertyUnitId"]);
 }
 
+function assignmentAddress(assignment) {
+  return metadataValue(assignment, ["address", "property_address", "site_address", "street_address"]);
+}
+
 function assignmentUnitPropertyKeys(assignment) {
   const metadata = assignment?.metadata && typeof assignment.metadata === "object" ? assignment.metadata : {};
   return [
@@ -737,9 +741,9 @@ function resolvedPropertyName(assignment) {
 }
 
 function resolvedAddress(assignment) {
-  return compactAddress(activeDirectoryDetails?.client)
+  return assignmentAddress(assignment)
     || compactAddress(activeDirectoryDetails?.portalProperty)
-    || assignment?.address
+    || compactAddress(activeDirectoryDetails?.client)
     || "";
 }
 
