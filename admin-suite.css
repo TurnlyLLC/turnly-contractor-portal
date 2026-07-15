@@ -81,6 +81,15 @@
   gap: 8px;
 }
 
+.client-property-panel-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  padding-bottom: 4px;
+}
+
 .client-contact-row {
   display: grid;
   grid-template-columns: minmax(150px, 1.2fr) minmax(120px, 0.9fr) minmax(180px, 1.2fr) minmax(120px, 0.9fr) auto;
@@ -126,6 +135,17 @@
   white-space: normal;
 }
 
+.client-readonly-field {
+  background: rgba(2, 6, 23, 0.24);
+  border: 1px solid var(--suite-border-soft, rgba(148, 163, 184, 0.14));
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.client-readonly-field strong {
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 980px) {
   .client-property-contact-toggle,
   .client-contact-row {
@@ -137,6 +157,7 @@
   }
 
   .client-contact-actions,
+  .client-property-panel-actions,
   .client-contact-panel-actions {
     justify-content: flex-start;
   }

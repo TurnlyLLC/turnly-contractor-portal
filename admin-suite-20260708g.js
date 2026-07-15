@@ -188,9 +188,12 @@ const clientContactState = {
   openClientId: "",
   search: "",
   editingId: "",
+  editingPropertyId: "",
   tableReady: true,
   isSaving: false,
   isDeleting: false,
+  isPropertySaving: false,
+  isPropertyDeleting: false,
   user: null
 };
 const clientOptionalColumns = [
@@ -543,7 +546,7 @@ const pages = {
   "client-directory": {
     title: "Clients",
     subtitle: "Store client management contacts by property.",
-    action: { label: "Add Contact", icon: "plus" },
+    action: { label: "Add Property", icon: "plus" },
     render: () => renderClients("client-directory")
   },
   "reports-sales": {
@@ -6163,20 +6166,20 @@ function renderClientDirectory(clientTabs) {
       </section>
       ${toolbar(
         `<label class="inline-search client-search">${icon("search")}<input id="clientSearchInput" type="search" placeholder="Search property, address, name, phone, or email..." /></label>`,
-        `<button id="clientContactAddBtn" class="primary-action" type="button">${icon("plus")}<span>Add Contact</span></button>`
+        `<button id="clientPropertyAddBtn" class="primary-action" type="button">${icon("plus")}<span>Add Property</span></button>`
       )}
       <p id="clientMessage" class="status-message" aria-live="polite"></p>
       <section id="clientContactGroups" class="client-contact-groups" aria-live="polite"></section>
-      <div id="clientEmptyState" hidden>${emptyState("contact", "No client contacts found", "Add a management contact to a property.", actionButton("Add Contact", "plus", "clientEmptyAddBtn"))}</div>
+      <div id="clientEmptyState" hidden>${emptyState("building", "No properties found", "Add a property, then add its management contacts inside the property dropdown.", actionButton("Add Property", "plus", "clientEmptyAddBtn"))}</div>
       <div id="clientModal" class="client-modal" role="dialog" aria-modal="true" aria-labelledby="clientModalTitle" hidden>
-        <button class="client-modal-backdrop" type="button" aria-label="Close contact form" data-client-modal-close></button>
+        <button class="client-modal-backdrop" type="button" aria-label="Close form" data-client-modal-close></button>
         <section class="client-modal-panel">
           <div class="client-modal-header">
             <div>
               <p>Client Directory</p>
-              <h2 id="clientModalTitle">Add Contact</h2>
+              <h2 id="clientModalTitle">Add Property</h2>
             </div>
-            <button class="client-modal-close" type="button" aria-label="Close contact form" data-client-modal-close>${icon("x")}</button>
+            <button class="client-modal-close" type="button" aria-label="Close form" data-client-modal-close>${icon("x")}</button>
           </div>
           <div id="clientModalBody"></div>
         </section>
@@ -6405,16 +6408,16 @@ function initClientContactDirectory(root) {
 
   root.addEventListener("click", handleClientContactClick);
   root.addEventListener("input", handleClientContactInput);
-  root.addEventListener("submit", saveClientContactForm);
+  root.addEventListener("submit", handleClientContactSubmit);
   root.addEventListener("keydown", (event) => {
     if (event.key === "Escape") closeClientContactModal();
   });
 
   const topbarAdd = Array.from(document.querySelectorAll(".suite-topbar .primary-action"))
-    .find((link) => link.textContent?.trim() === "Add Contact");
+    .find((link) => link.textContent?.trim() === "Add Property");
   topbarAdd?.addEventListener("click", (event) => {
     event.preventDefault();
-    openClientContactModal();
+    openClientPropertyModal();
   });
 
   void loadClientContactDirectory();
@@ -6427,7 +6430,26 @@ function handleClientContactClick(event) {
     return;
   }
 
-  const addButton = event.target.closest("#clientContactAddBtn, #clientEmptyAddBtn, [data-client-contact-add]");
+  const addPropertyButton = event.target.closest("#clientPropertyAddBtn, #clientEmptyAddBtn");
+  if (addPropertyButton) {
+    openClientPropertyModal();
+    return;
+  }
+
+  const editPropertyButton = event.target.closest("[data-client-property-edit]");
+  if (editPropertyButton) {
+    const property = clientContactState.properties.find((item) => item.id === editPropertyButton.dataset.clientPropertyEdit);
+    if (property) openClientPropertyModal(property);
+    return;
+  }
+
+  const deletePropertyButton = event.target.closest("[data-client-property-delete]");
+  if (deletePropertyButton) {
+    void deleteClientProperty(deletePropertyButton.dataset.clientPropertyDelete);
+    return;
+  }
+
+  const addButton = event.target.closest("[data-client-contact-add]");
   if (addButton) {
     openClientContactModal(null, addButton.dataset.clientContactAdd || clientContactState.openClientId);
     return;
@@ -6451,6 +6473,16 @@ function handleClientContactClick(event) {
     const id = toggle.dataset.clientContactToggle || "";
     clientContactState.openClientId = clientContactState.openClientId === id ? "" : id;
     renderClientContactDirectory();
+  }
+}
+
+function handleClientContactSubmit(event) {
+  if (event.target?.id === "clientPropertyForm") {
+    void saveClientPropertyForm(event);
+    return;
+  }
+  if (event.target?.id === "clientContactForm") {
+    void saveClientContactForm(event);
   }
 }
 
@@ -6596,6 +6628,11 @@ function renderClientContactPropertyGroup(row) {
         ${icon(isOpen ? "chevron-down" : "chevron-right")}
       </button>
       <div class="client-property-contact-panel" ${isOpen ? "" : "hidden"}>
+        <div class="client-property-panel-actions">
+          <button class="secondary-action" type="button" data-client-property-edit="${id}">${icon("settings")}<span>Edit Property</span></button>
+          <button class="secondary-action danger-action" type="button" data-client-property-delete="${id}">${icon("trash")}<span>Delete Property</span></button>
+          <button class="secondary-action" type="button" data-client-contact-add="${id}">${icon("plus")}<span>Add Contact</span></button>
+        </div>
         <div class="client-contact-row client-contact-header">
           <span>Name</span>
           <span>Cell Phone</span>
@@ -6604,9 +6641,6 @@ function renderClientContactPropertyGroup(row) {
           <span>Actions</span>
         </div>
         ${contacts.length ? contacts.map(renderClientContactRow).join("") : `<div class="client-contact-empty">No management contacts saved for this property.</div>`}
-        <div class="client-contact-panel-actions">
-          <button class="secondary-action" type="button" data-client-contact-add="${id}">${icon("plus")}<span>Add Contact</span></button>
-        </div>
       </div>
     </article>
   `;
@@ -6641,7 +6675,7 @@ function clientContactPropertyName(row) {
 function clientContactPropertyAddress(row) {
   const billingAddress = row?.billing_address || "";
   const composed = [row?.address, row?.city, row?.state, row?.postal_code].filter(Boolean).join(", ");
-  return billingAddress || composed || "No address saved";
+  return composed || billingAddress || "No address saved";
 }
 
 function clientContactPropertyOption(row) {
@@ -6658,6 +6692,106 @@ function clientContactPhoneLink(value) {
 function clientContactEmailLink(value) {
   const email = String(value || "").trim();
   return email ? `<a href="mailto:${esc(email)}">${esc(email)}</a>` : "-";
+}
+
+function openClientPropertyModal(row = null) {
+  const modal = document.getElementById("clientModal");
+  const body = document.getElementById("clientModalBody");
+  const title = document.getElementById("clientModalTitle");
+  if (!modal || !body) return;
+  clientContactState.editingPropertyId = row?.id || "";
+  clientContactState.editingId = "";
+  if (title) title.textContent = row ? "Edit Property" : "Add Property";
+  body.innerHTML = clientPropertyForm(row);
+  modal.hidden = false;
+  requestAnimationFrame(() => document.getElementById("clientPropertyName")?.focus());
+}
+
+function clientPropertyForm(row = null) {
+  const isAdd = !row?.id;
+  return `
+    <form id="clientPropertyForm" class="lead-form client-property-form">
+      <input id="clientPropertyId" type="hidden" value="${esc(row?.id || "")}" />
+      ${formGrid([
+        leadInputField("clientPropertyName", "Property Name", "text", { required: true, value: row?.property_name || row?.name || "" }),
+        leadInputField("clientPropertyStreet", "Address", "text", { className: "wide", value: row?.address || "" }),
+        leadInputField("clientPropertyCity", "City", "text", { value: row?.city || "" }),
+        leadInputField("clientPropertyState", "State", "text", { value: row?.state || "" }),
+        leadInputField("clientPropertyPostalCode", "Postal Code", "text", { value: row?.postal_code || "" }),
+        clientPropertyTextareaField("clientPropertyAccessNotes", "Default Unit Access Notes", row?.access_notes || "", "wide"),
+        clientPropertyTextareaField("clientPropertyNotes", "Private Client Notes", row?.notes || "", "wide")
+      ])}
+      <div class="lead-form-actions">
+        ${isAdd ? "" : `<button class="secondary-action danger-action client-delete-action" type="button" data-client-property-delete="${esc(row.id)}">${icon("trash")}<span>Delete Property</span></button>`}
+        <button class="secondary-action" type="button" data-client-modal-close>${icon("x")}<span>Cancel</span></button>
+        <button id="clientPropertySaveBtn" class="primary-action" type="submit">${icon("check")}<span>${isAdd ? "Add Property" : "Save Property"}</span></button>
+      </div>
+    </form>
+  `;
+}
+
+function clientPropertyTextareaField(id, label, value = "", className = "") {
+  return `<label class="suite-field ${className}"><span>${esc(label)}</span><textarea id="${esc(id)}">${esc(value)}</textarea></label>`;
+}
+
+function collectClientPropertyPayload() {
+  const propertyName = clientContactValue("clientPropertyName");
+  const id = clientContactValue("clientPropertyId");
+  const payload = {
+    name: propertyName,
+    property_name: propertyName,
+    address: clientContactValue("clientPropertyStreet"),
+    city: clientContactValue("clientPropertyCity"),
+    state: clientContactValue("clientPropertyState"),
+    postal_code: clientContactValue("clientPropertyPostalCode"),
+    access_notes: clientContactValue("clientPropertyAccessNotes"),
+    notes: clientContactValue("clientPropertyNotes")
+  };
+  if (!id) {
+    payload.status = "active";
+    payload.client_type = "Property Manager";
+    payload.service_model = "apartment_turnover";
+    payload.property_count = 1;
+    payload.created_by = clientContactState.user?.id || null;
+  }
+  return payload;
+}
+
+async function saveClientPropertyForm(event) {
+  event.preventDefault();
+  if (!suiteSupabase || clientContactState.isPropertySaving) return;
+
+  const id = clientContactValue("clientPropertyId");
+  const payload = collectClientPropertyPayload();
+  if (!payload.property_name) {
+    showClientMessage("Enter a property name before saving.", true);
+    return;
+  }
+
+  clientContactState.isPropertySaving = true;
+  setClientPropertySaving(true);
+  showClientMessage(id ? "Saving property..." : "Adding property...");
+  const result = await saveClientPayloadWithSchemaFallback(id, payload);
+  clientContactState.isPropertySaving = false;
+  setClientPropertySaving(false);
+
+  if (result.error) {
+    showClientMessage("Unable to save property: " + result.error.message, true);
+    return;
+  }
+
+  closeClientContactModal();
+  clientContactState.openClientId = result.data?.id || id || clientContactState.openClientId;
+  await loadClientContactDirectory();
+  showClientMessage(id ? "Property saved." : "Property added.");
+}
+
+function setClientPropertySaving(isSaving) {
+  const button = document.getElementById("clientPropertySaveBtn");
+  if (!button) return;
+  const isAdd = !clientContactValue("clientPropertyId");
+  button.disabled = isSaving;
+  button.querySelector("span").textContent = isSaving ? "Saving..." : isAdd ? "Add Property" : "Save Property";
 }
 
 function openClientContactModal(contact = null, clientId = "") {
@@ -6679,16 +6813,19 @@ function closeClientContactModal() {
   if (modal) modal.hidden = true;
   if (body) body.innerHTML = "";
   clientContactState.editingId = "";
+  clientContactState.editingPropertyId = "";
 }
 
 function clientContactForm(contact = null, clientId = "") {
   const selectedClientId = contact?.client_id || clientId || "";
-  const options = clientContactState.properties.map((row) => `<option value="${esc(row.id)}" ${row.id === selectedClientId ? "selected" : ""}>${esc(clientContactPropertyOption(row))}</option>`).join("");
+  const selectedProperty = clientContactState.properties.find((row) => row.id === selectedClientId);
+  const propertyLabel = selectedProperty ? clientContactPropertyOption(selectedProperty) : "Property not selected";
   return `
     <form id="clientContactForm" class="lead-form client-contact-form">
       <input id="clientContactId" type="hidden" value="${esc(contact?.id || "")}" />
+      <input id="clientContactClientId" type="hidden" value="${esc(selectedClientId)}" />
       ${formGrid([
-        `<label class="suite-field wide"><span>Property</span><select id="clientContactClientId" required>${options}</select></label>`,
+        `<div class="suite-field wide client-readonly-field"><span>Property</span><strong>${esc(propertyLabel)}</strong></div>`,
         leadInputField("clientContactName", "Name", "text", { required: true, value: contact?.name || "" }),
         leadInputField("clientContactCellPhone", "Cell Phone", "tel", { value: contact?.cell_phone || "" }),
         leadInputField("clientContactEmail", "Email", "email", { value: contact?.email || "" }),
@@ -6785,6 +6922,33 @@ async function deleteClientContact(id) {
   clientContactState.openClientId = contact.client_id;
   await loadClientContactDirectory();
   showClientMessage("Contact deleted.");
+}
+
+async function deleteClientProperty(id) {
+  if (!suiteSupabase || !id || clientContactState.isPropertyDeleting) return;
+  const property = clientContactState.properties.find((item) => item.id === id);
+  if (!property) return;
+  const contacts = clientContactsForProperty(id);
+  const contactText = contacts.length ? ` This also removes ${contacts.length} saved contact${contacts.length === 1 ? "" : "s"} for this property.` : "";
+  if (!window.confirm(`Delete ${clientContactPropertyName(property)} from the client directory?${contactText}`)) return;
+
+  clientContactState.isPropertyDeleting = true;
+  showClientMessage("Deleting property...");
+  const { error } = await suiteSupabase
+    .from(clientTable)
+    .delete()
+    .eq("id", id);
+  clientContactState.isPropertyDeleting = false;
+
+  if (error) {
+    showClientMessage("Unable to delete property: " + error.message, true);
+    return;
+  }
+
+  closeClientContactModal();
+  clientContactState.openClientId = "";
+  await loadClientContactDirectory();
+  showClientMessage("Property deleted.");
 }
 
 function handleClientClick(event) {
