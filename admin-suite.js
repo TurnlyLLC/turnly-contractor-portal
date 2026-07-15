@@ -6612,9 +6612,6 @@ async function loadClientContactDirectory() {
   }
 
   clientContactState.contacts = (contacts || []).map(normalizeClientContact);
-  if (!clientContactState.openClientId && clientContactState.properties.length) {
-    clientContactState.openClientId = clientContactState.properties[0].id;
-  }
   renderClientContactDirectory();
   showClientMessage(`${clientContactState.contacts.length.toLocaleString()} contact${clientContactState.contacts.length === 1 ? "" : "s"} synced from Supabase.`);
 }
@@ -6657,8 +6654,8 @@ function renderClientContactDirectory() {
 
   const rows = getFilteredClientContactProperties();
   const ids = new Set(rows.map((row) => row.id));
-  if (!clientContactState.openClientId || !ids.has(clientContactState.openClientId)) {
-    clientContactState.openClientId = rows[0]?.id || "";
+  if (clientContactState.openClientId && !ids.has(clientContactState.openClientId)) {
+    clientContactState.openClientId = "";
   }
 
   host.innerHTML = rows.length ? rows.map(renderClientContactPropertyGroup).join("") : "";
