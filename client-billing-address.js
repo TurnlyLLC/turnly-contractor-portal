@@ -12,6 +12,10 @@ const formState = new WeakMap();
 let pendingAddAddress = "";
 let activeClientForm = null;
 
+function isClientWorkspacePage() {
+  return ["client-directory", "contracts"].includes(document.body?.dataset?.adminPage);
+}
+
 function currentState(form) {
   if (!formState.has(form)) {
     formState.set(form, { clientId: "", lastSaved: "", loading: false, timer: 0 });
@@ -241,7 +245,7 @@ document.addEventListener("submit", (event) => {
 }, true);
 
 window.addEventListener("load", () => {
-  if (document.body?.dataset?.adminPage !== "client-directory") return;
+  if (!isClientWorkspacePage()) return;
   installClientFetchPatch();
   syncForms();
   const observer = new MutationObserver(syncForms);
