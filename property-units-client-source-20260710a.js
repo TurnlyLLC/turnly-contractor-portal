@@ -420,6 +420,9 @@ async function saveUnit(form) {
     if (!id) form.reset();
     renderAll();
     setMessage("Unit saved to Supabase.");
+    window.dispatchEvent(new CustomEvent("turnly:property-unit-saved", {
+      detail: { id: saved.id, isNew: !id, unit: saved }
+    }));
   } catch (error) {
     console.warn("[property-units] Unable to save unit", error);
     setMessage("Unable to save unit: " + (error?.message || "Unknown error"), true);
@@ -487,8 +490,12 @@ function bindEvents() {
     const add = target?.closest?.("[data-property-unit-add]");
     if (add && inWorkspace(add)) {
       stopPropertyUnitEvent(event);
-      document.getElementById("propertyUnitQuickForm")?.scrollIntoView({ behavior: "smooth", block: "center" });
-      document.querySelector("#propertyUnitQuickForm [name='unit_name']")?.focus();
+      if (window.TurnlyPropertyUnits?.openAddUnitModal) {
+        window.TurnlyPropertyUnits.openAddUnitModal();
+      } else {
+        document.getElementById("propertyUnitQuickForm")?.scrollIntoView({ behavior: "smooth", block: "center" });
+        document.querySelector("#propertyUnitQuickForm [name='unit_name']")?.focus();
+      }
       return;
     }
 

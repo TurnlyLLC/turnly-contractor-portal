@@ -1,5 +1,15 @@
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+
+const env = window.__ENV || {};
+const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
+  ? createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY)
+  : null;
+
 const modalState = {
-  started: false
+  started: false,
+  mode: "add",
+  sourceUnits: [],
+  isLoadingUnits: false
 };
 
 function propertyUnitsWorkspace() {
@@ -37,6 +47,49 @@ function selectedPropertyName() {
   return select?.selectedOptions?.[0]?.textContent?.trim() || "";
 }
 
+function selectedPropertyId() {
+  return document.getElementById("propertyUnitPropertySelect")?.value || "";
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function formField(form, name) {
+  return form?.querySelector(`[name="${name}"]`) || null;
+}
+
+function setFormValue(form, name, value) {
+  const field = formField(form, name);
+  if (!field) return;
+  field.value = value ?? "";
+  field.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function resetUnitForm(form) {
+  form?.reset();
+  if (form) form.dataset.propertyUnitId = "";
+}
+
+function fillFormFromUnit(unit) {
+  const form = document.getElementById("propertyUnitQuickForm");
+  if (!form || !unit) return;
+  resetUnitForm(form);
+  setFormValue(form, "unit_name", "");
+  setFormValue(form, "bedroom_count", unit.bedroom_count ?? 0);
+  setFormValue(form, "bathroom_count", unit.bathroom_count ?? 0);
+  setFormValue(form, "square_feet", unit.square_feet ?? 0);
+  setFormValue(form, "customer_price", unit.customer_price ?? 0);
+  setFormValue(form, "contractor_pay", unit.contractor_pay ?? 0);
+  setFormValue(form, "notes", unit.notes || "");
+  formField(form, "unit_name")?.focus();
+}
+
 function ensureModal() {
   const root = propertyUnitsWorkspace();
   if (!root) return null;
@@ -55,6 +108,15 @@ function ensureModal() {
             </div>
             <button class="secondary-action property-unit-modal-close" type="button" data-property-unit-modal-close aria-label="Close add unit modal">Close</button>
           </header>
+          <section id="propertyUnitCopySelector" class="property-unit-copy-selector" hidden>
+            <label class="suite-field">
+              <span>Copy from existing unit</span>
+              <select id="propertyUnitCopySourceSelect">
+                <option value="">Loading units...</option>
+              </select>
+            </label>
+            <p id="propertyUnitCopyHelp">Choose a unit to copy, then enter the new unit number.</p>
+          </section>
           <div id="propertyUnitAddFormSlot" class="property-unit-add-form-slot"></div>
         </section>
       </div>
@@ -75,7 +137,64 @@ function moveQuickFormIntoModal() {
   slot.appendChild(form);
 }
 
-function openAddUnitModal() {
+function setModalMode(mode) {
+  modalState.mode = mode === "copy" ? "copy" : "add";
+  const eyebrow = document.querySelector("#propertyUnitAddModal .property-unit-add-head p");
+  const title = document.getElementById("propertyUnitAddModalTitle");
+  const selector = document.getElementById("propertyUnitCopySelector");
+  const submitLabel = document.querySelector("#propertyUnitQuickAddBtn span");
+  if (eyebrow) eyebrow.textContent = modalState.mode === "copy" ? "Copy Unit" : "Add Unit";
+  if (title) title.textContent = modalState.mode === "copy" ? "Copy Property Unit" : "New Property Unit";
+  if (selector) selector.hidden = modalState.mode !== "copy";
+  if (submitLabel) submitLabel.textContent = modalState.mode === "copy" ? "Create Copied Unit" : "Add Unit";
+}
+
+async function loadCopySourceUnits() {
+  const propertyId = selectedPropertyId();
+  const select = document.getElementById("propertyUnitCopySourceSelect");
+  if (!select || !propertyId) return;
+
+  modalState.isLoadingUnits = true;
+  select.innerHTML = `<option value="">Loading units...</option>`;
+
+  let units = [];
+  if (supabase) {
+    const result = await supabase
+      .from("property_units")
+      .select("*")
+      .eq("property_id", propertyId)
+      .order("unit_name", { ascending: true })
+      .limit(1000);
+    if (result.error) {
+      setPropertyUnitModalMessage("Unable to load units to copy: " + result.error.message, true);
+    } else {
+      units = result.data || [];
+    }
+  }
+
+  if (!units.length) {
+    units = Array.from(document.querySelectorAll("[data-property-unit-row]"))
+      .map((form) => ({
+        id: form.dataset.propertyUnitId || "",
+        unit_name: formField(form, "unit_name")?.value || "",
+        bedroom_count: formField(form, "bedroom_count")?.value || 0,
+        bathroom_count: formField(form, "bathroom_count")?.value || 0,
+        square_feet: formField(form, "square_feet")?.value || 0,
+        customer_price: formField(form, "customer_price")?.value || 0,
+        contractor_pay: formField(form, "contractor_pay")?.value || 0,
+        notes: formField(form, "notes")?.value || ""
+      }))
+      .filter((unit) => unit.id && unit.unit_name);
+  }
+
+  modalState.sourceUnits = units;
+  modalState.isLoadingUnits = false;
+  select.innerHTML = units.length
+    ? `<option value="">Select a unit to copy...</option>${units.map((unit) => `<option value="${escapeHtml(unit.id)}">${escapeHtml(unit.unit_name || "Unnamed unit")}</option>`).join("")}`
+    : `<option value="">No units available to copy</option>`;
+}
+
+async function openUnitModal(mode = "add") {
   const propertySelect = document.getElementById("propertyUnitPropertySelect");
   if (!propertySelect?.value) {
     setPropertyUnitModalMessage("Select a property before adding units.", true);
@@ -87,21 +206,45 @@ function openAddUnitModal() {
   const form = document.getElementById("propertyUnitQuickForm");
   if (!modal || !form) return;
 
-  form.reset();
+  resetUnitForm(form);
   const propertyLabel = document.getElementById("propertyUnitAddModalProperty");
   if (propertyLabel) propertyLabel.textContent = selectedPropertyName();
+  setModalMode(mode);
 
   modal.hidden = false;
   document.body.classList.add("property-unit-modal-open");
+  if (modalState.mode === "copy") {
+    await loadCopySourceUnits();
+    document.getElementById("propertyUnitCopySourceSelect")?.focus();
+    return;
+  }
   window.setTimeout(() => {
     form.querySelector("[name='unit_name']")?.focus();
   }, 40);
+}
+
+function openAddUnitModal() {
+  void openUnitModal("add");
+}
+
+function openCopyUnitModal() {
+  void openUnitModal("copy");
 }
 
 function closeAddUnitModal() {
   const modal = document.getElementById("propertyUnitAddModal");
   if (modal) modal.hidden = true;
   document.body.classList.remove("property-unit-modal-open");
+}
+
+function ensureCopyButton() {
+  const addButton = document.querySelector(".property-unit-list-head [data-property-unit-add]");
+  if (!addButton || document.getElementById("propertyUnitCopyBtn")) return;
+  addButton.insertAdjacentHTML("afterend", `
+    <button id="propertyUnitCopyBtn" class="secondary-action" type="button" data-property-unit-copy>
+      <span>Copy Unit</span>
+    </button>
+  `);
 }
 
 function installModalStyles() {
@@ -194,6 +337,19 @@ function installModalStyles() {
       justify-self: end;
       min-width: 160px;
     }
+    .property-unit-copy-selector {
+      border: 1px solid var(--suite-border-soft);
+      border-radius: 8px;
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+    }
+    .property-unit-copy-selector[hidden] { display: none; }
+    .property-unit-copy-selector p {
+      color: var(--suite-soft);
+      font-size: 12px;
+      margin: 0;
+    }
     @media (max-width: 720px) {
       .property-unit-add-dialog {
         max-height: 92vh;
@@ -230,6 +386,15 @@ function bindModalEvents() {
       return;
     }
 
+    const copyTrigger = event.target?.closest?.("[data-property-unit-copy]");
+    if (copyTrigger) {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      openCopyUnitModal();
+      return;
+    }
+
     const closeTrigger = event.target?.closest?.("[data-property-unit-modal-close]");
     if (closeTrigger) {
       event.preventDefault();
@@ -237,10 +402,23 @@ function bindModalEvents() {
     }
   }, true);
 
+  document.addEventListener("change", (event) => {
+    if (event.target?.id !== "propertyUnitCopySourceSelect") return;
+    const source = modalState.sourceUnits.find((unit) => unit.id === event.target.value);
+    if (source) fillFormFromUnit(source);
+  }, true);
+
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !document.getElementById("propertyUnitAddModal")?.hidden) {
       closeAddUnitModal();
     }
+  });
+
+  window.addEventListener("turnly:property-unit-saved", (event) => {
+    if (!event.detail?.isNew) return;
+    const modal = document.getElementById("propertyUnitAddModal");
+    if (!modal || modal.hidden) return;
+    closeAddUnitModal();
   });
 }
 
@@ -254,6 +432,7 @@ function startWhenReady() {
 
   installModalStyles();
   ensureModal();
+  ensureCopyButton();
   bindModalEvents();
 }
 
@@ -263,3 +442,9 @@ if (document.readyState === "loading") {
   startWhenReady();
 }
 window.addEventListener("load", startWhenReady, { once: true });
+
+window.TurnlyPropertyUnits = {
+  ...(window.TurnlyPropertyUnits || {}),
+  openAddUnitModal,
+  openCopyUnitModal
+};
