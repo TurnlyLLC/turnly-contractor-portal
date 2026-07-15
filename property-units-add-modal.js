@@ -90,6 +90,31 @@ function fillFormFromUnit(unit) {
   formField(form, "unit_name")?.focus();
 }
 
+function setSubmitButtonLabel(text) {
+  const button = document.getElementById("propertyUnitQuickAddBtn");
+  if (!button) return;
+  const icon = button.querySelector(".suite-icon");
+  let label = button.querySelector("[data-property-unit-submit-label]")
+    || Array.from(button.querySelectorAll("span")).find((span) => !span.classList.contains("suite-icon"));
+
+  if (!label) {
+    label = document.createElement("span");
+    if (icon) icon.insertAdjacentElement("afterend", label);
+    else button.appendChild(label);
+  }
+
+  label.dataset.propertyUnitSubmitLabel = "true";
+  label.textContent = text;
+
+  Array.from(button.childNodes).forEach((node) => {
+    if (node.nodeType === Node.TEXT_NODE && node.textContent.trim()) node.textContent = "";
+  });
+
+  Array.from(button.querySelectorAll("span")).forEach((span) => {
+    if (span !== icon && span !== label) span.remove();
+  });
+}
+
 function ensureModal() {
   const root = propertyUnitsWorkspace();
   if (!root) return null;
@@ -142,11 +167,10 @@ function setModalMode(mode) {
   const eyebrow = document.querySelector("#propertyUnitAddModal .property-unit-add-head p");
   const title = document.getElementById("propertyUnitAddModalTitle");
   const selector = document.getElementById("propertyUnitCopySelector");
-  const submitLabel = document.querySelector("#propertyUnitQuickAddBtn span");
   if (eyebrow) eyebrow.textContent = modalState.mode === "copy" ? "Copy Unit" : "Add Unit";
   if (title) title.textContent = modalState.mode === "copy" ? "Copy Property Unit" : "New Property Unit";
   if (selector) selector.hidden = modalState.mode !== "copy";
-  if (submitLabel) submitLabel.textContent = modalState.mode === "copy" ? "Create Copied Unit" : "Add Unit";
+  setSubmitButtonLabel(modalState.mode === "copy" ? "Create Copied Unit" : "Add Unit");
 }
 
 async function loadCopySourceUnits() {
@@ -335,7 +359,10 @@ function installModalStyles() {
     .property-unit-add-form-slot .property-unit-quick-form > button[type='submit'] {
       grid-column: 1 / -1;
       justify-self: end;
-      min-width: 160px;
+      min-width: 190px;
+    }
+    .property-unit-add-form-slot .property-unit-quick-form > button[type='submit'] span:not(.suite-icon) {
+      white-space: nowrap;
     }
     .property-unit-copy-selector {
       border: 1px solid var(--suite-border-soft);
