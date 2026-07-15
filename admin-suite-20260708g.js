@@ -181,6 +181,7 @@ const walkthroughState = {
   isSaving: false
 };
 const clientTable = "clients";
+const clientContractTable = "client_contracts";
 const clientContactTable = "client_contacts";
 const clientContactState = {
   properties: [],
@@ -261,6 +262,8 @@ const clientTurnoverMonthOptions = [
   ["dec", "Dec"]
 ];
 const clientState = {
+  table: clientTable,
+  mode: "clients",
   rows: [],
   user: null,
   profile: null,
@@ -458,7 +461,7 @@ const pages = {
   "contracts": {
     title: "Contracts",
     subtitle: "Review client contacts, projections, and revenue calculations.",
-    action: { label: "Add Client", icon: "plus" },
+    action: { label: "Add Contract", icon: "plus" },
     render: renderContracts
   },
   "schedule": {
@@ -6193,9 +6196,9 @@ function renderClientContractsDirectory(clientTabs) {
     <section class="client-directory-workspace" data-client-directory-page data-client-directory-mode="contracts">
       ${clientTabs}
       <section class="metric-strip six">
-        ${metric("Total Clients", "0", "synced from Supabase", "building", "blue", 'id="clientTotalCount"')}
-        ${metric("Active Clients", "0", "currently active", "check", "green", 'id="clientActiveCount"')}
-        ${metric("Prospects", "0", "pipeline clients", "clock", "yellow", 'id="clientProspectCount"')}
+        ${metric("Total Contracts", "0", "synced from Supabase", "building", "blue", 'id="clientTotalCount"')}
+        ${metric("Active Contracts", "0", "currently active", "check", "green", 'id="clientActiveCount"')}
+        ${metric("Prospects", "0", "pipeline contracts", "clock", "yellow", 'id="clientProspectCount"')}
         ${metric("Renewals", "0", "next 60 days", "calendar", "purple", 'id="clientRenewalCount"')}
         ${metric("Units", "0", "tracked service units", "building", "slate", 'id="clientUnitTotal"')}
         ${metric("Active MRR", "$0", "monthly recurring", "refresh", "green", 'id="clientActiveMrrTotal"')}
@@ -6206,8 +6209,8 @@ function renderClientContractsDirectory(clientTabs) {
         ${metric("Annual Revenue", "$0", "annualized monthly", "line-chart", "purple", 'id="clientAnnualRevenueTotal"')}
       </section>
       ${toolbar(
-        `<label class="inline-search client-search">${icon("search")}<input id="clientSearchInput" type="search" placeholder="Search clients..." /></label>`,
-        `<select id="clientManagerFilter" class="select-button" aria-label="Filter account manager"><option value="all">All Managers</option></select><button class="secondary-action" type="button" data-client-filter-toggle>${icon("filter")}<span>Filters</span></button><button id="clientAddBtn" class="primary-action" type="button">${icon("plus")}<span>Add Client</span></button>`
+        `<label class="inline-search client-search">${icon("search")}<input id="clientSearchInput" type="search" placeholder="Search contracts..." /></label>`,
+        `<select id="clientManagerFilter" class="select-button" aria-label="Filter account manager"><option value="all">All Managers</option></select><button class="secondary-action" type="button" data-client-filter-toggle>${icon("filter")}<span>Filters</span></button><button id="clientAddBtn" class="primary-action" type="button">${icon("plus")}<span>Add Contract</span></button>`
       )}
       <section id="clientFilterPanel" class="lead-filter-panel client-filter-panel" hidden>
         <label class="suite-field"><span>Status</span><select id="clientStatusFilter"><option value="all">All Statuses</option>${clientStatusOptions.map(([id, label]) => `<option value="${esc(id)}">${esc(label)}</option>`).join("")}</select></label>
@@ -6236,8 +6239,8 @@ function renderClientContractsDirectory(clientTabs) {
               <tbody id="clientTableBody"></tbody>
             </table>
           </div>
-          <div id="clientEmptyState" hidden>${emptyState("building", "No clients found", "Add your first client to start tracking accounts.", actionButton("Add Client", "plus", "clientEmptyAddBtn"))}</div>
-          <div class="table-foot"><span id="clientTableCount">Showing 0 clients</span>${pager()}</div>
+          <div id="clientEmptyState" hidden>${emptyState("building", "No contracts found", "Add your first contract to start tracking account terms.", actionButton("Add Contract", "plus", "clientEmptyAddBtn"))}</div>
+          <div class="table-foot"><span id="clientTableCount">Showing 0 contracts</span>${pager()}</div>
         </div>
       </section>
       <div id="clientModal" class="client-modal" role="dialog" aria-modal="true" aria-labelledby="clientModalTitle" hidden>
@@ -6245,8 +6248,8 @@ function renderClientContractsDirectory(clientTabs) {
         <section class="client-modal-panel">
           <div class="client-modal-header">
             <div>
-              <p>Client Directory</p>
-              <h2 id="clientModalTitle">Add Client</h2>
+              <p>Contracts</p>
+              <h2 id="clientModalTitle">Add Contract</h2>
             </div>
             <button class="client-modal-close" type="button" aria-label="Close client form" data-client-modal-close>${icon("x")}</button>
           </div>
@@ -6266,6 +6269,21 @@ function renderClientContractsDirectory(clientTabs) {
 function clientFormSection(title, className = "", section = "") {
   const sectionAttr = section ? `data-client-section="${esc(section)}"` : "";
   return `<div class="client-form-section wide ${className}" ${sectionAttr}><span>${esc(title)}</span></div>`;
+}
+
+function activeClientTable() {
+  return clientState.table || clientTable;
+}
+
+function clientEntityLabel(plural = false) {
+  const isContractMode = clientState.mode === "contracts" || activeClientTable() === clientContractTable;
+  if (isContractMode) return plural ? "contracts" : "contract";
+  return plural ? "clients" : "client";
+}
+
+function clientEntityTitle(plural = false) {
+  const label = clientEntityLabel(plural);
+  return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
 function clientManagerDropdownField(row = null) {
@@ -6320,6 +6338,7 @@ function clientMonthlyTurnoversField() {
 
 function clientForm(mode = "edit", row = null) {
   const isAdd = mode === "add";
+  const entityTitle = clientEntityTitle();
   return `
     <form id="clientForm" class="lead-form client-form" data-client-form-mode="${esc(mode)}">
       <input id="clientId" type="hidden" />
@@ -6351,9 +6370,9 @@ function clientForm(mode = "edit", row = null) {
         leadTextareaField("clientUnitNotes", "Default Scope / Unit Notes", "wide")
       ])}
       <div class="lead-form-actions">
-        ${isAdd ? "" : `<button id="clientDeleteBtn" class="secondary-action danger-action client-delete-action" type="button" data-client-delete-current>${icon("trash")}<span>Delete Client</span></button>`}
+        ${isAdd ? "" : `<button id="clientDeleteBtn" class="secondary-action danger-action client-delete-action" type="button" data-client-delete-current>${icon("trash")}<span>Delete ${esc(entityTitle)}</span></button>`}
         <button id="clientCancelBtn" class="secondary-action" type="button" ${isAdd ? "data-client-modal-close" : "data-client-cancel"}>${icon("x")}<span>Cancel</span></button>
-        <button id="clientSaveBtn" class="primary-action" type="submit">${icon("check")}<span>${isAdd ? "Add Client" : "Save Client"}</span></button>
+        <button id="clientSaveBtn" class="primary-action" type="submit">${icon("check")}<span>${isAdd ? `Add ${esc(entityTitle)}` : `Save ${esc(entityTitle)}`}</span></button>
       </div>
     </form>
   `;
@@ -6392,12 +6411,14 @@ function initClientDirectory() {
   });
 
   const topbarAdd = Array.from(document.querySelectorAll(".suite-topbar .primary-action"))
-    .find((link) => link.textContent?.trim() === "Add Client");
+    .find((link) => ["Add Client", "Add Contract"].includes(link.textContent?.trim()));
   topbarAdd?.addEventListener("click", (event) => {
     event.preventDefault();
     void openClientAddModal();
   });
 
+  clientState.table = root.dataset.clientDirectoryMode === "contracts" ? clientContractTable : clientTable;
+  clientState.mode = root.dataset.clientDirectoryMode === "contracts" ? "contracts" : "clients";
   clientState.selectedId = null;
   void loadClients();
 }
@@ -6768,7 +6789,7 @@ async function saveClientPropertyForm(event) {
   clientContactState.isPropertySaving = true;
   setClientPropertySaving(true);
   showClientMessage(id ? "Saving property..." : "Adding property...");
-  const result = await saveClientPayloadWithSchemaFallback(id, payload);
+  const result = await saveClientPayloadWithSchemaFallback(id, payload, clientTable);
   clientContactState.isPropertySaving = false;
   setClientPropertySaving(false);
 
@@ -7036,11 +7057,12 @@ function handleClientInput(event) {
 
 async function loadClients() {
   if (!suiteSupabase) {
-    showClientMessage("Supabase config is missing. Add env.js values before using clients.", true);
+    showClientMessage(`Supabase config is missing. Add env.js values before using ${clientEntityLabel(true)}.`, true);
     return;
   }
 
-  showClientMessage("Loading clients...");
+  const table = activeClientTable();
+  showClientMessage(`Loading ${clientEntityLabel(true)}...`);
   const { data: userData } = await suiteSupabase.auth.getUser();
   clientState.user = userData?.user || null;
   if (clientState.user) {
@@ -7055,13 +7077,13 @@ async function loadClients() {
   await loadClientManagerAccounts();
 
   const { data, error } = await suiteSupabase
-    .from(clientTable)
+    .from(table)
     .select("*")
     .order("updated_at", { ascending: false })
     .limit(500);
 
   if (error) {
-    showClientMessage("Unable to load clients: " + error.message, true);
+    showClientMessage(`Unable to load ${clientEntityLabel(true)}: ` + error.message, true);
     renderClientData();
     return;
   }
@@ -7072,7 +7094,8 @@ async function loadClients() {
   }
   populateClientManagerFilter();
   renderClientData();
-  showClientMessage(clientState.rows.length ? `${clientState.rows.length} client${clientState.rows.length === 1 ? "" : "s"} synced from Supabase.` : "Synced with Supabase. No clients yet.");
+  const pluralLabel = clientEntityLabel(true);
+  showClientMessage(clientState.rows.length ? `${clientState.rows.length} ${clientEntityLabel(clientState.rows.length !== 1)} synced from Supabase.` : `Synced with Supabase. No ${pluralLabel} yet.`);
 }
 
 async function loadClientManagerAccounts() {
@@ -7235,7 +7258,7 @@ function renderClientTable() {
   const selectedRow = rows.find((row) => row.id === clientState.selectedId);
   if (selectedRow) fillClientForm(selectedRow);
   if (empty) empty.hidden = rows.length > 0;
-  if (count) count.textContent = `Showing ${rows.length} of ${clientState.rows.length} clients`;
+  if (count) count.textContent = `Showing ${rows.length} of ${clientState.rows.length} ${clientEntityLabel(true)}`;
 }
 
 function renderClientRow(row) {
@@ -7763,7 +7786,7 @@ async function saveClientForm(event) {
   const formMode = event?.target?.dataset?.clientFormMode || document.getElementById("clientForm")?.dataset?.clientFormMode || "edit";
   clientState.isSaving = true;
   setClientSaving(true);
-  showClientMessage("Saving client to Supabase...");
+  showClientMessage(`Saving ${clientEntityLabel()} to Supabase...`);
 
   const id = clientValue("clientId");
   const payload = collectClientPayload();
@@ -7773,7 +7796,7 @@ async function saveClientForm(event) {
   setClientSaving(false);
 
   if (result.error) {
-    showClientMessage("Unable to save client: " + result.error.message, true);
+    showClientMessage(`Unable to save ${clientEntityLabel()}: ` + result.error.message, true);
     return;
   }
 
@@ -7789,7 +7812,7 @@ async function saveClientForm(event) {
   clientState.autoSaveLastSignature = clientPayloadSignature(payload);
   populateClientManagerFilter();
   renderClientData();
-  showClientMessage(formMode === "add" ? "Client added to Supabase." : "Client saved to Supabase.");
+  showClientMessage(formMode === "add" ? `${clientEntityTitle()} added to Supabase.` : `${clientEntityTitle()} saved to Supabase.`);
 }
 
 function scheduleClientAutosave(form = document.getElementById("clientForm")) {
@@ -7830,13 +7853,13 @@ async function autosaveClientForm(form = document.getElementById("clientForm"), 
 
   clientState.isSaving = true;
   setClientSaving(true, "Autosaving...");
-  showClientMessage("Autosaving client...");
+  showClientMessage(`Autosaving ${clientEntityLabel()}...`);
   const result = await saveClientPayloadWithSchemaFallback(id, payload);
   clientState.isSaving = false;
   setClientSaving(false);
 
   if (result.error) {
-    showClientMessage("Unable to autosave client: " + result.error.message, true);
+    showClientMessage(`Unable to autosave ${clientEntityLabel()}: ` + result.error.message, true);
     return;
   }
 
@@ -7852,7 +7875,7 @@ async function autosaveClientForm(form = document.getElementById("clientForm"), 
   populateClientManagerFilter();
   renderClientMetrics();
   renderClientInsights();
-  showClientMessage(`Client autosaved at ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.`);
+  showClientMessage(`${clientEntityTitle()} autosaved at ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.`);
 
   if (clientState.autoSaveQueued) {
     clientState.autoSaveQueued = false;
@@ -7889,14 +7912,14 @@ function markClientAutosaveBaseline() {
   clientState.autoSaveLastSignature = clientPayloadSignature(collectClientPayload());
 }
 
-async function saveClientPayloadWithSchemaFallback(id, payload) {
+async function saveClientPayloadWithSchemaFallback(id, payload, table = activeClientTable()) {
   const fallbackPayload = { ...payload };
   const maxAttempts = clientOptionalColumns.length + 2;
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const result = id
-      ? await suiteSupabase.from(clientTable).update(fallbackPayload).eq("id", id).select("*").maybeSingle()
-      : await suiteSupabase.from(clientTable).insert(fallbackPayload).select("*").maybeSingle();
+      ? await suiteSupabase.from(table).update(fallbackPayload).eq("id", id).select("*").maybeSingle()
+      : await suiteSupabase.from(table).insert(fallbackPayload).select("*").maybeSingle();
 
     if (!result.error) return result;
 
@@ -7919,7 +7942,7 @@ async function saveClientPayloadWithSchemaFallback(id, payload) {
 
   return {
     data: null,
-    error: new Error("Unable to save client because the clients table schema is missing required columns.")
+    error: new Error(`Unable to save ${clientEntityLabel()} because the ${table} table schema is missing required columns.`)
   };
 }
 
@@ -7928,18 +7951,18 @@ async function deleteSelectedClient() {
   if (!suiteSupabase || !id || clientState.isSaving || clientState.isDeleting) return;
   const row = clientState.rows.find((item) => item.id === id);
   const label = clientTitle(row);
-  if (!window.confirm(`Delete ${label}? This removes the client from Supabase.`)) return;
+  if (!window.confirm(`Delete ${label}? This removes the ${clientEntityLabel()} from Supabase.`)) return;
 
   clientState.isDeleting = true;
-  showClientMessage("Deleting client from Supabase...");
+  showClientMessage(`Deleting ${clientEntityLabel()} from Supabase...`);
   const { error } = await suiteSupabase
-    .from(clientTable)
+    .from(activeClientTable())
     .delete()
     .eq("id", id);
 
   clientState.isDeleting = false;
   if (error) {
-    showClientMessage("Unable to delete client: " + error.message, true);
+    showClientMessage(`Unable to delete ${clientEntityLabel()}: ` + error.message, true);
     return;
   }
 
@@ -7954,7 +7977,7 @@ async function deleteSelectedClient() {
 function setClientSaving(isSaving, savingLabel = "Saving...") {
   const button = document.getElementById("clientSaveBtn");
   if (button) {
-    const defaultLabel = button.closest("form")?.dataset?.clientFormMode === "add" ? "Add Client" : "Save Client";
+    const defaultLabel = button.closest("form")?.dataset?.clientFormMode === "add" ? `Add ${clientEntityTitle()}` : `Save ${clientEntityTitle()}`;
     button.disabled = isSaving;
     const labels = button.querySelectorAll("span");
     const label = labels[labels.length - 1];
