@@ -181,6 +181,18 @@ const walkthroughState = {
   isSaving: false
 };
 const clientTable = "clients";
+const clientContactTable = "client_contacts";
+const clientContactState = {
+  properties: [],
+  contacts: [],
+  openClientId: "",
+  search: "",
+  editingId: "",
+  tableReady: true,
+  isSaving: false,
+  isDeleting: false,
+  user: null
+};
 const clientOptionalColumns = [
   "company_name",
   "billing_address",
@@ -530,8 +542,8 @@ const pages = {
   },
   "client-directory": {
     title: "Clients",
-    subtitle: "Manage and monitor your clients in one place.",
-    action: { label: "Add Client", icon: "plus" },
+    subtitle: "Store client management contacts by property.",
+    action: { label: "Add Contact", icon: "plus" },
     render: () => renderClients("client-directory")
   },
   "reports-sales": {
@@ -1684,7 +1696,8 @@ function leadInputField(id, label, type = "text", options = {}) {
     options.required ? "required" : "",
     options.placeholder ? `placeholder="${esc(options.placeholder)}"` : "",
     options.step ? `step="${esc(options.step)}"` : "",
-    options.min ? `min="${esc(options.min)}"` : ""
+    options.min ? `min="${esc(options.min)}"` : "",
+    options.value !== undefined ? `value="${esc(options.value)}"` : ""
   ].filter(Boolean).join(" ");
   return `<label class="suite-field ${options.className || ""}"><span>${esc(label)}</span><input id="${esc(id)}" type="${esc(type)}" ${attrs} /></label>`;
 }
@@ -6135,12 +6148,46 @@ function renderClients(active) {
     ["activity", "Activity Log"],
     ["performance", "Client Performance"]
   ], active);
-  return renderClientDirectory(clientTabs);
+  return active === "contracts" ? renderClientContractsDirectory(clientTabs) : renderClientDirectory(clientTabs);
 }
 
 function renderClientDirectory(clientTabs) {
   return `
-    <section class="client-directory-workspace" data-client-directory-page>
+    <section class="client-directory-workspace client-contact-directory" data-client-directory-page data-client-directory-mode="contacts">
+      ${clientTabs}
+      <section class="metric-strip six">
+        ${metric("Properties", "0", "with contact storage", "building", "blue", 'id="clientContactPropertyCount"')}
+        ${metric("Contacts", "0", "management contacts", "contact", "green", 'id="clientContactTotalCount"')}
+        ${metric("Cell Phones", "0", "saved numbers", "phone", "yellow", 'id="clientContactCellCount"')}
+        ${metric("Emails", "0", "saved addresses", "mail", "purple", 'id="clientContactEmailCount"')}
+      </section>
+      ${toolbar(
+        `<label class="inline-search client-search">${icon("search")}<input id="clientSearchInput" type="search" placeholder="Search property, address, name, phone, or email..." /></label>`,
+        `<button id="clientContactAddBtn" class="primary-action" type="button">${icon("plus")}<span>Add Contact</span></button>`
+      )}
+      <p id="clientMessage" class="status-message" aria-live="polite"></p>
+      <section id="clientContactGroups" class="client-contact-groups" aria-live="polite"></section>
+      <div id="clientEmptyState" hidden>${emptyState("contact", "No client contacts found", "Add a management contact to a property.", actionButton("Add Contact", "plus", "clientEmptyAddBtn"))}</div>
+      <div id="clientModal" class="client-modal" role="dialog" aria-modal="true" aria-labelledby="clientModalTitle" hidden>
+        <button class="client-modal-backdrop" type="button" aria-label="Close contact form" data-client-modal-close></button>
+        <section class="client-modal-panel">
+          <div class="client-modal-header">
+            <div>
+              <p>Client Directory</p>
+              <h2 id="clientModalTitle">Add Contact</h2>
+            </div>
+            <button class="client-modal-close" type="button" aria-label="Close contact form" data-client-modal-close>${icon("x")}</button>
+          </div>
+          <div id="clientModalBody"></div>
+        </section>
+      </div>
+    </section>
+  `;
+}
+
+function renderClientContractsDirectory(clientTabs) {
+  return `
+    <section class="client-directory-workspace" data-client-directory-page data-client-directory-mode="contracts">
       ${clientTabs}
       <section class="metric-strip six">
         ${metric("Total Clients", "0", "synced from Supabase", "building", "blue", 'id="clientTotalCount"')}
@@ -6312,6 +6359,10 @@ function clientForm(mode = "edit", row = null) {
 function initClientDirectory() {
   const root = document.querySelector("[data-client-directory-page]");
   if (!root) return;
+  if (root.dataset.clientDirectoryMode === "contacts") {
+    initClientContactDirectory(root);
+    return;
+  }
 
   root.addEventListener("click", handleClientClick);
   root.addEventListener("change", handleClientChange);
@@ -6346,6 +6397,394 @@ function initClientDirectory() {
 
   clientState.selectedId = null;
   void loadClients();
+}
+
+function initClientContactDirectory(root) {
+  if (root.dataset.clientContactBound === "true") return;
+  root.dataset.clientContactBound = "true";
+
+  root.addEventListener("click", handleClientContactClick);
+  root.addEventListener("input", handleClientContactInput);
+  root.addEventListener("submit", saveClientContactForm);
+  root.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeClientContactModal();
+  });
+
+  const topbarAdd = Array.from(document.querySelectorAll(".suite-topbar .primary-action"))
+    .find((link) => link.textContent?.trim() === "Add Contact");
+  topbarAdd?.addEventListener("click", (event) => {
+    event.preventDefault();
+    openClientContactModal();
+  });
+
+  void loadClientContactDirectory();
+}
+
+function handleClientContactClick(event) {
+  const closeModal = event.target.closest("[data-client-modal-close]");
+  if (closeModal) {
+    closeClientContactModal();
+    return;
+  }
+
+  const addButton = event.target.closest("#clientContactAddBtn, #clientEmptyAddBtn, [data-client-contact-add]");
+  if (addButton) {
+    openClientContactModal(null, addButton.dataset.clientContactAdd || clientContactState.openClientId);
+    return;
+  }
+
+  const editButton = event.target.closest("[data-client-contact-edit]");
+  if (editButton) {
+    const contact = clientContactState.contacts.find((item) => item.id === editButton.dataset.clientContactEdit);
+    if (contact) openClientContactModal(contact, contact.client_id);
+    return;
+  }
+
+  const deleteButton = event.target.closest("[data-client-contact-delete]");
+  if (deleteButton) {
+    void deleteClientContact(deleteButton.dataset.clientContactDelete);
+    return;
+  }
+
+  const toggle = event.target.closest("[data-client-contact-toggle]");
+  if (toggle) {
+    const id = toggle.dataset.clientContactToggle || "";
+    clientContactState.openClientId = clientContactState.openClientId === id ? "" : id;
+    renderClientContactDirectory();
+  }
+}
+
+function handleClientContactInput(event) {
+  if (event.target?.id !== "clientSearchInput") return;
+  clientContactState.search = event.target.value || "";
+  renderClientContactDirectory();
+}
+
+async function loadClientContactDirectory() {
+  if (!suiteSupabase) {
+    showClientMessage("Supabase config is missing. Add env.js values before using contacts.", true);
+    return;
+  }
+
+  showClientMessage("Loading client contacts...");
+  const { data: userData } = await suiteSupabase.auth.getUser();
+  clientContactState.user = userData?.user || null;
+
+  const { data: properties, error: propertyError } = await suiteSupabase
+    .from(clientTable)
+    .select("id,name,company_name,property_name,billing_address,address,city,state,postal_code,primary_contact_name,primary_contact_email,primary_contact_phone,updated_at")
+    .order("name", { ascending: true })
+    .limit(1000);
+
+  if (propertyError) {
+    showClientMessage("Unable to load properties: " + propertyError.message, true);
+    return;
+  }
+
+  clientContactState.properties = properties || [];
+
+  const { data: contacts, error: contactError } = await suiteSupabase
+    .from(clientContactTable)
+    .select("*")
+    .order("sort_order", { ascending: true })
+    .order("name", { ascending: true })
+    .limit(2000);
+
+  clientContactState.tableReady = !contactError;
+  if (contactError) {
+    console.warn("[admin-suite] Unable to load client contacts", contactError);
+    clientContactState.contacts = clientContactState.properties.map(legacyClientContactFromProperty).filter(Boolean);
+    renderClientContactDirectory();
+    showClientMessage("Contact table is not available yet. Showing existing primary contacts only.", true);
+    return;
+  }
+
+  clientContactState.contacts = (contacts || []).map(normalizeClientContact);
+  if (!clientContactState.openClientId && clientContactState.properties.length) {
+    clientContactState.openClientId = clientContactState.properties[0].id;
+  }
+  renderClientContactDirectory();
+  showClientMessage(`${clientContactState.contacts.length.toLocaleString()} contact${clientContactState.contacts.length === 1 ? "" : "s"} synced from Supabase.`);
+}
+
+function normalizeClientContact(row) {
+  return {
+    id: row.id || "",
+    client_id: row.client_id || "",
+    name: row.name || "",
+    cell_phone: row.cell_phone || row.phone || "",
+    email: row.email || "",
+    office_phone: row.office_phone || "",
+    sort_order: Number(row.sort_order) || 0,
+    isLegacy: false
+  };
+}
+
+function legacyClientContactFromProperty(row) {
+  const name = row.primary_contact_name || "";
+  const email = row.primary_contact_email || "";
+  const cell = row.primary_contact_phone || "";
+  if (!name && !email && !cell) return null;
+  return {
+    id: `primary:${row.id}`,
+    client_id: row.id,
+    name,
+    cell_phone: cell,
+    email,
+    office_phone: "",
+    sort_order: 0,
+    isLegacy: true
+  };
+}
+
+function renderClientContactDirectory() {
+  renderClientContactMetrics();
+  const host = document.getElementById("clientContactGroups");
+  const empty = document.getElementById("clientEmptyState");
+  if (!host) return;
+
+  const rows = getFilteredClientContactProperties();
+  const ids = new Set(rows.map((row) => row.id));
+  if (!clientContactState.openClientId || !ids.has(clientContactState.openClientId)) {
+    clientContactState.openClientId = rows[0]?.id || "";
+  }
+
+  host.innerHTML = rows.length ? rows.map(renderClientContactPropertyGroup).join("") : "";
+  if (empty) empty.hidden = rows.length > 0;
+}
+
+function renderClientContactMetrics() {
+  const properties = clientContactState.properties;
+  const contacts = clientContactState.contacts;
+  const setText = (id, value) => {
+    const element = document.getElementById(id);
+    if (element) element.textContent = value;
+  };
+  setText("clientContactPropertyCount", properties.length.toLocaleString());
+  setText("clientContactTotalCount", contacts.length.toLocaleString());
+  setText("clientContactCellCount", contacts.filter((contact) => contact.cell_phone).length.toLocaleString());
+  setText("clientContactEmailCount", contacts.filter((contact) => contact.email).length.toLocaleString());
+}
+
+function getFilteredClientContactProperties() {
+  const term = clientContactState.search.trim().toLowerCase();
+  const sorted = [...clientContactState.properties].sort((a, b) => clientContactPropertyName(a).localeCompare(clientContactPropertyName(b)));
+  if (!term) return sorted;
+  return sorted.filter((row) => {
+    const contacts = clientContactsForProperty(row.id);
+    return [
+      clientContactPropertyName(row),
+      clientContactPropertyAddress(row),
+      row.company_name,
+      ...contacts.flatMap((contact) => [contact.name, contact.cell_phone, contact.email, contact.office_phone])
+    ].some((value) => String(value || "").toLowerCase().includes(term));
+  });
+}
+
+function renderClientContactPropertyGroup(row) {
+  const id = esc(row.id);
+  const isOpen = row.id === clientContactState.openClientId;
+  const contacts = clientContactsForProperty(row.id);
+  return `
+    <article class="client-property-contact-group ${isOpen ? "is-open" : ""}">
+      <button class="client-property-contact-toggle" type="button" data-client-contact-toggle="${id}" aria-expanded="${isOpen ? "true" : "false"}">
+        <span class="client-property-contact-main">
+          <strong>${esc(clientContactPropertyName(row))}</strong>
+          <small>${esc(clientContactPropertyAddress(row))}</small>
+        </span>
+        <span class="client-property-contact-count">${contacts.length.toLocaleString()} contact${contacts.length === 1 ? "" : "s"}</span>
+        ${icon(isOpen ? "chevron-down" : "chevron-right")}
+      </button>
+      <div class="client-property-contact-panel" ${isOpen ? "" : "hidden"}>
+        <div class="client-contact-row client-contact-header">
+          <span>Name</span>
+          <span>Cell Phone</span>
+          <span>Email</span>
+          <span>Office Phone</span>
+          <span>Actions</span>
+        </div>
+        ${contacts.length ? contacts.map(renderClientContactRow).join("") : `<div class="client-contact-empty">No management contacts saved for this property.</div>`}
+        <div class="client-contact-panel-actions">
+          <button class="secondary-action" type="button" data-client-contact-add="${id}">${icon("plus")}<span>Add Contact</span></button>
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function renderClientContactRow(contact) {
+  const id = esc(contact.id);
+  return `
+    <div class="client-contact-row">
+      <span><strong>${esc(contact.name || "-")}</strong></span>
+      <span>${clientContactPhoneLink(contact.cell_phone)}</span>
+      <span>${clientContactEmailLink(contact.email)}</span>
+      <span>${clientContactPhoneLink(contact.office_phone)}</span>
+      <span class="client-contact-actions">
+        <button class="table-action-button" type="button" data-client-contact-edit="${id}" ${contact.isLegacy ? "disabled" : ""}>Edit</button>
+        <button class="table-action-button danger-action" type="button" data-client-contact-delete="${id}" ${contact.isLegacy ? "disabled" : ""}>Delete</button>
+      </span>
+    </div>
+  `;
+}
+
+function clientContactsForProperty(clientId) {
+  return clientContactState.contacts
+    .filter((contact) => contact.client_id === clientId)
+    .sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
+}
+
+function clientContactPropertyName(row) {
+  return row?.property_name || row?.name || row?.company_name || "Unnamed property";
+}
+
+function clientContactPropertyAddress(row) {
+  const billingAddress = row?.billing_address || "";
+  const composed = [row?.address, row?.city, row?.state, row?.postal_code].filter(Boolean).join(", ");
+  return billingAddress || composed || "No address saved";
+}
+
+function clientContactPropertyOption(row) {
+  return `${clientContactPropertyName(row)} - ${clientContactPropertyAddress(row)}`;
+}
+
+function clientContactPhoneLink(value) {
+  const phone = String(value || "").trim();
+  if (!phone) return "-";
+  const href = phone.replace(/[^\d+]/g, "");
+  return `<a href="tel:${esc(href || phone)}">${esc(phone)}</a>`;
+}
+
+function clientContactEmailLink(value) {
+  const email = String(value || "").trim();
+  return email ? `<a href="mailto:${esc(email)}">${esc(email)}</a>` : "-";
+}
+
+function openClientContactModal(contact = null, clientId = "") {
+  const modal = document.getElementById("clientModal");
+  const body = document.getElementById("clientModalBody");
+  const title = document.getElementById("clientModalTitle");
+  if (!modal || !body || !clientContactState.properties.length) return;
+  const selectedClientId = contact?.client_id || clientId || clientContactState.openClientId || clientContactState.properties[0].id;
+  clientContactState.editingId = contact?.id || "";
+  if (title) title.textContent = contact ? "Edit Contact" : "Add Contact";
+  body.innerHTML = clientContactForm(contact, selectedClientId);
+  modal.hidden = false;
+  requestAnimationFrame(() => document.getElementById("clientContactName")?.focus());
+}
+
+function closeClientContactModal() {
+  const modal = document.getElementById("clientModal");
+  const body = document.getElementById("clientModalBody");
+  if (modal) modal.hidden = true;
+  if (body) body.innerHTML = "";
+  clientContactState.editingId = "";
+}
+
+function clientContactForm(contact = null, clientId = "") {
+  const selectedClientId = contact?.client_id || clientId || "";
+  const options = clientContactState.properties.map((row) => `<option value="${esc(row.id)}" ${row.id === selectedClientId ? "selected" : ""}>${esc(clientContactPropertyOption(row))}</option>`).join("");
+  return `
+    <form id="clientContactForm" class="lead-form client-contact-form">
+      <input id="clientContactId" type="hidden" value="${esc(contact?.id || "")}" />
+      ${formGrid([
+        `<label class="suite-field wide"><span>Property</span><select id="clientContactClientId" required>${options}</select></label>`,
+        leadInputField("clientContactName", "Name", "text", { required: true, value: contact?.name || "" }),
+        leadInputField("clientContactCellPhone", "Cell Phone", "tel", { value: contact?.cell_phone || "" }),
+        leadInputField("clientContactEmail", "Email", "email", { value: contact?.email || "" }),
+        leadInputField("clientContactOfficePhone", "Office Phone", "tel", { value: contact?.office_phone || "" })
+      ])}
+      <div class="lead-form-actions">
+        <button class="secondary-action" type="button" data-client-modal-close>${icon("x")}<span>Cancel</span></button>
+        <button id="clientContactSaveBtn" class="primary-action" type="submit">${icon("check")}<span>Save Contact</span></button>
+      </div>
+    </form>
+  `;
+}
+
+function clientContactValue(id) {
+  return (document.getElementById(id)?.value || "").trim();
+}
+
+function collectClientContactPayload() {
+  const clientId = clientContactValue("clientContactClientId");
+  const contactsForClient = clientContactsForProperty(clientId);
+  return {
+    client_id: clientId,
+    name: clientContactValue("clientContactName"),
+    cell_phone: clientContactValue("clientContactCellPhone"),
+    email: clientContactValue("clientContactEmail"),
+    office_phone: clientContactValue("clientContactOfficePhone"),
+    sort_order: contactsForClient.length
+  };
+}
+
+async function saveClientContactForm(event) {
+  event.preventDefault();
+  if (!suiteSupabase || clientContactState.isSaving) return;
+  if (!clientContactState.tableReady) {
+    showClientMessage("Contact storage is not ready yet. Please refresh after the Supabase update finishes.", true);
+    return;
+  }
+
+  const id = clientContactValue("clientContactId");
+  const payload = collectClientContactPayload();
+  if (!payload.client_id || !payload.name) {
+    showClientMessage("Choose a property and enter a contact name.", true);
+    return;
+  }
+
+  clientContactState.isSaving = true;
+  setClientContactSaving(true);
+  showClientMessage("Saving contact...");
+
+  const result = id
+    ? await suiteSupabase.from(clientContactTable).update(payload).eq("id", id).select("*").maybeSingle()
+    : await suiteSupabase.from(clientContactTable).insert({ ...payload, created_by: clientContactState.user?.id || null }).select("*").maybeSingle();
+
+  clientContactState.isSaving = false;
+  setClientContactSaving(false);
+
+  if (result.error) {
+    showClientMessage("Unable to save contact: " + result.error.message, true);
+    return;
+  }
+
+  closeClientContactModal();
+  clientContactState.openClientId = payload.client_id;
+  await loadClientContactDirectory();
+  showClientMessage("Contact saved.");
+}
+
+function setClientContactSaving(isSaving) {
+  const button = document.getElementById("clientContactSaveBtn");
+  if (!button) return;
+  button.disabled = isSaving;
+  button.querySelector("span").textContent = isSaving ? "Saving..." : "Save Contact";
+}
+
+async function deleteClientContact(id) {
+  if (!suiteSupabase || !id || id.startsWith("primary:") || clientContactState.isDeleting) return;
+  const contact = clientContactState.contacts.find((item) => item.id === id);
+  if (!contact) return;
+  if (!window.confirm(`Delete ${contact.name || "this contact"}?`)) return;
+
+  clientContactState.isDeleting = true;
+  showClientMessage("Deleting contact...");
+  const { error } = await suiteSupabase
+    .from(clientContactTable)
+    .delete()
+    .eq("id", id);
+  clientContactState.isDeleting = false;
+
+  if (error) {
+    showClientMessage("Unable to delete contact: " + error.message, true);
+    return;
+  }
+
+  clientContactState.openClientId = contact.client_id;
+  await loadClientContactDirectory();
+  showClientMessage("Contact deleted.");
 }
 
 function handleClientClick(event) {
