@@ -282,7 +282,10 @@ function unitMetadata() {
   };
   if (squareFeetMatch?.[1]) metadata.unit_square_feet = squareFeetMatch[1].replace(/,/g, "");
   if (value("pay_amount")) metadata.unit_contractor_pay = value("pay_amount");
-  if (value("special_instructions")) metadata.unit_notes = value("special_instructions");
+  if (value("special_instructions")) {
+    metadata.unit_notes = value("special_instructions");
+    metadata.access_notes = value("special_instructions");
+  }
   return metadata;
 }
 

@@ -703,13 +703,26 @@ async function fetchClientById(clientId) {
   return fetchTableRow("clients", "id", clientId);
 }
 
+async function fetchContractById(contractId) {
+  return fetchTableRow("client_contracts", "id", contractId);
+}
+
 async function fetchDirectoryDetails(assignment) {
-  const details = { client: null, portalProperty: null };
+  const metadata = assignment?.metadata && typeof assignment.metadata === "object" ? assignment.metadata : {};
+  const details = { client: null, contract: null, portalProperty: null };
   const propertyId = assignment?.property_id || assignment?.portal_property_id || assignment?.metadata?.property_id || "";
+  const contractId = assignment?.contract_id || metadata.contract_id || "";
+
+  if (contractId) {
+    details.contract = await fetchContractById(contractId);
+  }
 
   if (propertyId) {
     details.portalProperty = await fetchTableRow("portal_properties", "id", propertyId);
     details.client = await fetchClientById(details.portalProperty?.client_id || propertyId);
+    if (!details.contract) {
+      details.contract = await fetchContractById(details.portalProperty?.client_id || propertyId);
+    }
   }
 
   if (!details.client) {
@@ -721,6 +734,22 @@ async function fetchDirectoryDetails(assignment) {
       details.client = (data || []).find((row) => directoryMatchesAssignment(row, assignment)) || null;
     } else {
       console.warn("[contractor-job-flow] Unable to search clients", error);
+    }
+  }
+
+  if (!details.contract && details.client?.id) {
+    details.contract = await fetchContractById(details.client.id);
+  }
+
+  if (!details.contract) {
+    const { data, error } = await supabase
+      .from("client_contracts")
+      .select("*")
+      .limit(500);
+    if (!error) {
+      details.contract = (data || []).find((row) => directoryMatchesAssignment(row, assignment)) || null;
+    } else {
+      console.warn("[contractor-job-flow] Unable to search client contracts", error);
     }
   }
 
@@ -743,13 +772,15 @@ function resolvedPropertyName(assignment) {
 
 function resolvedAddress(assignment) {
   return assignmentAddress(assignment)
+    || compactAddress(activeDirectoryDetails?.contract)
     || compactAddress(activeDirectoryDetails?.portalProperty)
     || compactAddress(activeDirectoryDetails?.client)
     || "";
 }
 
 function resolvedAccessNotes(assignment) {
-  return metadataValue(assignment, ["access_notes", "entry_notes", "gate_code", "special_instructions"])
+  return directoryAccessNotes(activeDirectoryDetails?.contract)
+    || metadataValue(assignment, ["access_notes", "entry_notes", "gate_code", "special_instructions"])
     || directoryAccessNotes(activeDirectoryDetails?.client)
     || directoryAccessNotes(activeDirectoryDetails?.portalProperty)
     || "";
@@ -2027,14 +2058,18 @@ async function startJob() {
     start_notes: document.getElementById("tjStartNotes")?.value.trim() || null
   };
 
-  if (issueNotes) {
+  const accessNotes = resolvedAccessNotes(activeAssignment);
+  if (issueNotes || accessNotes) {
     const metadata = activeAssignment.metadata && typeof activeAssignment.metadata === "object"
       ? { ...activeAssignment.metadata }
       : {};
-    metadata.contractor_start_issues = issueNotes;
-    metadata.latest_contractor_issue = issueNotes;
-    metadata.issue_reported_at = now;
-    metadata.issue_reported_by = activeUser.id;
+    if (issueNotes) {
+      metadata.contractor_start_issues = issueNotes;
+      metadata.latest_contractor_issue = issueNotes;
+      metadata.issue_reported_at = now;
+      metadata.issue_reported_by = activeUser.id;
+    }
+    if (accessNotes) metadata.access_notes = accessNotes;
     payload.metadata = metadata;
   }
 

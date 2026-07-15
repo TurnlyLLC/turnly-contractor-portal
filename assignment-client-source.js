@@ -15,6 +15,8 @@ let selectedUnitId = "";
 let unitLoadRequestId = 0;
 let pendingAssignmentUnitMetadata = null;
 let pendingAssignmentUnitMetadataTimer = 0;
+const CLIENT_TABLE = "clients";
+const CONTRACT_TABLE = "client_contracts";
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -39,6 +41,15 @@ function clientPropertyTitle(row) {
   return row?.property_name || row?.company_name || row?.name || row?.title || "";
 }
 
+function propertyMatchKey(row) {
+  return String(clientPropertyTitle(row) || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function clientPropertyAddress(row) {
   const billing = row?.billing_address || "";
   if (billing) return billing;
@@ -50,7 +61,59 @@ function clientPropertyAddress(row) {
 }
 
 function clientAccessNotes(row) {
-  return row?.access_notes || row?.entry_notes || row?.gate_code || "";
+  return row?.contract_access_notes || row?.access_notes || row?.entry_notes || row?.gate_code || "";
+}
+
+function mergeContractIntoClient(client, contract) {
+  if (!contract) return client;
+  return {
+    ...contract,
+    ...client,
+    contract_id: contract.id || client?.contract_id || "",
+    contract_property_name: clientPropertyTitle(contract),
+    contract_access_notes: contract.access_notes || "",
+    contract_unit_notes: contract.unit_notes || "",
+    access_notes: contract.access_notes || client?.access_notes || "",
+    unit_notes: contract.unit_notes || client?.unit_notes || "",
+    notes: contract.notes || client?.notes || "",
+    billing_address: contract.billing_address || client?.billing_address || "",
+    address: contract.address || client?.address || "",
+    city: contract.city || client?.city || "",
+    state: contract.state || client?.state || "",
+    postal_code: contract.postal_code || client?.postal_code || "",
+    property_name: client?.property_name || contract.property_name || contract.company_name || contract.name || ""
+  };
+}
+
+function mergeClientAndContractProperties(clients = [], contracts = []) {
+  const contractById = new Map(contracts.map((contract) => [String(contract.id || ""), contract]).filter(([id]) => id));
+  const contractsByName = new Map();
+  contracts.forEach((contract) => {
+    const key = propertyMatchKey(contract);
+    if (key && !contractsByName.has(key)) contractsByName.set(key, contract);
+  });
+
+  const usedContractIds = new Set();
+  const merged = clients.map((client) => {
+    const match = contractById.get(String(client.id || "")) || contractsByName.get(propertyMatchKey(client)) || null;
+    if (match?.id) usedContractIds.add(String(match.id));
+    return mergeContractIntoClient(client, match);
+  });
+
+  contracts.forEach((contract) => {
+    if (usedContractIds.has(String(contract.id || ""))) return;
+    if (!clientPropertyTitle(contract)) return;
+    merged.push({
+      ...contract,
+      contract_id: contract.id || "",
+      contract_access_notes: contract.access_notes || "",
+      contract_unit_notes: contract.unit_notes || ""
+    });
+  });
+
+  return merged
+    .filter((client) => clientPropertyTitle(client))
+    .sort((a, b) => clientPropertyTitle(a).localeCompare(clientPropertyTitle(b)));
 }
 
 function serviceModelLabel(value) {
@@ -143,6 +206,7 @@ function assignmentUnitMetadata() {
 
   const searchText = unitSearchValue();
   const unit = selectedUnit() || findUnitBySearch(searchText);
+  const client = selectedClient();
   const unitName = unit?.unit_name || unit?.name || unit?.unit_number || searchText;
   const unitId = unit?.id || selectedUnitId || "";
 
@@ -152,6 +216,8 @@ function assignmentUnitMetadata() {
     unit_id: unitId || null,
     unit_name: unitName || "",
     unit_number: unitName || "",
+    contract_id: client?.contract_id || null,
+    access_notes: clientAccessNotes(client),
     unit_square_feet: unit?.square_feet ?? "",
     unit_customer_price: unit?.customer_price ?? "",
     unit_contractor_pay: unit?.contractor_pay ?? "",
@@ -458,14 +524,28 @@ async function loadClientProperties() {
   isLoadingClients = true;
 
   let result = await supabase
-    .from("clients")
+    .from(CLIENT_TABLE)
     .select("*")
     .order("updated_at", { ascending: false })
     .limit(500);
 
   if (result.error && String(result.error.message || "").includes("updated_at")) {
     result = await supabase
-      .from("clients")
+      .from(CLIENT_TABLE)
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(500);
+  }
+
+  let contractsResult = await supabase
+    .from(CONTRACT_TABLE)
+    .select("*")
+    .order("updated_at", { ascending: false })
+    .limit(500);
+
+  if (contractsResult.error && String(contractsResult.error.message || "").includes("updated_at")) {
+    contractsResult = await supabase
+      .from(CONTRACT_TABLE)
       .select("*")
       .order("created_at", { ascending: false })
       .limit(500);
@@ -476,10 +556,11 @@ async function loadClientProperties() {
     console.warn("[assignments] Unable to load clients for property select", result.error);
     return;
   }
+  if (contractsResult.error) {
+    console.warn("[assignments] Unable to load contract access notes for property select", contractsResult.error);
+  }
 
-  clientProperties = (result.data || [])
-    .filter((client) => clientPropertyTitle(client))
-    .sort((a, b) => clientPropertyTitle(a).localeCompare(clientPropertyTitle(b)));
+  clientProperties = mergeClientAndContractProperties(result.data || [], contractsResult.data || []);
   populateClientPropertySelect();
 }
 

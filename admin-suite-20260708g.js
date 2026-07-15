@@ -8611,7 +8611,7 @@ function populateAssignmentFormForEdit(row) {
   setValue("preferred_until", toDatetimeInput(row.preferred_until));
   setValue("scope", row.scope || "");
   setValue("supplies_notes", row.supplies_notes || "");
-  setValue("special_instructions", row.special_instructions || metadata.unit_notes || "");
+  setValue("special_instructions", assignmentAccessNotes(row) || "");
 
   const autoRenewal = document.getElementById("auto_renewal");
   if (autoRenewal) autoRenewal.checked = Boolean(row.auto_renewal);
@@ -8839,7 +8839,7 @@ async function loadAssignments() {
 
   assignmentState.properties = propertiesResult;
   assignmentState.contractors = contractorsResult;
-  assignmentState.rows = assignmentsResult.rows;
+  assignmentState.rows = enrichAssignmentRowsWithContractAccess(assignmentsResult.rows, propertiesResult);
   renderAssignmentData();
   const totalCount = assignmentState.rows.length;
   const boardCount = assignmentState.rows.filter(isAssignmentOpen).length;
@@ -8851,17 +8851,121 @@ async function loadAssignments() {
 }
 
 async function loadAssignmentProperties() {
-  const { data, error } = await suiteSupabase
-    .from(leadTable)
-    .select("*")
-    .limit(500);
-  if (error) {
-    console.warn("[admin-suite] Unable to load assignment properties", error);
-    return [];
-  }
-  return (data || [])
+  const [propertiesResult, clientsResult, contractsResult] = await Promise.all([
+    suiteSupabase.from(leadTable).select("*").limit(500),
+    suiteSupabase.from(clientTable).select("*").limit(500),
+    suiteSupabase.from(clientContractTable).select("*").limit(500)
+  ]);
+  if (propertiesResult.error) console.warn("[admin-suite] Unable to load assignment properties", propertiesResult.error);
+  if (clientsResult.error) console.warn("[admin-suite] Unable to load client assignment properties", clientsResult.error);
+  if (contractsResult.error) console.warn("[admin-suite] Unable to load contract access notes for assignments", contractsResult.error);
+
+  return mergeAssignmentContractProperties(
+    propertiesResult.data || [],
+    clientsResult.data || [],
+    contractsResult.data || []
+  )
     .filter((row) => assignmentPropertyTitle(row))
     .sort((a, b) => assignmentPropertyTitle(a).localeCompare(assignmentPropertyTitle(b)));
+}
+
+function assignmentPropertyMatchKey(row) {
+  return String(assignmentPropertyTitle(row) || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function assignmentContractMatch(row, contracts = []) {
+  const rowId = String(row?.id || "");
+  const clientId = String(row?.client_id || "");
+  const key = assignmentPropertyMatchKey(row);
+  return contracts.find((contract) => (
+    (rowId && String(contract.id || "") === rowId) ||
+    (clientId && String(contract.id || "") === clientId)
+  )) || contracts.find((contract) => key && assignmentPropertyMatchKey(contract) === key) || null;
+}
+
+function assignmentMergeContractNotes(row, contract) {
+  if (!contract) return row;
+  return {
+    ...row,
+    contract_id: contract.id || row?.contract_id || "",
+    contract_access_notes: contract.access_notes || "",
+    contract_unit_notes: contract.unit_notes || "",
+    access_notes: contract.access_notes || row?.access_notes || "",
+    unit_notes: contract.unit_notes || row?.unit_notes || "",
+    billing_address: contract.billing_address || row?.billing_address || "",
+    address: contract.address || row?.address || "",
+    city: contract.city || row?.city || "",
+    state: contract.state || row?.state || "",
+    postal_code: contract.postal_code || row?.postal_code || ""
+  };
+}
+
+function mergeAssignmentContractProperties(properties = [], clients = [], contracts = []) {
+  const seen = new Set();
+  const rows = [...clients, ...properties].map((row) => {
+    const match = assignmentContractMatch(row, contracts);
+    if (match?.id) seen.add(String(match.id));
+    return assignmentMergeContractNotes(row, match);
+  });
+
+  contracts.forEach((contract) => {
+    if (!contract?.id || seen.has(String(contract.id)) || !assignmentPropertyTitle(contract)) return;
+    rows.push({
+      ...contract,
+      contract_id: contract.id,
+      contract_access_notes: contract.access_notes || "",
+      contract_unit_notes: contract.unit_notes || ""
+    });
+  });
+
+  return rows;
+}
+
+function assignmentPropertyForRow(row, properties = assignmentState.properties) {
+  const metadata = assignmentMetadata(row);
+  const idCandidates = [
+    row?.property_id,
+    row?.contract_id,
+    metadata.property_id,
+    metadata.contract_id
+  ].filter(Boolean).map(String);
+  const byId = properties.find((property) => {
+    const propertyIds = [property?.id, property?.contract_id, property?.client_id].filter(Boolean).map(String);
+    return propertyIds.some((id) => idCandidates.includes(id));
+  });
+  if (byId) return byId;
+
+  const rowKey = assignmentPropertyMatchKey(row);
+  if (!rowKey) return null;
+  return properties.find((property) => assignmentPropertyMatchKey(property) === rowKey) || null;
+}
+
+function enrichAssignmentRowsWithContractAccess(rows = [], properties = assignmentState.properties) {
+  return rows.map((row) => {
+    const property = assignmentPropertyForRow(row, properties);
+    const accessNotes = assignmentPropertyAccessNotes(property);
+    if (!accessNotes && !property?.contract_id) return row;
+
+    const metadata = assignmentMetadata(row);
+    const nextMetadata = { ...metadata };
+    if (accessNotes) nextMetadata.access_notes = accessNotes;
+    if (property?.contract_id) nextMetadata.contract_id = property.contract_id;
+
+    return {
+      ...row,
+      contract_access_notes: accessNotes || row?.contract_access_notes || "",
+      metadata: nextMetadata
+    };
+  });
+}
+
+function enrichAssignmentRowWithContractAccess(row, properties = assignmentState.properties) {
+  return enrichAssignmentRowsWithContractAccess([row], properties)[0] || row;
 }
 
 async function loadAssignmentContractors() {
@@ -9139,7 +9243,7 @@ function assignmentNotesPreview(row) {
   const notes = [
     ["Scope", row.scope],
     ["Supplies", row.supplies_notes],
-    ["Instructions", row.special_instructions]
+    ["Instructions", assignmentAccessNotes(row)]
   ].filter(([, value]) => value);
   if (!notes.length) return "";
   return `
@@ -9459,7 +9563,7 @@ async function saveAssignmentBulkForm(event) {
       continue;
     }
     const index = assignmentState.rows.findIndex((row) => String(row.id || "") === String(item.row.id || ""));
-    if (index >= 0 && result.data) assignmentState.rows[index] = result.data;
+    if (index >= 0 && result.data) assignmentState.rows[index] = enrichAssignmentRowWithContractAccess(result.data);
   }
 
   assignmentState.isBulkSaving = false;
@@ -9577,7 +9681,7 @@ async function saveAssignmentForm(event) {
       return;
     }
     const index = assignmentState.rows.findIndex((row) => String(row.id || "") === String(editingId));
-    if (index >= 0) assignmentState.rows[index] = result.data;
+    if (index >= 0) assignmentState.rows[index] = enrichAssignmentRowWithContractAccess(result.data);
     renderAssignmentData();
     closeAssignmentModal();
     clearAssignmentForm({ keepMessage: true });
@@ -9603,7 +9707,7 @@ async function saveAssignmentForm(event) {
     return;
   }
 
-  assignmentState.rows = [...(result.data || []), ...assignmentState.rows]
+  assignmentState.rows = [...(result.data || []).map((row) => enrichAssignmentRowWithContractAccess(row)), ...assignmentState.rows]
     .sort((a, b) => dateValue(a.start_window) - dateValue(b.start_window));
   renderAssignmentData();
   closeAssignmentModal();
@@ -9717,7 +9821,7 @@ async function updateAssignmentStatusValue(id, status, presetPayload = null) {
     return;
   }
   const index = assignmentState.rows.findIndex((row) => row.id === id);
-  if (index >= 0) assignmentState.rows[index] = result.data;
+  if (index >= 0) assignmentState.rows[index] = enrichAssignmentRowWithContractAccess(result.data);
   renderAssignmentData();
   showAssignmentMessage("Assignment updated in Supabase.");
 }
@@ -9741,7 +9845,7 @@ async function generateDueRecurringAssignments() {
     showRecurringMessage("Unable to generate recurring assignments: " + result.error.message, true);
     return;
   }
-  assignmentState.rows = [...assignmentState.rows, ...(result.data || [])]
+  assignmentState.rows = [...assignmentState.rows, ...(result.data || []).map((row) => enrichAssignmentRowWithContractAccess(row))]
     .sort((a, b) => dateValue(a.start_window) - dateValue(b.start_window));
   renderAssignmentData();
   showRecurringMessage(`${result.data?.length || payloads.length} recurring assignment${(result.data?.length || payloads.length) === 1 ? "" : "s"} generated.`);
@@ -9945,11 +10049,17 @@ function setAssignmentWeekdays(days = []) {
 
 function assignmentFormMetadata(frequency, weekdays, currentRow = null) {
   const metadata = currentRow ? { ...assignmentMetadata(currentRow) } : {};
+  const selectedProperty = assignmentState.properties.find((item) => item.id === assignmentValue("property_id") || item.id === assignmentValue("propertySelect"));
+  const accessNotes = assignmentValue("special_instructions") || assignmentPropertyAccessNotes(selectedProperty);
   if (frequency === "weekly") {
     metadata.recurrence_weekdays = weekdays;
   } else {
     delete metadata.recurrence_weekdays;
   }
+  if (accessNotes) metadata.access_notes = accessNotes;
+  else delete metadata.access_notes;
+  if (selectedProperty?.contract_id) metadata.contract_id = selectedProperty.contract_id;
+  else delete metadata.contract_id;
   return metadata;
 }
 
@@ -10038,7 +10148,7 @@ function assignmentPropertyAddress(row) {
 }
 
 function assignmentPropertyAccessNotes(row) {
-  return row?.access_notes || row?.entry_notes || row?.gate_code || "";
+  return row?.contract_access_notes || row?.access_notes || row?.entry_notes || row?.gate_code || "";
 }
 
 function assignmentStatusKey(value) {
@@ -10263,20 +10373,29 @@ function assignmentUnitMeta(row) {
 }
 
 function assignmentSpecialNotes(row) {
-  const metadata = assignmentMetadata(row);
-  return row?.special_instructions
-    || metadata.unit_notes
+  return assignmentAccessNotes(row)
     || row?.supplies_notes
     || row?.scope
     || "No notes";
 }
 
 function assignmentSpecialNotesMeta(row) {
+  const metadata = assignmentMetadata(row);
+  if (row?.contract_access_notes || metadata.access_notes) return "Contract access notes";
   if (row?.special_instructions) return "Special instructions";
-  if (assignmentMetadata(row).unit_notes) return "Unit notes";
+  if (metadata.unit_notes) return "Unit notes";
   if (row?.supplies_notes) return "Supply notes";
   if (row?.scope) return "Scope";
   return "Click to edit";
+}
+
+function assignmentAccessNotes(row) {
+  const metadata = assignmentMetadata(row);
+  return row?.contract_access_notes
+    || metadata.access_notes
+    || row?.special_instructions
+    || metadata.unit_notes
+    || "";
 }
 
 function assignmentShortId(row) {
