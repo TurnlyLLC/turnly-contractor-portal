@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-contractor-pwa-v20260714c";
+const CACHE_NAME = "turnly-contractor-pwa-v20260715a";
 
 const PRECACHE_URLS = [
   "/",
@@ -74,6 +74,7 @@ function isAdminRuntimeAsset(request) {
     || pathname === "/app.js"
     || pathname === "/assignment-client-source.js"
     || pathname === "/client-billing-address.js"
+    || pathname.startsWith("/qa-checklists-nav")
     || pathname === "/schedule-add-assignment.js"
     || pathname === "/contractor-directory-source.js"
     || pathname.startsWith("/contractor-directory-source-")

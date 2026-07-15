@@ -25,7 +25,6 @@ const navSections = [
   {
     title: "Operations",
     links: [
-      { key: "contracts", label: "Contracts", href: "contracts.html", icon: "briefcase" },
       { key: "schedule", label: "Schedule", href: "schedule.html", icon: "calendar" },
       { key: "coverage-center", label: "Coverage Center", href: "coverage-center.html", icon: "shield" },
       { key: "assignments", label: "Assignments", href: "assignments.html", icon: "clipboard-list" },
@@ -51,7 +50,7 @@ const navSections = [
     title: "Clients",
     links: [
       { key: "client-directory", label: "Client Directory", href: "client-directory.html", icon: "building" },
-      { key: "contacts", label: "Contacts", href: "contacts.html", icon: "contact" }
+      { key: "contracts", label: "Contracts", href: "contracts.html", icon: "briefcase" }
     ]
   },
   {
@@ -443,8 +442,8 @@ const pages = {
   },
   "contracts": {
     title: "Contracts",
-    subtitle: "Manage and oversee all active client contracts",
-    action: { label: "Export", icon: "download", tone: "secondary" },
+    subtitle: "Review client contacts, projections, and revenue calculations.",
+    action: { label: "Add Client", icon: "plus" },
     render: renderContracts
   },
   "schedule": {
@@ -534,12 +533,6 @@ const pages = {
     subtitle: "Manage and monitor your clients in one place.",
     action: { label: "Add Client", icon: "plus" },
     render: () => renderClients("client-directory")
-  },
-  "contacts": {
-    title: "Clients",
-    subtitle: "Manage and view all clients and their account details.",
-    action: { label: "Add Contact", icon: "plus" },
-    render: () => renderClients("contacts")
   },
   "reports-sales": {
     title: "Sales",
@@ -3195,37 +3188,7 @@ function renderContractsPending() {
 }
 
 function renderContracts() {
-  return `
-    <section class="split-contracts">
-      <div>
-        ${toolbar(`${searchBox("Search contracts...")}${actionButton("Filters", "filter", "", "secondary")}`, actionButton("Export", "download", "", "secondary"))}
-        ${tableFrame(["", "Contract / Property", "Client", "Status", "Frequency", "Start Date", "End Date", "Monthly Value", "Actions"], emptyState("document", "No contracts found"), {
-          checkbox: true,
-          toolbar: tabs([["all", "All Contracts"], ["archived", "Archived"]], "all"),
-          className: "contract-list-card"
-        })}
-      </div>
-      ${panel("Contract Details", `
-        ${tabs([["overview", "Overview"], ["scope", "Scope of Work"], ["schedule", "Schedule"], ["docs", "Documents"], ["activity", "Activity"]], "overview")}
-        <h3>Contract Information</h3>
-        ${formGrid([
-          inputControl("Contract / Property"),
-          inputControl("Client"),
-          selectControl("Status", [""]),
-          selectControl("Contract Type", [""]),
-          selectControl("Frequency", [""]),
-          inputControl("Start Date", "", "date"),
-          inputControl("End Date", "", "date"),
-          inputControl("Monthly Value", "$")
-        ])}
-        <h3>Key Contacts</h3>
-        ${formGrid([inputControl("Primary Contact"), inputControl("Email"), inputControl("Phone"), inputControl("Secondary Contact")])}
-        <h3>Service Details</h3>
-        ${formGrid([selectControl("Assigned Contractor", [""]), selectControl("Backup Contractor", [""]), inputControl("Service Days"), inputControl("Service Time"), inputControl("Property Address", "", "text")])}
-        ${textareaControl("Contract Notes", "wide")}
-      `, { className: "contract-details-panel" })}
-    </section>
-  `;
+  return renderClients("contracts");
 }
 
 function renderSchedule() {
@@ -6229,11 +6192,11 @@ function renderVideoLibrary() {
 function renderClients(active) {
   const clientTabs = tabs([
     ["client-directory", "Client Directory", "client-directory.html"],
-    ["contacts", "Contacts", "contacts.html"],
+    ["contracts", "Contracts", "contracts.html"],
     ["activity", "Activity Log"],
     ["performance", "Client Performance"]
   ], active);
-  return active === "contacts" ? renderContacts(clientTabs) : renderClientDirectory(clientTabs);
+  return renderClientDirectory(clientTabs);
 }
 
 function renderClientDirectory(clientTabs) {
@@ -7636,35 +7599,6 @@ function isWithinPastDays(value, days) {
   if (!date) return false;
   const today = startOfToday();
   return date >= addDays(today, -days) && date <= addDays(today, 1);
-}
-
-function renderContacts(clientTabs) {
-  return `
-    ${clientTabs}
-    ${panel("Filters", formGrid([
-      inputControl("Search Contacts", "Search by name, email, or phone..."),
-      selectControl("Client", ["All Clients"]),
-      selectControl("Account Manager", ["All Account Managers"]),
-      selectControl("Contact Type", ["All Contact Types"]),
-      selectControl("Role / Title", ["All Roles"]),
-      selectControl("Department", ["All Departments"]),
-      selectControl("Status", ["All Statuses"]),
-      selectControl("Primary Contact", ["All"]),
-      inputControl("Phone", "Search phone number..."),
-      inputControl("Email", "Search email..."),
-      selectControl("Location", ["All Locations"]),
-      selectControl("Tags", ["All Tags"]),
-      inputControl("Date Added", "Select date range", "date"),
-      inputControl("Last Contacted", "Select date range", "date"),
-      selectControl("Notes", ["All"])
-    ], "contacts-filter-grid"), { className: "compact-panel", action: { label: "Save View", icon: "document", tone: "secondary" } })}
-    ${tableFrame(["", "Contact Name", "Client", "Role / Title", "Email", "Phone", "Contact Type", "Status", "Last Contacted", "Actions"], emptyState("contact", "No contacts found", "No contacts match your current filters. Try adjusting your filters or add a new contact.", actionButton("Add Contact", "plus")), {
-      checkbox: true,
-      toolbar: toolbar("", `${actionButton("Export", "download", "", "secondary")}${actionButton("Columns", "grid", "", "secondary")}${actionButton("Add Contact", "plus")}`),
-      className: "contacts-table",
-      itemName: "contacts"
-    })}
-  `;
 }
 
 function renderSalesReport() {
@@ -10411,7 +10345,7 @@ function renderApp() {
   if (activeKey === "walkthroughs") {
     initWalkthroughs();
   }
-  if (activeKey === "client-directory") {
+  if (activeKey === "client-directory" || activeKey === "contracts") {
     initClientDirectory();
   }
 }
