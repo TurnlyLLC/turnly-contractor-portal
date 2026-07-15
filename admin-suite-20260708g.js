@@ -50,8 +50,7 @@ const navSections = [
     title: "Clients",
     links: [
       { key: "client-directory", label: "Client Directory", href: "client-directory.html", icon: "building" },
-      { key: "contracts", label: "Contracts", href: "contracts.html", icon: "briefcase" },
-      { key: "contacts", label: "Contacts", href: "contacts.html", icon: "contact" }
+      { key: "contracts", label: "Contracts", href: "contracts.html", icon: "briefcase" }
     ]
   },
   {
@@ -534,12 +533,6 @@ const pages = {
     subtitle: "Manage and monitor your clients in one place.",
     action: { label: "Add Client", icon: "plus" },
     render: () => renderClients("client-directory")
-  },
-  "contacts": {
-    title: "Clients",
-    subtitle: "Manage and view all clients and their account details.",
-    action: { label: "Add Contact", icon: "plus" },
-    render: () => renderClients("contacts")
   },
   "reports-sales": {
     title: "Sales",
@@ -6139,11 +6132,10 @@ function renderClients(active) {
   const clientTabs = tabs([
     ["client-directory", "Client Directory", "client-directory.html"],
     ["contracts", "Contracts", "contracts.html"],
-    ["contacts", "Contacts", "contacts.html"],
     ["activity", "Activity Log"],
     ["performance", "Client Performance"]
   ], active);
-  return active === "contacts" ? renderContacts(clientTabs) : renderClientDirectory(clientTabs);
+  return renderClientDirectory(clientTabs);
 }
 
 function renderClientDirectory(clientTabs) {
@@ -7551,35 +7543,6 @@ function isWithinPastDays(value, days) {
   if (!date) return false;
   const today = startOfToday();
   return date >= addDays(today, -days) && date <= addDays(today, 1);
-}
-
-function renderContacts(clientTabs) {
-  return `
-    ${clientTabs}
-    ${panel("Filters", formGrid([
-      inputControl("Search Contacts", "Search by name, email, or phone..."),
-      selectControl("Client", ["All Clients"]),
-      selectControl("Account Manager", ["All Account Managers"]),
-      selectControl("Contact Type", ["All Contact Types"]),
-      selectControl("Role / Title", ["All Roles"]),
-      selectControl("Department", ["All Departments"]),
-      selectControl("Status", ["All Statuses"]),
-      selectControl("Primary Contact", ["All"]),
-      inputControl("Phone", "Search phone number..."),
-      inputControl("Email", "Search email..."),
-      selectControl("Location", ["All Locations"]),
-      selectControl("Tags", ["All Tags"]),
-      inputControl("Date Added", "Select date range", "date"),
-      inputControl("Last Contacted", "Select date range", "date"),
-      selectControl("Notes", ["All"])
-    ], "contacts-filter-grid"), { className: "compact-panel", action: { label: "Save View", icon: "document", tone: "secondary" } })}
-    ${tableFrame(["", "Contact Name", "Client", "Role / Title", "Email", "Phone", "Contact Type", "Status", "Last Contacted", "Actions"], emptyState("contact", "No contacts found", "No contacts match your current filters. Try adjusting your filters or add a new contact.", actionButton("Add Contact", "plus")), {
-      checkbox: true,
-      toolbar: toolbar("", `${actionButton("Export", "download", "", "secondary")}${actionButton("Columns", "grid", "", "secondary")}${actionButton("Add Contact", "plus")}`),
-      className: "contacts-table",
-      itemName: "contacts"
-    })}
-  `;
 }
 
 function renderSalesReport() {
