@@ -7,6 +7,8 @@ const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
 
 const FIELD_ID = "clientBillingAddress";
 const SYNC_ATTR = "data-client-billing-address-ready";
+const CLIENT_TABLE = "clients";
+const CONTRACT_TABLE = "client_contracts";
 
 const formState = new WeakMap();
 let pendingAddAddress = "";
@@ -21,6 +23,25 @@ function currentState(form) {
     formState.set(form, { clientId: "", lastSaved: "", loading: false, timer: 0 });
   }
   return formState.get(form);
+}
+
+function activeClientTable() {
+  return document.body?.dataset?.adminPage === "contracts" ? CONTRACT_TABLE : CLIENT_TABLE;
+}
+
+function tableFromRestUrl(url) {
+  const match = String(url || "").match(/\/rest\/v1\/(client_contracts|clients)\b/i);
+  return match?.[1] || "";
+}
+
+function addressFromRow(row) {
+  return row?.billing_address || [row?.address, row?.city, row?.state, row?.postal_code].filter(Boolean).join(", ");
+}
+
+function addressPayload(address, table = activeClientTable()) {
+  const payload = { billing_address: address || null };
+  if (table === CONTRACT_TABLE) payload.address = address || "";
+  return payload;
 }
 
 function fieldFor(form) {
@@ -56,19 +77,32 @@ async function loadAddress(form) {
   if (state.loading || state.clientId === clientId) return;
   state.loading = true;
   state.clientId = clientId;
+  const table = activeClientTable();
 
   const { data, error } = await supabase
-    .from("clients")
-    .select("billing_address")
+    .from(table)
+    .select("billing_address,address,city,state,postal_code")
     .eq("id", clientId)
     .maybeSingle();
 
   if (error) {
-    console.warn("[clients] Unable to load billing address", error);
+    console.warn(`[${table}] Unable to load billing address`, error);
   }
 
-  let savedAddress = data?.billing_address || "";
-  if (!savedAddress) {
+  let savedAddress = addressFromRow(data);
+  if (!savedAddress && table === CONTRACT_TABLE) {
+    const { data: clientData, error: clientError } = await supabase
+      .from(CLIENT_TABLE)
+      .select("billing_address,address,city,state,postal_code")
+      .eq("id", clientId)
+      .maybeSingle();
+
+    if (clientError) {
+      console.warn("[clients] Unable to load fallback billing address", clientError);
+    }
+    savedAddress = addressFromRow(clientData);
+  }
+  if (!savedAddress && table === CLIENT_TABLE) {
     const { data: propertyData, error: propertyError } = await supabase
       .from("portal_properties")
       .select("address")
@@ -108,20 +142,23 @@ async function saveAddress(form, options = {}) {
   const state = currentState(form);
   const address = input.value.trim();
   if (!options.force && address === state.lastSaved) return;
+  const table = activeClientTable();
 
   const { error } = await supabase
-    .from("clients")
-    .update({ billing_address: address || null })
+    .from(table)
+    .update(addressPayload(address, table))
     .eq("id", clientId);
 
   if (error) {
-    console.warn("[clients] Unable to save billing address", error);
+    console.warn(`[${table}] Unable to save billing address`, error);
     return;
   }
 
   state.lastSaved = address;
   input.dataset.dirty = "false";
-  await savePortalPropertyAddress(clientId, address);
+  if (table === CLIENT_TABLE) {
+    await savePortalPropertyAddress(clientId, address);
+  }
 }
 
 async function savePortalPropertyAddress(clientId, address) {
@@ -171,25 +208,26 @@ function installClientFetchPatch() {
     let patchedAddress = "";
     let patchedClientId = "";
 
-    if (/\/rest\/v1\/clients\b/i.test(url) && ["POST", "PATCH"].includes(method) && body) {
+    const saveTable = tableFromRestUrl(url);
+    if ((saveTable === CLIENT_TABLE || saveTable === CONTRACT_TABLE) && ["POST", "PATCH"].includes(method) && body) {
       const saveForm = formForClientSave(url);
       const address = fieldFor(saveForm)?.value?.trim() || pendingAddAddress;
       if (address) {
         try {
           const parsed = JSON.parse(body);
-          const withAddress = (row) => ({ ...row, billing_address: row.billing_address || address });
+          const withAddress = (row) => ({ ...row, ...addressPayload(address, saveTable), billing_address: row.billing_address || address });
           const patchedBody = Array.isArray(parsed) ? parsed.map(withAddress) : withAddress(parsed);
           init = { ...init, body: JSON.stringify(patchedBody) };
           patchedAddress = address;
           patchedClientId = clientIdFor(saveForm) || clientIdFromUrl(url);
         } catch (error) {
-          console.warn("[clients] Unable to attach billing address to client save", error);
+          console.warn(`[${saveTable}] Unable to attach billing address to save`, error);
         }
       }
     }
 
     const response = await originalFetch(input, init);
-    if (response.ok && patchedAddress && patchedClientId) {
+    if (response.ok && patchedAddress && patchedClientId && tableFromRestUrl(url) === CLIENT_TABLE) {
       void savePortalPropertyAddress(patchedClientId, patchedAddress);
     }
     return response;

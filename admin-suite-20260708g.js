@@ -7088,7 +7088,7 @@ async function loadClients() {
     return;
   }
 
-  clientState.rows = data || [];
+  clientState.rows = await hydrateClientContractRows(data || []);
   if (clientState.selectedId && !clientState.rows.some((row) => row.id === clientState.selectedId)) {
     clientState.selectedId = null;
   }
@@ -7096,6 +7096,40 @@ async function loadClients() {
   renderClientData();
   const pluralLabel = clientEntityLabel(true);
   showClientMessage(clientState.rows.length ? `${clientState.rows.length} ${clientEntityLabel(clientState.rows.length !== 1)} synced from Supabase.` : `Synced with Supabase. No ${pluralLabel} yet.`);
+}
+
+async function hydrateClientContractRows(rows) {
+  if (activeClientTable() !== clientContractTable || !rows.length) return rows;
+  const ids = rows.map((row) => row.id).filter(Boolean);
+  if (!ids.length) return rows;
+
+  const { data, error } = await suiteSupabase
+    .from(clientTable)
+    .select("id,billing_address,address,city,state,postal_code,access_notes,unit_notes,notes")
+    .in("id", ids);
+
+  if (error) {
+    console.warn("[admin-suite] Unable to load source client notes for contracts", error);
+    return rows;
+  }
+
+  const sourceById = new Map((data || []).map((row) => [row.id, row]));
+  return rows.map((row) => mergeClientContractSource(row, sourceById.get(row.id)));
+}
+
+function mergeClientContractSource(row, source) {
+  if (!source) return row;
+  const merged = { ...row };
+  ["billing_address", "address", "city", "state", "postal_code", "access_notes", "unit_notes", "notes"].forEach((field) => {
+    if (clientFieldIsBlank(merged[field]) && !clientFieldIsBlank(source[field])) {
+      merged[field] = source[field];
+    }
+  });
+  return merged;
+}
+
+function clientFieldIsBlank(value) {
+  return value == null || String(value).trim() === "";
 }
 
 async function loadClientManagerAccounts() {
