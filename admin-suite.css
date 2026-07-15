@@ -81,6 +81,10 @@
   gap: 8px;
 }
 
+.client-property-contact-panel[hidden] {
+  display: none;
+}
+
 .client-property-panel-actions {
   align-items: center;
   display: flex;
