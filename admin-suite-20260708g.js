@@ -8232,19 +8232,24 @@ function renderSalesReport() {
       )}
       <section class="metric-strip six">
         ${metric("Completed Revenue", "$0", "customer charges so far", "badge-dollar", "green", 'id="salesCompletedRevenue"')}
-        ${metric("Completed Contractor Pay", "$0", "paid or expected payout", "users", "blue", 'id="salesCompletedContractorPay"')}
-        ${metric("Completed Profit", "$0", "revenue minus contractor pay", "line-chart", "purple", 'id="salesCompletedProfit"')}
+        ${metric("Completed Contractor Pay", "$0", "actual paid out", "users", "blue", 'id="salesCompletedContractorPay"')}
+        ${metric("Completed Profit", "$0", "revenue minus actual payouts", "line-chart", "purple", 'id="salesCompletedProfit"')}
         ${metric("Upcoming Revenue", "$0", "future customer charges", "calendar", "green", 'id="salesUpcomingRevenue"')}
         ${metric("Upcoming Contractor Pay", "$0", "future contractor payout", "briefcase", "orange", 'id="salesUpcomingContractorPay"')}
         ${metric("Projected Profit", "$0", "upcoming revenue minus pay", "target", "yellow", 'id="salesUpcomingProfit"')}
+      </section>
+      <section class="metric-strip sales-total-strip">
+        ${metric("Total Revenue Outlook", "$0", "completed plus upcoming", "badge-dollar", "green", 'id="salesTotalRevenue"')}
+        ${metric("Total Contractor Pay Outlook", "$0", "actual paid plus projected pay", "users", "blue", 'id="salesTotalContractorPay"')}
+        ${metric("Total Profit Outlook", "$0", "completed plus projected profit", "target", "purple", 'id="salesTotalProfit"')}
       </section>
       <section class="report-grid">
         ${panel("Completed Financials", `<div id="salesCompletedSummary" class="property-unit-summary">${salesSummaryPlaceholder("Completed assignment totals")}</div>`, { className: "span-half", subtitle: "All assignments marked complete or carrying a completion timestamp." })}
         ${panel("Upcoming Projection", `<div id="salesUpcomingSummary" class="property-unit-summary">${salesSummaryPlaceholder("Upcoming assignment projection")}</div>`, { className: "span-half", subtitle: "Future assignments that are not completed, cancelled, or declined." })}
         ${panel("Profit by Property", salesFinancialTable(["Property", "Completed Revenue", "Completed Profit", "Upcoming Revenue", "Projected Profit"], "salesPropertyRows", 5), { className: "span-half", subtitle: "Completed and projected totals grouped by property." })}
         ${panel("Monthly Forecast", salesFinancialTable(["Month", "Assignments", "Revenue", "Contractor Pay", "Profit"], "salesForecastRows", 5), { className: "span-half", subtitle: "Upcoming assignment totals grouped by scheduled month." })}
-        ${tableFrame(["Date", "Assignment", "Unit", "Customer Charge", "Contractor Pay", "Profit", "Status"], "", { className: "span-all", bodyId: "salesCompletedRows", rows: salesReportTableMessage(7, "Loading completed assignments..."), pagination: false })}
-        ${tableFrame(["Date", "Assignment", "Unit", "Customer Charge", "Contractor Pay", "Projected Profit", "Status"], "", { className: "span-all", bodyId: "salesUpcomingRows", rows: salesReportTableMessage(7, "Loading upcoming assignments..."), pagination: false })}
+        ${tableFrame(["Date", "Assignment", "Unit", "Customer Charge", "Actual Paid Out", "Profit", "Status"], "", { className: "span-all", bodyId: "salesCompletedRows", rows: salesReportTableMessage(7, "Loading completed assignments..."), pagination: false })}
+        ${tableFrame(["Date", "Assignment", "Unit", "Customer Charge", "Projected Contractor Pay", "Projected Profit", "Status"], "", { className: "span-all", bodyId: "salesUpcomingRows", rows: salesReportTableMessage(7, "Loading upcoming assignments..."), pagination: false })}
       </section>
     </section>
   `;
@@ -8313,8 +8318,9 @@ function renderSalesReportData() {
   const rows = salesReportState.rows || [];
   const completed = salesCompletedAssignments(rows);
   const upcoming = salesUpcomingAssignments(rows);
-  const completedTotals = salesPeriodTotals(completed);
-  const upcomingTotals = salesPeriodTotals(upcoming);
+  const completedTotals = salesPeriodTotals(completed, "actual");
+  const upcomingTotals = salesPeriodTotals(upcoming, "projected");
+  const totalTotals = salesCombineTotals(completedTotals, upcomingTotals);
 
   setText("salesCompletedRevenue", salesMoney(completedTotals.revenue));
   setText("salesCompletedContractorPay", salesMoney(completedTotals.contractorPay));
@@ -8322,11 +8328,14 @@ function renderSalesReportData() {
   setText("salesUpcomingRevenue", salesMoney(upcomingTotals.revenue));
   setText("salesUpcomingContractorPay", salesMoney(upcomingTotals.contractorPay));
   setText("salesUpcomingProfit", salesMoney(upcomingTotals.profit));
+  setText("salesTotalRevenue", salesMoney(totalTotals.revenue));
+  setText("salesTotalContractorPay", salesMoney(totalTotals.contractorPay));
+  setText("salesTotalProfit", salesMoney(totalTotals.profit));
 
   setSalesHtml("salesCompletedSummary", salesSummaryHtml(completed, "Completed assignment totals", "completed"));
   setSalesHtml("salesUpcomingSummary", salesSummaryHtml(upcoming, "Upcoming assignment projection", "upcoming"));
-  setSalesHtml("salesCompletedRows", salesAssignmentTableRows(completed, "No completed assignments found."));
-  setSalesHtml("salesUpcomingRows", salesAssignmentTableRows(upcoming, "No upcoming assignments found."));
+  setSalesHtml("salesCompletedRows", salesAssignmentTableRows(completed, "No completed assignments found.", "actual"));
+  setSalesHtml("salesUpcomingRows", salesAssignmentTableRows(upcoming, "No upcoming assignments found.", "projected"));
   setSalesHtml("salesPropertyRows", salesPropertyRows(completed, upcoming));
   setSalesHtml("salesForecastRows", salesForecastRows(upcoming));
 }
@@ -8564,14 +8573,15 @@ function salesAssignmentPaidAmount(row = {}) {
   return stored || (isSalesAssignmentPaid(row) ? salesAssignmentProjectedContractorPay(row) : 0);
 }
 
-function salesAssignmentContractorPay(row = {}) {
+function salesAssignmentContractorPay(row = {}, mode = "projected") {
+  if (mode === "actual") return salesAssignmentPaidAmount(row);
   return salesAssignmentPaidAmount(row) || salesAssignmentProjectedContractorPay(row);
 }
 
-function salesPeriodTotals(rows = []) {
+function salesPeriodTotals(rows = [], mode = "projected") {
   return rows.reduce((totals, row) => {
     const revenue = salesAssignmentRevenue(row);
-    const contractorPay = salesAssignmentContractorPay(row);
+    const contractorPay = salesAssignmentContractorPay(row, mode);
     const paid = isSalesAssignmentPaid(row) ? 1 : 0;
     return {
       count: totals.count + 1,
@@ -8583,11 +8593,22 @@ function salesPeriodTotals(rows = []) {
   }, { count: 0, paidCount: 0, revenue: 0, contractorPay: 0, profit: 0 });
 }
 
+function salesCombineTotals(...totalsList) {
+  return totalsList.reduce((combined, totals) => ({
+    count: combined.count + (totals?.count || 0),
+    paidCount: combined.paidCount + (totals?.paidCount || 0),
+    revenue: combined.revenue + (totals?.revenue || 0),
+    contractorPay: combined.contractorPay + (totals?.contractorPay || 0),
+    profit: combined.profit + (totals?.profit || 0)
+  }), { count: 0, paidCount: 0, revenue: 0, contractorPay: 0, profit: 0 });
+}
+
 function salesSummaryHtml(rows = [], title, mode) {
-  const totals = salesPeriodTotals(rows);
+  const totals = salesPeriodTotals(rows, mode === "completed" ? "actual" : "projected");
   const margin = totals.revenue ? (totals.profit / totals.revenue) * 100 : 0;
   const datedRows = rows.filter((row) => parseDate(mode === "completed" ? row.completed_at || row.checklist_completed_at || row.end_window || row.start_window : row.start_window));
   const dateLabel = mode === "completed" ? "Most Recent" : "Next Assignment";
+  const payLabel = mode === "completed" ? "Actual Paid Out" : "Projected Pay";
   const dateValueText = datedRows.length
     ? formatDateOnly(mode === "completed"
       ? datedRows[0].completed_at || datedRows[0].checklist_completed_at || datedRows[0].end_window || datedRows[0].start_window
@@ -8599,7 +8620,7 @@ function salesSummaryHtml(rows = [], title, mode) {
     <dl>
       <div><dt>Assignments</dt><dd>${esc(totals.count.toLocaleString())}</dd></div>
       <div><dt>Revenue</dt><dd>${esc(salesMoney(totals.revenue))}</dd></div>
-      <div><dt>Contractor Pay</dt><dd>${esc(salesMoney(totals.contractorPay))}</dd></div>
+      <div><dt>${esc(payLabel)}</dt><dd>${esc(salesMoney(totals.contractorPay))}</dd></div>
       <div><dt>Profit</dt><dd>${esc(salesMoney(totals.profit))}</dd></div>
       <div><dt>Profit Margin</dt><dd>${esc(salesPercent(margin))}</dd></div>
       <div><dt>${esc(dateLabel)}</dt><dd>${esc(dateValueText)}</dd></div>
@@ -8608,24 +8629,27 @@ function salesSummaryHtml(rows = [], title, mode) {
   `;
 }
 
-function salesAssignmentTableRows(rows = [], emptyText) {
+function salesAssignmentTableRows(rows = [], emptyText, mode = "projected") {
   if (!rows.length) return salesReportTableMessage(7, emptyText);
   return rows.map((row) => {
     const revenue = salesAssignmentRevenue(row);
-    const contractorPay = salesAssignmentContractorPay(row);
+    const contractorPay = salesAssignmentContractorPay(row, mode);
     const profit = revenue - contractorPay;
     const paymentStatus = salesAssignmentPaymentStatus(row);
     const date = isSalesCompletedAssignment(row)
       ? row.completed_at || row.checklist_completed_at || row.end_window || row.start_window
       : row.start_window;
     const subtitle = [assignmentPropertyTitle(row), assignmentShortId(row)].filter(Boolean).join(" | ");
+    const payMeta = mode === "actual"
+      ? (paymentStatus ? titleCase(paymentStatus) : "Not paid yet")
+      : "Projected pay";
     return `
       <tr>
         <td><strong>${esc(formatDateOnly(date))}</strong><small>${esc(formatDateWindow(row.start_window, row.end_window))}</small></td>
         <td><strong>${esc(row.title || row.property_name || "Untitled assignment")}</strong><small>${esc(subtitle || "Assignment")}</small></td>
         <td><strong>${esc(assignmentUnitNumber(row))}</strong><small>${esc(assignmentUnitMeta(row))}</small></td>
         <td><strong>${esc(salesMoney(revenue))}</strong></td>
-        <td><strong>${esc(salesMoney(contractorPay))}</strong><small>${esc(paymentStatus ? titleCase(paymentStatus) : "Expected pay")}</small></td>
+        <td><strong>${esc(salesMoney(contractorPay))}</strong><small>${esc(payMeta)}</small></td>
         <td><strong>${esc(salesMoney(profit))}</strong></td>
         <td>${statusBadge(row.status || (isSalesCompletedAssignment(row) ? "completed" : "open"))}</td>
       </tr>
@@ -8652,13 +8676,13 @@ function salesPropertyRows(completed = [], upcoming = []) {
     const group = ensure(assignmentPropertyTitle(row));
     const revenue = salesAssignmentRevenue(row);
     group.completedRevenue += revenue;
-    group.completedProfit += revenue - salesAssignmentContractorPay(row);
+    group.completedProfit += revenue - salesAssignmentContractorPay(row, "actual");
   });
   upcoming.forEach((row) => {
     const group = ensure(assignmentPropertyTitle(row));
     const revenue = salesAssignmentRevenue(row);
     group.upcomingRevenue += revenue;
-    group.upcomingProfit += revenue - salesAssignmentContractorPay(row);
+    group.upcomingProfit += revenue - salesAssignmentContractorPay(row, "projected");
   });
   const rows = Array.from(groups.values())
     .sort((a, b) => (b.completedRevenue + b.upcomingRevenue) - (a.completedRevenue + a.upcomingRevenue) || a.property.localeCompare(b.property));
@@ -8692,7 +8716,7 @@ function salesForecastRows(upcoming = []) {
     }
     const group = groups.get(key);
     const revenue = salesAssignmentRevenue(row);
-    const contractorPay = salesAssignmentContractorPay(row);
+    const contractorPay = salesAssignmentContractorPay(row, "projected");
     group.rows.push(row);
     group.revenue += revenue;
     group.contractorPay += contractorPay;

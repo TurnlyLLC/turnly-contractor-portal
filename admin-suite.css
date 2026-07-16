@@ -4055,6 +4055,10 @@ a {
   gap: 14px;
 }
 
+.metric-strip.sales-total-strip {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .sales-report-workspace .status-message {
   margin: 0;
 }
