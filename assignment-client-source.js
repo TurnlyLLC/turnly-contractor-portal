@@ -15,7 +15,6 @@ let selectedUnitId = "";
 let unitLoadRequestId = 0;
 let pendingAssignmentUnitMetadata = null;
 let pendingAssignmentUnitMetadataTimer = 0;
-const CLIENT_TABLE = "clients";
 const CONTRACT_TABLE = "client_contracts";
 
 function escapeHtml(value) {
@@ -64,54 +63,14 @@ function clientAccessNotes(row) {
   return row?.contract_access_notes || row?.access_notes || row?.entry_notes || row?.gate_code || "";
 }
 
-function mergeContractIntoClient(client, contract) {
-  if (!contract) return client;
-  return {
-    ...contract,
-    ...client,
-    contract_id: contract.id || client?.contract_id || "",
-    contract_property_name: clientPropertyTitle(contract),
-    contract_access_notes: contract.access_notes || "",
-    contract_unit_notes: contract.unit_notes || "",
-    access_notes: contract.access_notes || client?.access_notes || "",
-    unit_notes: contract.unit_notes || client?.unit_notes || "",
-    notes: contract.notes || client?.notes || "",
-    billing_address: contract.billing_address || client?.billing_address || "",
-    address: contract.address || client?.address || "",
-    city: contract.city || client?.city || "",
-    state: contract.state || client?.state || "",
-    postal_code: contract.postal_code || client?.postal_code || "",
-    property_name: client?.property_name || contract.property_name || contract.company_name || contract.name || ""
-  };
-}
-
-function mergeClientAndContractProperties(clients = [], contracts = []) {
-  const contractById = new Map(contracts.map((contract) => [String(contract.id || ""), contract]).filter(([id]) => id));
-  const contractsByName = new Map();
-  contracts.forEach((contract) => {
-    const key = propertyMatchKey(contract);
-    if (key && !contractsByName.has(key)) contractsByName.set(key, contract);
-  });
-
-  const usedContractIds = new Set();
-  const merged = clients.map((client) => {
-    const match = contractById.get(String(client.id || "")) || contractsByName.get(propertyMatchKey(client)) || null;
-    if (match?.id) usedContractIds.add(String(match.id));
-    return mergeContractIntoClient(client, match);
-  });
-
-  contracts.forEach((contract) => {
-    if (usedContractIds.has(String(contract.id || ""))) return;
-    if (!clientPropertyTitle(contract)) return;
-    merged.push({
+function normalizeContractProperties(contracts = []) {
+  return contracts
+    .map((contract) => ({
       ...contract,
       contract_id: contract.id || "",
       contract_access_notes: contract.access_notes || "",
       contract_unit_notes: contract.unit_notes || ""
-    });
-  });
-
-  return merged
+    }))
     .filter((client) => clientPropertyTitle(client))
     .sort((a, b) => clientPropertyTitle(a).localeCompare(clientPropertyTitle(b)));
 }
@@ -508,7 +467,7 @@ function populateClientPropertySelect() {
   isPopulatingSelect = true;
   const currentValue = select.value;
   select.innerHTML = [
-    `<option value="">Choose a client or property...</option>`,
+    `<option value="">Choose a contract property...</option>`,
     ...clientProperties.map((client) => (
       `<option value="${escapeHtml(client.id)}">${escapeHtml(clientPropertyTitle(client))}</option>`
     ))
@@ -527,20 +486,6 @@ async function loadClientProperties() {
   if (!supabase || isLoadingClients) return;
   isLoadingClients = true;
 
-  let result = await supabase
-    .from(CLIENT_TABLE)
-    .select("*")
-    .order("updated_at", { ascending: false })
-    .limit(500);
-
-  if (result.error && String(result.error.message || "").includes("updated_at")) {
-    result = await supabase
-      .from(CLIENT_TABLE)
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(500);
-  }
-
   let contractsResult = await supabase
     .from(CONTRACT_TABLE)
     .select("*")
@@ -556,15 +501,12 @@ async function loadClientProperties() {
   }
 
   isLoadingClients = false;
-  if (result.error) {
-    console.warn("[assignments] Unable to load clients for property select", result.error);
+  if (contractsResult.error) {
+    console.warn("[assignments] Unable to load contract properties for property select", contractsResult.error);
     return;
   }
-  if (contractsResult.error) {
-    console.warn("[assignments] Unable to load contract access notes for property select", contractsResult.error);
-  }
 
-  clientProperties = mergeClientAndContractProperties(result.data || [], contractsResult.data || []);
+  clientProperties = normalizeContractProperties(contractsResult.data || []);
   populateClientPropertySelect();
 }
 

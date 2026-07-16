@@ -8957,20 +8957,19 @@ async function loadAssignments() {
 }
 
 async function loadAssignmentProperties() {
-  const [propertiesResult, clientsResult, contractsResult] = await Promise.all([
-    suiteSupabase.from(leadTable).select("*").limit(500),
-    suiteSupabase.from(clientTable).select("*").limit(500),
-    suiteSupabase.from(clientContractTable).select("*").limit(500)
-  ]);
-  if (propertiesResult.error) console.warn("[admin-suite] Unable to load assignment properties", propertiesResult.error);
-  if (clientsResult.error) console.warn("[admin-suite] Unable to load client assignment properties", clientsResult.error);
+  const contractsResult = await suiteSupabase
+    .from(clientContractTable)
+    .select("*")
+    .limit(1000);
   if (contractsResult.error) console.warn("[admin-suite] Unable to load contract access notes for assignments", contractsResult.error);
 
-  return mergeAssignmentContractProperties(
-    propertiesResult.data || [],
-    clientsResult.data || [],
-    contractsResult.data || []
-  )
+  return (contractsResult.data || [])
+    .map((contract) => ({
+      ...contract,
+      contract_id: contract.id || "",
+      contract_access_notes: contract.access_notes || "",
+      contract_unit_notes: contract.unit_notes || ""
+    }))
     .filter((row) => assignmentPropertyTitle(row))
     .sort((a, b) => assignmentPropertyTitle(a).localeCompare(assignmentPropertyTitle(b)));
 }
@@ -8995,54 +8994,6 @@ function assignmentPropertyMatchKey(row) {
     .replace(/[^a-z0-9]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-}
-
-function assignmentContractMatch(row, contracts = []) {
-  const rowId = String(row?.id || "");
-  const clientId = String(row?.client_id || "");
-  const key = assignmentPropertyMatchKey(row);
-  return contracts.find((contract) => (
-    (rowId && String(contract.id || "") === rowId) ||
-    (clientId && String(contract.id || "") === clientId)
-  )) || contracts.find((contract) => key && assignmentPropertyMatchKey(contract) === key) || null;
-}
-
-function assignmentMergeContractNotes(row, contract) {
-  if (!contract) return row;
-  return {
-    ...row,
-    contract_id: contract.id || row?.contract_id || "",
-    contract_access_notes: contract.access_notes || "",
-    contract_unit_notes: contract.unit_notes || "",
-    access_notes: contract.access_notes || row?.access_notes || "",
-    unit_notes: contract.unit_notes || row?.unit_notes || "",
-    billing_address: contract.billing_address || row?.billing_address || "",
-    address: contract.address || row?.address || "",
-    city: contract.city || row?.city || "",
-    state: contract.state || row?.state || "",
-    postal_code: contract.postal_code || row?.postal_code || ""
-  };
-}
-
-function mergeAssignmentContractProperties(properties = [], clients = [], contracts = []) {
-  const seen = new Set();
-  const rows = [...clients, ...properties].map((row) => {
-    const match = assignmentContractMatch(row, contracts);
-    if (match?.id) seen.add(String(match.id));
-    return assignmentMergeContractNotes(row, match);
-  });
-
-  contracts.forEach((contract) => {
-    if (!contract?.id || seen.has(String(contract.id)) || !assignmentPropertyTitle(contract)) return;
-    rows.push({
-      ...contract,
-      contract_id: contract.id,
-      contract_access_notes: contract.access_notes || "",
-      contract_unit_notes: contract.unit_notes || ""
-    });
-  });
-
-  return rows;
 }
 
 function assignmentPropertyForRow(row, properties = assignmentState.properties) {
@@ -9275,7 +9226,7 @@ function populateAssignmentPropertySelect() {
   const select = document.getElementById("propertySelect");
   if (!select) return;
   const selected = select.value;
-  select.innerHTML = `<option value="">Choose a property...</option>${assignmentState.properties.map((row) => `<option value="${esc(row.id)}">${esc(assignmentPropertyTitle(row))}</option>`).join("")}`;
+  select.innerHTML = `<option value="">Choose a contract property...</option>${assignmentState.properties.map((row) => `<option value="${esc(row.id)}">${esc(assignmentPropertyTitle(row))}</option>`).join("")}`;
   if (selected && assignmentState.properties.some((row) => row.id === selected)) {
     select.value = selected;
   }

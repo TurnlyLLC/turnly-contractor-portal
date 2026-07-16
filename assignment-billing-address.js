@@ -8,6 +8,7 @@ const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
 let addressRequestId = 0;
 let addressSaveTimer = 0;
 const addressCache = new Map();
+const CONTRACT_TABLE = "client_contracts";
 
 function selectedPropertyId() {
   return document.getElementById("propertySelect")?.value || document.getElementById("property_id")?.value || "";
@@ -19,28 +20,17 @@ async function loadBillingAddress(propertyId) {
   if (addressCache.has(propertyId)) return addressCache.get(propertyId);
 
   const { data, error } = await supabase
-    .from("clients")
-    .select("billing_address")
+    .from(CONTRACT_TABLE)
+    .select("billing_address,address,city,state,postal_code")
     .eq("id", propertyId)
     .maybeSingle();
 
   if (error) {
-    console.warn("[assignments] Unable to load client billing address", error);
+    console.warn("[assignments] Unable to load contract billing address", error);
   }
 
-  let address = String(data?.billing_address || "").trim();
-  if (!address) {
-    const { data: propertyData, error: propertyError } = await supabase
-      .from("portal_properties")
-      .select("address")
-      .eq("id", propertyId)
-      .maybeSingle();
-
-    if (propertyError) {
-      console.warn("[assignments] Unable to load portal property address", propertyError);
-    }
-    address = String(propertyData?.address || "").trim();
-  }
+  const address = String(data?.billing_address || "").trim()
+    || [data?.address, data?.city, data?.state, data?.postal_code].filter(Boolean).join(", ");
 
   addressCache.set(propertyId, address);
   return address;
@@ -52,20 +42,16 @@ async function saveBillingAddress(propertyId, address) {
   if (!cleanAddress) return;
 
   const { error } = await supabase
-    .from("clients")
+    .from(CONTRACT_TABLE)
     .update({ billing_address: cleanAddress })
     .eq("id", propertyId);
 
   if (error) {
-    console.warn("[assignments] Unable to save client billing address", error);
+    console.warn("[assignments] Unable to save contract billing address", error);
     return;
   }
 
   addressCache.set(propertyId, cleanAddress);
-  await supabase
-    .from("portal_properties")
-    .update({ address: cleanAddress })
-    .eq("id", propertyId);
 }
 
 async function syncSelectedPropertyAddress() {
