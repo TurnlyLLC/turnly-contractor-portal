@@ -4050,6 +4050,22 @@ a {
   grid-column: span 2;
 }
 
+.sales-report-workspace {
+  display: grid;
+  gap: 14px;
+}
+
+.sales-report-workspace .status-message {
+  margin: 0;
+}
+
+.sales-report-table-note {
+  color: var(--suite-soft);
+  display: inline-block;
+  font-size: 12px;
+  padding: 12px 0;
+}
+
 .growth-drivers {
   min-height: 190px;
 }

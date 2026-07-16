@@ -387,6 +387,12 @@ const assignmentState = {
   isBulkSaving: false,
   isDeleting: false
 };
+const salesReportState = {
+  rows: [],
+  loading: false,
+  message: "",
+  error: false
+};
 const propertyUnitsTable = "property_units";
 const checklistTemplatesTable = "checklist_templates";
 const checklistModulesTable = "checklist_modules";
@@ -570,10 +576,9 @@ const pages = {
   },
   "reports-sales": {
     title: "Sales",
-    subtitle: "Track pipeline performance and deal activity.",
+    subtitle: "Track assignment revenue, contractor pay, profit, and upcoming projections.",
     actions: [
-      { label: "Export", icon: "download", tone: "secondary" },
-      { label: "Add Deal", icon: "plus" }
+      { label: "Assignments", icon: "clipboard-list", href: "assignments.html", tone: "secondary" }
     ],
     render: renderSalesReport
   },
@@ -8219,20 +8224,491 @@ function isWithinPastDays(value, days) {
 }
 
 function renderSalesReport() {
-  return reportLayout("sales", [
-    ["Total Pipeline Value", "-", "badge-dollar", "green"],
-    ["Open Deals", "-", "briefcase", "blue"],
-    ["Won Deals (Value)", "-", "target", "green"],
-    ["Lost Deals (Value)", "-", "alert", "red"],
-    ["Win Rate", "-", "activity", "purple"],
-    ["Avg. Deal Size", "-", "line-chart", "yellow"]
-  ], [
-    panel("Pipeline Value by Stage", chart("funnel")),
-    panel("Pipeline Value Over Time", chart("line")),
-    panel("Deals by Source", `${chart("donut")}${statLegend([["", "", "slate"], ["", "", "slate"], ["", "", "slate"]])}`),
-    panel("Deals by Sales Owner", chart("bar")),
-    tableFrame(["", "Deal Name", "Account", "Pipeline", "Stage", "Deal Value", "Close Date", "Sales Owner", "Status", "Last Activity", "Actions"], skeletonRows(4), { className: "span-all", itemName: "deals" })
-  ], ["Overview", "Pipeline", "Leads", "Deals", "Forecast", "Activity"]);
+  return `
+    <section class="sales-report-workspace" data-sales-report-page>
+      ${toolbar(
+        `<p id="salesReportMessage" class="status-message" aria-live="polite">Loading assignment financials...</p>`,
+        `<button class="secondary-action" type="button" data-sales-report-refresh>${icon("refresh")}<span>Refresh</span></button>`
+      )}
+      <section class="metric-strip six">
+        ${metric("Completed Revenue", "$0", "customer charges so far", "badge-dollar", "green", 'id="salesCompletedRevenue"')}
+        ${metric("Completed Contractor Pay", "$0", "paid or expected payout", "users", "blue", 'id="salesCompletedContractorPay"')}
+        ${metric("Completed Profit", "$0", "revenue minus contractor pay", "line-chart", "purple", 'id="salesCompletedProfit"')}
+        ${metric("Upcoming Revenue", "$0", "future customer charges", "calendar", "green", 'id="salesUpcomingRevenue"')}
+        ${metric("Upcoming Contractor Pay", "$0", "future contractor payout", "briefcase", "orange", 'id="salesUpcomingContractorPay"')}
+        ${metric("Projected Profit", "$0", "upcoming revenue minus pay", "target", "yellow", 'id="salesUpcomingProfit"')}
+      </section>
+      <section class="report-grid">
+        ${panel("Completed Financials", `<div id="salesCompletedSummary" class="property-unit-summary">${salesSummaryPlaceholder("Completed assignment totals")}</div>`, { className: "span-half", subtitle: "All assignments marked complete or carrying a completion timestamp." })}
+        ${panel("Upcoming Projection", `<div id="salesUpcomingSummary" class="property-unit-summary">${salesSummaryPlaceholder("Upcoming assignment projection")}</div>`, { className: "span-half", subtitle: "Future assignments that are not completed, cancelled, or declined." })}
+        ${panel("Profit by Property", salesFinancialTable(["Property", "Completed Revenue", "Completed Profit", "Upcoming Revenue", "Projected Profit"], "salesPropertyRows", 5), { className: "span-half", subtitle: "Completed and projected totals grouped by property." })}
+        ${panel("Monthly Forecast", salesFinancialTable(["Month", "Assignments", "Revenue", "Contractor Pay", "Profit"], "salesForecastRows", 5), { className: "span-half", subtitle: "Upcoming assignment totals grouped by scheduled month." })}
+        ${tableFrame(["Date", "Assignment", "Unit", "Customer Charge", "Contractor Pay", "Profit", "Status"], "", { className: "span-all", bodyId: "salesCompletedRows", rows: salesReportTableMessage(7, "Loading completed assignments..."), pagination: false })}
+        ${tableFrame(["Date", "Assignment", "Unit", "Customer Charge", "Contractor Pay", "Projected Profit", "Status"], "", { className: "span-all", bodyId: "salesUpcomingRows", rows: salesReportTableMessage(7, "Loading upcoming assignments..."), pagination: false })}
+      </section>
+    </section>
+  `;
+}
+
+function initSalesReport() {
+  const root = document.querySelector("[data-sales-report-page]");
+  if (!root) return;
+  root.querySelector("[data-sales-report-refresh]")?.addEventListener("click", () => {
+    void loadSalesReport();
+  });
+  void loadSalesReport();
+}
+
+async function loadSalesReport() {
+  if (!suiteSupabase) {
+    salesReportState.rows = [];
+    renderSalesReportData();
+    setSalesReportMessage("Supabase config is missing. Add env.js values before using the sales report.", true);
+    return;
+  }
+
+  salesReportState.loading = true;
+  setSalesReportMessage("Loading assignment financials...");
+  const { data: userData } = await suiteSupabase.auth.getUser();
+  const user = userData?.user || null;
+  if (!user) {
+    salesReportState.rows = [];
+    salesReportState.loading = false;
+    renderSalesReportData();
+    setSalesReportMessage("Sign in as an admin to load completed and upcoming assignment financials.", true);
+    return;
+  }
+
+  const { data: profile, error: profileError } = await suiteSupabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (profileError || normalizeToken(profile?.role) !== "admin") {
+    salesReportState.rows = [];
+    salesReportState.loading = false;
+    renderSalesReportData();
+    setSalesReportMessage(profileError
+      ? "Unable to verify admin access: " + profileError.message
+      : "Admin access is required to load the sales report.", true);
+    return;
+  }
+
+  const [properties, assignmentsResult] = await Promise.all([
+    loadAssignmentProperties(),
+    loadAssignmentRows()
+  ]);
+  salesReportState.rows = enrichAssignmentRowsWithContractAccess(assignmentsResult.rows, properties);
+  salesReportState.loading = false;
+  renderSalesReportData();
+
+  const completed = salesCompletedAssignments(salesReportState.rows);
+  const upcoming = salesUpcomingAssignments(salesReportState.rows);
+  setSalesReportMessage(assignmentsResult.error
+    ? `Loaded ${salesReportState.rows.length.toLocaleString()} assignment${salesReportState.rows.length === 1 ? "" : "s"} before Supabase returned an error.`
+    : `Loaded ${completed.length.toLocaleString()} completed assignment${completed.length === 1 ? "" : "s"} and ${upcoming.length.toLocaleString()} upcoming assignment${upcoming.length === 1 ? "" : "s"}.`);
+}
+
+function renderSalesReportData() {
+  const rows = salesReportState.rows || [];
+  const completed = salesCompletedAssignments(rows);
+  const upcoming = salesUpcomingAssignments(rows);
+  const completedTotals = salesPeriodTotals(completed);
+  const upcomingTotals = salesPeriodTotals(upcoming);
+
+  setText("salesCompletedRevenue", salesMoney(completedTotals.revenue));
+  setText("salesCompletedContractorPay", salesMoney(completedTotals.contractorPay));
+  setText("salesCompletedProfit", salesMoney(completedTotals.profit));
+  setText("salesUpcomingRevenue", salesMoney(upcomingTotals.revenue));
+  setText("salesUpcomingContractorPay", salesMoney(upcomingTotals.contractorPay));
+  setText("salesUpcomingProfit", salesMoney(upcomingTotals.profit));
+
+  setSalesHtml("salesCompletedSummary", salesSummaryHtml(completed, "Completed assignment totals", "completed"));
+  setSalesHtml("salesUpcomingSummary", salesSummaryHtml(upcoming, "Upcoming assignment projection", "upcoming"));
+  setSalesHtml("salesCompletedRows", salesAssignmentTableRows(completed, "No completed assignments found."));
+  setSalesHtml("salesUpcomingRows", salesAssignmentTableRows(upcoming, "No upcoming assignments found."));
+  setSalesHtml("salesPropertyRows", salesPropertyRows(completed, upcoming));
+  setSalesHtml("salesForecastRows", salesForecastRows(upcoming));
+}
+
+function setSalesReportMessage(text = "", isError = false) {
+  salesReportState.message = text;
+  salesReportState.error = Boolean(isError);
+  const message = document.getElementById("salesReportMessage");
+  if (!message) return;
+  message.textContent = text || "";
+  message.classList.toggle("error", Boolean(isError));
+}
+
+function setSalesHtml(id, html) {
+  const node = document.getElementById(id);
+  if (node) node.innerHTML = html;
+}
+
+function salesSummaryPlaceholder(title) {
+  return `
+    <strong>${esc(title)}</strong>
+    <p>Financials will appear once assignments load from Supabase.</p>
+    <dl>
+      <div><dt>Assignments</dt><dd>0</dd></div>
+      <div><dt>Revenue</dt><dd>$0</dd></div>
+      <div><dt>Contractor Pay</dt><dd>$0</dd></div>
+      <div><dt>Profit</dt><dd>$0</dd></div>
+    </dl>
+  `;
+}
+
+function salesFinancialTable(headers, bodyId, colspan) {
+  return `
+    <div class="table-scroll">
+      <table class="suite-table sales-report-table">
+        <thead><tr>${headers.map((header) => `<th>${esc(header)}</th>`).join("")}</tr></thead>
+        <tbody id="${esc(bodyId)}">${salesReportTableMessage(colspan, "Loading financials...")}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function salesReportTableMessage(colspan, text) {
+  return `<tr><td colspan="${Number(colspan) || 1}"><span class="sales-report-table-note">${esc(text)}</span></td></tr>`;
+}
+
+function salesCompletedAssignments(rows = []) {
+  return rows
+    .filter(isSalesCompletedAssignment)
+    .sort((a, b) => dateValue(b.completed_at || b.checklist_completed_at || b.end_window || b.start_window, 0) - dateValue(a.completed_at || a.checklist_completed_at || a.end_window || a.start_window, 0));
+}
+
+function salesUpcomingAssignments(rows = []) {
+  return rows
+    .filter(isSalesUpcomingAssignment)
+    .sort((a, b) => dateValue(a.start_window) - dateValue(b.start_window) || String(a.property_name || a.title || "").localeCompare(String(b.property_name || b.title || ""), undefined, { sensitivity: "base" }));
+}
+
+function isSalesCompletedAssignment(row = {}) {
+  const status = assignmentStatusKey(row.status);
+  return ["completed", "complete", "closed", "done"].includes(status)
+    || Boolean(row.completed_at || row.completed_by || row.checklist_completed_at);
+}
+
+function isSalesCancelledAssignment(row = {}) {
+  return ["cancelled", "canceled", "declined"].includes(assignmentStatusKey(row.status));
+}
+
+function isSalesUpcomingAssignment(row = {}) {
+  const start = parseDate(row.start_window);
+  return Boolean(start && start >= startOfToday() && !isSalesCompletedAssignment(row) && !isSalesCancelledAssignment(row));
+}
+
+function salesParseMoney(value) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (value === null || value === undefined || value === "") return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+  const isNegative = /^\(.*\)$/.test(raw);
+  const cleaned = raw.replace(/[,$\s]/g, "").replace(/[()]/g, "");
+  const number = Number(cleaned);
+  if (!Number.isFinite(number)) return null;
+  return isNegative ? -number : number;
+}
+
+function salesFirstMoney(values = [], allowZero = false) {
+  for (const value of values) {
+    const number = salesParseMoney(value);
+    if (number !== null && Number.isFinite(number) && (allowZero ? number >= 0 : number > 0)) return number;
+  }
+  return 0;
+}
+
+function salesMoney(value) {
+  const number = Number(value);
+  const safe = Number.isFinite(number) ? number : 0;
+  return safe.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 2 });
+}
+
+function salesPercent(value) {
+  const number = Number(value);
+  const safe = Number.isFinite(number) ? number : 0;
+  return `${safe.toFixed(1)}%`;
+}
+
+function salesAssignmentPayment(row = {}) {
+  const metadata = assignmentMetadata(row);
+  const payment = metadata.payment;
+  return payment && typeof payment === "object" && !Array.isArray(payment) ? payment : {};
+}
+
+function salesAssignmentPaymentStatus(row = {}) {
+  const payment = salesAssignmentPayment(row);
+  return normalizeToken(row.payment_status || row.pay_status || row.payout_status || payment.status || "");
+}
+
+function salesAssignmentPaidDate(row = {}) {
+  const payment = salesAssignmentPayment(row);
+  return row.paid_at
+    || row.payout_at
+    || row.payout_date
+    || row.payout_completed_at
+    || row.payment_sent_at
+    || row.statement_paid_at
+    || row.paid_on
+    || payment.paid_at
+    || "";
+}
+
+function isSalesAssignmentPaid(row = {}) {
+  const payment = salesAssignmentPayment(row);
+  const status = salesAssignmentPaymentStatus(row);
+  return Boolean(
+    salesAssignmentPaidDate(row)
+    || row.paid === true
+    || row.is_paid === true
+    || row.paid_out === true
+    || payment.paid === true
+    || ["paid", "paid-out", "payout-paid", "payout-sent", "settled"].includes(status)
+  );
+}
+
+function salesAssignmentRevenue(row = {}) {
+  const metadata = assignmentMetadata(row);
+  const payment = salesAssignmentPayment(row);
+  return salesFirstMoney([
+    row.customer_charge,
+    row.customer_price,
+    row.customer_amount,
+    row.customer_total,
+    row.revenue_amount,
+    row.invoice_amount,
+    row.charge_amount,
+    row.billed_amount,
+    row.sales_amount,
+    row.contract_value,
+    metadata.unit_customer_price,
+    metadata.customer_charge,
+    metadata.customer_price,
+    metadata.customer_amount,
+    metadata.revenue_amount,
+    metadata.invoice_amount,
+    metadata.charge_amount,
+    metadata.billed_amount,
+    payment.customer_charge,
+    payment.customer_price,
+    payment.customer_amount,
+    payment.revenue_amount
+  ]);
+}
+
+function salesAssignmentBaseContractorPay(row = {}) {
+  const metadata = assignmentMetadata(row);
+  const payment = salesAssignmentPayment(row);
+  return salesFirstMoney([
+    row.pay_amount,
+    row.contractor_pay,
+    row.contractor_pay_amount,
+    metadata.unit_contractor_pay,
+    metadata.contractor_pay,
+    metadata.contractor_pay_amount,
+    payment.contractor_pay,
+    payment.contractor_pay_amount
+  ]);
+}
+
+function salesAssignmentAddedFees(row = {}) {
+  const payment = salesAssignmentPayment(row);
+  return salesFirstMoney([
+    row.added_fee_amount,
+    row.fees_added,
+    row.income_fee_amount,
+    row.heavy_soil_fee_amount,
+    payment.added_fee_amount,
+    payment.fees_added,
+    payment.income_fee_amount,
+    payment.heavy_soil_fee_amount
+  ]);
+}
+
+function salesAssignmentFeesTaken(row = {}) {
+  const payment = salesAssignmentPayment(row);
+  return salesFirstMoney([
+    row.cleaner_fee_amount,
+    row.fees_taken,
+    row.fee_amount,
+    payment.cleaner_fee_amount,
+    payment.fees_taken,
+    payment.fee_amount
+  ]);
+}
+
+function salesAssignmentProjectedContractorPay(row = {}) {
+  const payment = salesAssignmentPayment(row);
+  const storedProjection = salesFirstMoney([
+    row.projected_net_amount,
+    payment.projected_net_amount
+  ]);
+  if (storedProjection) return storedProjection;
+  return Math.max(0, salesAssignmentBaseContractorPay(row) + salesAssignmentAddedFees(row) - salesAssignmentFeesTaken(row));
+}
+
+function salesAssignmentPaidAmount(row = {}) {
+  const payment = salesAssignmentPayment(row);
+  const stored = salesFirstMoney([
+    row.net_paid_amount,
+    row.paid_amount,
+    row.payout_amount,
+    row.amount_paid,
+    payment.net_paid_amount,
+    payment.paid_amount,
+    payment.payout_amount,
+    payment.amount_paid
+  ]);
+  return stored || (isSalesAssignmentPaid(row) ? salesAssignmentProjectedContractorPay(row) : 0);
+}
+
+function salesAssignmentContractorPay(row = {}) {
+  return salesAssignmentPaidAmount(row) || salesAssignmentProjectedContractorPay(row);
+}
+
+function salesPeriodTotals(rows = []) {
+  return rows.reduce((totals, row) => {
+    const revenue = salesAssignmentRevenue(row);
+    const contractorPay = salesAssignmentContractorPay(row);
+    const paid = isSalesAssignmentPaid(row) ? 1 : 0;
+    return {
+      count: totals.count + 1,
+      paidCount: totals.paidCount + paid,
+      revenue: totals.revenue + revenue,
+      contractorPay: totals.contractorPay + contractorPay,
+      profit: totals.profit + revenue - contractorPay
+    };
+  }, { count: 0, paidCount: 0, revenue: 0, contractorPay: 0, profit: 0 });
+}
+
+function salesSummaryHtml(rows = [], title, mode) {
+  const totals = salesPeriodTotals(rows);
+  const margin = totals.revenue ? (totals.profit / totals.revenue) * 100 : 0;
+  const datedRows = rows.filter((row) => parseDate(mode === "completed" ? row.completed_at || row.checklist_completed_at || row.end_window || row.start_window : row.start_window));
+  const dateLabel = mode === "completed" ? "Most Recent" : "Next Assignment";
+  const dateValueText = datedRows.length
+    ? formatDateOnly(mode === "completed"
+      ? datedRows[0].completed_at || datedRows[0].checklist_completed_at || datedRows[0].end_window || datedRows[0].start_window
+      : datedRows[0].start_window)
+    : "No date";
+  return `
+    <strong>${esc(title)}</strong>
+    <p>${esc(totals.count.toLocaleString())} assignment${totals.count === 1 ? "" : "s"} included in this section.</p>
+    <dl>
+      <div><dt>Assignments</dt><dd>${esc(totals.count.toLocaleString())}</dd></div>
+      <div><dt>Revenue</dt><dd>${esc(salesMoney(totals.revenue))}</dd></div>
+      <div><dt>Contractor Pay</dt><dd>${esc(salesMoney(totals.contractorPay))}</dd></div>
+      <div><dt>Profit</dt><dd>${esc(salesMoney(totals.profit))}</dd></div>
+      <div><dt>Profit Margin</dt><dd>${esc(salesPercent(margin))}</dd></div>
+      <div><dt>${esc(dateLabel)}</dt><dd>${esc(dateValueText)}</dd></div>
+      <div><dt>Paid Jobs</dt><dd>${esc(totals.paidCount.toLocaleString())}</dd></div>
+    </dl>
+  `;
+}
+
+function salesAssignmentTableRows(rows = [], emptyText) {
+  if (!rows.length) return salesReportTableMessage(7, emptyText);
+  return rows.map((row) => {
+    const revenue = salesAssignmentRevenue(row);
+    const contractorPay = salesAssignmentContractorPay(row);
+    const profit = revenue - contractorPay;
+    const paymentStatus = salesAssignmentPaymentStatus(row);
+    const date = isSalesCompletedAssignment(row)
+      ? row.completed_at || row.checklist_completed_at || row.end_window || row.start_window
+      : row.start_window;
+    const subtitle = [assignmentPropertyTitle(row), assignmentShortId(row)].filter(Boolean).join(" | ");
+    return `
+      <tr>
+        <td><strong>${esc(formatDateOnly(date))}</strong><small>${esc(formatDateWindow(row.start_window, row.end_window))}</small></td>
+        <td><strong>${esc(row.title || row.property_name || "Untitled assignment")}</strong><small>${esc(subtitle || "Assignment")}</small></td>
+        <td><strong>${esc(assignmentUnitNumber(row))}</strong><small>${esc(assignmentUnitMeta(row))}</small></td>
+        <td><strong>${esc(salesMoney(revenue))}</strong></td>
+        <td><strong>${esc(salesMoney(contractorPay))}</strong><small>${esc(paymentStatus ? titleCase(paymentStatus) : "Expected pay")}</small></td>
+        <td><strong>${esc(salesMoney(profit))}</strong></td>
+        <td>${statusBadge(row.status || (isSalesCompletedAssignment(row) ? "completed" : "open"))}</td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function salesPropertyRows(completed = [], upcoming = []) {
+  const groups = new Map();
+  const ensure = (name) => {
+    const key = name || "Unassigned property";
+    if (!groups.has(key)) {
+      groups.set(key, {
+        property: key,
+        completedRevenue: 0,
+        completedProfit: 0,
+        upcomingRevenue: 0,
+        upcomingProfit: 0
+      });
+    }
+    return groups.get(key);
+  };
+  completed.forEach((row) => {
+    const group = ensure(assignmentPropertyTitle(row));
+    const revenue = salesAssignmentRevenue(row);
+    group.completedRevenue += revenue;
+    group.completedProfit += revenue - salesAssignmentContractorPay(row);
+  });
+  upcoming.forEach((row) => {
+    const group = ensure(assignmentPropertyTitle(row));
+    const revenue = salesAssignmentRevenue(row);
+    group.upcomingRevenue += revenue;
+    group.upcomingProfit += revenue - salesAssignmentContractorPay(row);
+  });
+  const rows = Array.from(groups.values())
+    .sort((a, b) => (b.completedRevenue + b.upcomingRevenue) - (a.completedRevenue + a.upcomingRevenue) || a.property.localeCompare(b.property));
+  if (!rows.length) return salesReportTableMessage(5, "No property financials found.");
+  return rows.map((row) => `
+    <tr>
+      <td><strong>${esc(row.property)}</strong></td>
+      <td>${esc(salesMoney(row.completedRevenue))}</td>
+      <td>${esc(salesMoney(row.completedProfit))}</td>
+      <td>${esc(salesMoney(row.upcomingRevenue))}</td>
+      <td>${esc(salesMoney(row.upcomingProfit))}</td>
+    </tr>
+  `).join("");
+}
+
+function salesForecastRows(upcoming = []) {
+  const groups = new Map();
+  upcoming.forEach((row) => {
+    const date = parseDate(row.start_window);
+    if (!date) return;
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        label: date.toLocaleDateString([], { month: "long", year: "numeric" }),
+        rows: [],
+        revenue: 0,
+        contractorPay: 0,
+        profit: 0
+      });
+    }
+    const group = groups.get(key);
+    const revenue = salesAssignmentRevenue(row);
+    const contractorPay = salesAssignmentContractorPay(row);
+    group.rows.push(row);
+    group.revenue += revenue;
+    group.contractorPay += contractorPay;
+    group.profit += revenue - contractorPay;
+  });
+  const rows = Array.from(groups.values()).sort((a, b) => a.key.localeCompare(b.key));
+  if (!rows.length) return salesReportTableMessage(5, "No upcoming assignments to forecast.");
+  return rows.map((row) => `
+    <tr>
+      <td><strong>${esc(row.label)}</strong></td>
+      <td>${esc(row.rows.length.toLocaleString())}</td>
+      <td>${esc(salesMoney(row.revenue))}</td>
+      <td>${esc(salesMoney(row.contractorPay))}</td>
+      <td>${esc(salesMoney(row.profit))}</td>
+    </tr>
+  `).join("");
 }
 
 function renderOperationsReport() {
@@ -11570,6 +12046,9 @@ function renderApp() {
   }
   if (activeKey === "walkthroughs") {
     initWalkthroughs();
+  }
+  if (activeKey === "reports-sales") {
+    initSalesReport();
   }
   if (activeKey === "client-directory" || activeKey === "contracts") {
     initClientDirectory();
