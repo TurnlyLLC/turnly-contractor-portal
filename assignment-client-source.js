@@ -235,6 +235,10 @@ function captureAssignmentUnitMetadata() {
   }
 }
 
+function isBulkUnitAddEnabled() {
+  return Boolean(document.getElementById("assignmentBulkUnitMode")?.checked);
+}
+
 function mergeAssignmentUnitMetadata(row, metadata) {
   if (!row || typeof row !== "object" || Array.isArray(row)) return row;
   const existing = row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
@@ -600,6 +604,10 @@ function bindClientPropertySelect() {
   document.addEventListener("submit", (event) => {
     if (event.target?.id === "assignmentForm") {
       fillAssignmentFromClient();
+      if (isBulkUnitAddEnabled()) {
+        pendingAssignmentUnitMetadata = null;
+        return;
+      }
       applySelectedUnit(selectedUnit());
       captureAssignmentUnitMetadata();
     }

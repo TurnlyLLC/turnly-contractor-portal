@@ -5,6 +5,10 @@ const suiteSupabase = suiteEnv.SUPABASE_URL && suiteEnv.SUPABASE_ANON_KEY
   ? createClient(suiteEnv.SUPABASE_URL, suiteEnv.SUPABASE_ANON_KEY)
   : null;
 
+if (typeof window !== "undefined") {
+  window.turnlyAdminSuiteHandlesAssignmentForm = true;
+}
+
 const navSections = [
   {
     title: "",
@@ -303,6 +307,12 @@ const assignmentOptionalColumns = [
   "visibility",
   "declined_contractor_ids",
   "created_by",
+  "claimed_by",
+  "claimed_by_name",
+  "claimed_by_email",
+  "assigned_to",
+  "assigned_to_name",
+  "assigned_to_email",
   "accepted_at",
   "claimed_at",
   "started_by",
@@ -311,6 +321,9 @@ const assignmentOptionalColumns = [
   "completed_by",
   "checklist_completed_at",
   "checklist_responses",
+  "payment_status",
+  "pay_status",
+  "payout_status",
   "metadata",
   "completion_notes"
 ];
@@ -356,6 +369,7 @@ const assignmentPageSizeOptions = [30, 50, 100];
 const assignmentState = {
   rows: [],
   properties: [],
+  units: [],
   contractors: [],
   user: null,
   profile: null,
@@ -366,6 +380,7 @@ const assignmentState = {
   pageSize: 30,
   currentPage: 1,
   selectedIds: new Set(),
+  bulkUnitIds: new Set(),
   editingId: null,
   isSaving: false,
   isGenerating: false,
@@ -8330,15 +8345,18 @@ function assignmentForm() {
         leadInputField("pay_amount", "Pay Amount", "number", { min: "0", step: "0.01" }),
         leadSelectField("assignment_status", "Status", assignmentStatusOptions, { required: true })
       ])}
+      ${assignmentBulkUnitSection()}
       ${assignmentFormSection("Timing & Routing", [
         leadSelectField("assignment_frequency", "Block Type", assignmentFrequencyOptions, { required: true }),
         leadSelectField("priority", "Priority", assignmentPriorityOptions, { required: true }),
+        assignmentAssignedContractorField(),
         assignmentWeekdayPickerField(),
         leadInputField("start_window", "Start Window", "datetime-local", { required: true }),
         leadInputField("end_window", "End Window", "datetime-local", { required: true }),
         `<label class="suite-field" data-assignment-recurrence-field><span>Renew Until</span><input id="recurrence_end_date" type="date" /></label>`,
         `<label class="suite-field"><span>Preferred Response Deadline</span><input id="preferred_until" type="datetime-local" /></label>`,
         `<label class="checkbox-field assignment-toggle wide" data-assignment-recurrence-field><input id="auto_renewal" type="checkbox" /> <span>Auto renew this assignment block</span></label>`,
+        `<label class="checkbox-field assignment-toggle wide" data-assignment-create-only><input id="assignmentCompleteOnCreate" type="checkbox" /> <span>Mark created assignments complete</span></label>`,
         `<label class="checkbox-field assignment-toggle wide"><input id="preferred_first" type="checkbox" checked /> <span>Offer to preferred contractors first</span></label>`,
         preferredContractorDropdownField()
       ])}
@@ -8351,6 +8369,38 @@ function assignmentForm() {
       <p id="assignmentFormMessage" class="status-message"></p>
       <div class="form-actions"><button id="assignmentSaveBtn" type="submit" class="primary-action assignment-save-action">${icon("check")}<span data-assignment-save-label>Post Assignment</span></button></div>
     </form>
+  `;
+}
+
+function assignmentBulkUnitSection() {
+  return `
+    <section class="assignment-form-section assignment-bulk-unit-section" data-assignment-bulk-unit-section>
+      <div class="assignment-section-title-row">
+        <h3>Bulk Unit Add</h3>
+        <strong id="assignmentBulkUnitSummary">0 units selected</strong>
+      </div>
+      <label class="checkbox-field assignment-toggle assignment-bulk-unit-mode">
+        <input id="assignmentBulkUnitMode" type="checkbox" />
+        <span>Add one assignment for each selected unit</span>
+      </label>
+      <div class="assignment-bulk-unit-tools">
+        <label class="inline-search assignment-bulk-unit-search"><span class="sr-only">Search units</span>${icon("search")}<input id="assignmentBulkUnitSearch" type="search" placeholder="Search unit number..." /></label>
+        <button class="secondary-action" type="button" data-assignment-bulk-unit-select-all>${icon("check")}<span>Select Showing</span></button>
+        <button class="secondary-action" type="button" data-assignment-bulk-unit-clear>${icon("minus")}<span>Clear</span></button>
+      </div>
+      <div id="assignmentBulkUnitList" class="assignment-bulk-unit-list">${emptyState("building", "Select a property to load units")}</div>
+    </section>
+  `;
+}
+
+function assignmentAssignedContractorField() {
+  return `
+    <label class="suite-field">
+      <span>Assigned Contractor</span>
+      <select id="assignmentAssignedContractor">
+        <option value="">Unassigned</option>
+      </select>
+    </label>
   `;
 }
 
@@ -8449,6 +8499,7 @@ function initAssignments() {
   root.addEventListener("click", handleAssignmentClick);
   root.addEventListener("keydown", handleAssignmentKeydown);
   root.addEventListener("change", handleAssignmentChange);
+  root.addEventListener("input", handleAssignmentInput);
   root.addEventListener("submit", saveAssignmentForm);
   root.querySelector("#assignmentSearchInput")?.addEventListener("input", (event) => {
     assignmentState.search = event.target.value || "";
@@ -8500,12 +8551,14 @@ function openAssignmentModal(row = null) {
   assignmentState.editingId = row?.id || null;
   populateAssignmentPropertySelect();
   populateAssignmentContractorMenu();
+  populateAssignmentAssignedContractorSelect();
   if (row) {
     populateAssignmentFormForEdit(row);
   }
   updateAssignmentModalMode();
   updateAssignmentRecurrenceVisibility();
   updateAssignmentContractorControls();
+  renderAssignmentBulkUnitPicker();
   modal.hidden = false;
   document.getElementById("title")?.focus();
 }
@@ -8572,8 +8625,18 @@ function updateAssignmentModalMode() {
   const propertySelect = document.getElementById("propertySelect");
   const button = document.getElementById("assignmentSaveBtn");
   const buttonLabel = assignmentSaveButtonLabel(button);
+  const bulkUnitSection = document.querySelector("[data-assignment-bulk-unit-section]");
   if (title) title.textContent = isEditing ? "Edit Assignment" : "New Assignment";
   if (propertySelect) propertySelect.required = !isEditing;
+  if (bulkUnitSection) bulkUnitSection.hidden = isEditing;
+  document.querySelectorAll("[data-assignment-create-only]").forEach((field) => {
+    field.hidden = isEditing;
+  });
+  if (isEditing) {
+    assignmentState.bulkUnitIds.clear();
+    const bulkToggle = document.getElementById("assignmentBulkUnitMode");
+    if (bulkToggle) bulkToggle.checked = false;
+  }
   if (form) {
     if (isEditing) {
       form.dataset.assignmentEditingId = assignmentState.editingId;
@@ -8581,7 +8644,7 @@ function updateAssignmentModalMode() {
       delete form.dataset.assignmentEditingId;
     }
   }
-  if (buttonLabel) buttonLabel.textContent = isEditing ? "Save Changes" : "Post Assignment";
+  if (buttonLabel) buttonLabel.textContent = isEditing ? "Save Changes" : assignmentBulkUnitModeEnabled() ? "Post Assignments" : "Post Assignment";
 }
 
 function populateAssignmentFormForEdit(row) {
@@ -8600,6 +8663,8 @@ function populateAssignmentFormForEdit(row) {
   setValue("address", row.address || "");
   setValue("service_type", row.service_type || "");
   setValue("pay_amount", row.pay_amount ?? "");
+  populateAssignmentAssignedContractorSelect();
+  setValue("assignmentAssignedContractor", assignmentWorkerId(row) || "");
   populateAssignmentStatusSelect(row);
   setValue("assignment_status", assignmentStatusFormValue(row.status));
   setValue("assignment_frequency", frequency || "one_time");
@@ -8624,6 +8689,7 @@ function populateAssignmentFormForEdit(row) {
     input.checked = selectedIds.has(input.dataset.contractorId) || selectedNames.has(normalizeToken(input.dataset.contractorName));
   });
   updateAssignmentContractorDropdownLabel();
+  updateAssignmentAssignedContractorControls();
 
   const unitField = document.getElementById("assignmentUnitField");
   const unitLabel = row.unit_number || row.unit_name || metadata.unit_number || metadata.unit_name || "";
@@ -8661,6 +8727,19 @@ function handleAssignmentClick(event) {
   const bulkDelete = event.target.closest("[data-assignment-bulk-delete]");
   if (bulkDelete) {
     void deleteSelectedCompletedAssignments();
+    return;
+  }
+
+  const selectVisibleUnits = event.target.closest("[data-assignment-bulk-unit-select-all]");
+  if (selectVisibleUnits) {
+    selectVisibleAssignmentBulkUnits();
+    return;
+  }
+
+  const clearUnits = event.target.closest("[data-assignment-bulk-unit-clear]");
+  if (clearUnits) {
+    assignmentState.bulkUnitIds.clear();
+    renderAssignmentBulkUnitPicker();
     return;
   }
 
@@ -8786,7 +8865,26 @@ function handleAssignmentChange(event) {
     return;
   }
   if (event.target.matches("#propertySelect")) {
+    assignmentState.bulkUnitIds.clear();
     fillAssignmentFromProperty(event.target.value);
+    renderAssignmentBulkUnitPicker();
+  }
+  if (event.target.matches("#assignmentBulkUnitMode")) {
+    renderAssignmentBulkUnitPicker();
+    updateAssignmentModalMode();
+  }
+  if (event.target.matches("[data-assignment-bulk-unit]")) {
+    const unitId = event.target.dataset.assignmentBulkUnit || "";
+    if (unitId && event.target.checked) assignmentState.bulkUnitIds.add(unitId);
+    if (unitId && !event.target.checked) assignmentState.bulkUnitIds.delete(unitId);
+    renderAssignmentBulkUnitPicker();
+  }
+  if (event.target.matches("#assignmentAssignedContractor")) {
+    updateAssignmentAssignedContractorControls();
+  }
+  if (event.target.matches("#assignmentCompleteOnCreate")) {
+    syncAssignmentCompleteOnCreateStatus();
+    renderAssignmentBulkUnitPicker();
   }
   if (event.target.matches("#assignment_frequency")) {
     updateAssignmentRecurrenceVisibility();
@@ -8796,6 +8894,12 @@ function handleAssignmentChange(event) {
   }
   if (event.target.matches("#preferred_first")) {
     updateAssignmentContractorControls();
+  }
+}
+
+function handleAssignmentInput(event) {
+  if (event.target?.matches("#assignmentBulkUnitSearch")) {
+    renderAssignmentBulkUnitPicker();
   }
 }
 
@@ -8831,14 +8935,16 @@ async function loadAssignments() {
     return;
   }
 
-  const [propertiesResult, contractorsResult, assignmentsResult] = await Promise.all([
+  const [propertiesResult, contractorsResult, unitsResult, assignmentsResult] = await Promise.all([
     loadAssignmentProperties(),
     loadAssignmentContractors(),
+    loadAssignmentUnits(),
     loadAssignmentRows()
   ]);
 
   assignmentState.properties = propertiesResult;
   assignmentState.contractors = contractorsResult;
+  assignmentState.units = unitsResult;
   assignmentState.rows = enrichAssignmentRowsWithContractAccess(assignmentsResult.rows, propertiesResult);
   renderAssignmentData();
   const totalCount = assignmentState.rows.length;
@@ -8867,6 +8973,19 @@ async function loadAssignmentProperties() {
   )
     .filter((row) => assignmentPropertyTitle(row))
     .sort((a, b) => assignmentPropertyTitle(a).localeCompare(assignmentPropertyTitle(b)));
+}
+
+async function loadAssignmentUnits() {
+  const { data, error } = await suiteSupabase
+    .from(propertyUnitsTable)
+    .select("*")
+    .order("unit_name", { ascending: true })
+    .limit(3000);
+  if (error) {
+    console.warn("[admin-suite] Unable to load assignment property units", error);
+    return [];
+  }
+  return data || [];
 }
 
 function assignmentPropertyMatchKey(row) {
@@ -8968,6 +9087,126 @@ function enrichAssignmentRowWithContractAccess(row, properties = assignmentState
   return enrichAssignmentRowsWithContractAccess([row], properties)[0] || row;
 }
 
+function selectedAssignmentProperty() {
+  const selectedId = assignmentValue("propertySelect") || assignmentValue("property_id");
+  if (!selectedId) return null;
+  return assignmentState.properties.find((property) => {
+    const ids = [property?.id, property?.client_id, property?.contract_id].filter(Boolean).map(String);
+    return ids.includes(String(selectedId));
+  }) || null;
+}
+
+function assignmentPropertyUnitKeys(property = selectedAssignmentProperty()) {
+  return new Set([property?.id, property?.client_id, property?.contract_id].filter(Boolean).map(String));
+}
+
+function assignmentUnitName(unit = {}) {
+  return unit.unit_name || unit.name || unit.unit_number || "Unnamed unit";
+}
+
+function assignmentUnitSquareFeet(unit = {}) {
+  const squareFeet = propertyUnitNumber(unit.square_feet);
+  return squareFeet > 0 ? `${squareFeet.toLocaleString()} sq ft` : "";
+}
+
+function assignmentUnitInstructions(unit = {}) {
+  return unit.special_instructions || unit.instructions || unit.notes || unit.unit_notes || "";
+}
+
+function assignmentUnitMetaText(unit = {}) {
+  return [
+    assignmentUnitSquareFeet(unit),
+    propertyUnitNumber(unit.contractor_pay) ? `Pay ${propertyUnitMoney(unit.contractor_pay)}` : "",
+    propertyUnitNumber(unit.customer_price) ? `Charge ${propertyUnitMoney(unit.customer_price)}` : ""
+  ].filter(Boolean).join(" | ");
+}
+
+function getAssignmentUnitsForSelectedProperty(applySearch = true) {
+  const property = selectedAssignmentProperty();
+  const keys = assignmentPropertyUnitKeys(property);
+  const term = applySearch ? assignmentValue("assignmentBulkUnitSearch").toLowerCase() : "";
+  if (!keys.size) return [];
+  return assignmentState.units
+    .filter((unit) => keys.has(String(unit.property_id || "")))
+    .filter((unit) => !term || [
+      assignmentUnitName(unit),
+      unit.square_feet,
+      unit.customer_price,
+      unit.contractor_pay,
+      assignmentUnitInstructions(unit)
+    ].some((value) => String(value || "").toLowerCase().includes(term)))
+    .sort(propertyUnitSort);
+}
+
+function assignmentBulkUnitModeEnabled() {
+  return !assignmentState.editingId && Boolean(document.getElementById("assignmentBulkUnitMode")?.checked);
+}
+
+function selectedAssignmentBulkUnits() {
+  const selected = new Set(Array.from(assignmentState.bulkUnitIds).map(String));
+  return assignmentState.units
+    .filter((unit) => selected.has(String(unit.id || "")))
+    .sort(propertyUnitSort);
+}
+
+function renderAssignmentBulkUnitPicker() {
+  const section = document.querySelector("[data-assignment-bulk-unit-section]");
+  const list = document.getElementById("assignmentBulkUnitList");
+  const summary = document.getElementById("assignmentBulkUnitSummary");
+  if (!section || !list || !summary) return;
+
+  const enabled = assignmentBulkUnitModeEnabled();
+  section.classList.toggle("is-enabled", enabled);
+  const property = selectedAssignmentProperty();
+  const allUnits = getAssignmentUnitsForSelectedProperty(false);
+  const visibleUnits = getAssignmentUnitsForSelectedProperty(true);
+  const selectedUnits = selectedAssignmentBulkUnits();
+  const selectedPayTotal = selectedUnits.reduce((sum, unit) => sum + propertyUnitNumber(unit.contractor_pay), 0);
+  summary.textContent = `${selectedUnits.length.toLocaleString()} selected${selectedUnits.length ? ` | ${propertyUnitMoney(selectedPayTotal)} contractor pay` : ""}`;
+
+  section.querySelectorAll(".assignment-bulk-unit-tools input, .assignment-bulk-unit-tools button").forEach((control) => {
+    control.disabled = !enabled;
+  });
+
+  if (!enabled) {
+    list.innerHTML = emptyState("building", "Bulk unit add is off", "Turn it on to choose multiple units.");
+    return;
+  }
+  if (!property) {
+    list.innerHTML = emptyState("building", "Select a property to load units");
+    return;
+  }
+  if (!allUnits.length) {
+    list.innerHTML = emptyState("building", "No units found", "Add units on the Property Units page first.");
+    return;
+  }
+  if (!visibleUnits.length) {
+    list.innerHTML = emptyState("search", "No units match this search");
+    return;
+  }
+
+  list.innerHTML = visibleUnits.map((unit) => {
+    const id = String(unit.id || "");
+    const selected = assignmentState.bulkUnitIds.has(id);
+    return `
+      <label class="assignment-bulk-unit-option ${selected ? "is-selected" : ""}">
+        <input type="checkbox" data-assignment-bulk-unit="${esc(id)}" ${selected ? "checked" : ""} />
+        <span>
+          <strong>${esc(assignmentUnitName(unit))}</strong>
+          <small>${esc(assignmentUnitMetaText(unit) || "No unit pricing set")}</small>
+        </span>
+      </label>
+    `;
+  }).join("");
+}
+
+function selectVisibleAssignmentBulkUnits() {
+  getAssignmentUnitsForSelectedProperty(true).forEach((unit) => {
+    if (unit.id) assignmentState.bulkUnitIds.add(String(unit.id));
+  });
+  renderAssignmentBulkUnitPicker();
+}
+
 async function loadAssignmentContractors() {
   const { data, error } = await suiteSupabase
     .from("profiles")
@@ -9006,10 +9245,12 @@ function renderAssignmentData() {
   pruneAssignmentSelection();
   populateAssignmentPropertySelect();
   populateAssignmentContractorMenu();
+  populateAssignmentAssignedContractorSelect();
   populateAssignmentContractorFilter();
   renderAssignmentFilterControls();
   updateAssignmentRecurrenceVisibility();
   updateAssignmentContractorControls();
+  renderAssignmentBulkUnitPicker();
   renderAssignmentMetrics();
   renderAssignmentTable();
 }
@@ -9058,6 +9299,77 @@ function populateAssignmentContractorMenu() {
     }).join("")
     : `<div class="client-manager-empty">Registered contractor accounts will appear here</div>`;
   updateAssignmentContractorDropdownLabel();
+}
+
+function populateAssignmentAssignedContractorSelect() {
+  const select = document.getElementById("assignmentAssignedContractor");
+  if (!select) return;
+  const selected = select.value;
+  const options = getAssignmentContractorOptions();
+  select.innerHTML = `<option value="">Unassigned</option>${options.map((contractor) => {
+    const label = [contractor.name, contractor.email].filter(Boolean).join(" - ");
+    return `<option value="${esc(contractor.id)}">${esc(label || "Contractor")}</option>`;
+  }).join("")}`;
+  if (selected && options.some((contractor) => String(contractor.id || "") === String(selected))) {
+    select.value = selected;
+  } else {
+    select.value = "";
+  }
+}
+
+function readAssignedAssignmentContractor() {
+  const contractorId = assignmentValue("assignmentAssignedContractor");
+  if (!contractorId) return null;
+  return getAssignmentContractorOptions().find((contractor) => String(contractor.id || "") === String(contractorId)) || null;
+}
+
+function assignmentAssignedContractorPayload(contractor, options = {}) {
+  if (!contractor?.id) return {};
+  const now = options.now || new Date().toISOString();
+  const payload = {
+    assigned_to: contractor.id,
+    assigned_to_name: contractor.name || null,
+    assigned_to_email: contractor.email || null
+  };
+  if (options.claimed) {
+    payload.claimed_by = contractor.id;
+    payload.claimed_by_name = contractor.name || null;
+    payload.claimed_by_email = contractor.email || null;
+    payload.claimed_at = options.claimedAt || now;
+    payload.accepted_at = options.acceptedAt || now;
+  }
+  if (options.started) {
+    payload.started_by = contractor.id;
+    payload.started_at = options.startedAt || now;
+  }
+  return payload;
+}
+
+function assignmentRowWithAssignedContractor(row = {}, contractor = null) {
+  if (!contractor?.id) return row;
+  return {
+    ...row,
+    ...assignmentAssignedContractorPayload(contractor, { claimed: true, started: Boolean(row.started_at || row.status === "in_progress" || row.status === "completed") })
+  };
+}
+
+function syncAssignmentCompleteOnCreateStatus() {
+  const complete = Boolean(document.getElementById("assignmentCompleteOnCreate")?.checked);
+  const status = document.getElementById("assignment_status");
+  if (complete && status) status.value = "completed";
+}
+
+function updateAssignmentAssignedContractorControls() {
+  const contractor = readAssignedAssignmentContractor();
+  const status = document.getElementById("assignment_status");
+  if (contractor?.id && status && assignmentStatusFormValue(status.value) === "open") {
+    status.value = "claimed";
+  }
+  if (contractor?.id) {
+    const preferredFirst = document.getElementById("preferred_first");
+    if (preferredFirst) preferredFirst.checked = false;
+  }
+  updateAssignmentContractorControls();
 }
 
 function populateAssignmentContractorFilter() {
@@ -9340,6 +9652,7 @@ function clearAssignmentForm(options = {}) {
   const form = document.getElementById("assignmentForm");
   if (!form) return;
   form.reset();
+  assignmentState.bulkUnitIds.clear();
   populateAssignmentStatusSelect();
   document.getElementById("property_id").value = "";
   const start = new Date();
@@ -9355,6 +9668,8 @@ function clearAssignmentForm(options = {}) {
   setValue("assignment_frequency", "one_time");
   setValue("priority", "normal");
   setValue("assignment_status", "open");
+  setValue("assignmentAssignedContractor", "");
+  setValue("assignmentBulkUnitSearch", "");
   setValue("start_window", toDatetimeInput(start));
   setValue("end_window", toDatetimeInput(end));
   setValue("preferred_until", toDatetimeInput(preferredUntil));
@@ -9362,9 +9677,15 @@ function clearAssignmentForm(options = {}) {
   document.querySelectorAll("[data-assignment-contractor-option]").forEach((input) => {
     input.checked = false;
   });
+  const bulkToggle = document.getElementById("assignmentBulkUnitMode");
+  if (bulkToggle) bulkToggle.checked = false;
+  const completeToggle = document.getElementById("assignmentCompleteOnCreate");
+  if (completeToggle) completeToggle.checked = false;
   updateAssignmentContractorDropdownLabel();
+  updateAssignmentAssignedContractorControls();
   updateAssignmentRecurrenceVisibility();
   updateAssignmentContractorControls();
+  renderAssignmentBulkUnitPicker();
   refreshAssignmentDateTimeControls();
   const formMessage = document.getElementById("assignmentFormMessage");
   if (formMessage) {
@@ -9394,6 +9715,92 @@ function fillAssignmentFromProperty(propertyId) {
   if (title && !title.value) title.value = `${assignmentPropertyTitle(row)} Service`;
 }
 
+function assignmentSelectedStatusForCreate(assignedContractor) {
+  const completeOnCreate = Boolean(document.getElementById("assignmentCompleteOnCreate")?.checked);
+  let selectedStatus = assignmentStatusFormValue(assignmentValue("assignment_status") || "open");
+  if (completeOnCreate) selectedStatus = "completed";
+  if (assignedContractor?.id && selectedStatus === "open") selectedStatus = "claimed";
+  return selectedStatus;
+}
+
+function assignmentRequiresAssignedContractor(status) {
+  return ["claimed", "in_progress", "completed"].includes(assignmentStatusFormValue(status));
+}
+
+function assignmentCompletionTimestampForWindow(window) {
+  return (window?.end instanceof Date && !Number.isNaN(window.end.getTime()) ? window.end : new Date()).toISOString();
+}
+
+function assignmentStartTimestampForWindow(window) {
+  return (window?.start instanceof Date && !Number.isNaN(window.start.getTime()) ? window.start : new Date()).toISOString();
+}
+
+function assignmentStatusPayloadForWindow(status, rowContext, window, assignedContractor = null) {
+  const normalizedStatus = assignmentStatusFormValue(status);
+  const patch = assignmentStatusPayload(normalizedStatus, rowContext);
+  const shouldClaim = ["claimed", "in_progress", "completed"].includes(normalizedStatus);
+  const shouldStart = ["in_progress", "completed"].includes(normalizedStatus);
+  Object.assign(patch, assignmentAssignedContractorPayload(assignedContractor, {
+    claimed: shouldClaim,
+    started: shouldStart,
+    claimedAt: rowContext.claimed_at || assignmentStartTimestampForWindow(window),
+    acceptedAt: rowContext.accepted_at || assignmentStartTimestampForWindow(window),
+    startedAt: rowContext.started_at || assignmentStartTimestampForWindow(window)
+  }));
+  if (normalizedStatus === "completed") {
+    const completedAt = assignmentCompletionTimestampForWindow(window);
+    patch.visibility = "closed";
+    patch.completed_at = rowContext.completed_at || completedAt;
+    patch.completed_by = assignedContractor?.id || assignmentCompletionUserId(rowContext) || null;
+    patch.checklist_completed_at = rowContext.checklist_completed_at || completedAt;
+    patch.checklist_responses = assignmentAdminCompletionResponses(rowContext, completedAt);
+    patch.payment_status = rowContext.payment_status || "unpaid";
+    patch.pay_status = rowContext.pay_status || "unpaid";
+    patch.payout_status = rowContext.payout_status || "unpaid";
+    patch.completion_notes = rowContext.completion_notes || "Historical completion entered from admin bulk assignment add.";
+  }
+  return patch;
+}
+
+function assignmentUnitPayloadDetails(unit = {}, selectedProperty = selectedAssignmentProperty()) {
+  const unitName = assignmentUnitName(unit);
+  const squareFeet = propertyUnitNumber(unit.square_feet);
+  const customerPrice = propertyUnitNumber(unit.customer_price);
+  const contractorPay = propertyUnitNumber(unit.contractor_pay);
+  const bedrooms = propertyUnitNumber(unit.bedroom_count ?? unit.bedrooms);
+  const bathrooms = propertyUnitNumber(unit.bathroom_count ?? unit.bathrooms);
+  const instructions = assignmentUnitInstructions(unit);
+  const propertyAccessNotes = assignmentPropertyAccessNotes(selectedProperty);
+  const formInstructions = assignmentValue("special_instructions");
+  const accessNotes = formInstructions || instructions || propertyAccessNotes;
+  const metadata = {
+    unit_id: unit.id || null,
+    unit_name: unitName,
+    unit_number: unitName,
+    unit_square_feet: squareFeet || "",
+    unit_customer_price: customerPrice || "",
+    unit_contractor_pay: contractorPay || "",
+    unit_notes: instructions || "",
+    access_notes: accessNotes || "",
+    admin_bulk_unit_add: true
+  };
+  if (bedrooms) metadata.unit_bedrooms = bedrooms;
+  if (bathrooms) metadata.unit_bathrooms = bathrooms;
+  if (selectedProperty?.contract_id) metadata.contract_id = selectedProperty.contract_id;
+  return {
+    unitName,
+    contractorPay,
+    accessNotes,
+    metadata
+  };
+}
+
+function assignmentTitleForUnit(baseTitle, unitName, propertyName) {
+  const title = baseTitle || `${propertyName || "Property"} Service`;
+  if (!unitName || title.toLowerCase().includes(String(unitName).toLowerCase())) return title;
+  return `${title} - ${unitName}`;
+}
+
 function collectAssignmentPayloads() {
   const frequency = assignmentFrequencyKey(assignmentValue("assignment_frequency") || "one_time");
   const start = parseDate(assignmentValue("start_window"));
@@ -9405,10 +9812,16 @@ function collectAssignmentPayloads() {
   const windows = buildAssignmentWindows(start, end, frequency, recurrenceEnd, weekdays);
   if (!windows.length) throw new Error("Renew Until must be on or after the Start Window date.");
   const selectedContractors = readSelectedAssignmentContractors();
-  const preferredFirst = document.getElementById("preferred_first")?.checked && selectedContractors.length > 0;
+  const assignedContractor = readAssignedAssignmentContractor();
+  const selectedStatus = assignmentSelectedStatusForCreate(assignedContractor);
+  if (assignmentRequiresAssignedContractor(selectedStatus) && !assignedContractor?.id) {
+    throw new Error("Choose an Assigned Contractor before posting claimed, in-progress, or completed assignments.");
+  }
+  const directAssignment = Boolean(assignedContractor?.id);
+  const preferredFirst = !directAssignment && selectedStatus === "open" && document.getElementById("preferred_first")?.checked && selectedContractors.length > 0;
   const payAmount = Number(assignmentValue("pay_amount"));
   const groupId = frequency === "one_time" ? null : randomAssignmentGroupId();
-  const status = preferredFirst ? "preferred_pending" : "open";
+  const status = preferredFirst ? "preferred_pending" : selectedStatus;
   const selectedProperty = assignmentState.properties.find((item) => item.id === assignmentValue("property_id") || item.id === assignmentValue("propertySelect"));
   const specialInstructions = assignmentValue("special_instructions") || assignmentPropertyAccessNotes(selectedProperty);
   const payload = {
@@ -9438,10 +9851,34 @@ function collectAssignmentPayloads() {
     metadata: assignmentFormMetadata(frequency, weekdays),
     created_by: assignmentState.user?.id || null
   };
-  return windows.map((window) => ({
-    ...payload,
-    start_window: window.start.toISOString(),
-    end_window: window.end.toISOString()
+  const selectedUnits = assignmentBulkUnitModeEnabled() ? selectedAssignmentBulkUnits() : [];
+  if (assignmentBulkUnitModeEnabled() && !selectedUnits.length) {
+    throw new Error("Choose at least one unit before posting bulk unit assignments.");
+  }
+  const unitRows = selectedUnits.length ? selectedUnits : [null];
+  return windows.flatMap((window) => unitRows.map((unit) => {
+    const unitDetails = unit ? assignmentUnitPayloadDetails(unit, selectedProperty) : null;
+    const unitPay = unitDetails?.contractorPay || 0;
+    const unitMetadata = unitDetails?.metadata || {};
+    const rowContext = assignmentRowWithAssignedContractor({
+      ...payload,
+      status,
+      claimed_at: window.start.toISOString(),
+      accepted_at: window.start.toISOString(),
+      started_at: ["in_progress", "completed"].includes(status) ? window.start.toISOString() : null,
+      completed_at: status === "completed" ? window.end.toISOString() : null,
+      completion_notes: status === "completed" ? "Historical completion entered from admin bulk assignment add." : ""
+    }, assignedContractor);
+    return {
+      ...payload,
+      title: unitDetails ? assignmentTitleForUnit(payload.title, unitDetails.unitName, payload.property_name) : payload.title,
+      pay_amount: unitPay || payload.pay_amount,
+      special_instructions: unitDetails?.accessNotes || payload.special_instructions,
+      metadata: assignmentFormMetadata(frequency, weekdays, null, unitMetadata),
+      start_window: window.start.toISOString(),
+      end_window: window.end.toISOString(),
+      ...assignmentStatusPayloadForWindow(status, rowContext, window, assignedContractor)
+    };
   }));
 }
 
@@ -9452,11 +9889,12 @@ function collectAssignmentUpdatePayload(currentRow = {}) {
   if (!start || !end) throw new Error("Start Window and End Window are required.");
   if (end <= start) throw new Error("End Window must be after Start Window.");
   const selectedContractors = readSelectedAssignmentContractors();
-  const preferredFirst = document.getElementById("preferred_first")?.checked && selectedContractors.length > 0;
+  const assignedContractor = readAssignedAssignmentContractor();
+  const preferredFirst = !assignedContractor?.id && document.getElementById("preferred_first")?.checked && selectedContractors.length > 0;
   const payAmount = Number(assignmentValue("pay_amount"));
   const weekdays = selectedAssignmentWeekdays(start);
   const selectedStatus = assignmentValue("assignment_status");
-  const statusRow = assignmentRowWithSelectedClaim(currentRow, selectedContractors);
+  const statusRow = assignmentRowWithAssignedContractor(assignmentRowWithSelectedClaim(currentRow, selectedContractors), assignedContractor);
   const statusError = assignmentStatusChangeError(selectedStatus, statusRow);
   if (statusError) throw new Error(statusError);
   const payload = {
@@ -9483,6 +9921,18 @@ function collectAssignmentUpdatePayload(currentRow = {}) {
     start_window: start.toISOString(),
     end_window: end.toISOString()
   };
+  Object.assign(payload, assignmentAssignedContractorPayload(assignedContractor, {
+    claimed: ["claimed", "in_progress", "completed"].includes(assignmentStatusFormValue(selectedStatus)),
+    started: ["in_progress", "completed"].includes(assignmentStatusFormValue(selectedStatus)),
+    claimedAt: currentRow.claimed_at || start.toISOString(),
+    acceptedAt: currentRow.accepted_at || start.toISOString(),
+    startedAt: currentRow.started_at || start.toISOString()
+  }));
+  if (assignmentStatusFormValue(selectedStatus) === "completed") {
+    payload.completed_at = currentRow.completed_at || end.toISOString();
+    payload.completed_by = assignedContractor?.id || payload.completed_by || assignmentCompletionUserId(statusRow);
+    payload.checklist_completed_at = currentRow.checklist_completed_at || end.toISOString();
+  }
   const selectedPropertyId = assignmentValue("propertySelect");
   if (selectedPropertyId && assignmentHasPropertyOption(selectedPropertyId)) {
     payload.property_id = selectedPropertyId;
@@ -10047,8 +10497,11 @@ function setAssignmentWeekdays(days = []) {
   });
 }
 
-function assignmentFormMetadata(frequency, weekdays, currentRow = null) {
-  const metadata = currentRow ? { ...assignmentMetadata(currentRow) } : {};
+function assignmentFormMetadata(frequency, weekdays, currentRow = null, extraMetadata = {}) {
+  const metadata = {
+    ...(currentRow ? assignmentMetadata(currentRow) : {}),
+    ...(extraMetadata && typeof extraMetadata === "object" && !Array.isArray(extraMetadata) ? extraMetadata : {})
+  };
   const selectedProperty = assignmentState.properties.find((item) => item.id === assignmentValue("property_id") || item.id === assignmentValue("propertySelect"));
   const accessNotes = assignmentValue("special_instructions") || assignmentPropertyAccessNotes(selectedProperty);
   if (frequency === "weekly") {
@@ -10064,7 +10517,8 @@ function assignmentFormMetadata(frequency, weekdays, currentRow = null) {
 }
 
 function updateAssignmentContractorControls() {
-  const enabled = Boolean(document.getElementById("preferred_first")?.checked);
+  const hasDirectAssignment = Boolean(assignmentValue("assignmentAssignedContractor"));
+  const enabled = Boolean(document.getElementById("preferred_first")?.checked) && !hasDirectAssignment;
   const field = document.querySelector(".assignment-contractor-field");
   const deadline = document.getElementById("preferred_until")?.closest(".suite-field");
   if (field) field.classList.toggle("muted-field", !enabled);
@@ -10220,7 +10674,7 @@ function assignmentRowWithSelectedClaim(row = {}, contractors = []) {
 }
 
 function assignmentCompletionUserId(row = {}) {
-  return row.completed_by || assignmentState.user?.id || row.claimed_by || row.assigned_to || row.started_by || "";
+  return row.completed_by || row.claimed_by || row.assigned_to || row.started_by || assignmentState.user?.id || "";
 }
 
 function assignmentHasChecklistResponses(row = {}) {
@@ -10501,9 +10955,10 @@ function setAssignmentSaving(isSaving) {
   button.disabled = isSaving;
   const label = assignmentSaveButtonLabel(button);
   const isEditing = Boolean(assignmentState.editingId);
+  const createLabel = assignmentBulkUnitModeEnabled() ? "Post Assignments" : "Post Assignment";
   if (label) label.textContent = isSaving
     ? (isEditing ? "Saving..." : "Posting...")
-    : (isEditing ? "Save Changes" : "Post Assignment");
+    : (isEditing ? "Save Changes" : createLabel);
 }
 
 function setAssignmentBulkSaving(isSaving) {

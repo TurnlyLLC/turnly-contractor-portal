@@ -412,6 +412,7 @@ async function insertAssignmentsWithFallback(payloads) {
 
 async function saveAssignment(event) {
   if (event.target?.id !== "assignmentForm") return;
+  if (window.turnlyAdminSuiteHandlesAssignmentForm) return;
   event.preventDefault();
   event.stopImmediatePropagation();
 
