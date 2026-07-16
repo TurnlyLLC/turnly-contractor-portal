@@ -8836,6 +8836,11 @@ function handleAssignmentClick(event) {
 }
 
 function handleAssignmentKeydown(event) {
+  if (shouldSuppressAssignmentFormEnter(event)) {
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
   if (!["Enter", " "].includes(event.key)) return;
   if (event.target.closest("button, a, input, select, textarea")) return;
   const row = event.target.closest("[data-assignment-row-id]");
@@ -8843,6 +8848,14 @@ function handleAssignmentKeydown(event) {
   event.preventDefault();
   const assignment = assignmentState.rows.find((item) => String(item.id || "") === row.dataset.assignmentRowId);
   if (assignment) openAssignmentModal(assignment);
+}
+
+function shouldSuppressAssignmentFormEnter(event) {
+  if (event.key !== "Enter" || event.isComposing) return false;
+  const target = event.target;
+  const form = target?.closest?.("#assignmentForm");
+  if (!form || target.closest("textarea")) return false;
+  return Boolean(target.closest("input, select, button"));
 }
 
 function handleAssignmentChange(event) {
