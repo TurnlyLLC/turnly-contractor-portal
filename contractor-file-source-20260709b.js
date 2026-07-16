@@ -62,7 +62,7 @@ function title(value) {
 function money(value) {
   const number = Number(value);
   if (!Number.isFinite(number) || number <= 0) return "$0";
-  return number.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+  return number.toLocaleString(undefined, { style: "currency", currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
 function dateValue(value, fallback = 0) {
@@ -144,6 +144,54 @@ function isPaid(row = {}) {
     assignmentPayment(row).paid === true ||
     ["paid", "paid-out", "payout-paid", "payout-sent", "settled"].includes(status)
   );
+}
+
+function positiveNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : 0;
+}
+
+function firstMoneyValue(values, allowZero = false) {
+  const found = values.find((value) => {
+    if (value === null || value === undefined || value === "") return false;
+    const number = Number(value);
+    return Number.isFinite(number) && (allowZero ? number >= 0 : number > 0);
+  });
+  return found === undefined ? 0 : Number(found);
+}
+
+function paymentPaidAmount(row = {}) {
+  const payment = assignmentPayment(row);
+  const stored = firstMoneyValue([
+    row.paid_amount,
+    row.payout_amount,
+    row.amount_paid,
+    payment.paid_amount,
+    payment.payout_amount,
+    payment.amount_paid
+  ]);
+  return stored || (isPaid(row) ? positiveNumber(row.pay_amount) : 0);
+}
+
+function paymentFeeAmount(row = {}) {
+  const payment = assignmentPayment(row);
+  return firstMoneyValue([
+    row.cleaner_fee_amount,
+    row.fees_taken,
+    row.fee_amount,
+    payment.cleaner_fee_amount,
+    payment.fees_taken,
+    payment.fee_amount
+  ], true);
+}
+
+function paymentNetAmount(row = {}) {
+  return Math.max(0, paymentPaidAmount(row) - paymentFeeAmount(row));
+}
+
+function paymentNotes(row = {}) {
+  const payment = assignmentPayment(row);
+  return String(row.payment_notes || row.paid_notes || row.fee_notes || payment.notes || payment.payment_notes || payment.fee_notes || "").trim();
 }
 
 function isCompleted(row = {}) {
@@ -384,6 +432,18 @@ function totalPay(rows) {
   return rows.reduce((sum, row) => sum + (Number(row.pay_amount) || 0), 0);
 }
 
+function totalPaidOut(rows) {
+  return rows.reduce((sum, row) => sum + paymentPaidAmount(row), 0);
+}
+
+function totalFees(rows) {
+  return rows.reduce((sum, row) => sum + paymentFeeAmount(row), 0);
+}
+
+function totalNetPaid(rows) {
+  return rows.reduce((sum, row) => sum + paymentNetAmount(row), 0);
+}
+
 function render() {
   const root = document.querySelector("[data-contractor-file-page]");
   if (!root) return;
@@ -414,7 +474,7 @@ function render() {
       ${metric("Active Jobs", active.length.toLocaleString(), "accepted or scheduled", "blue")}
       ${metric("Completed", completed.length.toLocaleString(), "all time", "green")}
       ${metric("Completed Owed", money(totalPay(owed)), `${owed.length} unpaid job(s)`, "yellow")}
-      ${metric("Paid Out", money(totalPay(paid)), `${paid.length} paid job(s)`, "green")}
+      ${metric("Paid Out", money(totalPaidOut(paid)), `${paid.length} paid job(s)`, "green")}
       ${metric("Documents", state.documents.length.toLocaleString(), "records found", "purple")}
       ${metric("Media", state.media.length.toLocaleString(), "photos and videos", "blue")}
     </section>
@@ -699,12 +759,15 @@ function renderSchedule() {
 }
 
 function renderPay() {
+  const rows = payRows();
+  const paid = rows.filter(isPaid);
+  const owed = completedJobs().filter((row) => Number(row.pay_amount) > 0 && !isPaid(row));
   return `
     <section class="metric-strip four">
       ${metric("Accepted Pay", money(totalPay(activeJobs())), `${activeJobs().length} active job(s)`, "blue")}
-      ${metric("Completed Owed", money(totalPay(completedJobs().filter((row) => !isPaid(row)))), "not paid yet", "yellow")}
-      ${metric("Paid Out", money(totalPay(payRows().filter(isPaid))), "marked paid", "green")}
-      ${metric("YTD Completed", money(totalPay(completedJobs().filter((row) => new Date(row.completed_at || row.updated_at).getFullYear() === new Date().getFullYear()))), "this year", "purple")}
+      ${metric("Completed Owed", money(totalPay(owed)), "not paid yet", "yellow")}
+      ${metric("Money Paid Out", money(totalPaidOut(paid)), `${paid.length} paid job(s)`, "green")}
+      ${metric("Fees Taken", money(totalFees(rows)), "cleaner deductions", "purple")}
     </section>
     ${panel("Admin Pay Controls", payTable())}
   `;
@@ -717,7 +780,9 @@ function renderPaySummary() {
   return detailGrid([
     ["Accepted Job Pay", money(totalPay(activeJobs()))],
     ["Completed Owed", money(totalPay(owed))],
-    ["Paid Out", money(totalPay(paid))],
+    ["Money Paid Out", money(totalPaidOut(paid))],
+    ["Fees Taken", money(totalFees(rows))],
+    ["Net Paid To Cleaners", money(totalNetPaid(paid))],
     ["Paid Jobs", paid.length.toLocaleString()]
   ]);
 }
@@ -755,9 +820,16 @@ function payTable() {
   return tableRows(rows, [
     ["Assignment", (row) => `<strong>${esc(assignmentTitle(row))}</strong><small>${esc(formatWindow(row))}</small>`],
     ["Status", (row) => esc(title(row.status || "open"))],
-    ["Amount", (row) => esc(money(row.pay_amount))],
+    ["Job Pay", (row) => esc(money(row.pay_amount))],
+    ["Money Paid Out", (row) => `<input class="contractor-file-pay-input" type="number" min="0" step="0.01" inputmode="decimal" data-pay-field="paidAmount" data-pay-row="${esc(row.id)}" value="${esc(paymentPaidAmount(row) || "")}" aria-label="Money paid out for ${esc(assignmentTitle(row))}">`],
+    ["Fees Taken", (row) => `<input class="contractor-file-pay-input" type="number" min="0" step="0.01" inputmode="decimal" data-pay-field="feeAmount" data-pay-row="${esc(row.id)}" value="${esc(paymentFeeAmount(row) || "")}" aria-label="Fees taken from cleaner for ${esc(assignmentTitle(row))}">`],
+    ["Net", (row) => `<strong data-pay-net="${esc(row.id)}">${esc(money(paymentNetAmount(row)))}</strong><small>paid minus fees</small>`],
+    ["Notes", (row) => `<textarea class="contractor-file-pay-notes" rows="2" data-pay-field="notes" data-pay-row="${esc(row.id)}" aria-label="Payment notes for ${esc(assignmentTitle(row))}">${esc(paymentNotes(row))}</textarea>`],
     ["Payment", (row) => esc(isPaid(row) ? `Paid ${formatDate(assignmentPaidDate(row), "")}` : "Unpaid")],
-    ["Action", (row) => `<button class="${isPaid(row) ? "secondary-action" : "primary-action"}" type="button" data-pay-toggle="${esc(row.id)}" ${state.savingId === row.id ? "disabled" : ""}><span>${esc(isPaid(row) ? "Mark Unpaid" : "Mark Paid")}</span></button>`]
+    ["Action", (row) => {
+      const saving = state.savingId === row.id || state.savingId === `pay:${row.id}`;
+      return `<div class="contractor-file-pay-actions"><button class="secondary-action" type="button" data-pay-save="${esc(row.id)}" ${saving ? "disabled" : ""}><span>Save Pay</span></button><button class="${isPaid(row) ? "secondary-action" : "primary-action"}" type="button" data-pay-toggle="${esc(row.id)}" ${saving ? "disabled" : ""}><span>${esc(isPaid(row) ? "Mark Unpaid" : "Mark Paid")}</span></button></div>`;
+    }]
   ], "No payable assignments found for this contractor.");
 }
 
@@ -1149,7 +1221,7 @@ async function savePerformanceMetric(form) {
 
 async function updateAssignmentWithFallback(id, payload) {
   const next = { ...payload };
-  for (let index = 0; index < 14; index += 1) {
+  for (let index = 0; index < 30; index += 1) {
     const { data, error } = await supabase
       .from("assignment_blocks")
       .update(next)
@@ -1167,43 +1239,140 @@ async function updateAssignmentWithFallback(id, payload) {
   return { data: null, error: new Error("Unable to update assignment payment fields.") };
 }
 
+function payField(id, field) {
+  return Array.from(document.querySelectorAll(`[data-pay-field="${field}"]`))
+    .find((node) => String(node.dataset.payRow || "") === String(id)) || null;
+}
+
+function readPayNumber(id, field, fallback = 0) {
+  const node = payField(id, field);
+  if (!node) return fallback;
+  const number = Number(node.value);
+  return Number.isFinite(number) && number >= 0 ? number : fallback;
+}
+
+function readPayText(id, field, fallback = "") {
+  const node = payField(id, field);
+  return node ? String(node.value || "").trim() : fallback;
+}
+
+function paymentUpdatePayload(row, options) {
+  const paid = Boolean(options.paid);
+  const paidAmount = paid ? positiveNumber(options.paidAmount) : 0;
+  const feeAmount = paid ? positiveNumber(options.feeAmount) : 0;
+  const netPaid = Math.max(0, paidAmount - feeAmount);
+  const now = options.now || new Date().toISOString();
+  const paidAt = paid ? (assignmentPaidDate(row) || now) : null;
+  const notes = String(options.notes || "").trim();
+  const userId = options.userId || null;
+  const currentMetadata = metadata(row);
+  const payment = {
+    ...assignmentPayment(row),
+    status: paid ? "paid" : "unpaid",
+    paid,
+    paid_at: paidAt,
+    paid_by: paid ? userId : null,
+    paid_amount: paidAmount,
+    payout_amount: paidAmount,
+    amount_paid: paidAmount,
+    fees_taken: feeAmount,
+    cleaner_fee_amount: feeAmount,
+    fee_amount: feeAmount,
+    net_paid_amount: netPaid,
+    notes,
+    payment_notes: notes,
+    fee_notes: notes,
+    updated_at: now,
+    updated_by: userId
+  };
+  return {
+    metadata: { ...currentMetadata, payment },
+    payment_status: paid ? "paid" : "unpaid",
+    pay_status: paid ? "paid" : "unpaid",
+    payout_status: paid ? "paid" : "unpaid",
+    paid_at: paidAt,
+    paid_by: paid ? userId : null,
+    paid_amount: paid ? paidAmount : null,
+    payout_amount: paid ? paidAmount : null,
+    amount_paid: paid ? paidAmount : null,
+    cleaner_fee_amount: paid ? feeAmount : null,
+    fees_taken: paid ? feeAmount : null,
+    fee_amount: paid ? feeAmount : null,
+    net_paid_amount: paid ? netPaid : null,
+    paid_out: paid,
+    paid_notes: notes || (paid ? "Payment details saved from admin contractor file." : "Marked unpaid from admin contractor file."),
+    payment_notes: notes,
+    fee_notes: notes
+  };
+}
+
+function updatePayNetPreview(id) {
+  const node = Array.from(document.querySelectorAll("[data-pay-net]"))
+    .find((item) => String(item.dataset.payNet || "") === String(id));
+  if (!node) return;
+  const paidAmount = readPayNumber(id, "paidAmount", 0);
+  const feeAmount = readPayNumber(id, "feeAmount", 0);
+  node.textContent = money(Math.max(0, paidAmount - feeAmount));
+}
+
+async function savePayDetails(id) {
+  const row = state.assignments.find((item) => String(item.id) === String(id));
+  if (!row || state.savingId) return;
+  const paidAmount = readPayNumber(id, "paidAmount", paymentPaidAmount(row));
+  const feeAmount = readPayNumber(id, "feeAmount", paymentFeeAmount(row));
+  const notes = readPayText(id, "notes", paymentNotes(row));
+  state.savingId = `pay:${id}`;
+  render();
+  try {
+    const { data: userData } = await supabase.auth.getUser();
+    const payload = paymentUpdatePayload(row, {
+      paid: paidAmount > 0 || feeAmount > 0 || isPaid(row),
+      paidAmount,
+      feeAmount,
+      notes,
+      userId: userData?.user?.id || null,
+      now: new Date().toISOString()
+    });
+    const result = await updateAssignmentWithFallback(id, payload);
+    state.savingId = "";
+    if (result.error) {
+      message(`Unable to save payment details: ${result.error.message}`, true);
+      render();
+      return;
+    }
+    state.assignments = state.assignments.map((item) => String(item.id) === String(id) ? { ...item, ...(result.data || payload) } : item);
+    message("Payment details saved.");
+    render();
+  } catch (error) {
+    state.savingId = "";
+    message(`Unable to save payment details: ${error.message}`, true);
+    render();
+  }
+}
+
 async function togglePaid(id) {
   const row = state.assignments.find((item) => String(item.id) === String(id));
   if (!row || state.savingId) return;
   const nextPaid = !isPaid(row);
   const label = nextPaid ? "mark this assignment paid" : "mark this assignment unpaid";
   if (!window.confirm(`Are you sure you want to ${label}?`)) return;
+  const paidAmount = nextPaid
+    ? readPayNumber(id, "paidAmount", paymentPaidAmount(row) || positiveNumber(row.pay_amount))
+    : 0;
+  const feeAmount = nextPaid ? readPayNumber(id, "feeAmount", paymentFeeAmount(row)) : 0;
+  const notes = nextPaid ? readPayText(id, "notes", paymentNotes(row)) : "";
   state.savingId = id;
   render();
   const { data: userData } = await supabase.auth.getUser();
-  const now = new Date().toISOString();
-  const currentMetadata = metadata(row);
-  const payment = nextPaid
-    ? {
-      status: "paid",
-      paid: true,
-      paid_at: now,
-      paid_by: userData?.user?.id || null,
-      paid_amount: Number(row.pay_amount) || 0
-    }
-    : {
-      status: "unpaid",
-      paid: false,
-      paid_at: null,
-      paid_by: null,
-      paid_amount: 0
-    };
-  const payload = {
-    metadata: { ...currentMetadata, payment },
-    payment_status: nextPaid ? "paid" : "unpaid",
-    pay_status: nextPaid ? "paid" : "unpaid",
-    payout_status: nextPaid ? "paid" : "unpaid",
-    paid_at: nextPaid ? now : null,
-    paid_by: nextPaid ? userData?.user?.id || null : null,
-    paid_amount: nextPaid ? Number(row.pay_amount) || 0 : null,
-    paid_out: nextPaid,
-    paid_notes: nextPaid ? "Marked paid from admin contractor file." : "Marked unpaid from admin contractor file."
-  };
+  const payload = paymentUpdatePayload(row, {
+    paid: nextPaid,
+    paidAmount,
+    feeAmount,
+    notes,
+    userId: userData?.user?.id || null,
+    now: new Date().toISOString()
+  });
+  payload.paid_notes = notes || (nextPaid ? "Marked paid from admin contractor file." : "Marked unpaid from admin contractor file.");
   const result = await updateAssignmentWithFallback(id, payload);
   state.savingId = "";
   if (result.error) {
@@ -1211,7 +1380,7 @@ async function togglePaid(id) {
     render();
     return;
   }
-  state.assignments = state.assignments.map((item) => item.id === id ? { ...item, ...(result.data || payload) } : item);
+  state.assignments = state.assignments.map((item) => String(item.id) === String(id) ? { ...item, ...(result.data || payload) } : item);
   message(nextPaid ? "Assignment marked paid." : "Assignment marked unpaid.");
   render();
 }
@@ -1233,6 +1402,9 @@ function injectStyles() {
   style.textContent = `
     .contractor-file-workspace{display:grid;gap:14px}.contractor-file-hero{align-items:end;background:rgba(17,32,50,.92);border:1px solid var(--suite-border);border-radius:8px;display:flex;gap:16px;justify-content:space-between;padding:18px}.contractor-file-hero h1{font-size:26px;margin:12px 0 6px}.contractor-file-hero p{color:var(--suite-soft);margin:0}.contractor-file-badges{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}.contractor-file-back{display:inline-flex;width:auto}.contractor-file-quick{background:rgba(0,214,166,.1);border:1px solid rgba(0,214,166,.3);border-radius:8px;padding:14px 18px;text-align:right}.contractor-file-quick strong{color:var(--suite-green);display:block;font-size:24px}.contractor-file-quick small{color:var(--suite-soft);font-weight:800;text-transform:uppercase}.contractor-file-tabs{margin-top:2px}.contractor-file-grid{display:grid;gap:14px;grid-template-columns:repeat(2,minmax(0,1fr))}.contractor-file-panel .panel-head{padding-bottom:10px}.contractor-file-detail-grid{display:grid;gap:10px;grid-template-columns:repeat(2,minmax(0,1fr))}.contractor-file-detail-grid div{background:rgba(7,18,32,.55);border:1px solid var(--suite-border-soft);border-radius:8px;padding:10px}.contractor-file-detail-grid span{color:var(--suite-soft);display:block;font-size:11px;font-weight:900;text-transform:uppercase}.contractor-file-detail-grid strong{display:block;margin-top:4px}.contractor-file-list{display:grid;gap:8px}.contractor-file-list article{align-items:center;background:rgba(7,18,32,.55);border:1px solid var(--suite-border-soft);border-radius:8px;display:flex;justify-content:space-between;padding:10px}.contractor-file-list small,.contractor-file-table small{color:var(--suite-soft);display:block;font-size:11px;margin-top:3px}.contractor-file-empty{border:1px dashed var(--suite-border-soft);border-radius:8px;color:var(--suite-soft);padding:18px;text-align:center}.contractor-file-step-list{display:grid;gap:10px;margin-bottom:14px}.contractor-file-step{align-items:center;background:rgba(7,18,32,.55);border:1px solid var(--suite-border-soft);border-radius:8px;display:flex;gap:10px;padding:10px}.contractor-file-step>span{align-items:center;border:1px solid var(--suite-border);border-radius:999px;display:inline-flex;height:28px;justify-content:center;width:28px}.contractor-file-step.is-complete>span{background:var(--suite-green);border-color:var(--suite-green);color:#041d15}.contractor-file-step small{color:var(--suite-soft);display:block}.contractor-file-table-wrap{max-height:520px}.contractor-file-tab-body{display:grid;gap:14px}.contractor-file-form{display:grid;gap:12px}.contractor-file-form-grid{display:grid;gap:12px;grid-template-columns:repeat(2,minmax(0,1fr))}.contractor-file-form label{display:grid;gap:6px}.contractor-file-form label span{color:var(--suite-soft);font-size:11px;font-weight:900;text-transform:uppercase}.contractor-file-form input,.contractor-file-form select,.contractor-file-form textarea{background:rgba(7,18,32,.8);border:1px solid var(--suite-border-soft);border-radius:7px;color:var(--suite-text);font:inherit;min-height:38px;padding:9px 10px;width:100%}.contractor-file-form input[type=file]{padding:8px}.contractor-file-form textarea{min-height:88px;resize:vertical}.contractor-file-field-full{grid-column:1/-1}.contractor-file-form-actions{display:flex;gap:10px;justify-content:flex-end}.contractor-file-nested-form{border-top:1px solid var(--suite-border-soft);margin-top:14px;padding-top:14px}@media(max-width:1050px){.contractor-file-grid{grid-template-columns:1fr}.contractor-file-hero{align-items:start;display:grid}.contractor-file-quick{text-align:left}.contractor-file-detail-grid,.contractor-file-form-grid{grid-template-columns:1fr}.contractor-file-form-actions{justify-content:stretch}.contractor-file-form-actions .primary-action{width:100%}}
   `;
+  style.textContent += `
+    .contractor-file-table input,.contractor-file-table textarea{background:rgba(7,18,32,.82);border:1px solid var(--suite-border-soft);border-radius:7px;color:var(--suite-text);font:inherit;min-height:36px;padding:8px 9px;width:100%}.contractor-file-table textarea{min-height:54px;min-width:180px;resize:vertical}.contractor-file-pay-input{min-width:105px}.contractor-file-pay-actions{display:flex;flex-wrap:wrap;gap:6px;min-width:190px}.contractor-file-pay-actions .primary-action,.contractor-file-pay-actions .secondary-action{min-height:34px;padding:8px 10px}.contractor-file-table [data-pay-net]{color:var(--suite-green);display:block;min-width:82px}
+  `;
   document.head.appendChild(style);
 }
 
@@ -1249,6 +1421,11 @@ function bind() {
       void togglePaid(pay.dataset.payToggle);
       return;
     }
+    const paySave = event.target.closest("[data-pay-save]");
+    if (paySave) {
+      void savePayDetails(paySave.dataset.paySave);
+      return;
+    }
     const storage = event.target.closest("[data-open-storage-path]");
     if (storage) {
       void openStorageFile(storage.dataset.openStorageBucket, storage.dataset.openStoragePath);
@@ -1259,6 +1436,11 @@ function bind() {
       state.editingProfile = !state.editingProfile;
       render();
     }
+  });
+  document.addEventListener("input", (event) => {
+    const payInput = event.target.closest("[data-pay-field]");
+    if (!payInput) return;
+    updatePayNetPreview(payInput.dataset.payRow);
   });
   document.addEventListener("submit", (event) => {
     const form = event.target;
