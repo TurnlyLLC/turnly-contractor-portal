@@ -384,7 +384,8 @@ const assignmentState = {
   editingId: null,
   isSaving: false,
   isGenerating: false,
-  isBulkSaving: false
+  isBulkSaving: false,
+  isDeleting: false
 };
 const propertyUnitsTable = "property_units";
 const checklistTemplatesTable = "checklist_templates";
@@ -8367,7 +8368,10 @@ function assignmentForm() {
       ], "assignment-notes-grid")}
       <div id="assignmentChecklistPreview" class="checklist-summary assignment-checklist-preview"></div>
       <p id="assignmentFormMessage" class="status-message"></p>
-      <div class="form-actions"><button id="assignmentSaveBtn" type="submit" class="primary-action assignment-save-action">${icon("check")}<span data-assignment-save-label>Post Assignment</span></button></div>
+      <div class="form-actions assignment-edit-actions">
+        <button id="assignmentDeleteBtn" type="button" class="secondary-action danger-action assignment-delete-action" data-assignment-delete-current hidden>${icon("trash")}<span data-assignment-delete-label>Delete Assignment</span></button>
+        <button id="assignmentSaveBtn" type="submit" class="primary-action assignment-save-action">${icon("check")}<span data-assignment-save-label>Post Assignment</span></button>
+      </div>
     </form>
   `;
 }
@@ -8625,6 +8629,7 @@ function updateAssignmentModalMode() {
   const propertySelect = document.getElementById("propertySelect");
   const button = document.getElementById("assignmentSaveBtn");
   const buttonLabel = assignmentSaveButtonLabel(button);
+  const deleteButton = document.getElementById("assignmentDeleteBtn");
   const bulkUnitSection = document.querySelector("[data-assignment-bulk-unit-section]");
   if (title) title.textContent = isEditing ? "Edit Assignment" : "New Assignment";
   if (propertySelect) propertySelect.required = !isEditing;
@@ -8645,6 +8650,13 @@ function updateAssignmentModalMode() {
     }
   }
   if (buttonLabel) buttonLabel.textContent = isEditing ? "Save Changes" : assignmentBulkUnitModeEnabled() ? "Post Assignments" : "Post Assignment";
+  if (deleteButton) {
+    deleteButton.hidden = !isEditing;
+    deleteButton.disabled = !isEditing || assignmentState.isSaving || assignmentState.isDeleting;
+    deleteButton.dataset.assignmentDeleteCurrent = isEditing ? String(assignmentState.editingId || "") : "";
+    const deleteLabel = deleteButton.querySelector("[data-assignment-delete-label]");
+    if (deleteLabel && !assignmentState.isDeleting) deleteLabel.textContent = "Delete Assignment";
+  }
 }
 
 function populateAssignmentFormForEdit(row) {
@@ -8715,6 +8727,12 @@ function handleAssignmentClick(event) {
   const closeModal = event.target.closest("[data-assignment-modal-close]");
   if (closeModal) {
     closeAssignmentModal();
+    return;
+  }
+
+  const deleteCurrent = event.target.closest("[data-assignment-delete-current]");
+  if (deleteCurrent) {
+    void deleteAssignmentFromEditModal(deleteCurrent.dataset.assignmentDeleteCurrent || assignmentState.editingId);
     return;
   }
 
@@ -9522,9 +9540,6 @@ function assignmentRowActions(row, status, id) {
   if (status === "preferred-pending") {
     actions.push(["open", "Release"]);
   }
-  if (["open", "preferred-pending", "claimed", "in-progress", "draft"].includes(status)) {
-    actions.push(["cancel", "Cancel"]);
-  }
   if (status === "claimed") {
     actions.push(["start", "Start"]);
   }
@@ -9538,7 +9553,7 @@ function assignmentRowActions(row, status, id) {
     ...actions.map(([action, label]) => `<button class="table-action-button" type="button" data-assignment-id="${id}" data-assignment-action="${esc(action)}">${esc(label)}</button>`),
     canDeleteCompleted ? `<button class="table-action-button danger-action" type="button" data-assignment-delete-completed="${esc(id)}">${icon("trash")}<span>Delete</span></button>` : ""
   ].filter(Boolean).join("");
-  const doneText = !actions.length && !canDeleteCompleted ? `<span class="assignment-action-muted">Done</span>` : "";
+  const doneText = !actions.length && !canDeleteCompleted && isAssignmentClosed(row) ? `<span class="assignment-action-muted">Done</span>` : "";
   return `${assignmentStatusInlineSelect(row, id)}${actionButtons}${doneText}`;
 }
 
@@ -10000,31 +10015,77 @@ async function deleteCompletedAssignment(id) {
   await deleteCompletedAssignments([row]);
 }
 
+async function deleteAssignmentFromEditModal(id = assignmentState.editingId) {
+  if (!suiteSupabase || assignmentState.isDeleting || assignmentState.isSaving) return;
+  const row = assignmentState.rows.find((item) => String(item.id || "") === String(id || ""));
+  if (!row?.id) {
+    showAssignmentMessage("That assignment could not be found.", true);
+    return;
+  }
+
+  const label = assignmentSingleDeleteLabel(row);
+  if (isCompletedContractorAssignment(row)) {
+    const deleted = await deleteCompletedAssignments([row]);
+    if (deleted) {
+      closeAssignmentModal();
+      showAssignmentMessage(`${label} deleted from Supabase.`);
+    }
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `Delete ${label}?\n\nThis permanently removes the assignment from Supabase.`
+  );
+  if (!confirmed) return;
+
+  assignmentState.isDeleting = true;
+  setAssignmentDeleting(true);
+  showAssignmentMessage(`Deleting ${label}...`);
+  const { error } = await suiteSupabase
+    .from(assignmentTable)
+    .delete()
+    .eq("id", row.id);
+  assignmentState.isDeleting = false;
+  setAssignmentDeleting(false);
+
+  if (error) {
+    showAssignmentMessage("Unable to delete assignment: " + error.message, true);
+    return;
+  }
+
+  assignmentState.rows = assignmentState.rows.filter((item) => String(item.id || "") !== String(row.id || ""));
+  assignmentState.selectedIds.delete(String(row.id || ""));
+  closeAssignmentModal();
+  clearAssignmentForm({ keepMessage: true });
+  renderAssignmentData();
+  showAssignmentMessage(`${label} deleted from Supabase.`);
+}
+
 async function deleteCompletedAssignments(rows = []) {
-  if (!suiteSupabase || assignmentState.isBulkSaving) return;
+  if (!suiteSupabase || assignmentState.isBulkSaving) return false;
   const ids = rows.map((row) => row.id).filter(Boolean);
   const invalidRows = rows.filter((row) => !isCompletedContractorAssignment(row));
   if (!ids.length) {
     showAssignmentMessage("Choose a completed contractor job first.", true);
-    return;
+    return false;
   }
   if (invalidRows.length) {
     showAssignmentMessage("Only completed contractor jobs can be deleted from this action.", true);
-    return;
+    return false;
   }
 
   const label = assignmentDeleteLabel(rows);
   const firstConfirmed = window.confirm(
     `Delete ${label}?\n\nThis permanently removes the completed contractor job from Supabase.`
   );
-  if (!firstConfirmed) return;
+  if (!firstConfirmed) return false;
 
   const typed = window.prompt(
     `Second confirmation required.\n\nType DELETE to permanently delete ${label}.`
   );
   if (typed !== "DELETE") {
     showAssignmentMessage("Delete cancelled. The second confirmation did not match DELETE.", true);
-    return;
+    return false;
   }
 
   assignmentState.isBulkSaving = true;
@@ -10039,7 +10100,7 @@ async function deleteCompletedAssignments(rows = []) {
   if (error) {
     renderAssignmentBulkControls(getCurrentAssignmentPageRows());
     showAssignmentMessage("Unable to delete completed jobs: " + error.message, true);
-    return;
+    return false;
   }
 
   const deletedIds = new Set(ids.map((id) => String(id)));
@@ -10048,6 +10109,7 @@ async function deleteCompletedAssignments(rows = []) {
   renderAssignmentData();
   const deletedCount = Number(data) || ids.length;
   showAssignmentMessage(`${deletedCount} completed contractor job${deletedCount === 1 ? "" : "s"} deleted from Supabase.`);
+  return true;
 }
 
 async function saveAssignmentForm(event) {
@@ -10856,6 +10918,10 @@ function assignmentDeleteLabel(rows = []) {
   return `${rows.length} completed contractor jobs`;
 }
 
+function assignmentSingleDeleteLabel(row = {}) {
+  return row.title || row.property_name || assignmentShortId(row) || "this assignment";
+}
+
 function isAssignmentClaimedHistory(row) {
   const status = assignmentStatusKey(row?.status);
   return ["claimed", "in-progress"].includes(status)
@@ -10902,14 +10968,28 @@ function isAssignmentUpcoming(row) {
 
 function setAssignmentSaving(isSaving) {
   const button = document.getElementById("assignmentSaveBtn");
-  if (!button) return;
-  button.disabled = isSaving;
-  const label = assignmentSaveButtonLabel(button);
-  const isEditing = Boolean(assignmentState.editingId);
-  const createLabel = assignmentBulkUnitModeEnabled() ? "Post Assignments" : "Post Assignment";
-  if (label) label.textContent = isSaving
-    ? (isEditing ? "Saving..." : "Posting...")
-    : (isEditing ? "Save Changes" : createLabel);
+  if (button) {
+    button.disabled = isSaving || assignmentState.isDeleting;
+    const label = assignmentSaveButtonLabel(button);
+    const isEditing = Boolean(assignmentState.editingId);
+    const createLabel = assignmentBulkUnitModeEnabled() ? "Post Assignments" : "Post Assignment";
+    if (label) label.textContent = isSaving
+      ? (isEditing ? "Saving..." : "Posting...")
+      : (isEditing ? "Save Changes" : createLabel);
+  }
+  const deleteButton = document.getElementById("assignmentDeleteBtn");
+  if (deleteButton) deleteButton.disabled = isSaving || assignmentState.isDeleting || !assignmentState.editingId;
+}
+
+function setAssignmentDeleting(isDeleting) {
+  const deleteButton = document.getElementById("assignmentDeleteBtn");
+  if (deleteButton) {
+    deleteButton.disabled = isDeleting || assignmentState.isSaving;
+    const label = deleteButton.querySelector("[data-assignment-delete-label]");
+    if (label) label.textContent = isDeleting ? "Deleting..." : "Delete Assignment";
+  }
+  const saveButton = document.getElementById("assignmentSaveBtn");
+  if (saveButton) saveButton.disabled = isDeleting || assignmentState.isSaving;
 }
 
 function setAssignmentBulkSaving(isSaving) {

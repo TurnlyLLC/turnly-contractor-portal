@@ -709,10 +709,28 @@ body[data-admin-page="assignments"] .assignment-modal-form .form-actions {
   justify-content: flex-end;
 }
 
+body[data-admin-page="assignments"] .assignment-modal-form .assignment-edit-actions {
+  gap: 10px;
+  justify-content: space-between;
+}
+
 body[data-admin-page="assignments"] .assignment-save-action {
   flex: 0 0 auto;
   min-width: 148px;
   white-space: nowrap;
+}
+
+body[data-admin-page="assignments"] .assignment-delete-action {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+body[data-admin-page="assignments"] .assignment-delete-action[hidden] {
+  display: none !important;
+}
+
+body[data-admin-page="assignments"] .assignment-edit-actions .assignment-save-action {
+  margin-left: auto;
 }
 
 body[data-admin-page="assignments"] .assignment-save-action .suite-icon {
