@@ -84,6 +84,7 @@ const state = {
   messageStatus: "",
   messageStatusError: false,
   messageSending: false,
+  profileMenuOpen: false,
   loading: true,
   message: "",
   messageError: false,
@@ -567,9 +568,28 @@ function topbar() {
         ${Array.from(new Set(state.myAssignments.map((item) => item.property_name).filter(Boolean))).slice(0, 8).map((name) => `<option>${esc(name)}</option>`).join("")}
       </select>
       <button id="installPwaBtn" class="cp-ghost-action cp-install-action" type="button" data-pwa-install hidden>Install App</button>
-      <button id="logoutBtn" class="cp-ghost-action" type="button">Sign Out</button>
     </header>
     <p id="claimMessage" class="cp-status-message ${state.messageError ? "error" : ""}" aria-live="polite">${esc(state.message)}</p>
+  `;
+}
+
+function profileAccountMenu(menuId = "cpProfileMenu") {
+  return `
+    <div id="${esc(menuId)}" class="cp-profile-menu" data-contractor-profile-menu ${state.profileMenuOpen ? "" : "hidden"}>
+      <button class="cp-profile-menu-action" type="button" data-contractor-logout>Sign Out</button>
+    </div>
+  `;
+}
+
+function profileAccountTrigger(menuId = "cpProfileMenu") {
+  return `
+    <button class="cp-profile" type="button" data-contractor-profile-toggle aria-expanded="${state.profileMenuOpen ? "true" : "false"}" aria-controls="${esc(menuId)}">
+      <span class="cp-profile-avatar">${esc(initials())}</span>
+      <span>
+        <strong>${esc(contractorName())}</strong>
+        <small>Contractor</small>
+      </span>
+    </button>
   `;
 }
 
@@ -593,12 +613,9 @@ function sidebar() {
         <strong>Turnly Ops Center</strong>
         <small>ops@turnlypros.com</small>
       </section>
-      <section class="cp-profile">
-        <span class="cp-profile-avatar">${esc(initials())}</span>
-        <span>
-          <strong>${esc(contractorName())}</strong>
-          <small>Contractor</small>
-        </span>
+      <section class="cp-profile-wrap">
+        ${profileAccountTrigger("cpProfileMenu")}
+        ${profileAccountMenu("cpProfileMenu")}
       </section>
     </aside>
   `;
@@ -613,6 +630,10 @@ function mobileNav() {
         ${mobileMoreItems.map(([key, label, href]) => `
           <a class="cp-mobile-more-link ${key === pageKey ? "active" : ""}" href="${esc(href)}">${esc(label)}</a>
         `).join("")}
+      </div>
+      <div class="cp-mobile-profile-account">
+        ${profileAccountTrigger("cpMobileProfileMenu")}
+        ${profileAccountMenu("cpMobileProfileMenu")}
       </div>
     </div>
     <nav class="cp-mobile-nav" aria-label="Contractor mobile navigation">
@@ -1806,10 +1827,23 @@ function attachEvents() {
       document.querySelector("[data-mobile-more-toggle]")?.setAttribute("aria-expanded", "false");
     }
 
-    const logoutButton = event.target.closest("#logoutBtn");
+    const logoutButton = event.target.closest("[data-contractor-logout], #logoutBtn");
     if (logoutButton) {
       await supabase?.auth.signOut();
       window.location.href = "contractor-login.html";
+      return;
+    }
+
+    const profileToggle = event.target.closest("[data-contractor-profile-toggle]");
+    if (profileToggle) {
+      state.profileMenuOpen = !state.profileMenuOpen;
+      renderShell();
+      return;
+    }
+
+    if (state.profileMenuOpen && !event.target.closest("[data-contractor-profile-menu], [data-contractor-profile-toggle]")) {
+      state.profileMenuOpen = false;
+      renderShell();
       return;
     }
 
@@ -1929,6 +1963,10 @@ function attachEvents() {
     }
     if (event.key === "Escape" && state.selectedBoardJobId) {
       state.selectedBoardJobId = "";
+      renderShell();
+    }
+    if (event.key === "Escape" && state.profileMenuOpen) {
+      state.profileMenuOpen = false;
       renderShell();
     }
   });

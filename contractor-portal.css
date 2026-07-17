@@ -126,6 +126,10 @@
   padding: 12px;
 }
 
+.cp-profile-wrap {
+  position: relative;
+}
+
 .cp-support small,
 .cp-profile small,
 .cp-panel-kicker,
@@ -145,10 +149,22 @@
 
 .cp-profile {
   align-items: center;
+  color: var(--cp-text);
+  cursor: pointer;
   display: grid;
+  font: inherit;
   gap: 10px;
   grid-template-columns: 40px 1fr;
   padding: 10px;
+  text-align: left;
+  width: 100%;
+}
+
+.cp-profile:hover,
+.cp-profile:focus-visible,
+.cp-profile[aria-expanded="true"] {
+  border-color: rgba(18, 217, 155, 0.45);
+  outline: 0;
 }
 
 .cp-profile-avatar {
@@ -158,6 +174,46 @@
   font-weight: 900;
   height: 40px;
   width: 40px;
+}
+
+.cp-profile-menu {
+  background: rgba(5, 14, 24, 0.98);
+  border: 1px solid var(--cp-line);
+  border-radius: 8px;
+  bottom: calc(100% + 8px);
+  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.34);
+  display: grid;
+  gap: 6px;
+  left: 0;
+  padding: 8px;
+  position: absolute;
+  right: 0;
+  z-index: 80;
+}
+
+.cp-profile-menu[hidden] {
+  display: none;
+}
+
+.cp-profile-menu-action {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid var(--cp-line);
+  border-radius: 8px;
+  color: var(--cp-text);
+  cursor: pointer;
+  display: flex;
+  font-weight: 900;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 12px;
+}
+
+.cp-profile-menu-action:hover,
+.cp-profile-menu-action:focus-visible {
+  border-color: rgba(255, 100, 112, 0.58);
+  color: #ffd6da;
+  outline: 0;
 }
 
 .cp-main {
@@ -170,7 +226,7 @@
   align-items: center;
   display: grid;
   gap: 14px;
-  grid-template-columns: minmax(0, 1fr) auto auto auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
 }
 
 .cp-page-title h1 {
@@ -1062,8 +1118,7 @@
     display: none;
   }
 
-  .cp-install-action,
-  #logoutBtn {
+  .cp-install-action {
     width: 100%;
   }
 
@@ -1155,6 +1210,17 @@
     display: grid;
     gap: 8px;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cp-mobile-profile-account {
+    border-top: 1px solid var(--cp-line);
+    margin-top: 10px;
+    padding-top: 10px;
+    position: relative;
+  }
+
+  .cp-mobile-profile-account .cp-profile-menu {
+    bottom: calc(100% + 8px);
   }
 
   .cp-mobile-more-link {
