@@ -420,6 +420,8 @@ const qaQueueState = {
 const topbarState = {
   user: null,
   profile: null,
+  messageNotifications: [],
+  notificationError: "",
   loaded: false,
   loading: false
 };
@@ -10627,6 +10629,7 @@ function renderSidebar(activeKey) {
                   <a class="suite-nav-link ${activeKey === link.key ? "active" : ""}" href="${link.href || "#"}">
                     ${icon(link.icon)}
                     <span>${esc(link.label)}</span>
+                    ${renderNavNotificationBadge(link.key)}
                   </a>
                 `).join("")}
               </div>
@@ -10642,6 +10645,7 @@ function renderTopbar(page) {
   const actions = page.actions || (page.action ? [page.action] : []);
   const actionMarkup = actions.map((action) => actionLink(action.label, action.icon, action.href, action.tone)).join("");
   const profile = getTopbarProfileDefaults();
+  const unreadMessages = topbarUnreadMessageCount();
   return `
     <header class="suite-topbar">
       <div class="page-heading">
@@ -10657,12 +10661,9 @@ function renderTopbar(page) {
         </div>
         ${actionMarkup}
         <div class="topbar-popover-wrap">
-          <button id="topNotificationsBtn" class="top-icon" type="button" aria-label="Notifications" aria-expanded="false">${icon("bell")}<span id="topNotificationsBadge">3</span></button>
+          <button id="topNotificationsBtn" class="top-icon" type="button" aria-label="${esc(topbarNotificationButtonLabel())}" aria-expanded="false">${icon("bell")}<span id="topNotificationsBadge" ${unreadMessages ? "" : "hidden"}>${esc(topbarCountLabel(unreadMessages))}</span></button>
           <div id="topNotificationsMenu" class="topbar-dropdown topbar-notifications" hidden>
-            <div class="topbar-dropdown-head"><strong>Notifications</strong><small>Open active work queues</small></div>
-            <a href="assignments.html">${icon("clipboard-list")}<span><strong>Action Items</strong><small>Assignments and follow-ups</small></span></a>
-            <a href="coverage-center.html">${icon("shield")}<span><strong>Coverage Requests</strong><small>Open coverage center</small></span></a>
-            <a href="qa-queue.html">${icon("alert")}<span><strong>QA Alerts</strong><small>Review quality queue</small></span></a>
+            ${renderTopbarNotifications()}
           </div>
         </div>
         <div class="topbar-profile-wrap">
@@ -10735,6 +10736,11 @@ function initTopbar() {
   }
 
   void loadTopbarProfile();
+  if (!window.__turnlyTopbarMessagePoll) {
+    window.__turnlyTopbarMessagePoll = window.setInterval(() => {
+      if (topbarState.user && !topbarState.loading) void loadTopbarMessageNotifications();
+    }, 60000);
+  }
 }
 
 function getTopbarProfileDefaults() {
@@ -10749,6 +10755,7 @@ function getTopbarProfileDefaults() {
 async function loadTopbarProfile() {
   if (!suiteSupabase || topbarState.loading) {
     applyTopbarProfile();
+    applyTopbarNotifications();
     return;
   }
   topbarState.loading = true;
@@ -10771,9 +10778,11 @@ async function loadTopbarProfile() {
     topbarState.profile = result.data || null;
   }
 
+  await loadTopbarMessageNotifications({ render: false });
   topbarState.loaded = true;
   topbarState.loading = false;
   applyTopbarProfile();
+  applyTopbarNotifications();
 }
 
 function applyTopbarProfile() {
@@ -10788,6 +10797,141 @@ function applyTopbarProfile() {
   setText("topProfileEmail", profile.email || profile.role);
   paintTopbarAvatar("topUserAvatar", profile);
   paintTopbarAvatar("topProfileAvatarLarge", profile);
+}
+
+async function loadTopbarMessageNotifications(options = {}) {
+  const shouldRender = options.render !== false;
+  topbarState.messageNotifications = [];
+  topbarState.notificationError = "";
+  const fallbackUser = typeof internalMessageState !== "undefined" ? internalMessageState.user : null;
+  const currentUser = topbarState.user || fallbackUser;
+
+  if (!suiteSupabase || !currentUser?.id) {
+    if (shouldRender) applyTopbarNotifications();
+    return;
+  }
+
+  const { data: ownParticipants, error: participantError } = await suiteSupabase
+    .from("message_thread_participants")
+    .select("thread_id,last_read_at")
+    .eq("user_id", currentUser.id)
+    .eq("is_archived", false);
+
+  if (participantError) {
+    topbarState.notificationError = participantError.message || "Unable to load messages.";
+    if (shouldRender) applyTopbarNotifications();
+    return;
+  }
+
+  const ownByThread = new Map((ownParticipants || [])
+    .filter((row) => row.thread_id)
+    .map((row) => [row.thread_id, row]));
+  const threadIds = [...ownByThread.keys()];
+  if (!threadIds.length) {
+    if (shouldRender) applyTopbarNotifications();
+    return;
+  }
+
+  const { data: threads, error: threadError } = await suiteSupabase
+    .from("message_threads")
+    .select("id,subject,last_message_at,last_message_preview,created_at")
+    .in("id", threadIds)
+    .order("last_message_at", { ascending: false });
+
+  if (threadError) {
+    topbarState.notificationError = threadError.message || "Unable to load message notifications.";
+    if (shouldRender) applyTopbarNotifications();
+    return;
+  }
+
+  topbarState.messageNotifications = (threads || [])
+    .filter((thread) => topbarMessageThreadUnread(thread, ownByThread.get(thread.id)))
+    .slice(0, 100);
+  if (shouldRender) applyTopbarNotifications();
+}
+
+function topbarMessageThreadUnread(thread, ownParticipant) {
+  if (!ownParticipant || !thread?.last_message_at) return false;
+  if (!ownParticipant.last_read_at) return true;
+  return new Date(thread.last_message_at).getTime() > new Date(ownParticipant.last_read_at).getTime();
+}
+
+function topbarUnreadMessageCount() {
+  return topbarState.messageNotifications.length;
+}
+
+function topbarCountLabel(count) {
+  return count > 99 ? "99+" : String(count || 0);
+}
+
+function topbarNotificationButtonLabel() {
+  const count = topbarUnreadMessageCount();
+  if (!count) return "Notifications";
+  return `${count} unread message notification${count === 1 ? "" : "s"}`;
+}
+
+function renderNavNotificationBadge(key) {
+  const count = key === "messages" ? topbarUnreadMessageCount() : 0;
+  return `<em class="nav-notification-badge" data-nav-notification="${esc(key)}" ${count ? "" : "hidden"}>${esc(topbarCountLabel(count))}</em>`;
+}
+
+function renderTopbarNotifications() {
+  const count = topbarUnreadMessageCount();
+  const messageRows = topbarState.messageNotifications.slice(0, 4).map(renderTopbarMessageNotification).join("");
+  const moreRows = count > 4
+    ? `<a class="topbar-message-notification" href="messages.html">${icon("message-square")}<span><strong>View all unread messages</strong><small>${esc(`${count - 4} more unread thread${count - 4 === 1 ? "" : "s"}`)}</small></span></a>`
+    : "";
+  const messageBlock = count
+    ? `${messageRows}${moreRows}`
+    : `<a class="topbar-empty-notification" href="messages.html">${icon("message-square")}<span><strong>No unread messages</strong><small>Open the message center</small></span></a>`;
+  const loadError = topbarState.notificationError
+    ? `<p class="topbar-notification-error">Unable to load message notifications: ${esc(topbarState.notificationError)}</p>`
+    : "";
+
+  return `
+    <div class="topbar-dropdown-head"><strong>Notifications</strong><small>${esc(count ? `${count} unread message${count === 1 ? "" : "s"}` : "No unread messages")}</small></div>
+    ${loadError}
+    ${messageBlock}
+    <div class="topbar-notification-divider"></div>
+    <a href="assignments.html">${icon("clipboard-list")}<span><strong>Action Items</strong><small>Assignments and follow-ups</small></span></a>
+    <a href="coverage-center.html">${icon("shield")}<span><strong>Coverage Requests</strong><small>Open coverage center</small></span></a>
+    <a href="qa-queue.html">${icon("alert")}<span><strong>QA Alerts</strong><small>Review quality queue</small></span></a>
+  `;
+}
+
+function renderTopbarMessageNotification(thread) {
+  return `
+    <a class="topbar-message-notification unread" href="messages.html">
+      ${icon("message-square")}
+      <span><strong>${esc(thread.subject || "New message")}</strong><small>${esc(thread.last_message_preview || "Unread message")}</small></span>
+      <em>${esc(formatTopbarNotificationTime(thread.last_message_at || thread.created_at))}</em>
+    </a>
+  `;
+}
+
+function formatTopbarNotificationTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+function applyTopbarNotifications() {
+  const count = topbarUnreadMessageCount();
+  const label = topbarCountLabel(count);
+  const topBadge = document.getElementById("topNotificationsBadge");
+  const topButton = document.getElementById("topNotificationsBtn");
+  const menu = document.getElementById("topNotificationsMenu");
+  if (topBadge) {
+    topBadge.textContent = label;
+    topBadge.hidden = !count;
+  }
+  if (topButton) topButton.setAttribute("aria-label", topbarNotificationButtonLabel());
+  if (menu) menu.innerHTML = renderTopbarNotifications();
+  document.querySelectorAll("[data-nav-notification='messages']").forEach((badge) => {
+    badge.textContent = label;
+    badge.hidden = !count;
+  });
 }
 
 function paintTopbarAvatar(id, profile) {

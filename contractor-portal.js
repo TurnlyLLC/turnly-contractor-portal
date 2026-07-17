@@ -605,6 +605,7 @@ function sidebar() {
         ${navItems.map(([key, label, href]) => `
           <a class="cp-nav-link ${key === pageKey ? "active" : ""}" href="${esc(href)}">
             <span>${esc(label)}</span>
+            ${cpNavBadge(key)}
           </a>
         `).join("")}
       </nav>
@@ -628,7 +629,7 @@ function mobileNav() {
     <div class="cp-mobile-more-panel" id="cpMobileMorePanel" ${moreOpen ? "" : "hidden"}>
       <div class="cp-mobile-more-grid">
         ${mobileMoreItems.map(([key, label, href]) => `
-          <a class="cp-mobile-more-link ${key === pageKey ? "active" : ""}" href="${esc(href)}">${esc(label)}</a>
+          <a class="cp-mobile-more-link ${key === pageKey ? "active" : ""}" href="${esc(href)}"><span>${esc(label)}</span>${cpNavBadge(key)}</a>
         `).join("")}
       </div>
       <div class="cp-mobile-profile-account">
@@ -644,6 +645,7 @@ function mobileNav() {
       `).join("")}
       <button class="${moreIsActive ? "active" : ""}" type="button" aria-expanded="${moreOpen ? "true" : "false"}" aria-controls="cpMobileMorePanel" data-mobile-more-toggle>
         <strong>...</strong>
+        ${cpUnreadMessageCount() ? cpNavBadge("messages") : ""}
       </button>
     </nav>
   `;
@@ -1668,6 +1670,19 @@ function cpThreadUnread(thread) {
   if (!own || !thread.last_message_at) return false;
   if (!own.last_read_at) return true;
   return new Date(thread.last_message_at).getTime() > new Date(own.last_read_at).getTime();
+}
+
+function cpUnreadMessageCount() {
+  return state.messageThreads.filter(cpThreadUnread).length;
+}
+
+function cpCountLabel(count) {
+  return count > 99 ? "99+" : String(count || 0);
+}
+
+function cpNavBadge(key) {
+  const count = key === "messages" ? cpUnreadMessageCount() : 0;
+  return count ? `<em class="cp-nav-badge">${esc(cpCountLabel(count))}</em>` : "";
 }
 
 function formatMessageTime(value) {

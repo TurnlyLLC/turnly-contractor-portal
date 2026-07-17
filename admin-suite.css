@@ -312,10 +312,30 @@ a {
   font-size: 12px;
   font-weight: 700;
   gap: 8px;
-  grid-template-columns: 18px minmax(0, 1fr);
+  grid-template-columns: 18px minmax(0, 1fr) auto;
   min-height: 31px;
   padding: 0 8px;
   text-decoration: none;
+}
+
+.nav-notification-badge {
+  align-items: center;
+  background: var(--suite-green);
+  border-radius: 999px;
+  color: #041a15;
+  display: inline-flex;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 900;
+  justify-content: center;
+  line-height: 1;
+  min-height: 17px;
+  min-width: 17px;
+  padding: 0 5px;
+}
+
+.nav-notification-badge[hidden] {
+  display: none;
 }
 
 .suite-nav-link:hover {
@@ -481,10 +501,16 @@ a {
   font-weight: 900;
   height: 17px;
   justify-content: center;
+  min-width: 17px;
+  padding: 0 5px;
   position: absolute;
   right: -6px;
   top: -6px;
-  width: 17px;
+  width: auto;
+}
+
+.top-icon span[hidden] {
+  display: none;
 }
 
 .top-user {
@@ -601,6 +627,57 @@ a {
 
 .topbar-dropdown-head {
   padding: 6px 8px 8px;
+}
+
+.topbar-notifications {
+  min-width: 330px;
+}
+
+.topbar-message-notification {
+  align-items: flex-start;
+}
+
+.topbar-message-notification span {
+  min-width: 0;
+}
+
+.topbar-message-notification small {
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbar-message-notification em {
+  color: var(--suite-soft);
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-style: normal;
+  margin-left: auto;
+  padding-top: 2px;
+  white-space: nowrap;
+}
+
+.topbar-message-notification.unread strong {
+  color: #ffffff;
+}
+
+.topbar-empty-notification {
+  color: var(--suite-soft);
+}
+
+.topbar-notification-divider {
+  background: var(--suite-border-soft);
+  height: 1px;
+  margin: 2px 4px;
+}
+
+.topbar-notification-error {
+  color: #ff6b78;
+  font-size: 11px;
+  line-height: 1.35;
+  margin: 0;
+  padding: 0 8px 4px;
 }
 
 .topbar-profile-card {
