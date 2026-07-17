@@ -1,0 +1,146 @@
+body[data-contractor-page="messages"] .cp-messages-layout {
+  align-items: stretch;
+  grid-template-columns: minmax(280px, 330px) minmax(0, 1fr) !important;
+  min-height: calc(100dvh - 128px);
+}
+
+body[data-contractor-page="messages"] .cp-message-panel {
+  display: grid !important;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: calc(100dvh - 128px);
+}
+
+body[data-contractor-page="messages"] .cp-message-panel > .cp-panel-heading {
+  flex: 0 0 auto;
+}
+
+body[data-contractor-page="messages"] #cpConversation.cp-conversation {
+  display: grid !important;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-height: 0;
+}
+
+body[data-contractor-page="messages"] .cp-conversation-box {
+  align-self: center;
+  grid-row: 1 / -1;
+  justify-self: center;
+}
+
+body[data-contractor-page="messages"] .cp-message-bubbles {
+  max-height: none !important;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 12px;
+}
+
+body[data-contractor-page="messages"] #cpMessageReplyForm.cp-message-reply-bar {
+  align-items: stretch;
+  background: linear-gradient(180deg, rgba(12, 26, 42, 0.08), rgba(12, 26, 42, 0.98) 34%);
+  border-top: 1px solid var(--cp-line);
+  display: grid !important;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) 92px !important;
+  margin-top: auto;
+  padding-top: 12px;
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+}
+
+body[data-contractor-page="messages"] #cpMessageReplyForm .sr-only {
+  height: 1px !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  position: absolute !important;
+  width: 1px !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+}
+
+body[data-contractor-page="messages"] #cpMessageReplyForm .cp-reply-field {
+  display: block;
+  gap: 0;
+}
+
+body[data-contractor-page="messages"] #cpMessageReplyForm textarea {
+  height: 46px;
+  max-height: 118px;
+  min-height: 46px !important;
+  resize: vertical;
+}
+
+body[data-contractor-page="messages"] #cpMessageReplyForm .cp-reply-send {
+  align-self: stretch;
+  min-height: 46px;
+  padding: 0 12px;
+  width: 92px;
+}
+
+@media (max-width: 1180px) {
+  body[data-contractor-page="messages"] .cp-messages-layout {
+    grid-template-columns: minmax(240px, 320px) minmax(0, 1fr) !important;
+  }
+}
+
+@media (max-width: 780px) {
+  body.contractor-portal-body[data-contractor-page="messages"] {
+    min-height: 100dvh;
+  }
+
+  body[data-contractor-page="messages"] .cp-main {
+    min-height: 100dvh;
+    padding-bottom: calc(80px + env(safe-area-inset-bottom));
+  }
+
+  body[data-contractor-page="messages"] .cp-messages-layout {
+    grid-template-columns: 1fr !important;
+    min-height: auto;
+  }
+
+  body[data-contractor-page="messages"] .cp-messages-layout > .cp-panel:first-child {
+    max-height: 34dvh;
+    min-height: 190px;
+    overflow: hidden;
+  }
+
+  body[data-contractor-page="messages"] .cp-chat-list {
+    max-height: calc(34dvh - 104px);
+    overflow-y: auto;
+  }
+
+  body[data-contractor-page="messages"] .cp-message-panel {
+    min-height: calc(66dvh - 96px);
+  }
+
+  body[data-contractor-page="messages"] #cpConversation.cp-conversation {
+    min-height: calc(66dvh - 156px);
+  }
+
+  body[data-contractor-page="messages"] #cpMessageReplyForm.cp-message-reply-bar {
+    background: rgba(12, 26, 42, 0.98);
+    bottom: calc(76px + env(safe-area-inset-bottom));
+    grid-template-columns: minmax(0, 1fr) 72px !important;
+    padding: 10px 0 calc(8px + env(safe-area-inset-bottom));
+  }
+
+  body[data-contractor-page="messages"] #cpMessageReplyForm textarea {
+    height: 44px;
+    min-height: 44px !important;
+  }
+
+  body[data-contractor-page="messages"] #cpMessageReplyForm .cp-reply-send {
+    min-height: 44px;
+    width: 72px;
+  }
+}
+
+@media (display-mode: standalone) and (max-width: 780px) {
+  body[data-contractor-page="messages"] .cp-main {
+    min-height: 100dvh;
+  }
+
+  body[data-contractor-page="messages"] #cpMessageReplyForm.cp-message-reply-bar {
+    bottom: calc(76px + env(safe-area-inset-bottom));
+  }
+}
