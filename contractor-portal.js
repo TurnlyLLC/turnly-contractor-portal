@@ -80,6 +80,7 @@ const state = {
   messageThreads: [],
   messageParticipants: [],
   messageMessages: [],
+  messageReadAt: new Map(),
   selectedThreadId: "",
   messageStatus: "",
   messageStatusError: false,
@@ -1543,6 +1544,7 @@ async function loadMessageThreads() {
     state.selectedThreadId = state.messageThreads[0]?.id || "";
   }
   await loadMessageThreadMessages(state.selectedThreadId);
+  if (pageKey === "messages") await markCpMessageThreadRead(state.selectedThreadId);
   state.messageStatus = `${state.messageThreads.length} conversation${state.messageThreads.length === 1 ? "" : "s"} loaded.`;
   state.messageStatusError = false;
 }
@@ -1635,14 +1637,18 @@ async function sendCpMessageReply(form) {
 
 async function markCpMessageThreadRead(threadId) {
   if (!supabase || !threadId) return;
+  const readAt = new Date().toISOString();
   const { error } = await supabase.rpc("mark_message_thread_read", { target_thread_id: threadId });
   if (error) {
     await supabase
       .from("message_thread_participants")
-      .update({ last_read_at: new Date().toISOString() })
+      .update({ last_read_at: readAt })
       .eq("thread_id", threadId)
       .eq("user_id", state.user?.id || "");
   }
+  const own = cpOwnThreadParticipant(threadId);
+  if (own) own.last_read_at = readAt;
+  state.messageReadAt.set(threadId, readAt);
 }
 
 function selectedCpThread() {
@@ -1668,8 +1674,14 @@ function cpParticipantLine(threadId) {
 function cpThreadUnread(thread) {
   const own = cpOwnThreadParticipant(thread.id);
   if (!own || !thread.last_message_at) return false;
-  if (!own.last_read_at) return true;
-  return new Date(thread.last_message_at).getTime() > new Date(own.last_read_at).getTime();
+  const lastMessageAt = new Date(thread.last_message_at).getTime();
+  const storedReadAt = own.last_read_at ? new Date(own.last_read_at).getTime() : 0;
+  const localReadAt = state.messageReadAt.get(thread.id)
+    ? new Date(state.messageReadAt.get(thread.id)).getTime()
+    : 0;
+  const readAt = Math.max(storedReadAt || 0, localReadAt || 0);
+  if (!readAt) return true;
+  return lastMessageAt > readAt;
 }
 
 function cpUnreadMessageCount() {

@@ -446,6 +446,7 @@ const topbarState = {
   user: null,
   profile: null,
   messageNotifications: [],
+  messageReadAt: new Map(),
   notificationError: "",
   loaded: false,
   loading: false
@@ -6426,6 +6427,7 @@ async function loadInternalMessages() {
   }
 
   await loadInternalThreadMessages(internalMessageState.selectedThreadId);
+  await markInternalMessageThreadRead(internalMessageState.selectedThreadId, { refreshTopbar: false });
   internalMessageState.loading = false;
   setInternalMessageStatus(`${internalMessageState.threads.length} message thread${internalMessageState.threads.length === 1 ? "" : "s"} loaded.`);
   await loadTopbarMessageNotifications();
@@ -6524,7 +6526,7 @@ async function sendInternalMessageReply(form) {
   await loadInternalMessages();
 }
 
-async function markInternalMessageThreadRead(threadId) {
+async function markInternalMessageThreadRead(threadId, options = {}) {
   if (!suiteSupabase || !threadId) return;
   const readAt = new Date().toISOString();
   const { error } = await suiteSupabase.rpc("mark_message_thread_read", { target_thread_id: threadId });
@@ -6537,7 +6539,10 @@ async function markInternalMessageThreadRead(threadId) {
   }
   const own = internalMessageOwnParticipant(threadId);
   if (own) own.last_read_at = readAt;
-  await loadTopbarMessageNotifications();
+  topbarState.messageReadAt.set(threadId, readAt);
+  topbarState.messageNotifications = topbarState.messageNotifications.filter((thread) => thread.id !== threadId);
+  applyTopbarNotifications();
+  if (options.refreshTopbar !== false) await loadTopbarMessageNotifications();
 }
 
 function renderMessageCenterData() {
@@ -12400,8 +12405,14 @@ async function loadTopbarMessageNotifications(options = {}) {
 
 function topbarMessageThreadUnread(thread, ownParticipant) {
   if (!ownParticipant || !thread?.last_message_at) return false;
-  if (!ownParticipant.last_read_at) return true;
-  return new Date(thread.last_message_at).getTime() > new Date(ownParticipant.last_read_at).getTime();
+  const lastMessageAt = new Date(thread.last_message_at).getTime();
+  const storedReadAt = ownParticipant.last_read_at ? new Date(ownParticipant.last_read_at).getTime() : 0;
+  const localReadAt = topbarState.messageReadAt?.get(thread.id)
+    ? new Date(topbarState.messageReadAt.get(thread.id)).getTime()
+    : 0;
+  const readAt = Math.max(storedReadAt || 0, localReadAt || 0);
+  if (!readAt) return true;
+  return lastMessageAt > readAt;
 }
 
 function topbarUnreadMessageCount() {
