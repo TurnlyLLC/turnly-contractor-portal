@@ -77,6 +77,13 @@ const state = {
   availabilityMessage: "",
   availabilityError: false,
   selectedBoardJobId: "",
+  messageThreads: [],
+  messageParticipants: [],
+  messageMessages: [],
+  selectedThreadId: "",
+  messageStatus: "",
+  messageStatusError: false,
+  messageSending: false,
   loading: true,
   message: "",
   messageError: false,
@@ -1086,21 +1093,87 @@ function renderResources() {
 }
 
 function renderMessages() {
-  const conversations = nextAssignments(8);
   return `
     <section class="cp-messages-layout">
-      ${panel("Conversations", `<div class="cp-chat-list">${conversations.length ? conversations.map((item, index) => `<div class="cp-chat-item ${index === 0 ? "active" : ""}"><strong>${esc(assignmentTitle(item))}</strong><small>${esc(item.address || "Operations Team")}</small></div>`).join("") : emptyState("No conversations yet.")}</div>`)}
-      ${panel("Message", `
-        <div class="cp-conversation">
-          <div class="cp-conversation-box">
-            <p class="cp-panel-kicker">Conversation Details</p>
-            <h2>${esc(assignmentTitle(conversations[0]))}</h2>
-            <p class="cp-muted">Messages for this job will appear here when connected to the messaging backend.</p>
-          </div>
+      ${panel("Conversations", `
+        <div class="cp-filter-row">
+          <button class="cp-ghost-action" type="button" data-cp-refresh-messages>Refresh</button>
         </div>
+        <p id="cpMessageStatus" class="cp-status-message ${state.messageStatusError ? "error" : ""}" aria-live="polite">${esc(state.messageStatus)}</p>
+        <div id="cpThreadList" class="cp-chat-list">${renderCpThreadList()}</div>
       `)}
-      ${panel("Shared Files", emptyState("No files shared yet."))}
+      ${panel("Message", `
+        <div id="cpConversation" class="cp-conversation">${renderCpConversation()}</div>
+      `)}
+      ${panel("New Message", `
+        <form id="cpNewThreadForm" class="cp-message-form">
+          <label class="cp-field">
+            <span>Subject</span>
+            <input name="subject" placeholder="Schedule change, access issue, or question" />
+          </label>
+          <label class="cp-field">
+            <span>Message Turnly</span>
+            <textarea name="body" rows="6" placeholder="Type your message..." required></textarea>
+          </label>
+          <button class="cp-action" type="submit" ${state.messageSending ? "disabled" : ""}>Send Message</button>
+        </form>
+      `)}
     </section>
+  `;
+}
+
+function renderCpThreadList() {
+  if (!state.messageThreads.length) return emptyState("No conversations yet.");
+  return state.messageThreads.map((thread) => {
+    const active = thread.id === state.selectedThreadId;
+    const unread = cpThreadUnread(thread);
+    return `
+      <button class="cp-chat-item ${active ? "active" : ""} ${unread ? "unread" : ""}" type="button" data-cp-thread-id="${esc(thread.id)}">
+        <strong>${esc(thread.subject || "Message")}</strong>
+        <small>${esc(cpParticipantLine(thread.id))}</small>
+        <span>${esc(formatMessageTime(thread.last_message_at || thread.created_at))}</span>
+        <p>${esc(thread.last_message_preview || "No messages yet.")}</p>
+      </button>
+    `;
+  }).join("");
+}
+
+function renderCpConversation() {
+  const thread = selectedCpThread();
+  if (!thread) {
+    return `<div class="cp-conversation-box">${emptyState("Select a conversation or send Turnly a new message.")}</div>`;
+  }
+  return `
+    <div class="cp-conversation-head">
+      <div>
+        <p class="cp-panel-kicker">Conversation</p>
+        <h2>${esc(thread.subject || "Message")}</h2>
+        <small class="cp-muted">${esc(cpParticipantLine(thread.id))}</small>
+      </div>
+    </div>
+    <div class="cp-message-bubbles">
+      ${state.messageMessages.length ? state.messageMessages.map(renderCpMessageBubble).join("") : emptyState("No replies yet.")}
+    </div>
+    <form id="cpMessageReplyForm" class="cp-message-form">
+      <label class="cp-field">
+        <span>Reply</span>
+        <textarea name="body" rows="4" placeholder="Type your reply..." required></textarea>
+      </label>
+      <button class="cp-action" type="submit" ${state.messageSending ? "disabled" : ""}>Send Reply</button>
+    </form>
+  `;
+}
+
+function renderCpMessageBubble(message) {
+  const mine = message.sender_id === state.user?.id;
+  return `
+    <article class="cp-message-bubble ${mine ? "mine" : ""}">
+      <div>
+        <strong>${esc(message.sender_name || "User")}</strong>
+        <small>${esc(formatMessageTime(message.created_at))}</small>
+      </div>
+      <p>${esc(message.body || "")}</p>
+    </article>
   `;
 }
 
@@ -1337,7 +1410,8 @@ async function loadData() {
     loadAvailability(),
     loadOpenAssignments(),
     loadMyAssignments(),
-    loadVideos()
+    loadVideos(),
+    loadMessageThreads()
   ]);
   state.loading = false;
   renderShell();
@@ -1411,6 +1485,188 @@ async function loadVideos() {
     .order("created_at", { ascending: false })
     .limit(24);
   state.videos = error ? [] : data || [];
+}
+
+async function loadMessageThreads() {
+  if (!supabase || !state.user?.id) return;
+
+  const { data: ownParticipants, error: participantError } = await supabase
+    .from("message_thread_participants")
+    .select("thread_id,last_read_at")
+    .eq("user_id", state.user.id)
+    .eq("is_archived", false);
+
+  if (participantError) {
+    state.messageThreads = [];
+    state.messageParticipants = [];
+    state.messageMessages = [];
+    state.messageStatus = `Unable to load messages: ${participantError.message}`;
+    state.messageStatusError = true;
+    return;
+  }
+
+  const threadIds = [...new Set((ownParticipants || []).map((row) => row.thread_id).filter(Boolean))];
+  if (!threadIds.length) {
+    state.messageThreads = [];
+    state.messageParticipants = [];
+    state.messageMessages = [];
+    state.selectedThreadId = "";
+    state.messageStatus = "No conversations yet.";
+    state.messageStatusError = false;
+    return;
+  }
+
+  const [threadsResult, participantsResult] = await Promise.all([
+    supabase.from("message_threads").select("*").in("id", threadIds).order("last_message_at", { ascending: false }),
+    supabase.from("message_thread_participants").select("*").in("thread_id", threadIds).order("display_name", { ascending: true })
+  ]);
+
+  if (threadsResult.error || participantsResult.error) {
+    state.messageStatus = `Unable to load messages: ${(threadsResult.error || participantsResult.error).message}`;
+    state.messageStatusError = true;
+    return;
+  }
+
+  state.messageThreads = threadsResult.data || [];
+  state.messageParticipants = participantsResult.data || [];
+  if (!state.messageThreads.some((thread) => thread.id === state.selectedThreadId)) {
+    state.selectedThreadId = state.messageThreads[0]?.id || "";
+  }
+  await loadMessageThreadMessages(state.selectedThreadId);
+  state.messageStatus = `${state.messageThreads.length} conversation${state.messageThreads.length === 1 ? "" : "s"} loaded.`;
+  state.messageStatusError = false;
+}
+
+async function loadMessageThreadMessages(threadId) {
+  if (!supabase || !threadId) {
+    state.messageMessages = [];
+    return;
+  }
+
+  const { data, error } = await supabase
+    .from("message_thread_messages")
+    .select("*")
+    .eq("thread_id", threadId)
+    .order("created_at", { ascending: true })
+    .limit(300);
+
+  if (error) {
+    state.messageMessages = [];
+    state.messageStatus = `Unable to load conversation: ${error.message}`;
+    state.messageStatusError = true;
+    return;
+  }
+
+  state.messageMessages = data || [];
+}
+
+async function createCpMessageThread(form) {
+  const body = form.elements.body?.value?.trim() || "";
+  const subject = form.elements.subject?.value?.trim() || "Message";
+  if (!body) return;
+
+  state.messageSending = true;
+  state.messageStatus = "Sending message...";
+  state.messageStatusError = false;
+  renderShell();
+
+  const { data, error } = await supabase.rpc("create_message_thread", {
+    recipient_ids: [],
+    thread_subject: subject,
+    message_body: body,
+    related_type: "",
+    related_id: "",
+    related_title: ""
+  });
+
+  state.messageSending = false;
+  if (error) {
+    state.messageStatus = `Unable to send message: ${error.message}`;
+    state.messageStatusError = true;
+    renderShell();
+    return;
+  }
+
+  state.selectedThreadId = data || state.selectedThreadId;
+  await loadMessageThreads();
+  renderShell();
+}
+
+async function sendCpMessageReply(form) {
+  const thread = selectedCpThread();
+  const body = form.elements.body?.value?.trim() || "";
+  if (!thread || !body) return;
+
+  state.messageSending = true;
+  state.messageStatus = "Sending reply...";
+  state.messageStatusError = false;
+  renderShell();
+
+  const { error } = await supabase.from("message_thread_messages").insert({
+    thread_id: thread.id,
+    sender_id: state.user.id,
+    sender_name: contractorName(),
+    sender_email: state.user.email || state.profile?.email || "",
+    sender_role: state.profile?.role || "contractor",
+    body
+  });
+
+  state.messageSending = false;
+  if (error) {
+    state.messageStatus = `Unable to send reply: ${error.message}`;
+    state.messageStatusError = true;
+    renderShell();
+    return;
+  }
+
+  await loadMessageThreads();
+  renderShell();
+}
+
+async function markCpMessageThreadRead(threadId) {
+  if (!supabase || !threadId) return;
+  const { error } = await supabase.rpc("mark_message_thread_read", { target_thread_id: threadId });
+  if (error) {
+    await supabase
+      .from("message_thread_participants")
+      .update({ last_read_at: new Date().toISOString() })
+      .eq("thread_id", threadId)
+      .eq("user_id", state.user?.id || "");
+  }
+}
+
+function selectedCpThread() {
+  return state.messageThreads.find((thread) => thread.id === state.selectedThreadId) || null;
+}
+
+function cpThreadParticipants(threadId) {
+  return state.messageParticipants.filter((participant) => participant.thread_id === threadId);
+}
+
+function cpOwnThreadParticipant(threadId) {
+  return cpThreadParticipants(threadId).find((participant) => participant.user_id === state.user?.id) || null;
+}
+
+function cpParticipantLine(threadId) {
+  const names = cpThreadParticipants(threadId)
+    .filter((participant) => participant.user_id !== state.user?.id)
+    .map((participant) => participant.display_name || participant.email || titleCase(participant.role || "Turnly"))
+    .filter(Boolean);
+  return names.length ? names.join(", ") : "Turnly Operations";
+}
+
+function cpThreadUnread(thread) {
+  const own = cpOwnThreadParticipant(thread.id);
+  if (!own || !thread.last_message_at) return false;
+  if (!own.last_read_at) return true;
+  return new Date(thread.last_message_at).getTime() > new Date(own.last_read_at).getTime();
+}
+
+function formatMessageTime(value) {
+  if (!value) return "No date";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "No date";
+  return date.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
 async function claimAssignment(assignmentId) {
@@ -1570,6 +1826,22 @@ function attachEvents() {
       return;
     }
 
+    const refreshMessages = event.target.closest("[data-cp-refresh-messages]");
+    if (refreshMessages) {
+      await loadMessageThreads();
+      renderShell();
+      return;
+    }
+
+    const threadButton = event.target.closest("[data-cp-thread-id]");
+    if (threadButton) {
+      state.selectedThreadId = threadButton.dataset.cpThreadId || "";
+      await markCpMessageThreadRead(state.selectedThreadId);
+      await loadMessageThreadMessages(state.selectedThreadId);
+      renderShell();
+      return;
+    }
+
     const claimButton = event.target.closest("[data-claim-assignment-id]");
     if (claimButton) {
       claimButton.disabled = true;
@@ -1650,6 +1922,14 @@ function attachEvents() {
     if (event.target.matches("#cpAvailabilityForm")) {
       event.preventDefault();
       await saveAvailability(event.target);
+    }
+    if (event.target.matches("#cpNewThreadForm")) {
+      event.preventDefault();
+      await createCpMessageThread(event.target);
+    }
+    if (event.target.matches("#cpMessageReplyForm")) {
+      event.preventDefault();
+      await sendCpMessageReply(event.target);
     }
   });
 

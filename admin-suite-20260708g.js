@@ -14,7 +14,8 @@ const navSections = [
     title: "",
     links: [
       { key: "dashboard", label: "Dashboard", href: "dashboard.html", icon: "home" },
-      { key: "command-center", label: "Command Center", href: "admin.html", icon: "layout-grid" }
+      { key: "command-center", label: "Command Center", href: "admin.html", icon: "layout-grid" },
+      { key: "messages", label: "Messages", href: "messages.html", icon: "message-square" }
     ]
   },
   {
@@ -396,6 +397,9 @@ const salesReportState = {
 const propertyUnitsTable = "property_units";
 const checklistTemplatesTable = "checklist_templates";
 const checklistModulesTable = "checklist_modules";
+const messageThreadsTable = "message_threads";
+const messageParticipantsTable = "message_thread_participants";
+const messageMessagesTable = "message_thread_messages";
 const propertyUnitState = {
   properties: [],
   units: [],
@@ -444,6 +448,19 @@ const topbarState = {
   loaded: false,
   loading: false
 };
+const internalMessageState = {
+  user: null,
+  profile: null,
+  users: [],
+  threads: [],
+  participants: [],
+  messages: [],
+  selectedThreadId: "",
+  loading: false,
+  sending: false,
+  message: "",
+  error: false
+};
 
 const pages = {
   "dashboard": {
@@ -455,6 +472,12 @@ const pages = {
     title: "Command Center",
     subtitle: "Your operational overview and actionable items",
     render: renderCommandCenter
+  },
+  "messages": {
+    title: "Messages",
+    subtitle: "Send internal messages to contractors, property managers, and admins.",
+    action: { label: "New Message", icon: "plus", href: "#messageComposePanel" },
+    render: renderMessages
   },
   "leads": {
     title: "Leads",
@@ -6166,6 +6189,403 @@ function renderVideoLibrary() {
       className: "video-library-card"
     })}
   `;
+}
+
+function renderMessages() {
+  return `
+    <section class="message-center-workspace" data-message-center>
+      ${toolbar(
+        `<p id="messageCenterStatus" class="status-message ${internalMessageState.error ? "error" : ""}" aria-live="polite">${esc(internalMessageState.message || "Loading messages...")}</p>`,
+        `<button class="secondary-action" type="button" data-message-refresh>${icon("refresh")}<span>Refresh</span></button>`
+      )}
+      <section class="message-center-layout">
+        ${panel("Threads", `<div id="messageThreadList" class="message-thread-list">${skeletonRows(4)}</div>`, { className: "message-thread-panel" })}
+        ${panel("Conversation", `<div id="messageConversation" class="message-conversation">${emptyState("message-square", "Select a message", "Choose a thread to view the conversation.")}</div>`, { className: "message-conversation-panel" })}
+        <div id="messageComposePanel" class="message-compose-anchor">
+          ${panel("New Message", renderMessageComposer(), { className: "message-compose-panel", key: "message-compose" })}
+        </div>
+      </section>
+    </section>
+  `;
+}
+
+function renderMessageComposer() {
+  return `
+    <form id="messageNewThreadForm" class="message-compose-form">
+      <label class="suite-field wide">
+        <span>Recipients</span>
+        <select id="messageRecipientSelect" multiple size="7" required>
+          ${renderMessageRecipientOptions()}
+        </select>
+      </label>
+      <label class="suite-field">
+        <span>Subject</span>
+        <input name="subject" placeholder="Question about an assignment, schedule, or property" />
+      </label>
+      <label class="suite-field wide">
+        <span>Message</span>
+        <textarea name="body" rows="4" placeholder="Type your message..." required></textarea>
+      </label>
+      <div class="message-form-actions">
+        <button class="primary-action" type="submit" ${internalMessageState.sending ? "disabled" : ""}>${icon("message-square")}<span>Send Message</span></button>
+      </div>
+    </form>
+  `;
+}
+
+function renderMessageRecipientOptions() {
+  const currentId = internalMessageState.user?.id || "";
+  const users = internalMessageState.users
+    .filter((user) => user.id && user.id !== currentId)
+    .sort((a, b) => messageUserLabel(a).localeCompare(messageUserLabel(b)));
+  if (!users.length) return `<option disabled>No users available</option>`;
+  return users.map((user) => `<option value="${esc(user.id)}">${esc(messageUserLabel(user))} - ${esc(messageUserRoleLabel(user.role))}</option>`).join("");
+}
+
+function initMessages() {
+  const root = document.querySelector("[data-message-center]");
+  if (!root) return;
+
+  root.addEventListener("click", (event) => {
+    const refresh = event.target.closest("[data-message-refresh]");
+    if (refresh) {
+      void loadInternalMessages();
+      return;
+    }
+
+    const threadButton = event.target.closest("[data-message-thread-id]");
+    if (threadButton) {
+      internalMessageState.selectedThreadId = threadButton.dataset.messageThreadId || "";
+      void markInternalMessageThreadRead(internalMessageState.selectedThreadId);
+      void loadInternalThreadMessages(internalMessageState.selectedThreadId).then(renderMessageCenterData);
+    }
+  });
+
+  root.addEventListener("submit", (event) => {
+    if (event.target.matches("#messageReplyForm")) {
+      event.preventDefault();
+      void sendInternalMessageReply(event.target);
+    }
+    if (event.target.matches("#messageNewThreadForm")) {
+      event.preventDefault();
+      void createInternalMessageThread(event.target);
+    }
+  });
+
+  void loadInternalMessages();
+}
+
+async function loadInternalMessages() {
+  if (!suiteSupabase) {
+    internalMessageState.message = "Supabase config is missing. Add env.js values before using messages.";
+    internalMessageState.error = true;
+    renderMessageCenterData();
+    return;
+  }
+
+  internalMessageState.loading = true;
+  setInternalMessageStatus("Loading messages...");
+
+  const { data: userData } = await suiteSupabase.auth.getUser();
+  const user = userData?.user || null;
+  internalMessageState.user = user;
+  if (!user) {
+    setInternalMessageStatus("Sign in again to use messages.", true);
+    internalMessageState.loading = false;
+    renderMessageCenterData();
+    return;
+  }
+
+  const [{ data: profile }, usersResult, participantResult] = await Promise.all([
+    suiteSupabase.from("profiles").select("id,full_name,email,role,status").eq("id", user.id).maybeSingle(),
+    suiteSupabase.from("profiles").select("id,full_name,email,role,status").order("full_name", { ascending: true }),
+    suiteSupabase.from(messageParticipantsTable).select("thread_id,last_read_at").eq("user_id", user.id).eq("is_archived", false)
+  ]);
+
+  internalMessageState.profile = profile || null;
+  internalMessageState.users = usersResult.error ? [] : usersResult.data || [];
+
+  if (participantResult.error) {
+    internalMessageState.threads = [];
+    internalMessageState.participants = [];
+    internalMessageState.messages = [];
+    internalMessageState.loading = false;
+    setInternalMessageStatus(`Unable to load messages: ${participantResult.error.message}`, true);
+    renderMessageCenterData();
+    return;
+  }
+
+  const threadIds = [...new Set((participantResult.data || []).map((row) => row.thread_id).filter(Boolean))];
+  if (!threadIds.length) {
+    internalMessageState.threads = [];
+    internalMessageState.participants = [];
+    internalMessageState.messages = [];
+    internalMessageState.selectedThreadId = "";
+    internalMessageState.loading = false;
+    setInternalMessageStatus("No message threads yet.");
+    renderMessageCenterData();
+    return;
+  }
+
+  const [threadsResult, participantsResult] = await Promise.all([
+    suiteSupabase.from(messageThreadsTable).select("*").in("id", threadIds).order("last_message_at", { ascending: false }),
+    suiteSupabase.from(messageParticipantsTable).select("*").in("thread_id", threadIds).order("display_name", { ascending: true })
+  ]);
+
+  if (threadsResult.error || participantsResult.error) {
+    internalMessageState.loading = false;
+    setInternalMessageStatus(`Unable to load message threads: ${(threadsResult.error || participantsResult.error).message}`, true);
+    renderMessageCenterData();
+    return;
+  }
+
+  internalMessageState.threads = threadsResult.data || [];
+  internalMessageState.participants = participantsResult.data || [];
+  if (!internalMessageState.threads.some((thread) => thread.id === internalMessageState.selectedThreadId)) {
+    internalMessageState.selectedThreadId = internalMessageState.threads[0]?.id || "";
+  }
+
+  await loadInternalThreadMessages(internalMessageState.selectedThreadId);
+  internalMessageState.loading = false;
+  setInternalMessageStatus(`${internalMessageState.threads.length} message thread${internalMessageState.threads.length === 1 ? "" : "s"} loaded.`);
+  renderMessageCenterData();
+}
+
+async function loadInternalThreadMessages(threadId) {
+  if (!suiteSupabase || !threadId) {
+    internalMessageState.messages = [];
+    return;
+  }
+
+  const { data, error } = await suiteSupabase
+    .from(messageMessagesTable)
+    .select("*")
+    .eq("thread_id", threadId)
+    .order("created_at", { ascending: true })
+    .limit(300);
+
+  if (error) {
+    internalMessageState.messages = [];
+    setInternalMessageStatus(`Unable to load conversation: ${error.message}`, true);
+    return;
+  }
+
+  internalMessageState.messages = data || [];
+}
+
+async function createInternalMessageThread(form) {
+  const recipients = Array.from(form.querySelector("#messageRecipientSelect")?.selectedOptions || [])
+    .map((option) => option.value)
+    .filter(Boolean);
+  const subject = form.elements.subject?.value?.trim() || "Message";
+  const body = form.elements.body?.value?.trim() || "";
+
+  if (!recipients.length) {
+    setInternalMessageStatus("Choose at least one recipient.", true);
+    return;
+  }
+  if (!body) {
+    setInternalMessageStatus("Type a message before sending.", true);
+    return;
+  }
+
+  internalMessageState.sending = true;
+  setInternalMessageStatus("Sending message...");
+  renderMessageCenterData();
+
+  const { data, error } = await suiteSupabase.rpc("create_message_thread", {
+    recipient_ids: recipients,
+    thread_subject: subject,
+    message_body: body,
+    related_type: "",
+    related_id: "",
+    related_title: ""
+  });
+
+  internalMessageState.sending = false;
+  if (error) {
+    setInternalMessageStatus(`Unable to send message: ${error.message}`, true);
+    renderMessageCenterData();
+    return;
+  }
+
+  form.reset();
+  internalMessageState.selectedThreadId = data || internalMessageState.selectedThreadId;
+  await loadInternalMessages();
+}
+
+async function sendInternalMessageReply(form) {
+  const thread = selectedInternalMessageThread();
+  const body = form.elements.body?.value?.trim() || "";
+  if (!thread || !body) return;
+
+  const sender = internalMessageState.profile || {};
+  const payload = {
+    thread_id: thread.id,
+    sender_id: internalMessageState.user.id,
+    sender_name: messageUserLabel(sender),
+    sender_email: sender.email || internalMessageState.user.email || "",
+    sender_role: sender.role || "admin",
+    body
+  };
+
+  internalMessageState.sending = true;
+  setInternalMessageStatus("Sending reply...");
+  renderMessageCenterData();
+
+  const { error } = await suiteSupabase.from(messageMessagesTable).insert(payload);
+  internalMessageState.sending = false;
+
+  if (error) {
+    setInternalMessageStatus(`Unable to send reply: ${error.message}`, true);
+    renderMessageCenterData();
+    return;
+  }
+
+  form.reset();
+  await loadInternalMessages();
+}
+
+async function markInternalMessageThreadRead(threadId) {
+  if (!suiteSupabase || !threadId) return;
+  const { error } = await suiteSupabase.rpc("mark_message_thread_read", { target_thread_id: threadId });
+  if (error) {
+    await suiteSupabase
+      .from(messageParticipantsTable)
+      .update({ last_read_at: new Date().toISOString() })
+      .eq("thread_id", threadId)
+      .eq("user_id", internalMessageState.user?.id || "");
+  }
+}
+
+function renderMessageCenterData() {
+  const list = document.getElementById("messageThreadList");
+  const conversation = document.getElementById("messageConversation");
+  const composer = document.getElementById("messageNewThreadForm");
+  if (list) list.innerHTML = renderInternalMessageThreadList();
+  if (conversation) conversation.innerHTML = renderInternalMessageConversation();
+  if (composer) {
+    const select = composer.querySelector("#messageRecipientSelect");
+    if (select) select.innerHTML = renderMessageRecipientOptions();
+    const submit = composer.querySelector("button[type='submit']");
+    if (submit) submit.disabled = internalMessageState.sending;
+  }
+  setInternalMessageStatus(internalMessageState.message, internalMessageState.error);
+}
+
+function renderInternalMessageThreadList() {
+  if (internalMessageState.loading && !internalMessageState.threads.length) return skeletonRows(4);
+  if (!internalMessageState.threads.length) {
+    return emptyState("message-square", "No messages yet", "Start a message with a contractor, property manager, or admin.");
+  }
+
+  return internalMessageState.threads.map((thread) => {
+    const active = thread.id === internalMessageState.selectedThreadId;
+    const unread = internalMessageThreadUnread(thread);
+    return `
+      <button class="message-thread-item ${active ? "active" : ""} ${unread ? "unread" : ""}" type="button" data-message-thread-id="${esc(thread.id)}">
+        <span>
+          <strong>${esc(thread.subject || "Message")}</strong>
+          <small>${esc(internalMessageParticipantLine(thread.id))}</small>
+        </span>
+        <em>${esc(formatMessageTimestamp(thread.last_message_at || thread.created_at))}</em>
+        <p>${esc(thread.last_message_preview || "No messages yet.")}</p>
+      </button>
+    `;
+  }).join("");
+}
+
+function renderInternalMessageConversation() {
+  const thread = selectedInternalMessageThread();
+  if (!thread) return emptyState("message-square", "No conversation selected", "Choose a thread or start a new message.");
+
+  const messages = internalMessageState.messages;
+  return `
+    <div class="message-conversation-head">
+      <div>
+        <p class="panel-kicker">Conversation</p>
+        <h3>${esc(thread.subject || "Message")}</h3>
+        <small>${esc(internalMessageParticipantLine(thread.id))}</small>
+      </div>
+    </div>
+    <div class="message-bubble-list">
+      ${messages.length ? messages.map(renderInternalMessageBubble).join("") : emptyState("message-square", "No replies yet", "Send the first reply below.")}
+    </div>
+    <form id="messageReplyForm" class="message-reply-form">
+      <label class="suite-field wide">
+        <span>Reply</span>
+        <textarea name="body" rows="3" placeholder="Type your reply..." required></textarea>
+      </label>
+      <div class="message-form-actions">
+        <button class="primary-action" type="submit" ${internalMessageState.sending ? "disabled" : ""}>${icon("message-square")}<span>Send Reply</span></button>
+      </div>
+    </form>
+  `;
+}
+
+function renderInternalMessageBubble(message) {
+  const mine = message.sender_id === internalMessageState.user?.id;
+  return `
+    <article class="message-bubble ${mine ? "mine" : ""}">
+      <div class="message-bubble-meta">
+        <strong>${esc(message.sender_name || "User")}</strong>
+        <span>${esc(formatMessageTimestamp(message.created_at))}</span>
+      </div>
+      <p>${esc(message.body)}</p>
+    </article>
+  `;
+}
+
+function selectedInternalMessageThread() {
+  return internalMessageState.threads.find((thread) => thread.id === internalMessageState.selectedThreadId) || null;
+}
+
+function internalMessageParticipants(threadId) {
+  return internalMessageState.participants.filter((participant) => participant.thread_id === threadId);
+}
+
+function internalMessageOwnParticipant(threadId) {
+  return internalMessageParticipants(threadId).find((participant) => participant.user_id === internalMessageState.user?.id) || null;
+}
+
+function internalMessageParticipantLine(threadId) {
+  const names = internalMessageParticipants(threadId)
+    .filter((participant) => participant.user_id !== internalMessageState.user?.id)
+    .map((participant) => participant.display_name || participant.email || messageUserRoleLabel(participant.role))
+    .filter(Boolean);
+  return names.length ? names.join(", ") : "Only you";
+}
+
+function internalMessageThreadUnread(thread) {
+  const own = internalMessageOwnParticipant(thread.id);
+  if (!own) return false;
+  if (!thread.last_message_at) return false;
+  if (!own.last_read_at) return true;
+  return new Date(thread.last_message_at).getTime() > new Date(own.last_read_at).getTime();
+}
+
+function messageUserLabel(user) {
+  return user?.full_name || user?.email || "User";
+}
+
+function messageUserRoleLabel(role) {
+  return titleCase(normalizeToken(role || "user"));
+}
+
+function formatMessageTimestamp(value) {
+  if (!value) return "No date";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "No date";
+  return date.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+function setInternalMessageStatus(message, error = false) {
+  internalMessageState.message = message || "";
+  internalMessageState.error = Boolean(error);
+  const target = document.getElementById("messageCenterStatus");
+  if (!target) return;
+  target.textContent = internalMessageState.message;
+  target.classList.toggle("error", internalMessageState.error);
 }
 
 function renderClients(active) {
@@ -12052,6 +12472,9 @@ function renderApp() {
   }
   if (activeKey === "dashboard" || activeKey === "command-center") {
     initCommandCenter();
+  }
+  if (activeKey === "messages") {
+    initMessages();
   }
   if (activeKey === "assignments") {
     initAssignments();
