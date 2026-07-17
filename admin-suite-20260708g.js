@@ -391,6 +391,7 @@ const assignmentState = {
 const salesReportState = {
   rows: [],
   loading: false,
+  selectedMonthKey: "",
   message: "",
   error: false
 };
@@ -8763,9 +8764,8 @@ function renderSalesReport() {
       <section class="report-grid">
         ${panel("Completed Financials", `<div id="salesCompletedSummary" class="property-unit-summary">${salesSummaryPlaceholder("Completed assignment totals")}</div>`, { className: "span-half", subtitle: "All assignments marked complete or carrying a completion timestamp." })}
         ${panel("Upcoming Projection", `<div id="salesUpcomingSummary" class="property-unit-summary">${salesSummaryPlaceholder("Upcoming assignment projection")}</div>`, { className: "span-half", subtitle: "Future assignments that are not completed, cancelled, or declined." })}
-        ${panel("Monthly Revenue, Pay, and Profit", `<div id="salesMonthlyBreakdown" class="sales-chart-shell">${salesChartEmpty("Monthly financials will appear once assignments load.")}</div>`, { className: "span-all", subtitle: "Completed actuals and upcoming projections grouped by month." })}
-        ${panel("Monthly Profit Margin", `<div id="salesMonthlyMargin" class="sales-chart-shell">${salesChartEmpty("Profit margin will appear once assignments load.")}</div>`, { className: "span-half", subtitle: "Profit divided by customer revenue for each month." })}
-        ${panel("Monthly Assignment Volume", `<div id="salesMonthlyVolume" class="sales-chart-shell">${salesChartEmpty("Assignment volume will appear once assignments load.")}</div>`, { className: "span-half", subtitle: "Assignment count and revenue volume by month." })}
+        ${panel("Monthly Revenue vs Profit", `<div id="salesMonthlyBarChart" class="sales-chart-shell">${salesChartEmpty("Monthly financials will appear once assignments load.")}</div>`, { className: "span-half", subtitle: "Switch months to compare customer revenue against profit." })}
+        ${panel("Revenue and Profit Trend", `<div id="salesMonthlyTrendChart" class="sales-chart-shell">${salesChartEmpty("Revenue and profit trends will appear once assignments load.")}</div>`, { className: "span-half", subtitle: "Revenue and profit by month, using completed actuals and upcoming projections." })}
       </section>
     </section>
   `;
@@ -8776,6 +8776,12 @@ function initSalesReport() {
   if (!root) return;
   root.querySelector("[data-sales-report-refresh]")?.addEventListener("click", () => {
     void loadSalesReport();
+  });
+  root.addEventListener("change", (event) => {
+    const target = event.target;
+    if (!target?.matches?.("[data-sales-month-select]")) return;
+    salesReportState.selectedMonthKey = target.value || "";
+    renderSalesReportData();
   });
   void loadSalesReport();
 }
@@ -8851,9 +8857,9 @@ function renderSalesReportData() {
   setSalesHtml("salesCompletedSummary", salesSummaryHtml(completed, "Completed assignment totals", "completed"));
   setSalesHtml("salesUpcomingSummary", salesSummaryHtml(upcoming, "Upcoming assignment projection", "upcoming"));
   const monthly = salesMonthlyFinancials(completed, upcoming);
-  setSalesHtml("salesMonthlyBreakdown", salesMonthlyBreakdownChart(monthly));
-  setSalesHtml("salesMonthlyMargin", salesMonthlyMarginChart(monthly));
-  setSalesHtml("salesMonthlyVolume", salesMonthlyVolumeChart(monthly));
+  salesReportState.selectedMonthKey = salesSelectedMonthKey(monthly, salesReportState.selectedMonthKey);
+  setSalesHtml("salesMonthlyBarChart", salesMonthlyComparisonChart(monthly));
+  setSalesHtml("salesMonthlyTrendChart", salesMonthlyTrendChart(monthly));
 }
 
 function setSalesReportMessage(text = "", isError = false) {
@@ -9152,69 +9158,112 @@ function salesAssignmentFinancialDate(row = {}, mode = "projected") {
     : row.start_window || row.end_window || row.created_at);
 }
 
-function salesMonthlyBreakdownChart(groups = []) {
+function salesSelectedMonthKey(groups = [], selectedKey = "") {
+  if (!groups.length) return "";
+  if (groups.some((group) => group.key === selectedKey)) return selectedKey;
+  const today = new Date();
+  const currentMonthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+  if (groups.some((group) => group.key === currentMonthKey)) return currentMonthKey;
+  return groups[groups.length - 1]?.key || "";
+}
+
+function salesMonthlyComparisonChart(groups = []) {
   if (!groups.length) return salesChartEmpty("No monthly assignment financials found.");
-  const max = salesMonthlyMax(groups, ["revenue", "contractorPay", "profit"]);
+  const selectedKey = salesSelectedMonthKey(groups, salesReportState.selectedMonthKey);
+  const selected = groups.find((group) => group.key === selectedKey) || groups[groups.length - 1];
+  const margin = selected.revenue ? (selected.profit / selected.revenue) * 100 : 0;
+  const max = salesMonthlyMax([selected], ["revenue", "profit"]);
   return `
-    ${salesChartLegend([["Revenue", "green"], ["Contractor Pay", "blue"], ["Profit", "purple"]])}
-    <div class="sales-month-chart" aria-label="Monthly revenue contractor pay and profit chart">
-      ${groups.map((group) => `
-        <article class="sales-month-group">
-          <div class="sales-month-bars">
-            ${salesChartBar("Revenue", group.revenue, "green", max)}
-            ${salesChartBar("Contractor Pay", group.contractorPay, "blue", max)}
-            ${salesChartBar("Profit", group.profit, "purple", max)}
-          </div>
-          <strong>${esc(group.shortLabel)}</strong>
-          <small>${esc(group.label)}</small>
-          <dl>
-            <div><dt>Revenue</dt><dd>${esc(salesMoney(group.revenue))}</dd></div>
-            <div><dt>Pay</dt><dd>${esc(salesMoney(group.contractorPay))}</dd></div>
-            <div><dt>Profit</dt><dd>${esc(salesMoney(group.profit))}</dd></div>
-          </dl>
-        </article>
-      `).join("")}
+    <div class="sales-chart-control">
+      <div>
+        <strong>${esc(selected.label)}</strong>
+        <small>${esc(selected.count.toLocaleString())} assignment${selected.count === 1 ? "" : "s"} included</small>
+      </div>
+      <label>
+        <span>Month</span>
+        <select data-sales-month-select aria-label="Choose month for revenue and profit bar chart">
+          ${groups.map((group) => `<option value="${esc(group.key)}" ${group.key === selected.key ? "selected" : ""}>${esc(group.label)}</option>`).join("")}
+        </select>
+      </label>
+    </div>
+    ${salesChartLegend([["Revenue", "green"], ["Profit", "purple"]])}
+    <div class="sales-compare-chart" aria-label="${esc(`${selected.label} revenue and profit bar chart`)}">
+      ${salesComparisonBar("Revenue", selected.revenue, "green", max)}
+      ${salesComparisonBar("Profit", selected.profit, selected.profit < 0 ? "red" : "purple", max)}
+    </div>
+    <dl class="sales-chart-stat-grid">
+      <div><dt>Revenue</dt><dd>${esc(salesMoney(selected.revenue))}</dd></div>
+      <div><dt>Profit</dt><dd>${esc(salesMoney(selected.profit))}</dd></div>
+      <div><dt>Profit Margin</dt><dd>${esc(salesPercent(margin))}</dd></div>
+      <div><dt>Jobs</dt><dd>${esc(selected.count.toLocaleString())}</dd></div>
+    </dl>
+  `;
+}
+
+function salesMonthlyTrendChart(groups = []) {
+  if (!groups.length) return salesChartEmpty("No monthly revenue and profit trend found.");
+  const width = Math.max(660, groups.length * 96);
+  const height = 300;
+  const padding = { top: 32, right: 30, bottom: 58, left: 74 };
+  const values = groups.flatMap((group) => [Number(group.revenue) || 0, Number(group.profit) || 0]);
+  let min = Math.min(0, ...values);
+  let max = Math.max(1, ...values);
+  if (min === max) {
+    min -= 1;
+    max += 1;
+  }
+  const plotWidth = width - padding.left - padding.right;
+  const plotHeight = height - padding.top - padding.bottom;
+  const xFor = (index) => groups.length === 1
+    ? padding.left + plotWidth / 2
+    : padding.left + (index / (groups.length - 1)) * plotWidth;
+  const yFor = (value) => padding.top + ((max - value) / (max - min)) * plotHeight;
+  const point = (group, index, key) => `${salesSvgNumber(xFor(index))},${salesSvgNumber(yFor(group[key]))}`;
+  const revenuePoints = groups.map((group, index) => point(group, index, "revenue")).join(" ");
+  const profitPoints = groups.map((group, index) => point(group, index, "profit")).join(" ");
+  const ticks = salesTrendTicks(min, max, 4);
+  return `
+    ${salesChartLegend([["Revenue", "green"], ["Profit", "purple"]])}
+    <div class="sales-trend-wrap">
+      <svg class="sales-trend-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Monthly revenue and profit trend chart">
+        ${ticks.map((tick) => {
+          const y = salesSvgNumber(yFor(tick));
+          return `
+            <line class="sales-trend-grid" x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}"></line>
+            <text class="sales-trend-axis" x="${padding.left - 12}" y="${Number(y) + 4}" text-anchor="end">${esc(salesMoneyShort(tick))}</text>
+          `;
+        }).join("")}
+        <line class="sales-trend-axis-line" x1="${padding.left}" y1="${height - padding.bottom}" x2="${width - padding.right}" y2="${height - padding.bottom}"></line>
+        <polyline class="sales-trend-line revenue" points="${revenuePoints}"></polyline>
+        <polyline class="sales-trend-line profit" points="${profitPoints}"></polyline>
+        ${groups.map((group, index) => {
+          const x = salesSvgNumber(xFor(index));
+          const revenueY = salesSvgNumber(yFor(group.revenue));
+          const profitY = salesSvgNumber(yFor(group.profit));
+          return `
+            <g>
+              <line class="sales-trend-month-line" x1="${x}" y1="${padding.top}" x2="${x}" y2="${height - padding.bottom}"></line>
+              <circle class="sales-trend-point revenue" cx="${x}" cy="${revenueY}" r="5"><title>${esc(`${group.label} revenue: ${salesMoney(group.revenue)}`)}</title></circle>
+              <circle class="sales-trend-point profit" cx="${x}" cy="${profitY}" r="5"><title>${esc(`${group.label} profit: ${salesMoney(group.profit)}`)}</title></circle>
+              <text class="sales-trend-month" x="${x}" y="${height - 30}" text-anchor="middle">${esc(group.shortLabel)}</text>
+              <text class="sales-trend-month-year" x="${x}" y="${height - 14}" text-anchor="middle">${esc(group.key.slice(0, 4))}</text>
+            </g>
+          `;
+        }).join("")}
+      </svg>
     </div>
   `;
 }
 
-function salesMonthlyMarginChart(groups = []) {
-  if (!groups.length) return salesChartEmpty("No monthly profit margin found.");
+function salesComparisonBar(label, value, tone, max) {
+  const number = Number(value) || 0;
+  const height = Math.max(8, Math.round((Math.abs(number) / Math.max(1, max)) * 100));
   return `
-    <div class="sales-margin-list" aria-label="Monthly profit margin chart">
-      ${groups.map((group) => {
-        const margin = group.revenue ? (group.profit / group.revenue) * 100 : 0;
-        const width = Math.max(2, Math.min(100, Math.abs(margin)));
-        return `
-          <article class="sales-margin-row">
-            <span>${esc(group.shortLabel)}</span>
-            <div class="sales-margin-track"><b class="${margin < 0 ? "negative" : ""}" style="width:${width}%;"></b></div>
-            <strong>${esc(salesPercent(margin))}</strong>
-            <small>${esc(salesMoney(group.profit))}</small>
-          </article>
-        `;
-      }).join("")}
-    </div>
-  `;
-}
-
-function salesMonthlyVolumeChart(groups = []) {
-  if (!groups.length) return salesChartEmpty("No monthly assignment volume found.");
-  const max = Math.max(1, ...groups.map((group) => group.count));
-  return `
-    <div class="sales-volume-chart" aria-label="Monthly assignment volume chart">
-      ${groups.map((group) => {
-        const height = Math.max(6, Math.round((group.count / max) * 100));
-        return `
-          <article class="sales-volume-month">
-            <div><span style="height:${height}%;"></span></div>
-            <strong>${esc(group.shortLabel)}</strong>
-            <small>${esc(group.count.toLocaleString())} jobs</small>
-            <em>${esc(salesMoney(group.revenue))}</em>
-          </article>
-        `;
-      }).join("")}
-    </div>
+    <article class="sales-compare-bar">
+      <strong>${esc(salesMoney(number))}</strong>
+      <div><span class="sales-compare-fill ${esc(tone)}" style="height:${height}%;"></span></div>
+      <em>${esc(label)}</em>
+    </article>
   `;
 }
 
@@ -9223,14 +9272,26 @@ function salesMonthlyMax(groups = [], keys = []) {
   return Math.max(1, ...values);
 }
 
-function salesChartLegend(items = []) {
-  return `<div class="sales-chart-legend">${items.map(([label, tone]) => `<span><i class="${esc(tone)}"></i>${esc(label)}</span>`).join("")}</div>`;
+function salesTrendTicks(min, max, steps = 4) {
+  const tickCount = Math.max(1, steps);
+  return Array.from({ length: tickCount + 1 }, (_, index) => max - ((max - min) / tickCount) * index);
 }
 
-function salesChartBar(label, value, tone, max) {
+function salesMoneyShort(value) {
   const number = Number(value) || 0;
-  const height = Math.max(4, Math.round((Math.abs(number) / Math.max(1, max)) * 100));
-  return `<span class="sales-chart-bar ${esc(tone)} ${number < 0 ? "negative" : ""}" style="height:${height}%;" title="${esc(`${label}: ${salesMoney(number)}`)}"><em>${esc(salesMoney(number))}</em></span>`;
+  const sign = number < 0 ? "-" : "";
+  const abs = Math.abs(number);
+  if (abs >= 1000000) return `${sign}$${(abs / 1000000).toFixed(abs >= 10000000 ? 0 : 1)}M`;
+  if (abs >= 1000) return `${sign}$${(abs / 1000).toFixed(abs >= 10000 ? 0 : 1)}K`;
+  return `${sign}$${Math.round(abs).toLocaleString()}`;
+}
+
+function salesSvgNumber(value) {
+  return Number(value || 0).toFixed(2);
+}
+
+function salesChartLegend(items = []) {
+  return `<div class="sales-chart-legend">${items.map(([label, tone]) => `<span><i class="${esc(tone)}"></i>${esc(label)}</span>`).join("")}</div>`;
 }
 
 function salesSummaryHtml(rows = [], title, mode) {
