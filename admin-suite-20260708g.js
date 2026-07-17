@@ -8763,10 +8763,9 @@ function renderSalesReport() {
       <section class="report-grid">
         ${panel("Completed Financials", `<div id="salesCompletedSummary" class="property-unit-summary">${salesSummaryPlaceholder("Completed assignment totals")}</div>`, { className: "span-half", subtitle: "All assignments marked complete or carrying a completion timestamp." })}
         ${panel("Upcoming Projection", `<div id="salesUpcomingSummary" class="property-unit-summary">${salesSummaryPlaceholder("Upcoming assignment projection")}</div>`, { className: "span-half", subtitle: "Future assignments that are not completed, cancelled, or declined." })}
-        ${panel("Profit by Property", salesFinancialTable(["Property", "Completed Revenue", "Completed Profit", "Upcoming Revenue", "Projected Profit"], "salesPropertyRows", 5), { className: "span-half", subtitle: "Completed and projected totals grouped by property." })}
-        ${panel("Monthly Forecast", salesFinancialTable(["Month", "Assignments", "Revenue", "Contractor Pay", "Profit"], "salesForecastRows", 5), { className: "span-half", subtitle: "Upcoming assignment totals grouped by scheduled month." })}
-        ${tableFrame(["Date", "Assignment", "Unit", "Customer Charge", "Actual Paid Out", "Profit", "Status"], "", { className: "span-all", bodyId: "salesCompletedRows", rows: salesReportTableMessage(7, "Loading completed assignments..."), pagination: false })}
-        ${tableFrame(["Date", "Assignment", "Unit", "Customer Charge", "Projected Contractor Pay", "Projected Profit", "Status"], "", { className: "span-all", bodyId: "salesUpcomingRows", rows: salesReportTableMessage(7, "Loading upcoming assignments..."), pagination: false })}
+        ${panel("Monthly Revenue, Pay, and Profit", `<div id="salesMonthlyBreakdown" class="sales-chart-shell">${salesChartEmpty("Monthly financials will appear once assignments load.")}</div>`, { className: "span-all", subtitle: "Completed actuals and upcoming projections grouped by month." })}
+        ${panel("Monthly Profit Margin", `<div id="salesMonthlyMargin" class="sales-chart-shell">${salesChartEmpty("Profit margin will appear once assignments load.")}</div>`, { className: "span-half", subtitle: "Profit divided by customer revenue for each month." })}
+        ${panel("Monthly Assignment Volume", `<div id="salesMonthlyVolume" class="sales-chart-shell">${salesChartEmpty("Assignment volume will appear once assignments load.")}</div>`, { className: "span-half", subtitle: "Assignment count and revenue volume by month." })}
       </section>
     </section>
   `;
@@ -8851,10 +8850,10 @@ function renderSalesReportData() {
 
   setSalesHtml("salesCompletedSummary", salesSummaryHtml(completed, "Completed assignment totals", "completed"));
   setSalesHtml("salesUpcomingSummary", salesSummaryHtml(upcoming, "Upcoming assignment projection", "upcoming"));
-  setSalesHtml("salesCompletedRows", salesAssignmentTableRows(completed, "No completed assignments found.", "actual"));
-  setSalesHtml("salesUpcomingRows", salesAssignmentTableRows(upcoming, "No upcoming assignments found.", "projected"));
-  setSalesHtml("salesPropertyRows", salesPropertyRows(completed, upcoming));
-  setSalesHtml("salesForecastRows", salesForecastRows(upcoming));
+  const monthly = salesMonthlyFinancials(completed, upcoming);
+  setSalesHtml("salesMonthlyBreakdown", salesMonthlyBreakdownChart(monthly));
+  setSalesHtml("salesMonthlyMargin", salesMonthlyMarginChart(monthly));
+  setSalesHtml("salesMonthlyVolume", salesMonthlyVolumeChart(monthly));
 }
 
 function setSalesReportMessage(text = "", isError = false) {
@@ -8884,19 +8883,8 @@ function salesSummaryPlaceholder(title) {
   `;
 }
 
-function salesFinancialTable(headers, bodyId, colspan) {
-  return `
-    <div class="table-scroll">
-      <table class="suite-table sales-report-table">
-        <thead><tr>${headers.map((header) => `<th>${esc(header)}</th>`).join("")}</tr></thead>
-        <tbody id="${esc(bodyId)}">${salesReportTableMessage(colspan, "Loading financials...")}</tbody>
-      </table>
-    </div>
-  `;
-}
-
-function salesReportTableMessage(colspan, text) {
-  return `<tr><td colspan="${Number(colspan) || 1}"><span class="sales-report-table-note">${esc(text)}</span></td></tr>`;
+function salesChartEmpty(text) {
+  return `<div class="sales-chart-empty">${icon("bar-chart")}<strong>${esc(text)}</strong></div>`;
 }
 
 function salesCompletedAssignments(rows = []) {
@@ -9120,6 +9108,131 @@ function salesCombineTotals(...totalsList) {
   }), { count: 0, paidCount: 0, revenue: 0, contractorPay: 0, profit: 0 });
 }
 
+function salesMonthlyFinancials(completed = [], upcoming = []) {
+  const groups = new Map();
+  const ensure = (date) => {
+    if (!date) return null;
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        label: date.toLocaleDateString([], { month: "long", year: "numeric" }),
+        shortLabel: date.toLocaleDateString([], { month: "short" }),
+        count: 0,
+        completedCount: 0,
+        upcomingCount: 0,
+        revenue: 0,
+        contractorPay: 0,
+        profit: 0
+      });
+    }
+    return groups.get(key);
+  };
+  const addRow = (row, mode) => {
+    const date = salesAssignmentFinancialDate(row, mode);
+    const group = ensure(date);
+    if (!group) return;
+    const revenue = salesAssignmentRevenue(row);
+    const contractorPay = salesAssignmentContractorPay(row, mode === "actual" ? "actual" : "projected");
+    group.count += 1;
+    group.completedCount += mode === "actual" ? 1 : 0;
+    group.upcomingCount += mode === "projected" ? 1 : 0;
+    group.revenue += revenue;
+    group.contractorPay += contractorPay;
+    group.profit += revenue - contractorPay;
+  };
+  completed.forEach((row) => addRow(row, "actual"));
+  upcoming.forEach((row) => addRow(row, "projected"));
+  return Array.from(groups.values()).sort((a, b) => a.key.localeCompare(b.key));
+}
+
+function salesAssignmentFinancialDate(row = {}, mode = "projected") {
+  return parseDate(mode === "actual"
+    ? row.completed_at || row.checklist_completed_at || row.end_window || row.start_window || row.created_at
+    : row.start_window || row.end_window || row.created_at);
+}
+
+function salesMonthlyBreakdownChart(groups = []) {
+  if (!groups.length) return salesChartEmpty("No monthly assignment financials found.");
+  const max = salesMonthlyMax(groups, ["revenue", "contractorPay", "profit"]);
+  return `
+    ${salesChartLegend([["Revenue", "green"], ["Contractor Pay", "blue"], ["Profit", "purple"]])}
+    <div class="sales-month-chart" aria-label="Monthly revenue contractor pay and profit chart">
+      ${groups.map((group) => `
+        <article class="sales-month-group">
+          <div class="sales-month-bars">
+            ${salesChartBar("Revenue", group.revenue, "green", max)}
+            ${salesChartBar("Contractor Pay", group.contractorPay, "blue", max)}
+            ${salesChartBar("Profit", group.profit, "purple", max)}
+          </div>
+          <strong>${esc(group.shortLabel)}</strong>
+          <small>${esc(group.label)}</small>
+          <dl>
+            <div><dt>Revenue</dt><dd>${esc(salesMoney(group.revenue))}</dd></div>
+            <div><dt>Pay</dt><dd>${esc(salesMoney(group.contractorPay))}</dd></div>
+            <div><dt>Profit</dt><dd>${esc(salesMoney(group.profit))}</dd></div>
+          </dl>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function salesMonthlyMarginChart(groups = []) {
+  if (!groups.length) return salesChartEmpty("No monthly profit margin found.");
+  return `
+    <div class="sales-margin-list" aria-label="Monthly profit margin chart">
+      ${groups.map((group) => {
+        const margin = group.revenue ? (group.profit / group.revenue) * 100 : 0;
+        const width = Math.max(2, Math.min(100, Math.abs(margin)));
+        return `
+          <article class="sales-margin-row">
+            <span>${esc(group.shortLabel)}</span>
+            <div class="sales-margin-track"><b class="${margin < 0 ? "negative" : ""}" style="width:${width}%;"></b></div>
+            <strong>${esc(salesPercent(margin))}</strong>
+            <small>${esc(salesMoney(group.profit))}</small>
+          </article>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function salesMonthlyVolumeChart(groups = []) {
+  if (!groups.length) return salesChartEmpty("No monthly assignment volume found.");
+  const max = Math.max(1, ...groups.map((group) => group.count));
+  return `
+    <div class="sales-volume-chart" aria-label="Monthly assignment volume chart">
+      ${groups.map((group) => {
+        const height = Math.max(6, Math.round((group.count / max) * 100));
+        return `
+          <article class="sales-volume-month">
+            <div><span style="height:${height}%;"></span></div>
+            <strong>${esc(group.shortLabel)}</strong>
+            <small>${esc(group.count.toLocaleString())} jobs</small>
+            <em>${esc(salesMoney(group.revenue))}</em>
+          </article>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function salesMonthlyMax(groups = [], keys = []) {
+  const values = groups.flatMap((group) => keys.map((key) => Math.abs(Number(group[key]) || 0)));
+  return Math.max(1, ...values);
+}
+
+function salesChartLegend(items = []) {
+  return `<div class="sales-chart-legend">${items.map(([label, tone]) => `<span><i class="${esc(tone)}"></i>${esc(label)}</span>`).join("")}</div>`;
+}
+
+function salesChartBar(label, value, tone, max) {
+  const number = Number(value) || 0;
+  const height = Math.max(4, Math.round((Math.abs(number) / Math.max(1, max)) * 100));
+  return `<span class="sales-chart-bar ${esc(tone)} ${number < 0 ? "negative" : ""}" style="height:${height}%;" title="${esc(`${label}: ${salesMoney(number)}`)}"><em>${esc(salesMoney(number))}</em></span>`;
+}
+
 function salesSummaryHtml(rows = [], title, mode) {
   const totals = salesPeriodTotals(rows, mode === "completed" ? "actual" : "projected");
   const margin = totals.revenue ? (totals.profit / totals.revenue) * 100 : 0;
@@ -9144,112 +9257,6 @@ function salesSummaryHtml(rows = [], title, mode) {
       <div><dt>Paid Jobs</dt><dd>${esc(totals.paidCount.toLocaleString())}</dd></div>
     </dl>
   `;
-}
-
-function salesAssignmentTableRows(rows = [], emptyText, mode = "projected") {
-  if (!rows.length) return salesReportTableMessage(7, emptyText);
-  return rows.map((row) => {
-    const revenue = salesAssignmentRevenue(row);
-    const contractorPay = salesAssignmentContractorPay(row, mode);
-    const profit = revenue - contractorPay;
-    const paymentStatus = salesAssignmentPaymentStatus(row);
-    const date = isSalesCompletedAssignment(row)
-      ? row.completed_at || row.checklist_completed_at || row.end_window || row.start_window
-      : row.start_window;
-    const subtitle = [assignmentPropertyTitle(row), assignmentShortId(row)].filter(Boolean).join(" | ");
-    const payMeta = mode === "actual"
-      ? (paymentStatus ? titleCase(paymentStatus) : "Not paid yet")
-      : "Projected pay";
-    return `
-      <tr>
-        <td><strong>${esc(formatDateOnly(date))}</strong><small>${esc(formatDateWindow(row.start_window, row.end_window))}</small></td>
-        <td><strong>${esc(row.title || row.property_name || "Untitled assignment")}</strong><small>${esc(subtitle || "Assignment")}</small></td>
-        <td><strong>${esc(assignmentUnitNumber(row))}</strong><small>${esc(assignmentUnitMeta(row))}</small></td>
-        <td><strong>${esc(salesMoney(revenue))}</strong></td>
-        <td><strong>${esc(salesMoney(contractorPay))}</strong><small>${esc(payMeta)}</small></td>
-        <td><strong>${esc(salesMoney(profit))}</strong></td>
-        <td>${statusBadge(row.status || (isSalesCompletedAssignment(row) ? "completed" : "open"))}</td>
-      </tr>
-    `;
-  }).join("");
-}
-
-function salesPropertyRows(completed = [], upcoming = []) {
-  const groups = new Map();
-  const ensure = (name) => {
-    const key = name || "Unassigned property";
-    if (!groups.has(key)) {
-      groups.set(key, {
-        property: key,
-        completedRevenue: 0,
-        completedProfit: 0,
-        upcomingRevenue: 0,
-        upcomingProfit: 0
-      });
-    }
-    return groups.get(key);
-  };
-  completed.forEach((row) => {
-    const group = ensure(assignmentPropertyTitle(row));
-    const revenue = salesAssignmentRevenue(row);
-    group.completedRevenue += revenue;
-    group.completedProfit += revenue - salesAssignmentContractorPay(row, "actual");
-  });
-  upcoming.forEach((row) => {
-    const group = ensure(assignmentPropertyTitle(row));
-    const revenue = salesAssignmentRevenue(row);
-    group.upcomingRevenue += revenue;
-    group.upcomingProfit += revenue - salesAssignmentContractorPay(row, "projected");
-  });
-  const rows = Array.from(groups.values())
-    .sort((a, b) => (b.completedRevenue + b.upcomingRevenue) - (a.completedRevenue + a.upcomingRevenue) || a.property.localeCompare(b.property));
-  if (!rows.length) return salesReportTableMessage(5, "No property financials found.");
-  return rows.map((row) => `
-    <tr>
-      <td><strong>${esc(row.property)}</strong></td>
-      <td>${esc(salesMoney(row.completedRevenue))}</td>
-      <td>${esc(salesMoney(row.completedProfit))}</td>
-      <td>${esc(salesMoney(row.upcomingRevenue))}</td>
-      <td>${esc(salesMoney(row.upcomingProfit))}</td>
-    </tr>
-  `).join("");
-}
-
-function salesForecastRows(upcoming = []) {
-  const groups = new Map();
-  upcoming.forEach((row) => {
-    const date = parseDate(row.start_window);
-    if (!date) return;
-    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-    if (!groups.has(key)) {
-      groups.set(key, {
-        key,
-        label: date.toLocaleDateString([], { month: "long", year: "numeric" }),
-        rows: [],
-        revenue: 0,
-        contractorPay: 0,
-        profit: 0
-      });
-    }
-    const group = groups.get(key);
-    const revenue = salesAssignmentRevenue(row);
-    const contractorPay = salesAssignmentContractorPay(row, "projected");
-    group.rows.push(row);
-    group.revenue += revenue;
-    group.contractorPay += contractorPay;
-    group.profit += revenue - contractorPay;
-  });
-  const rows = Array.from(groups.values()).sort((a, b) => a.key.localeCompare(b.key));
-  if (!rows.length) return salesReportTableMessage(5, "No upcoming assignments to forecast.");
-  return rows.map((row) => `
-    <tr>
-      <td><strong>${esc(row.label)}</strong></td>
-      <td>${esc(row.rows.length.toLocaleString())}</td>
-      <td>${esc(salesMoney(row.revenue))}</td>
-      <td>${esc(salesMoney(row.contractorPay))}</td>
-      <td>${esc(salesMoney(row.profit))}</td>
-    </tr>
-  `).join("");
 }
 
 function renderOperationsReport() {
