@@ -456,6 +456,8 @@ const internalMessageState = {
   participants: [],
   messages: [],
   selectedThreadId: "",
+  selectedRecipientIds: new Set(),
+  recipientSearch: "",
   loading: false,
   sending: false,
   message: "",
@@ -6212,12 +6214,14 @@ function renderMessages() {
 function renderMessageComposer() {
   return `
     <form id="messageNewThreadForm" class="message-compose-form">
-      <label class="suite-field wide">
-        <span>Recipients</span>
-        <select id="messageRecipientSelect" multiple size="7" required>
-          ${renderMessageRecipientOptions()}
-        </select>
-      </label>
+      <div class="message-recipient-picker">
+        <label class="suite-field wide">
+          <span>Recipients</span>
+          <input id="messageRecipientSearch" type="search" value="${esc(internalMessageState.recipientSearch)}" placeholder="Start typing a name, email, or role..." autocomplete="off" />
+        </label>
+        <div id="messageSelectedRecipients" class="message-recipient-chips">${renderSelectedMessageRecipients()}</div>
+        <div id="messageRecipientResults" class="message-recipient-results">${renderMessageRecipientResults()}</div>
+      </div>
       <label class="suite-field">
         <span>Subject</span>
         <input name="subject" placeholder="Question about an assignment, schedule, or property" />
@@ -6231,6 +6235,52 @@ function renderMessageComposer() {
       </div>
     </form>
   `;
+}
+
+function renderSelectedMessageRecipients() {
+  const selected = selectedMessageRecipientUsers();
+  if (!selected.length) return `<span class="message-recipient-empty">No recipients selected</span>`;
+  return selected.map((user) => `
+    <button class="message-recipient-chip" type="button" data-message-remove-recipient="${esc(user.id)}">
+      <span>${esc(messageUserLabel(user))}</span>
+      <small>${esc(messageUserRoleLabel(user.role))}</small>
+      <em>Remove</em>
+    </button>
+  `).join("");
+}
+
+function renderMessageRecipientResults() {
+  const term = internalMessageState.recipientSearch.trim();
+  if (!term) return `<div class="message-recipient-hint">Type to search users.</div>`;
+  const users = filteredMessageRecipientUsers();
+  if (!users.length) return `<div class="message-recipient-hint">No users match "${esc(term)}".</div>`;
+  return users.map((user) => `
+    <button class="message-recipient-result" type="button" data-message-add-recipient="${esc(user.id)}">
+      <strong>${esc(messageUserLabel(user))}</strong>
+      <small>${esc([user.email, messageUserRoleLabel(user.role)].filter(Boolean).join(" - "))}</small>
+    </button>
+  `).join("");
+}
+
+function selectedMessageRecipientUsers() {
+  return [...internalMessageState.selectedRecipientIds]
+    .map((id) => internalMessageState.users.find((user) => user.id === id))
+    .filter(Boolean);
+}
+
+function filteredMessageRecipientUsers() {
+  const currentId = internalMessageState.user?.id || "";
+  const selected = internalMessageState.selectedRecipientIds;
+  const term = internalMessageState.recipientSearch.trim().toLowerCase();
+  if (!term) return [];
+  return internalMessageState.users
+    .filter((user) => user.id && user.id !== currentId && !selected.has(user.id))
+    .filter((user) => {
+      const haystack = [messageUserLabel(user), user.email, user.role, user.status].join(" ").toLowerCase();
+      return haystack.includes(term);
+    })
+    .sort((a, b) => messageUserLabel(a).localeCompare(messageUserLabel(b)))
+    .slice(0, 10);
 }
 
 function renderMessageRecipientOptions() {
@@ -6253,11 +6303,35 @@ function initMessages() {
       return;
     }
 
+    const addRecipient = event.target.closest("[data-message-add-recipient]");
+    if (addRecipient) {
+      internalMessageState.selectedRecipientIds.add(addRecipient.dataset.messageAddRecipient || "");
+      internalMessageState.recipientSearch = "";
+      renderMessageRecipientPickerData();
+      document.getElementById("messageRecipientSearch")?.focus();
+      return;
+    }
+
+    const removeRecipient = event.target.closest("[data-message-remove-recipient]");
+    if (removeRecipient) {
+      internalMessageState.selectedRecipientIds.delete(removeRecipient.dataset.messageRemoveRecipient || "");
+      renderMessageRecipientPickerData();
+      document.getElementById("messageRecipientSearch")?.focus();
+      return;
+    }
+
     const threadButton = event.target.closest("[data-message-thread-id]");
     if (threadButton) {
       internalMessageState.selectedThreadId = threadButton.dataset.messageThreadId || "";
       void markInternalMessageThreadRead(internalMessageState.selectedThreadId);
       void loadInternalThreadMessages(internalMessageState.selectedThreadId).then(renderMessageCenterData);
+    }
+  });
+
+  root.addEventListener("input", (event) => {
+    if (event.target.matches("#messageRecipientSearch")) {
+      internalMessageState.recipientSearch = event.target.value || "";
+      renderMessageRecipientPickerData();
     }
   });
 
@@ -6374,9 +6448,7 @@ async function loadInternalThreadMessages(threadId) {
 }
 
 async function createInternalMessageThread(form) {
-  const recipients = Array.from(form.querySelector("#messageRecipientSelect")?.selectedOptions || [])
-    .map((option) => option.value)
-    .filter(Boolean);
+  const recipients = [...internalMessageState.selectedRecipientIds].filter(Boolean);
   const subject = form.elements.subject?.value?.trim() || "Message";
   const body = form.elements.body?.value?.trim() || "";
 
@@ -6393,13 +6465,15 @@ async function createInternalMessageThread(form) {
   setInternalMessageStatus("Sending message...");
   renderMessageCenterData();
 
-  const { data, error } = await suiteSupabase.rpc("create_message_thread", {
-    recipient_ids: recipients,
-    thread_subject: subject,
-    message_body: body,
-    related_type: "",
-    related_id: "",
-    related_title: ""
+  const { data, error } = await suiteSupabase.rpc("create_message_thread_v2", {
+    message_payload: {
+      recipient_ids: recipients,
+      subject,
+      body,
+      related_type: "",
+      related_id: "",
+      related_title: ""
+    }
   });
 
   internalMessageState.sending = false;
@@ -6410,6 +6484,8 @@ async function createInternalMessageThread(form) {
   }
 
   form.reset();
+  internalMessageState.selectedRecipientIds.clear();
+  internalMessageState.recipientSearch = "";
   internalMessageState.selectedThreadId = data || internalMessageState.selectedThreadId;
   await loadInternalMessages();
 }
@@ -6419,21 +6495,16 @@ async function sendInternalMessageReply(form) {
   const body = form.elements.body?.value?.trim() || "";
   if (!thread || !body) return;
 
-  const sender = internalMessageState.profile || {};
-  const payload = {
-    thread_id: thread.id,
-    sender_id: internalMessageState.user.id,
-    sender_name: messageUserLabel(sender),
-    sender_email: sender.email || internalMessageState.user.email || "",
-    sender_role: sender.role || "admin",
-    body
-  };
-
   internalMessageState.sending = true;
   setInternalMessageStatus("Sending reply...");
   renderMessageCenterData();
 
-  const { error } = await suiteSupabase.from(messageMessagesTable).insert(payload);
+  const { error } = await suiteSupabase.rpc("send_message_reply_v2", {
+    message_payload: {
+      thread_id: thread.id,
+      body
+    }
+  });
   internalMessageState.sending = false;
 
   if (error) {
@@ -6465,12 +6536,22 @@ function renderMessageCenterData() {
   if (list) list.innerHTML = renderInternalMessageThreadList();
   if (conversation) conversation.innerHTML = renderInternalMessageConversation();
   if (composer) {
-    const select = composer.querySelector("#messageRecipientSelect");
-    if (select) select.innerHTML = renderMessageRecipientOptions();
+    renderMessageRecipientPickerData();
     const submit = composer.querySelector("button[type='submit']");
     if (submit) submit.disabled = internalMessageState.sending;
   }
   setInternalMessageStatus(internalMessageState.message, internalMessageState.error);
+}
+
+function renderMessageRecipientPickerData() {
+  const input = document.getElementById("messageRecipientSearch");
+  const selected = document.getElementById("messageSelectedRecipients");
+  const results = document.getElementById("messageRecipientResults");
+  if (input && input.value !== internalMessageState.recipientSearch) {
+    input.value = internalMessageState.recipientSearch;
+  }
+  if (selected) selected.innerHTML = renderSelectedMessageRecipients();
+  if (results) results.innerHTML = renderMessageRecipientResults();
 }
 
 function renderInternalMessageThreadList() {

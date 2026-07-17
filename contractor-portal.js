@@ -1570,13 +1570,15 @@ async function createCpMessageThread(form) {
   state.messageStatusError = false;
   renderShell();
 
-  const { data, error } = await supabase.rpc("create_message_thread", {
-    recipient_ids: [],
-    thread_subject: subject,
-    message_body: body,
-    related_type: "",
-    related_id: "",
-    related_title: ""
+  const { data, error } = await supabase.rpc("create_message_thread_v2", {
+    message_payload: {
+      recipient_ids: [],
+      subject,
+      body,
+      related_type: "",
+      related_id: "",
+      related_title: ""
+    }
   });
 
   state.messageSending = false;
@@ -1602,13 +1604,11 @@ async function sendCpMessageReply(form) {
   state.messageStatusError = false;
   renderShell();
 
-  const { error } = await supabase.from("message_thread_messages").insert({
-    thread_id: thread.id,
-    sender_id: state.user.id,
-    sender_name: contractorName(),
-    sender_email: state.user.email || state.profile?.email || "",
-    sender_role: state.profile?.role || "contractor",
-    body
+  const { error } = await supabase.rpc("send_message_reply_v2", {
+    message_payload: {
+      thread_id: thread.id,
+      body
+    }
   });
 
   state.messageSending = false;

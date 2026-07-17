@@ -336,13 +336,15 @@ async function createManagerMessageThread(form) {
   setManagerMessageStatus("Sending message...");
   renderManagerMessages();
 
-  const { data, error } = await supabase.rpc("create_message_thread", {
-    recipient_ids: [],
-    thread_subject: subject,
-    message_body: body,
-    related_type: "property",
-    related_id: state.property?.id || "",
-    related_title: state.property?.name || ""
+  const { data, error } = await supabase.rpc("create_message_thread_v2", {
+    message_payload: {
+      recipient_ids: [],
+      subject,
+      body,
+      related_type: "property",
+      related_id: state.property?.id || "",
+      related_title: state.property?.name || ""
+    }
   });
 
   state.sending = false;
@@ -367,13 +369,11 @@ async function sendManagerReply(form) {
   setManagerMessageStatus("Sending reply...");
   renderManagerMessages();
 
-  const { error } = await supabase.from("message_thread_messages").insert({
-    thread_id: thread.id,
-    sender_id: state.user.id,
-    sender_name: getName(state.user, state.profile),
-    sender_email: state.user.email || state.profile?.email || "",
-    sender_role: state.profile?.role || "property_manager",
-    body
+  const { error } = await supabase.rpc("send_message_reply_v2", {
+    message_payload: {
+      thread_id: thread.id,
+      body
+    }
   });
 
   state.sending = false;
