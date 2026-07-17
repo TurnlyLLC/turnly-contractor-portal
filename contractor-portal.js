@@ -1104,20 +1104,7 @@ function renderMessages() {
       `)}
       ${panel("Message", `
         <div id="cpConversation" class="cp-conversation">${renderCpConversation()}</div>
-      `)}
-      ${panel("New Message", `
-        <form id="cpNewThreadForm" class="cp-message-form">
-          <label class="cp-field">
-            <span>Subject</span>
-            <input name="subject" placeholder="Schedule change, access issue, or question" />
-          </label>
-          <label class="cp-field">
-            <span>Message Turnly</span>
-            <textarea name="body" rows="6" placeholder="Type your message..." required></textarea>
-          </label>
-          <button class="cp-action" type="submit" ${state.messageSending ? "disabled" : ""}>Send Message</button>
-        </form>
-      `)}
+      `, { className: "cp-message-panel" })}
     </section>
   `;
 }
@@ -1141,7 +1128,7 @@ function renderCpThreadList() {
 function renderCpConversation() {
   const thread = selectedCpThread();
   if (!thread) {
-    return `<div class="cp-conversation-box">${emptyState("Select a conversation or send Turnly a new message.")}</div>`;
+    return `<div class="cp-conversation-box">${emptyState("Select a conversation to view messages.")}</div>`;
   }
   return `
     <div class="cp-conversation-head">
@@ -1154,12 +1141,12 @@ function renderCpConversation() {
     <div class="cp-message-bubbles">
       ${state.messageMessages.length ? state.messageMessages.map(renderCpMessageBubble).join("") : emptyState("No replies yet.")}
     </div>
-    <form id="cpMessageReplyForm" class="cp-message-form">
-      <label class="cp-field">
-        <span>Reply</span>
-        <textarea name="body" rows="4" placeholder="Type your reply..." required></textarea>
+    <form id="cpMessageReplyForm" class="cp-message-reply-bar">
+      <label class="cp-field cp-reply-field">
+        <span class="sr-only">Reply</span>
+        <textarea name="body" rows="2" placeholder="Type your reply..." required></textarea>
       </label>
-      <button class="cp-action" type="submit" ${state.messageSending ? "disabled" : ""}>Send Reply</button>
+      <button class="cp-action cp-reply-send" type="submit" ${state.messageSending ? "disabled" : ""}>Send</button>
     </form>
   `;
 }

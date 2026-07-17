@@ -336,6 +336,17 @@
   margin: 0;
 }
 
+.sr-only {
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  width: 1px;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
 .cp-panel-kicker {
   font-size: 12px;
   font-weight: 800;
@@ -620,7 +631,13 @@
 }
 
 .cp-messages-layout {
-  grid-template-columns: 330px minmax(0, 1fr) 280px;
+  grid-template-columns: 330px minmax(0, 1fr);
+}
+
+.cp-message-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: calc(100dvh - 132px);
 }
 
 .cp-chat-list {
@@ -677,10 +694,14 @@
 .cp-conversation {
   display: grid;
   gap: 14px;
-  min-height: 540px;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-height: 0;
 }
 
 .cp-conversation-box {
+  align-self: center;
+  grid-row: 1 / -1;
+  justify-self: center;
   margin: 0 auto;
   max-width: 460px;
   text-align: center;
@@ -699,7 +720,7 @@
   align-content: start;
   display: grid;
   gap: 10px;
-  max-height: 480px;
+  min-height: 0;
   overflow: auto;
   padding-right: 4px;
 }
@@ -737,6 +758,34 @@
 .cp-message-form {
   display: grid;
   gap: 12px;
+}
+
+.cp-message-reply-bar {
+  align-items: stretch;
+  background: linear-gradient(180deg, rgba(12, 26, 42, 0.1), rgba(12, 26, 42, 0.98) 34%);
+  border-top: 1px solid var(--cp-line);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) 92px;
+  margin-top: auto;
+  padding-top: 12px;
+}
+
+.cp-reply-field {
+  gap: 0;
+}
+
+.cp-reply-field textarea {
+  max-height: 116px;
+  min-height: 44px;
+  resize: vertical;
+}
+
+.cp-reply-send {
+  align-self: stretch;
+  min-height: 44px;
+  padding: 0 12px;
+  white-space: nowrap;
 }
 
 .cp-field {
