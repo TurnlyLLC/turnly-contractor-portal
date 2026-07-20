@@ -1259,6 +1259,37 @@ body[data-admin-page="assignments"] .assignment-page-actions .icon-only {
   width: 32px;
 }
 
+body.turnly-admin-suite[data-dashboard-theme="light"][data-admin-page="assignments"] .assignment-bulk-bar {
+  background: #f8fbfd;
+  border-color: var(--suite-border);
+  color: var(--suite-text);
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"][data-admin-page="assignments"] .assignment-bulk-select span,
+body.turnly-admin-suite[data-dashboard-theme="light"][data-admin-page="assignments"] .assignment-bulk-status span,
+body.turnly-admin-suite[data-dashboard-theme="light"][data-admin-page="assignments"] .assignment-page-size label,
+body.turnly-admin-suite[data-dashboard-theme="light"][data-admin-page="assignments"] .assignment-page-size span,
+body.turnly-admin-suite[data-dashboard-theme="light"][data-admin-page="assignments"] .assignment-page-status,
+body.turnly-admin-suite[data-dashboard-theme="light"][data-admin-page="assignments"] .assignment-page-actions span {
+  color: var(--suite-soft);
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"][data-admin-page="assignments"] .assignment-page-size select,
+body.turnly-admin-suite[data-dashboard-theme="light"][data-admin-page="assignments"] .assignment-page-size select option {
+  background: #ffffff;
+  border-color: var(--suite-border);
+  color: var(--suite-text);
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"][data-admin-page="assignments"] .assignment-pagination-controls {
+  border-top-color: var(--suite-border-soft);
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"][data-admin-page="assignments"] .assignment-bulk-bar .secondary-action:disabled {
+  background: #edf3f8;
+  color: #52677f;
+}
+
 body[data-admin-page="assignments"] .assignment-bulk-panel {
   max-width: min(920px, calc(100vw - 32px));
 }
