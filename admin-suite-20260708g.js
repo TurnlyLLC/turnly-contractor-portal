@@ -9243,8 +9243,8 @@ function salesMonthlyTrendChart(groups = []) {
           return `
             <g>
               <line class="sales-trend-month-line" x1="${x}" y1="${padding.top}" x2="${x}" y2="${height - padding.bottom}"></line>
-              <circle class="sales-trend-point revenue" cx="${x}" cy="${revenueY}" r="5"><title>${esc(`${group.label} revenue: ${salesMoney(group.revenue)}`)}</title></circle>
-              <circle class="sales-trend-point profit" cx="${x}" cy="${profitY}" r="5"><title>${esc(`${group.label} profit: ${salesMoney(group.profit)}`)}</title></circle>
+              ${salesTrendMarker(group, x, revenueY, "Revenue", group.revenue, "revenue", width)}
+              ${salesTrendMarker(group, x, profitY, "Profit", group.profit, "profit", width)}
               <text class="sales-trend-month" x="${x}" y="${height - 30}" text-anchor="middle">${esc(group.shortLabel)}</text>
               <text class="sales-trend-month-year" x="${x}" y="${height - 14}" text-anchor="middle">${esc(group.key.slice(0, 4))}</text>
             </g>
@@ -9252,6 +9252,28 @@ function salesMonthlyTrendChart(groups = []) {
         }).join("")}
       </svg>
     </div>
+  `;
+}
+
+function salesTrendMarker(group, x, y, label, value, tone, chartWidth) {
+  const displayValue = salesMoney(value);
+  const tooltipWidth = Math.max(86, Math.min(138, displayValue.length * 7 + 24));
+  const halfWidth = tooltipWidth / 2;
+  const xNumber = Number(x) || 0;
+  const yNumber = Number(y) || 0;
+  const tooltipX = Math.min(chartWidth - halfWidth - 8, Math.max(halfWidth + 8, xNumber));
+  const tooltipY = Math.max(36, yNumber - 14);
+  const pointerX = xNumber - tooltipX;
+  return `
+    <g class="sales-trend-marker ${esc(tone)}" tabindex="0" aria-label="${esc(`${group.label} ${label}: ${displayValue}`)}">
+      <circle class="sales-trend-hit" cx="${x}" cy="${y}" r="15"></circle>
+      <circle class="sales-trend-point ${esc(tone)}" cx="${x}" cy="${y}" r="5"></circle>
+      <g class="sales-trend-tooltip" transform="translate(${salesSvgNumber(tooltipX)} ${salesSvgNumber(tooltipY)})">
+        <rect x="${salesSvgNumber(-halfWidth)}" y="-28" width="${salesSvgNumber(tooltipWidth)}" height="24" rx="6"></rect>
+        <path d="M ${salesSvgNumber(pointerX - 5)} -4 L ${salesSvgNumber(pointerX + 5)} -4 L ${salesSvgNumber(pointerX)} 2 Z"></path>
+        <text x="0" y="-12" text-anchor="middle">${esc(displayValue)}</text>
+      </g>
+    </g>
   `;
 }
 

@@ -4201,9 +4201,15 @@ a {
   border: 1px solid var(--suite-border-soft);
   border-radius: 7px;
   color: var(--suite-text);
+  color-scheme: dark;
   font: inherit;
   min-height: 38px;
   padding: 8px 10px;
+}
+
+.sales-chart-control select option {
+  background: #071220;
+  color: #f8fafc;
 }
 
 .sales-chart-legend {
@@ -4402,6 +4408,43 @@ a {
 .sales-trend-point {
   stroke: rgba(5, 14, 24, 0.96);
   stroke-width: 3;
+}
+
+.sales-trend-marker {
+  cursor: default;
+  outline: none;
+}
+
+.sales-trend-hit {
+  fill: transparent;
+  stroke: transparent;
+}
+
+.sales-trend-tooltip {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 140ms ease;
+}
+
+.sales-trend-tooltip rect,
+.sales-trend-tooltip path {
+  fill: rgba(5, 14, 24, 0.96);
+  stroke: var(--suite-border-soft);
+}
+
+.sales-trend-tooltip text {
+  fill: var(--suite-text);
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.sales-trend-marker:hover .sales-trend-tooltip,
+.sales-trend-marker:focus .sales-trend-tooltip {
+  opacity: 1;
+}
+
+.sales-trend-marker:focus .sales-trend-point {
+  stroke: #f8fafc;
 }
 
 .message-center-workspace {
