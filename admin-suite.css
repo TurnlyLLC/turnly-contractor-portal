@@ -5333,6 +5333,187 @@ body.turnly-admin-suite[data-dashboard-theme="light"] .empty-icon {
   color: #6b4bd6;
 }
 
+body.turnly-admin-suite[data-dashboard-theme="light"] .client-property-contact-group,
+body.turnly-admin-suite[data-dashboard-theme="light"] .client-contact-row,
+body.turnly-admin-suite[data-dashboard-theme="light"] .client-readonly-field,
+body.turnly-admin-suite[data-dashboard-theme="light"] .clients-table-card .client-edit-row td,
+body.turnly-admin-suite[data-dashboard-theme="light"] .client-inline-edit,
+body.turnly-admin-suite[data-dashboard-theme="light"] .client-monthly-turnovers,
+body.turnly-admin-suite[data-dashboard-theme="light"] .client-insight-item,
+body.turnly-admin-suite[data-dashboard-theme="light"] .qa-review-video-card,
+body.turnly-admin-suite[data-dashboard-theme="light"] .qa-review-checklist,
+body.turnly-admin-suite[data-dashboard-theme="light"] .assignment-list-item,
+body.turnly-admin-suite[data-dashboard-theme="light"] .assignment-detail-cell,
+body.turnly-admin-suite[data-dashboard-theme="light"] .assignment-card,
+body.turnly-admin-suite[data-dashboard-theme="light"] .account-request-row,
+body.turnly-admin-suite[data-dashboard-theme="light"] .pipeline-item,
+body.turnly-admin-suite[data-dashboard-theme="light"] .property-unit-row,
+body.turnly-admin-suite[data-dashboard-theme="light"] .checklist-section-card,
+body.turnly-admin-suite[data-dashboard-theme="light"] .checklist-room-card,
+body.turnly-admin-suite[data-dashboard-theme="light"] .checklist-preview-item,
+body.turnly-admin-suite[data-dashboard-theme="light"] .checklist-preview-overview,
+body.turnly-admin-suite[data-dashboard-theme="light"] .schedule-summary-list > div,
+body.turnly-admin-suite[data-dashboard-theme="light"] .schedule-loading,
+body.turnly-admin-suite[data-dashboard-theme="light"] .schedule-assignment-hero,
+body.turnly-admin-suite[data-dashboard-theme="light"] .schedule-assignment-detail-grid > div,
+body.turnly-admin-suite[data-dashboard-theme="light"] .schedule-assignment-notes > div,
+body.turnly-admin-suite[data-dashboard-theme="light"] .message-thread-item,
+body.turnly-admin-suite[data-dashboard-theme="light"] .message-bubble,
+body.turnly-admin-suite[data-dashboard-theme="light"] .message-recipient-results,
+body.turnly-admin-suite[data-dashboard-theme="light"] .message-recipient-result,
+body.turnly-admin-suite[data-dashboard-theme="light"] .sales-chart-stat-grid div,
+body.turnly-admin-suite[data-dashboard-theme="light"] .sales-trend-wrap {
+  background: #f8fbfd;
+  border-color: var(--suite-border-soft);
+  color: var(--suite-text);
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"] .client-manager-toggle,
+body.turnly-admin-suite[data-dashboard-theme="light"] .client-manager-menu,
+body.turnly-admin-suite[data-dashboard-theme="light"] .client-modal-panel,
+body.turnly-admin-suite[data-dashboard-theme="light"] .property-modal-panel,
+body.turnly-admin-suite[data-dashboard-theme="light"] .qa-queue-controls select,
+body.turnly-admin-suite[data-dashboard-theme="light"] .table-action-button,
+body.turnly-admin-suite[data-dashboard-theme="light"] .pager button,
+body.turnly-admin-suite[data-dashboard-theme="light"] .pager span,
+body.turnly-admin-suite[data-dashboard-theme="light"] .calendar-controls button,
+body.turnly-admin-suite[data-dashboard-theme="light"] .walkthrough-calendar-controls > button,
+body.turnly-admin-suite[data-dashboard-theme="light"] .admin-assignment-actions select,
+body.turnly-admin-suite[data-dashboard-theme="light"] .account-request-actions select,
+body.turnly-admin-suite[data-dashboard-theme="light"] .assignment-status-inline,
+body.turnly-admin-suite[data-dashboard-theme="light"] .secondary-btn,
+body.turnly-admin-suite[data-dashboard-theme="light"] .secondary-command-btn,
+body.turnly-admin-suite[data-dashboard-theme="light"] .checklist-drag-handle,
+body.turnly-admin-suite[data-dashboard-theme="light"] .checklist-required-toggle,
+body.turnly-admin-suite[data-dashboard-theme="light"] .checklist-media-option {
+  background: #ffffff;
+  border-color: var(--suite-border);
+  color: var(--suite-text);
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"] .message-thread-item.active,
+body.turnly-admin-suite[data-dashboard-theme="light"] .message-thread-item:hover,
+body.turnly-admin-suite[data-dashboard-theme="light"] .message-thread-item:focus-visible,
+body.turnly-admin-suite[data-dashboard-theme="light"] .message-recipient-result:hover,
+body.turnly-admin-suite[data-dashboard-theme="light"] .message-recipient-result:focus-visible,
+body.turnly-admin-suite[data-dashboard-theme="light"] .checklist-unit-option:hover,
+body.turnly-admin-suite[data-dashboard-theme="light"] .checklist-unit-option.is-selected {
+  background: rgba(0, 214, 163, 0.1);
+  border-color: rgba(0, 214, 163, 0.38);
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"] .message-bubble.mine {
+  background: rgba(0, 214, 163, 0.12);
+  border-color: rgba(0, 214, 163, 0.34);
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"] .message-recipient-chip,
+body.turnly-admin-suite[data-dashboard-theme="light"] .checklist-section-composer,
+body.turnly-admin-suite[data-dashboard-theme="light"] .property-unit-quick-form {
+  background: rgba(0, 214, 163, 0.08);
+  border-color: rgba(0, 214, 163, 0.22);
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"] .checklist-module-importer {
+  background: rgba(58, 127, 255, 0.08);
+  border-color: rgba(58, 127, 255, 0.22);
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"] .client-monthly-turnovers-head,
+body.turnly-admin-suite[data-dashboard-theme="light"] .qa-review-rule-list span,
+body.turnly-admin-suite[data-dashboard-theme="light"] .qa-review-summary > span,
+body.turnly-admin-suite[data-dashboard-theme="light"] .schedule-assignment-danger-zone strong,
+body.turnly-admin-suite[data-dashboard-theme="light"] .checklist-required-toggle span,
+body.turnly-admin-suite[data-dashboard-theme="light"] .checklist-media-option strong {
+  color: var(--suite-text);
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"] .day-calendar,
+body.turnly-admin-suite[data-dashboard-theme="light"] .week-calendar,
+body.turnly-admin-suite[data-dashboard-theme="light"] .schedule-week-grid,
+body.turnly-admin-suite[data-dashboard-theme="light"] .schedule-month-calendar {
+  background: #ffffff;
+  border-color: var(--suite-border);
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"] .schedule-week-grid > strong,
+body.turnly-admin-suite[data-dashboard-theme="light"] .schedule-week-corner,
+body.turnly-admin-suite[data-dashboard-theme="light"] .schedule-month-grid b,
+body.turnly-admin-suite[data-dashboard-theme="light"] .schedule-live-page .schedule-week-day header {
+  background: #edf3f8;
+  border-color: var(--suite-border);
+  color: var(--suite-text);
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"] .schedule-live-page .schedule-week-day header span,
+body.turnly-admin-suite[data-dashboard-theme="light"] .schedule-week-grid > time,
+body.turnly-admin-suite[data-dashboard-theme="light"] .schedule-month-grid span,
+body.turnly-admin-suite[data-dashboard-theme="light"] .day-calendar time,
+body.turnly-admin-suite[data-dashboard-theme="light"] .mini-calendar b,
+body.turnly-admin-suite[data-dashboard-theme="light"] .mini-calendar span {
+  color: var(--suite-soft);
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"] .schedule-month-grid span.muted,
+body.turnly-admin-suite[data-dashboard-theme="light"] .schedule-live-page .schedule-month-cell.muted {
+  color: #8ba0b4;
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"] .schedule-live-page .schedule-event-card,
+body.turnly-admin-suite[data-dashboard-theme="light"] .schedule-live-page .schedule-month-cell {
+  background: #ffffff;
+  border-color: var(--suite-border-soft);
+  color: var(--suite-text);
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"] .schedule-live-page .schedule-event-card {
+  border-left-color: rgba(57, 169, 255, 0.82);
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"] .schedule-live-page .schedule-month-cell.today {
+  background: rgba(0, 214, 163, 0.08);
+  color: var(--suite-green);
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"] .schedule-live-page .schedule-assignment-danger-zone {
+  background: rgba(255, 91, 104, 0.08);
+  border-color: rgba(255, 91, 104, 0.28);
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"] .sales-compare-chart {
+  background:
+    linear-gradient(to top, rgba(15, 35, 55, 0.08) 1px, transparent 1px) 0 0 / 100% 25%,
+    #f8fbfd;
+  border-color: var(--suite-border-soft);
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"] .sales-compare-bar > div {
+  border-bottom-color: rgba(15, 35, 55, 0.16);
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"] .sales-trend-grid,
+body.turnly-admin-suite[data-dashboard-theme="light"] .sales-trend-month-line {
+  stroke: rgba(15, 35, 55, 0.1);
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"] .sales-trend-axis-line {
+  stroke: rgba(15, 35, 55, 0.22);
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"] .sales-trend-point {
+  stroke: #ffffff;
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"] .sales-trend-tooltip rect,
+body.turnly-admin-suite[data-dashboard-theme="light"] .sales-trend-tooltip path {
+  fill: #ffffff;
+  stroke: var(--suite-border);
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"] .sales-trend-tooltip .sales-trend-tooltip-month {
+  fill: var(--suite-soft);
+}
+
 @media (max-width: 620px) {
   body.turnly-admin-suite[data-dashboard-theme="light"] .dashboard-theme-toggle {
     justify-content: space-between;

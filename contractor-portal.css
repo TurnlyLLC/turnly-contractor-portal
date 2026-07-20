@@ -1462,6 +1462,21 @@
   background: var(--cp-panel);
 }
 
+.contractor-portal-body[data-dashboard-theme="light"] .cp-message-bubble {
+  background: #f8fbfd;
+  border-color: var(--cp-line);
+}
+
+.contractor-portal-body[data-dashboard-theme="light"] .cp-message-bubble.mine {
+  background: rgba(18, 217, 155, 0.12);
+  border-color: rgba(18, 217, 155, 0.28);
+}
+
+.contractor-portal-body[data-dashboard-theme="light"] #cpMessageReplyForm.cp-message-reply-bar {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), #ffffff 34%);
+  border-top-color: var(--cp-line);
+}
+
 .contractor-portal-body[data-dashboard-theme="light"] .cp-table th,
 .contractor-portal-body[data-dashboard-theme="light"] .cp-table td {
   border-bottom-color: var(--cp-line);
@@ -1478,6 +1493,10 @@
     background: #ffffff;
     border-color: var(--cp-line);
     box-shadow: 0 10px 32px rgba(15, 35, 55, 0.1);
+  }
+
+  .contractor-portal-body[data-dashboard-theme="light"] #cpMessageReplyForm.cp-message-reply-bar {
+    background: #ffffff;
   }
 
   .cp-theme-toggle {
