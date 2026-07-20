@@ -7,6 +7,7 @@ const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
 
 const root = document.getElementById("contractorPortalApp");
 const pageKey = document.body?.dataset?.contractorPage || "dashboard";
+const contractorDashboardThemeStorageKey = "turnlyContractorDashboardTheme";
 
 const navItems = [
   ["dashboard", "Dashboard", "contractor.html"],
@@ -125,6 +126,67 @@ function esc(value) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+}
+
+function readDashboardTheme() {
+  try {
+    return window.localStorage?.getItem(contractorDashboardThemeStorageKey) === "light" ? "light" : "dark";
+  } catch {
+    return "dark";
+  }
+}
+
+function writeDashboardTheme(theme) {
+  try {
+    window.localStorage?.setItem(contractorDashboardThemeStorageKey, theme === "light" ? "light" : "dark");
+  } catch {
+    // Theme still applies for the current page when storage is unavailable.
+  }
+}
+
+function applyDashboardTheme() {
+  if (!document.body) return;
+  if (pageKey === "dashboard") {
+    document.body.dataset.dashboardTheme = readDashboardTheme();
+  } else {
+    delete document.body.dataset.dashboardTheme;
+  }
+}
+
+function dashboardThemeIcon(theme) {
+  const path = theme === "light"
+    ? '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>'
+    : '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>';
+  return `<span class="cp-theme-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path}</svg></span>`;
+}
+
+function dashboardThemeToggleContent(theme) {
+  const label = theme === "light" ? "Light" : "Dark";
+  return `
+    <span class="cp-theme-toggle-track"><span class="cp-theme-toggle-thumb">${dashboardThemeIcon(theme)}</span></span>
+    <span class="cp-theme-toggle-label">${esc(label)}</span>
+  `;
+}
+
+function dashboardThemeToggle() {
+  if (pageKey !== "dashboard") return "";
+  const theme = readDashboardTheme();
+  const nextLabel = theme === "light" ? "dark" : "light";
+  return `
+    <button class="cp-theme-toggle" type="button" data-contractor-theme-toggle role="switch" aria-checked="${theme === "light" ? "true" : "false"}" aria-label="Switch to ${esc(nextLabel)} mode">
+      ${dashboardThemeToggleContent(theme)}
+    </button>
+  `;
+}
+
+function updateDashboardThemeToggle() {
+  const button = document.querySelector("[data-contractor-theme-toggle]");
+  if (!button) return;
+  const theme = readDashboardTheme();
+  const nextLabel = theme === "light" ? "dark" : "light";
+  button.setAttribute("aria-checked", theme === "light" ? "true" : "false");
+  button.setAttribute("aria-label", `Switch to ${nextLabel} mode`);
+  button.innerHTML = dashboardThemeToggleContent(theme);
 }
 
 function normalizeToken(value) {
@@ -560,6 +622,7 @@ function topbar() {
         <h1>${esc(meta[0])}</h1>
         <p>${esc(meta[1])}</p>
       </div>
+      ${dashboardThemeToggle()}
       <label class="cp-search">
         <span>Search</span>
         <input id="cpGlobalSearch" type="search" placeholder="Search jobs..." value="${esc(state.filters.search)}" />
@@ -654,6 +717,7 @@ function mobileNav() {
 
 function renderShell() {
   if (!root) return;
+  applyDashboardTheme();
   root.innerHTML = `
     <main class="cp-shell">
       ${sidebar()}
@@ -1835,6 +1899,15 @@ function refreshFilterOnly() {
 
 function attachEvents() {
   root?.addEventListener("click", async (event) => {
+    const themeToggle = event.target.closest("[data-contractor-theme-toggle]");
+    if (themeToggle) {
+      const nextTheme = readDashboardTheme() === "light" ? "dark" : "light";
+      writeDashboardTheme(nextTheme);
+      applyDashboardTheme();
+      updateDashboardThemeToggle();
+      return;
+    }
+
     const mobileMoreButton = event.target.closest("[data-mobile-more-toggle]");
     if (mobileMoreButton) {
       const open = mobileMoreButton.getAttribute("aria-expanded") !== "true";
@@ -2000,5 +2073,6 @@ function attachEvents() {
 }
 
 attachEvents();
+applyDashboardTheme();
 renderShell();
 void loadData();

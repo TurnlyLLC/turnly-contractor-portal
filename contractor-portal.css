@@ -245,7 +245,68 @@
   align-items: center;
   display: grid;
   gap: 14px;
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto auto;
+}
+
+.cp-theme-toggle {
+  align-items: center;
+  background: rgba(8, 19, 33, 0.94);
+  border: 1px solid var(--cp-line);
+  border-radius: 999px;
+  color: var(--cp-text);
+  cursor: pointer;
+  display: inline-flex;
+  font-weight: 900;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 12px 0 7px;
+  white-space: nowrap;
+}
+
+.cp-theme-toggle:focus-visible {
+  outline: 2px solid rgba(18, 217, 155, 0.52);
+  outline-offset: 3px;
+}
+
+.cp-theme-toggle-track {
+  align-items: center;
+  background: rgba(18, 217, 155, 0.12);
+  border: 1px solid rgba(18, 217, 155, 0.28);
+  border-radius: 999px;
+  display: inline-flex;
+  height: 26px;
+  justify-content: flex-start;
+  padding: 2px;
+  width: 48px;
+}
+
+.cp-theme-toggle[aria-checked="true"] .cp-theme-toggle-track {
+  background: rgba(54, 169, 255, 0.14);
+  border-color: rgba(54, 169, 255, 0.3);
+  justify-content: flex-end;
+}
+
+.cp-theme-toggle-thumb {
+  align-items: center;
+  background: var(--cp-green);
+  border-radius: 999px;
+  color: #041816;
+  display: inline-flex;
+  height: 20px;
+  justify-content: center;
+  width: 20px;
+}
+
+.cp-theme-toggle[aria-checked="true"] .cp-theme-toggle-thumb {
+  background: var(--cp-blue);
+  color: #04111d;
+}
+
+.cp-theme-icon,
+.cp-theme-icon svg {
+  display: block;
+  height: 13px;
+  width: 13px;
 }
 
 .cp-page-title h1 {
@@ -1300,5 +1361,127 @@
 
   .cp-mobile-nav strong {
     font-size: 13px;
+  }
+}
+
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] {
+  --cp-bg: #ffffff;
+  --cp-rail: #f7fafc;
+  --cp-panel: #ffffff;
+  --cp-panel-2: #f2f7fb;
+  --cp-line: rgba(15, 35, 55, 0.14);
+  --cp-line-strong: rgba(15, 35, 55, 0.24);
+  --cp-text: #102033;
+  --cp-muted: #5c7086;
+  background: #ffffff;
+  color: var(--cp-text);
+  color-scheme: light;
+}
+
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-sidebar,
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-support,
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-profile-menu {
+  background: #f8fbfd;
+  border-color: var(--cp-line);
+}
+
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-brand,
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-profile,
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-profile-menu-action,
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-ghost-action,
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-theme-toggle,
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-table td {
+  color: var(--cp-text);
+}
+
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-nav-link {
+  color: #253a51;
+}
+
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-nav-title,
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-page-title p,
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-support small,
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-profile small,
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-panel-kicker,
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-muted,
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-field span,
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-job-meta span,
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-mini-row span,
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-table th,
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-video-card small {
+  color: var(--cp-muted);
+}
+
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-search,
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-select,
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-field input,
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-field select,
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-field textarea,
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-theme-toggle {
+  background: #ffffff;
+  border-color: var(--cp-line);
+  color: var(--cp-text);
+}
+
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-search input {
+  color: var(--cp-text);
+}
+
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-metric,
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-panel,
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-resource-item,
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-document-tile,
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-video-card {
+  background: linear-gradient(145deg, #ffffff, #f8fbfd);
+  border-color: var(--cp-line);
+  box-shadow: 0 16px 44px rgba(15, 35, 55, 0.08);
+}
+
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-job-row,
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-chat-item,
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-mini-row,
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-feed-item,
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-transaction-row,
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-calendar-day,
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-day-toggle,
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-pay-card {
+  background: #f8fbfd;
+  border-color: var(--cp-line);
+}
+
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-ghost-action,
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-profile-menu-action,
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-tab,
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-mobile-more-link {
+  background: #ffffff;
+  border-color: var(--cp-line);
+}
+
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-calendar-event,
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-detail-panel {
+  background: var(--cp-panel);
+}
+
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-table th,
+.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-table td {
+  border-bottom-color: var(--cp-line);
+}
+
+@media (max-width: 780px) {
+  .contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] {
+    background: #ffffff;
+  }
+
+  .contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-topbar,
+  .contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-mobile-nav,
+  .contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-mobile-more-panel {
+    background: #ffffff;
+    border-color: var(--cp-line);
+    box-shadow: 0 10px 32px rgba(15, 35, 55, 0.1);
+  }
+
+  .cp-theme-toggle {
+    justify-content: space-between;
+    width: 100%;
   }
 }
