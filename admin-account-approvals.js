@@ -202,6 +202,7 @@ function renderRequest(profile) {
         <span>${escapeHtml(getPendingReason(profile))}</span>
         ${profile.status ? `<span>Status: ${escapeHtml(profile.status)}</span>` : ""}
         ${profile.phone ? `<span>${escapeHtml(profile.phone)}</span>` : ""}
+        ${isPropertyManager && profile.requested_property_name ? `<span>Requested property: ${escapeHtml(profile.requested_property_name)}</span>` : ""}
       </div>
       <div class="account-request-actions">
         ${propertyControl}
@@ -274,6 +275,21 @@ async function loadRequests() {
     renderRequests();
     showMessage("Error loading account requests: " + profileError.message);
     return;
+  }
+
+  if (!isStatusFallbackSchema && profileData.length) {
+    const requestedResult = await supabase
+      .from("profiles")
+      .select("id, requested_property_name")
+      .in("id", profileData.map((profile) => profile.id));
+
+    if (!requestedResult.error) {
+      const requestedById = new Map((requestedResult.data || []).map((profile) => [profile.id, profile.requested_property_name]));
+      profileData = profileData.map((profile) => ({
+        ...profile,
+        requested_property_name: requestedById.get(profile.id) || ""
+      }));
+    }
   }
 
   properties = propertyError ? [] : (propertyData || []);

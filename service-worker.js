@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-contractor-pwa-v20260720g";
+const CACHE_NAME = "turnly-contractor-pwa-v20260720h";
 
 const PRECACHE_URLS = [
   "/",
@@ -8,6 +8,7 @@ const PRECACHE_URLS = [
   "/pwa-register.js",
   "/style.css",
   "/portal-public.css",
+  "/portal-auth.js",
   "/portal-auth-overrides.css",
   "/access-notice.css",
   "/contractor-portal.css",
@@ -20,6 +21,7 @@ const PRECACHE_URLS = [
   "/contractor-portal-20260708b.js",
   "/contractor-job-flow-mobile.js",
   "/contractor-login.html",
+  "/property-manager-login.html",
   "/contractor.html",
   "/contractor-my-assignments.html",
   "/contractor-schedule.html",

@@ -119,7 +119,7 @@ function showMode(mode) {
 async function getProfile(userId) {
   const { data, error } = await supabase
     .from("profiles")
-    .select("role, status, contractor_approved, property_manager_property_id")
+    .select("role, status, contractor_approved, property_manager_property_id, requested_property_name")
     .eq("id", userId)
     .maybeSingle();
 
@@ -159,16 +159,22 @@ async function syncSignupProfile(user, details) {
 
   const role = normalizeRole(details.role);
   const status = getInitialStatus(role);
+  const payload = {
+    id: user.id,
+    email: details.email,
+    full_name: details.fullName,
+    phone: details.phone,
+    role,
+    status
+  };
+
+  if (role === "property_manager") {
+    payload.requested_property_name = details.requestedPropertyName || "";
+  }
+
   const { error } = await supabase
     .from("profiles")
-    .upsert({
-      id: user.id,
-      email: details.email,
-      full_name: details.fullName,
-      phone: details.phone,
-      role,
-      status
-    }, { onConflict: "id" });
+    .upsert(payload, { onConflict: "id" });
 
   if (error) {
     console.warn("Profile sync after signup skipped:", error.message);
@@ -293,6 +299,7 @@ signupForm?.addEventListener("submit", async (event) => {
   const lastName = value("lastName");
   const email = value("signupEmail").toLowerCase();
   const phone = value("phone");
+  const requestedPropertyName = isPropertyManagerPortal ? value("requestedPropertyName") : "";
   const password = document.getElementById("signupPassword")?.value || "";
   const verifyPassword = document.getElementById("verifyPassword")?.value || "";
   const fullName = `${firstName} ${lastName}`.trim();
@@ -301,6 +308,11 @@ signupForm?.addEventListener("submit", async (event) => {
 
   if (!firstName || !lastName || !email || !phone || !password || !verifyPassword) {
     showMessage("Fill out every field to create the account.", "error");
+    return;
+  }
+
+  if (isPropertyManagerPortal && !requestedPropertyName) {
+    showMessage("Enter the property or portfolio this account should be associated with.", "error");
     return;
   }
 
@@ -327,6 +339,7 @@ signupForm?.addEventListener("submit", async (event) => {
         last_name: lastName,
         full_name: fullName,
         phone,
+        requested_property_name: requestedPropertyName,
         role: normalizedSignupRole,
         status: initialStatus,
         contractor_approved: initialStatus === "active"
@@ -354,7 +367,8 @@ signupForm?.addEventListener("submit", async (event) => {
       email,
       fullName,
       phone,
-      role: normalizedSignupRole
+      role: normalizedSignupRole,
+      requestedPropertyName
     });
     await waitForProfile(data.user.id);
     const didRoute = await routeAuthenticatedUser(data.user, normalizedSignupRole);
@@ -366,7 +380,7 @@ signupForm?.addEventListener("submit", async (event) => {
 
   const accessNote = pageRole === "contractor"
     ? "A Turnly admin must approve the contractor account before dashboard data is visible."
-    : "A Turnly admin must link this account to a property before dashboard data is visible.";
+    : `A Turnly admin must link this account to ${requestedPropertyName || "the requested property"} before dashboard data is visible.`;
   showVerificationPrompt(email, accessNote);
   setFormLoading(signupForm, false, "Creating Account...", `Create ${pageLabel} Account`);
 });

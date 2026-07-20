@@ -82,7 +82,7 @@ async function getProfile(userId) {
 
 document.getElementById("logoutBtn")?.addEventListener("click", async () => {
   await supabase?.auth.signOut();
-  window.location.href = "contractor-login.html";
+  window.location.href = "https://portal.turnlypros.com/";
 });
 
 if (!supabase) {

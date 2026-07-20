@@ -10431,7 +10431,7 @@ async function signOutTopbarUser() {
   if (suiteSupabase) {
     await suiteSupabase.auth.signOut();
   }
-  window.location.href = "login.html";
+  window.location.href = "https://portal.turnlypros.com/";
 }
 
 function setTopbarProfileMessage(text, isError = false) {

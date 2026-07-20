@@ -1874,7 +1874,7 @@ document.addEventListener("click", async (event) => {
 
   if (event.target.closest("[data-manager-logout]")) {
     await supabase?.auth.signOut();
-    window.location.href = "property-manager-login.html";
+    window.location.href = "https://portal.turnlypros.com/";
     return;
   }
 
