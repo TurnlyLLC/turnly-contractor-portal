@@ -9,9 +9,9 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=20260624t" />
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png?v=20260624t" />
   <link rel="stylesheet" href="style.css" />
-  <link rel="stylesheet" href="admin-dashboard.css?v=20260717-message-search" />
+  <link rel="stylesheet" href="admin-dashboard.css?v=20260720-property-manager-portal" />
 </head>
-<body class="admin-command-body">
+<body class="admin-command-body" data-portal-role="property-manager">
   <main class="admin-command">
     <aside class="command-sidebar">
       <div class="command-brand">
@@ -20,22 +20,18 @@
       </div>
 
       <nav class="command-nav" aria-label="Property manager navigation">
-        <a class="nav-link active" href="property-manager.html"><span>⌂</span>Dashboard</a>
-        <a class="nav-link" href="#properties"><span>▤</span>Properties</a>
-        <a class="nav-link" href="#reports"><span>◫</span>Cleaning Reports</a>
-        <a class="nav-link" href="#invoices"><span>▥</span>Invoices</a>
-        <a class="nav-link" href="#messages"><span>✉</span>Messages</a>
-        <a class="nav-link" href="#feedback"><span>□</span>Feedback</a>
+        <a class="nav-link active" href="#overview" data-pm-view="overview"><span>O</span>Overview</a>
+        <a class="nav-link" href="#turn-requests" data-pm-view="turn-requests"><span>T</span>Turn Requests</a>
+        <a class="nav-link" href="#schedule" data-pm-view="schedule"><span>S</span>Schedule</a>
+        <a class="nav-link" href="#unit-videos" data-pm-view="unit-videos"><span>V</span>Unit Videos</a>
+        <a class="nav-link" href="#messages" data-pm-view="messages"><span>M</span>Messages</a>
+        <a class="nav-link" href="#invoices" data-pm-view="invoices"><span>I</span>Invoices</a>
       </nav>
 
-      <button id="managerLogoutBtn" class="admin-user-card" type="button">
-        <span class="avatar">PM</span>
-        <span>
-          <strong id="managerUserName">Property Manager</strong>
-          <small>Property Manager</small>
-        </span>
-        <span class="chevron">⌄</span>
-      </button>
+      <nav class="command-nav pm-support-nav" aria-label="Property manager support">
+        <a class="nav-link" href="#settings" data-pm-view="settings"><span>G</span>Settings</a>
+        <a class="nav-link" href="#support" data-pm-view="support"><span>H</span>Help &amp; Support</a>
+      </nav>
     </aside>
 
     <section class="command-main wip-main">
@@ -46,15 +42,15 @@
         </div>
       </header>
 
-      <section class="panel-card wip-panel">
-        <p class="wip-kicker">Client Operations</p>
-        <h2>Work in progress</h2>
-        <p>This role now has a dedicated portal route. The property manager workflows can be expanded here next.</p>
+      <section class="panel-card pm-lock-panel">
+        <p class="wip-kicker">Property Manager Portal</p>
+        <h2>Loading portal</h2>
+        <p>Loading property details, schedules, reports, invoices, feedback, and messages.</p>
       </section>
     </section>
   </main>
 
   <script src="env.js"></script>
-  <script type="module" src="property-manager.js?v=20260717-message-search"></script>
+  <script type="module" src="property-manager.js?v=20260720-property-manager-portal"></script>
 </body>
 </html>
