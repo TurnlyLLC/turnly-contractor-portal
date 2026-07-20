@@ -9257,21 +9257,28 @@ function salesMonthlyTrendChart(groups = []) {
 
 function salesTrendMarker(group, x, y, label, value, tone, chartWidth) {
   const displayValue = salesMoney(value);
-  const tooltipWidth = Math.max(86, Math.min(138, displayValue.length * 7 + 24));
+  const tooltipValue = `${label}: ${displayValue}`;
+  const tooltipMonth = group.label || group.shortLabel || "Month";
+  const ariaLabel = `${tooltipMonth} ${tooltipValue}`;
+  const tooltipWidth = Math.max(132, Math.min(260, Math.max(tooltipMonth.length, tooltipValue.length) * 7 + 28));
   const halfWidth = tooltipWidth / 2;
   const xNumber = Number(x) || 0;
   const yNumber = Number(y) || 0;
   const tooltipX = Math.min(chartWidth - halfWidth - 8, Math.max(halfWidth + 8, xNumber));
-  const tooltipY = Math.max(36, yNumber - 14);
+  const tooltipY = Math.max(52, yNumber - 14);
   const pointerX = xNumber - tooltipX;
   return `
-    <g class="sales-trend-marker ${esc(tone)}" tabindex="0" aria-label="${esc(`${group.label} ${label}: ${displayValue}`)}">
+    <g class="sales-trend-marker ${esc(tone)}" tabindex="0" aria-label="${esc(ariaLabel)}">
+      <title>${esc(ariaLabel)}</title>
       <circle class="sales-trend-hit" cx="${x}" cy="${y}" r="15"></circle>
       <circle class="sales-trend-point ${esc(tone)}" cx="${x}" cy="${y}" r="5"></circle>
       <g class="sales-trend-tooltip" transform="translate(${salesSvgNumber(tooltipX)} ${salesSvgNumber(tooltipY)})">
-        <rect x="${salesSvgNumber(-halfWidth)}" y="-28" width="${salesSvgNumber(tooltipWidth)}" height="24" rx="6"></rect>
+        <rect x="${salesSvgNumber(-halfWidth)}" y="-44" width="${salesSvgNumber(tooltipWidth)}" height="40" rx="7"></rect>
         <path d="M ${salesSvgNumber(pointerX - 5)} -4 L ${salesSvgNumber(pointerX + 5)} -4 L ${salesSvgNumber(pointerX)} 2 Z"></path>
-        <text x="0" y="-12" text-anchor="middle">${esc(displayValue)}</text>
+        <text x="0" y="-28" text-anchor="middle">
+          <tspan class="sales-trend-tooltip-month" x="0">${esc(tooltipMonth)}</tspan>
+          <tspan class="sales-trend-tooltip-value" x="0" dy="16">${esc(tooltipValue)}</tspan>
+        </text>
       </g>
     </g>
   `;

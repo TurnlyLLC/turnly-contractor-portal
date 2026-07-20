@@ -4197,19 +4197,27 @@ a {
 
 .sales-chart-control select {
   appearance: none;
-  background: var(--suite-input);
+  background: #f8fafc;
+  background-color: #f8fafc;
   border: 1px solid var(--suite-border-soft);
   border-radius: 7px;
-  color: var(--suite-text);
-  color-scheme: dark;
+  color: #071220;
+  color-scheme: light;
   font: inherit;
   min-height: 38px;
   padding: 8px 10px;
 }
 
 .sales-chart-control select option {
-  background: #071220;
-  color: #f8fafc;
+  background: #f8fafc !important;
+  background-color: #f8fafc !important;
+  color: #071220 !important;
+}
+
+.sales-chart-control select option:checked {
+  background: #dce6ef !important;
+  background-color: #dce6ef !important;
+  color: #071220 !important;
 }
 
 .sales-chart-legend {
@@ -4417,6 +4425,7 @@ a {
 
 .sales-trend-hit {
   fill: transparent;
+  pointer-events: all;
   stroke: transparent;
 }
 
@@ -4424,6 +4433,7 @@ a {
   opacity: 0;
   pointer-events: none;
   transition: opacity 140ms ease;
+  visibility: hidden;
 }
 
 .sales-trend-tooltip rect,
@@ -4438,9 +4448,22 @@ a {
   font-weight: 950;
 }
 
+.sales-trend-tooltip .sales-trend-tooltip-month {
+  fill: #aebdd0;
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.sales-trend-tooltip .sales-trend-tooltip-value {
+  fill: var(--suite-text);
+  font-size: 12px;
+  font-weight: 950;
+}
+
 .sales-trend-marker:hover .sales-trend-tooltip,
 .sales-trend-marker:focus .sales-trend-tooltip {
   opacity: 1;
+  visibility: visible;
 }
 
 .sales-trend-marker:focus .sales-trend-point {
