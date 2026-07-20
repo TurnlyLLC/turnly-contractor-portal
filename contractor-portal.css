@@ -1364,7 +1364,7 @@
   }
 }
 
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] {
+.contractor-portal-body[data-dashboard-theme="light"] {
   --cp-bg: #ffffff;
   --cp-rail: #f7fafc;
   --cp-panel: #ffffff;
@@ -1378,103 +1378,103 @@
   color-scheme: light;
 }
 
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-sidebar,
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-support,
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-profile-menu {
+.contractor-portal-body[data-dashboard-theme="light"] .cp-sidebar,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-support,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-profile-menu {
   background: #f8fbfd;
   border-color: var(--cp-line);
 }
 
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-brand,
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-profile,
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-profile-menu-action,
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-ghost-action,
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-theme-toggle,
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-table td {
+.contractor-portal-body[data-dashboard-theme="light"] .cp-brand,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-profile,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-profile-menu-action,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-ghost-action,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-theme-toggle,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-table td {
   color: var(--cp-text);
 }
 
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-nav-link {
+.contractor-portal-body[data-dashboard-theme="light"] .cp-nav-link {
   color: #253a51;
 }
 
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-nav-title,
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-page-title p,
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-support small,
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-profile small,
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-panel-kicker,
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-muted,
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-field span,
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-job-meta span,
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-mini-row span,
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-table th,
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-video-card small {
+.contractor-portal-body[data-dashboard-theme="light"] .cp-nav-title,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-page-title p,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-support small,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-profile small,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-panel-kicker,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-muted,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-field span,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-job-meta span,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-mini-row span,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-table th,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-video-card small {
   color: var(--cp-muted);
 }
 
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-search,
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-select,
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-field input,
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-field select,
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-field textarea,
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-theme-toggle {
+.contractor-portal-body[data-dashboard-theme="light"] .cp-search,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-select,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-field input,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-field select,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-field textarea,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-theme-toggle {
   background: #ffffff;
   border-color: var(--cp-line);
   color: var(--cp-text);
 }
 
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-search input {
+.contractor-portal-body[data-dashboard-theme="light"] .cp-search input {
   color: var(--cp-text);
 }
 
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-metric,
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-panel,
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-resource-item,
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-document-tile,
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-video-card {
+.contractor-portal-body[data-dashboard-theme="light"] .cp-metric,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-panel,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-resource-item,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-document-tile,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-video-card {
   background: linear-gradient(145deg, #ffffff, #f8fbfd);
   border-color: var(--cp-line);
   box-shadow: 0 16px 44px rgba(15, 35, 55, 0.08);
 }
 
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-job-row,
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-chat-item,
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-mini-row,
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-feed-item,
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-transaction-row,
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-calendar-day,
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-day-toggle,
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-pay-card {
+.contractor-portal-body[data-dashboard-theme="light"] .cp-job-row,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-chat-item,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-mini-row,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-feed-item,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-transaction-row,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-calendar-day,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-day-toggle,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-pay-card {
   background: #f8fbfd;
   border-color: var(--cp-line);
 }
 
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-ghost-action,
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-profile-menu-action,
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-tab,
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-mobile-more-link {
+.contractor-portal-body[data-dashboard-theme="light"] .cp-ghost-action,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-profile-menu-action,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-tab,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-mobile-more-link {
   background: #ffffff;
   border-color: var(--cp-line);
 }
 
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-calendar-event,
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-detail-panel {
+.contractor-portal-body[data-dashboard-theme="light"] .cp-calendar-event,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-detail-panel {
   background: var(--cp-panel);
 }
 
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-table th,
-.contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-table td {
+.contractor-portal-body[data-dashboard-theme="light"] .cp-table th,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-table td {
   border-bottom-color: var(--cp-line);
 }
 
 @media (max-width: 780px) {
-  .contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] {
+  .contractor-portal-body[data-dashboard-theme="light"] {
     background: #ffffff;
   }
 
-  .contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-topbar,
-  .contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-mobile-nav,
-  .contractor-portal-body[data-contractor-page="dashboard"][data-dashboard-theme="light"] .cp-mobile-more-panel {
+  .contractor-portal-body[data-dashboard-theme="light"] .cp-topbar,
+  .contractor-portal-body[data-dashboard-theme="light"] .cp-mobile-nav,
+  .contractor-portal-body[data-dashboard-theme="light"] .cp-mobile-more-panel {
     background: #ffffff;
     border-color: var(--cp-line);
     box-shadow: 0 10px 32px rgba(15, 35, 55, 0.1);

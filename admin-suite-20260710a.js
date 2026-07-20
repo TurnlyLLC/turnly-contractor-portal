@@ -603,6 +603,7 @@ const iconPaths = {
   list: '<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/>',
   map: '<path d="M9 18 3 21V6l6-3 6 3 6-3v15l-6 3Z"/><path d="M9 3v15"/><path d="M15 6v15"/>',
   "message-square": '<path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z"/>',
+  moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
   more: '<circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/>',
   minus: '<path d="M5 12h14"/>',
   plus: '<path d="M12 5v14"/><path d="M5 12h14"/>',
@@ -611,6 +612,7 @@ const iconPaths = {
   settings: '<path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/>',
   shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>',
   star: '<path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8-6.2-3.3L5.8 21 7 14.2l-5-4.9 6.9-1Z"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
   target: '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
   "trending-up": '<path d="m3 17 6-6 4 4 8-8"/><path d="M14 7h7v7"/>',
   triangle: '<path d="m12 3 9 18H3Z"/>',
@@ -657,6 +659,7 @@ function getPageKey() {
 }
 
 const navCollapseStorageKey = "turnlyAdminCollapsedNavSections";
+const dashboardThemeStorageKey = "turnlyAdminDashboardTheme";
 
 function navSectionKey(title) {
   return String(title || "")
@@ -688,6 +691,56 @@ function saveCollapsedNavSections(collapsedSections) {
   } catch {
     // Collapse state is helpful, not required.
   }
+}
+
+function readDashboardTheme() {
+  try {
+    return localStorage.getItem(dashboardThemeStorageKey) === "light" ? "light" : "dark";
+  } catch {
+    return "dark";
+  }
+}
+
+function writeDashboardTheme(theme) {
+  try {
+    localStorage.setItem(dashboardThemeStorageKey, theme === "light" ? "light" : "dark");
+  } catch {
+    // The switch still applies for the current page even when storage is blocked.
+  }
+}
+
+function applyDashboardTheme() {
+  if (!document.body) return;
+  document.body.dataset.dashboardTheme = readDashboardTheme();
+}
+
+function dashboardThemeToggleContent(theme) {
+  const isLight = theme === "light";
+  const label = isLight ? "Light" : "Dark";
+  return `
+    <span class="theme-toggle-track"><span class="theme-toggle-thumb">${icon(isLight ? "sun" : "moon")}</span></span>
+    <span class="theme-toggle-label">${esc(label)}</span>
+  `;
+}
+
+function dashboardThemeToggleMarkup(activeKey) {
+  const theme = readDashboardTheme();
+  const nextLabel = theme === "light" ? "dark" : "light";
+  return `
+    <button class="dashboard-theme-toggle" type="button" data-dashboard-theme-toggle role="switch" aria-checked="${theme === "light" ? "true" : "false"}" aria-label="Switch to ${esc(nextLabel)} mode">
+      ${dashboardThemeToggleContent(theme)}
+    </button>
+  `;
+}
+
+function updateDashboardThemeToggle() {
+  const button = document.querySelector("[data-dashboard-theme-toggle]");
+  if (!button) return;
+  const theme = readDashboardTheme();
+  const nextLabel = theme === "light" ? "dark" : "light";
+  button.setAttribute("aria-checked", theme === "light" ? "true" : "false");
+  button.setAttribute("aria-label", `Switch to ${nextLabel} mode`);
+  button.innerHTML = dashboardThemeToggleContent(theme);
 }
 
 function metric(label, value = "0", meta = "from last 7 days", iconName = "activity", tone = "green", attrs = "") {
@@ -9953,7 +10006,7 @@ function renderSidebar(activeKey) {
   `;
 }
 
-function renderTopbar(page) {
+function renderTopbar(page, activeKey) {
   const actions = page.actions || (page.action ? [page.action] : []);
   const actionMarkup = actions.map((action) => actionLink(action.label, action.icon, action.href, action.tone)).join("");
   const profile = getTopbarProfileDefaults();
@@ -9971,6 +10024,7 @@ function renderTopbar(page) {
           <kbd>K</kbd>
           <div id="globalSearchResults" class="topbar-dropdown topbar-search-results" hidden></div>
         </div>
+        ${dashboardThemeToggleMarkup(activeKey)}
         ${actionMarkup}
         <div class="topbar-popover-wrap">
           <button id="topNotificationsBtn" class="top-icon" type="button" aria-label="${esc(topbarNotificationButtonLabel())}" aria-expanded="false">${icon("bell")}<span id="topNotificationsBadge" ${unreadMessages ? "" : "hidden"}>${esc(topbarCountLabel(unreadMessages))}</span></button>
@@ -10008,6 +10062,7 @@ function initTopbar() {
   const avatarButton = document.getElementById("topAvatarUploadBtn");
   const avatarInput = document.getElementById("topAvatarInput");
   const signOutButton = document.getElementById("topSignOutBtn");
+  const themeToggle = document.querySelector("[data-dashboard-theme-toggle]");
 
   search?.addEventListener("input", () => renderTopbarSearchResults(search.value));
   search?.addEventListener("keydown", (event) => {
@@ -10033,6 +10088,12 @@ function initTopbar() {
     if (file) void uploadTopbarAvatar(file);
   });
   signOutButton?.addEventListener("click", () => void signOutTopbarUser());
+  themeToggle?.addEventListener("click", () => {
+    const nextTheme = readDashboardTheme() === "light" ? "dark" : "light";
+    writeDashboardTheme(nextTheme);
+    applyDashboardTheme();
+    updateDashboardThemeToggle();
+  });
 
   if (!window.__turnlyTopbarKeybind) {
     window.__turnlyTopbarKeybind = true;
@@ -10448,6 +10509,7 @@ function renderApp() {
   const activeKey = getPageKey();
   const page = pages[activeKey] || pages["command-center"];
   document.title = `${page.title} | Turnly Admin`;
+  applyDashboardTheme();
 
   const app = document.getElementById("adminSuiteApp");
   if (!app) return;
@@ -10456,7 +10518,7 @@ function renderApp() {
     <div class="admin-suite-shell">
       ${renderSidebar(activeKey)}
       <main class="suite-main">
-        ${renderTopbar(page)}
+        ${renderTopbar(page, activeKey)}
         <div class="suite-content">${page.render()}</div>
       </main>
     </div>

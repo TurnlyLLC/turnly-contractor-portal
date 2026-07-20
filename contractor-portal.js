@@ -146,11 +146,7 @@ function writeDashboardTheme(theme) {
 
 function applyDashboardTheme() {
   if (!document.body) return;
-  if (pageKey === "dashboard") {
-    document.body.dataset.dashboardTheme = readDashboardTheme();
-  } else {
-    delete document.body.dataset.dashboardTheme;
-  }
+  document.body.dataset.dashboardTheme = readDashboardTheme();
 }
 
 function dashboardThemeIcon(theme) {
@@ -169,7 +165,6 @@ function dashboardThemeToggleContent(theme) {
 }
 
 function dashboardThemeToggle() {
-  if (pageKey !== "dashboard") return "";
   const theme = readDashboardTheme();
   const nextLabel = theme === "light" ? "dark" : "light";
   return `

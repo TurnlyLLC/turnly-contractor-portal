@@ -775,13 +775,9 @@ function writeDashboardTheme(theme) {
   }
 }
 
-function applyDashboardTheme(activeKey = getPageKey()) {
+function applyDashboardTheme() {
   if (!document.body) return;
-  if (activeKey === "dashboard") {
-    document.body.dataset.dashboardTheme = readDashboardTheme();
-  } else {
-    delete document.body.dataset.dashboardTheme;
-  }
+  document.body.dataset.dashboardTheme = readDashboardTheme();
 }
 
 function dashboardThemeToggleContent(theme) {
@@ -794,7 +790,6 @@ function dashboardThemeToggleContent(theme) {
 }
 
 function dashboardThemeToggleMarkup(activeKey) {
-  if (activeKey !== "dashboard") return "";
   const theme = readDashboardTheme();
   const nextLabel = theme === "light" ? "dark" : "light";
   return `
