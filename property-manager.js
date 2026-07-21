@@ -1069,6 +1069,12 @@ async function loadManagerVideos() {
       .eq("property_id", id)
       .order("created_at", { ascending: false })
       .limit(120)),
+    ...propertyIds.slice(0, 10).map((id) => supabase
+      .from("qa_videos")
+      .select("*")
+      .eq("portal_property_id", id)
+      .order("created_at", { ascending: false })
+      .limit(120)),
     ...chunk(assignmentIds, 80).map((ids) => supabase
       .from("qa_videos")
       .select("*")
