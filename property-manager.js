@@ -28,8 +28,11 @@ const state = {
   selectedThreadId: "",
   selectedAssignmentId: "",
   selectedVideoKey: "",
+  selectedScheduleDate: "",
+  scheduleWeekStart: "",
   view: "overview",
   requestOpen: false,
+  accountMenuOpen: false,
   filters: {
     query: "",
     requestStatus: "all",
@@ -191,6 +194,31 @@ function formatShortDate(value, fallback = "Not set") {
   const date = parseDate(value);
   if (!date) return fallback;
   return date.toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
+function localDate(value = new Date()) {
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split("-").map(Number);
+    const date = new Date(year, month - 1, day);
+    date.setHours(0, 0, 0, 0);
+    return date;
+  }
+  const date = parseDate(value) || new Date();
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function dateInputValue(value = new Date()) {
+  const date = localDate(value);
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+function addDays(value, days) {
+  const date = localDate(value);
+  date.setDate(date.getDate() + days);
+  return date;
 }
 
 function formatShortTime(value, fallback = "Open") {
@@ -380,6 +408,24 @@ function endOfWeek(value = new Date(), monday = false) {
   const date = startOfWeek(value, monday);
   date.setDate(date.getDate() + 7);
   return date;
+}
+
+function ensureScheduleState() {
+  if (!state.selectedScheduleDate) state.selectedScheduleDate = dateInputValue(new Date());
+  if (!state.scheduleWeekStart) state.scheduleWeekStart = dateInputValue(startOfWeek(localDate(state.selectedScheduleDate), true));
+}
+
+function setScheduleDate(value) {
+  const date = localDate(value);
+  state.selectedScheduleDate = dateInputValue(date);
+  state.scheduleWeekStart = dateInputValue(startOfWeek(date, true));
+}
+
+function moveScheduleWeek(days) {
+  ensureScheduleState();
+  const nextStart = addDays(state.scheduleWeekStart, days);
+  state.scheduleWeekStart = dateInputValue(nextStart);
+  state.selectedScheduleDate = dateInputValue(nextStart);
 }
 
 function isDateBetween(value, start, end) {
@@ -747,14 +793,14 @@ function renderManagerPortal(loading = false) {
   const [title, subtitle] = viewLabels[state.view] || viewLabels.overview;
   const headingTitle = state.view === "overview" ? propertyTitle() : title;
   const headingSubtitle = state.view === "overview"
-    ? (hasLinkedProperty() ? "Your assigned property overview." : "Dashboard access is active while your property link is being set up.")
+    ? (hasLinkedProperty() ? "Your assigned property overview." : "")
     : subtitle;
 
   managerMain.innerHTML = `
     <header class="command-header pm-page-header">
       <div class="pm-heading">
         <h1>${esc(headingTitle)}</h1>
-        <p>${esc(headingSubtitle)}</p>
+        ${headingSubtitle ? `<p>${esc(headingSubtitle)}</p>` : ""}
       </div>
       ${renderTopBar()}
     </header>
@@ -772,7 +818,7 @@ function renderPropertyLinkNotice() {
       <div class="pm-panel-head">
         <div>
           <p class="pm-eyebrow">Property Link Pending</p>
-          <h2>Dashboard access is active</h2>
+          <h2>Property link pending</h2>
           <p>${esc(propertyLinkPendingMessage())}</p>
         </div>
         <button class="secondary-command-btn pm-compact-btn" type="button" data-pm-view-button="messages">Message Turnly</button>
@@ -788,18 +834,26 @@ function renderTopBar() {
     <div class="pm-topbar">
       <label class="pm-search">
         <span class="sr-only">Search property manager portal</span>
-        <span>Search</span>
-        <input data-pm-filter="query" value="${esc(state.filters.query)}" placeholder="Search units, requests, or updates..." />
+        <span class="pm-search-icon" aria-hidden="true"></span>
+        <input data-pm-filter="query" value="${esc(state.filters.query)}" placeholder="Search anything..." />
         <kbd>K</kbd>
       </label>
       <button class="notification-btn pm-notification" type="button" aria-label="${unread} unread messages" data-pm-view-button="messages">
-        <span>${integer(unread)}</span>
+        <span class="pm-bell" aria-hidden="true"></span>
+        <span class="pm-notification-count">${integer(unread)}</span>
       </button>
-      <button class="pm-user-chip" type="button" data-manager-logout>
-        <span class="avatar">${esc(initialsFromName(name))}</span>
-        <span><strong>${esc(name)}</strong><small>Property Manager</small></span>
-        <span>v</span>
-      </button>
+      <div class="pm-account-menu-wrap">
+        <button class="pm-user-chip" type="button" aria-haspopup="menu" aria-expanded="${state.accountMenuOpen ? "true" : "false"}" data-manager-account-toggle>
+          <span class="avatar">${esc(initialsFromName(name))}</span>
+          <span><strong>${esc(name)}</strong><small>Property Manager</small></span>
+          <span class="pm-chevron" aria-hidden="true"></span>
+        </button>
+        ${state.accountMenuOpen ? `
+          <div class="pm-account-menu" role="menu">
+            <button type="button" role="menuitem" data-manager-logout>Sign Out</button>
+          </div>
+        ` : ""}
+      </div>
     </div>
   `;
 }
@@ -823,7 +877,6 @@ function renderCurrentView() {
 function statCard(label, value, caption, tone = "green", view = "") {
   return `
     <article class="panel-card pm-stat-card ${esc(tone)}">
-      <span class="pm-stat-icon">${esc(label.slice(0, 1))}</span>
       <div>
         <small>${esc(label)}</small>
         <strong>${esc(value)}</strong>
@@ -876,7 +929,7 @@ function renderOverviewView() {
       })}
       <aside class="pm-side-stack">
         ${panel("Schedule Snapshot", renderScheduleSnapshot(), {
-          action: `<select class="pm-mini-select" data-pm-schedule-range><option>This Week</option><option>Next Week</option></select>`
+          action: renderScheduleSnapshotControls()
         })}
         ${renderUpdatesPanel("Messages / Updates")}
       </aside>
@@ -1159,28 +1212,54 @@ function renderScheduleDetails(row) {
 }
 
 function renderScheduleSnapshot() {
+  ensureScheduleState();
+  const weekStart = localDate(state.scheduleWeekStart);
+  const selectedDate = localDate(state.selectedScheduleDate);
   const days = Array.from({ length: 7 }, (_, index) => {
-    const date = new Date(startOfWeek(new Date()));
+    const date = new Date(weekStart);
     date.setDate(date.getDate() + index);
     return date;
   });
   const today = new Date();
-  const todayRows = todayAssignments().slice(0, 4);
+  const selectedRows = state.assignments
+    .filter((row) => sameDay(row.start_window || row.recurring_due_at, selectedDate))
+    .filter((row) => queryMatches([assignmentUnit(row), assignmentTitle(row), assignmentCleaner(row), row.service_type]))
+    .sort((a, b) => dateValue(a.start_window || a.recurring_due_at, 0) - dateValue(b.start_window || b.recurring_due_at, 0))
+    .slice(0, 4);
   return `
     <div class="pm-week-strip">
-      ${days.map((day) => `<span class="${sameDay(day, today) ? "active" : ""}"><small>${esc(day.toLocaleDateString([], { weekday: "short" }).slice(0, 1))}</small>${esc(day.getDate())}</span>`).join("")}
+      ${days.map((day) => {
+        const value = dateInputValue(day);
+        return `
+          <button type="button" class="${sameDay(day, selectedDate) ? "active" : ""} ${sameDay(day, today) ? "today" : ""}" data-pm-schedule-select-date="${esc(value)}" aria-label="${esc(day.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" }))}">
+            <small>${esc(day.toLocaleDateString([], { weekday: "short" }))}</small>
+            <strong>${esc(day.getDate())}</strong>
+          </button>
+        `;
+      }).join("")}
     </div>
-    <p class="pm-snapshot-label">Today - ${esc(today.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }))}<span>${todayRows.length} scheduled</span></p>
+    <p class="pm-snapshot-label">${esc(selectedDate.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }))}<span>${selectedRows.length} scheduled</span></p>
     <div class="pm-snapshot-list">
-      ${todayRows.length ? todayRows.map((row) => `
+      ${selectedRows.length ? selectedRows.map((row) => `
         <button type="button" data-manager-select-assignment="${esc(row.id || "")}">
           <time>${esc(formatShortTime(row.start_window || row.recurring_due_at))}</time>
           <span>${esc(assignmentUnit(row) ? `Unit ${assignmentUnit(row)}` : assignmentTitle(row))}</span>
           ${statusBadge(requestGroup(row))}
         </button>
-      `).join("") : emptyBlock("No turns today", "Upcoming turns will appear here.")}
+      `).join("") : emptyBlock("No turns scheduled", "Select another date or use the arrows to move through the schedule.")}
     </div>
     <div class="pm-panel-footer"><button class="pm-link-button" type="button" data-pm-view-button="schedule">View full schedule</button></div>
+  `;
+}
+
+function renderScheduleSnapshotControls() {
+  ensureScheduleState();
+  return `
+    <div class="pm-schedule-controls" aria-label="Schedule date controls">
+      <button type="button" aria-label="Previous week" data-pm-schedule-shift="-7"></button>
+      <input type="date" value="${esc(state.selectedScheduleDate)}" aria-label="Select schedule date" data-pm-schedule-date />
+      <button type="button" aria-label="Next week" data-pm-schedule-shift="7"></button>
+    </div>
   `;
 }
 
@@ -1949,12 +2028,22 @@ function setActiveNav() {
 }
 
 document.addEventListener("click", async (event) => {
+  const accountWasOpen = state.accountMenuOpen;
+  const accountWrap = event.target.closest(".pm-account-menu-wrap");
+  if (!accountWrap && accountWasOpen) state.accountMenuOpen = false;
+
   const navLink = event.target.closest(".command-nav .nav-link[data-pm-view]");
   if (navLink) {
     event.preventDefault();
     const view = navLink.dataset.pmView || "overview";
     if (window.location.hash !== `#${view}`) window.location.hash = view;
     state.view = view;
+    renderManagerPortal();
+    return;
+  }
+
+  if (event.target.closest("[data-manager-account-toggle]")) {
+    state.accountMenuOpen = !state.accountMenuOpen;
     renderManagerPortal();
     return;
   }
@@ -1975,6 +2064,20 @@ document.addEventListener("click", async (event) => {
   if (event.target.closest("[data-manager-logout]")) {
     await supabase?.auth.signOut();
     window.location.href = "https://portal.turnlypros.com/";
+    return;
+  }
+
+  const scheduleShift = event.target.closest("[data-pm-schedule-shift]");
+  if (scheduleShift) {
+    moveScheduleWeek(Number(scheduleShift.dataset.pmScheduleShift || 0));
+    renderManagerPortal();
+    return;
+  }
+
+  const scheduleDay = event.target.closest("[data-pm-schedule-select-date]");
+  if (scheduleDay) {
+    setScheduleDate(scheduleDay.dataset.pmScheduleSelectDate);
+    renderManagerPortal();
     return;
   }
 
@@ -2042,7 +2145,10 @@ document.addEventListener("click", async (event) => {
     await markManagerThreadRead(state.selectedThreadId);
     await loadManagerThreadMessages(state.selectedThreadId);
     renderManagerPortal();
+    return;
   }
+
+  if (!accountWrap && accountWasOpen) renderManagerPortal();
 });
 
 document.addEventListener("input", (event) => {
@@ -2052,6 +2158,13 @@ document.addEventListener("input", (event) => {
 });
 
 document.addEventListener("change", (event) => {
+  const scheduleDate = event.target.closest("[data-pm-schedule-date]");
+  if (scheduleDate) {
+    setScheduleDate(scheduleDate.value);
+    renderManagerPortal();
+    return;
+  }
+
   const filter = event.target.closest("[data-pm-filter]");
   if (!filter) return;
   state.filters[filter.dataset.pmFilter] = filter.value;

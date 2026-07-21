@@ -1621,7 +1621,7 @@ body.admin-command-body[data-portal-role="property-manager"] .nav-link {
   border-radius: 6px;
   color: #d7e2ee;
   font-size: 12px;
-  gap: 10px;
+  gap: 0;
   min-height: 38px;
   padding: 9px 11px;
 }
@@ -1699,15 +1699,41 @@ body.admin-command-body[data-portal-role="property-manager"] .metric-card {
   color: var(--pm-muted);
   display: grid;
   gap: 8px;
-  grid-template-columns: auto minmax(140px, 1fr) auto;
+  grid-template-columns: 18px minmax(190px, 1fr) auto;
   min-height: 38px;
+  min-width: min(34vw, 320px);
   padding: 0 10px;
 }
 
-.pm-search > span:not(.sr-only) {
-  color: #d9e7f5;
-  font-size: 11px;
-  font-weight: 800;
+.pm-search-icon {
+  display: block;
+  height: 14px;
+  position: relative;
+  width: 14px;
+}
+
+.pm-search-icon::before {
+  border: 2px solid var(--pm-muted);
+  border-radius: 50%;
+  content: "";
+  height: 9px;
+  left: 0;
+  position: absolute;
+  top: 0;
+  width: 9px;
+}
+
+.pm-search-icon::after {
+  background: var(--pm-muted);
+  border-radius: 999px;
+  content: "";
+  height: 2px;
+  left: 10px;
+  position: absolute;
+  top: 10px;
+  transform: rotate(45deg);
+  transform-origin: left center;
+  width: 6px;
 }
 
 .pm-search input {
@@ -1732,24 +1758,87 @@ body.admin-command-body[data-portal-role="property-manager"] .metric-card {
 }
 
 .pm-notification {
+  align-items: center;
   background: rgba(7, 21, 36, 0.92);
   border-color: var(--pm-border);
   border-radius: 7px;
+  display: grid;
   height: 38px;
+  justify-items: center;
+  position: relative;
   width: 38px;
 }
 
 .pm-notification::before {
-  content: "!";
-  color: var(--pm-text);
-  font-weight: 900;
+  content: none;
 }
 
-.pm-notification span {
+.pm-notification .pm-bell {
+  align-items: initial;
+  background: transparent;
+  border-radius: 0;
+  color: inherit;
+  display: block;
+  font-size: 0;
+  font-weight: 400;
+  height: 18px;
+  justify-content: initial;
+  line-height: normal;
+  position: relative;
+  right: auto;
+  top: auto;
+  width: 18px;
+}
+
+.pm-bell {
+  display: block;
+  height: 18px;
+  position: relative;
+  width: 18px;
+}
+
+.pm-bell::before {
+  border: 2px solid var(--pm-text);
+  border-bottom: 0;
+  border-radius: 10px 10px 4px 4px;
+  content: "";
+  height: 12px;
+  left: 3px;
+  position: absolute;
+  top: 2px;
+  width: 12px;
+}
+
+.pm-bell::after {
+  background: var(--pm-text);
+  border-radius: 999px;
+  bottom: 0;
+  box-shadow: 0 3px 0 -1px var(--pm-text);
+  content: "";
+  height: 2px;
+  left: 5px;
+  position: absolute;
+  width: 8px;
+}
+
+.pm-notification-count {
   background: var(--pm-green);
+  border-radius: 999px;
   color: #031712;
+  display: block;
+  font-size: 9px;
+  font-weight: 900;
   height: 16px;
+  line-height: 16px;
+  position: absolute;
+  right: -4px;
+  text-align: center;
+  top: -4px;
   width: 16px;
+}
+
+.pm-account-menu-wrap {
+  position: relative;
 }
 
 .pm-user-chip {
@@ -1779,6 +1868,46 @@ body.admin-command-body[data-portal-role="property-manager"] .metric-card {
 .pm-user-chip small {
   color: var(--pm-muted);
   font-size: 11px;
+}
+
+.pm-chevron {
+  border-bottom: 2px solid var(--pm-muted);
+  border-right: 2px solid var(--pm-muted);
+  display: block;
+  height: 7px;
+  transform: rotate(45deg) translateY(-2px);
+  width: 7px;
+}
+
+.pm-account-menu {
+  background: rgba(7, 21, 36, 0.98);
+  border: 1px solid var(--pm-border);
+  border-radius: 7px;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.28);
+  display: grid;
+  min-width: 170px;
+  padding: 6px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 40;
+}
+
+.pm-account-menu button {
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  color: var(--pm-text);
+  font-size: 12px;
+  font-weight: 800;
+  min-height: 34px;
+  padding: 0 10px;
+  text-align: left;
+}
+
+.pm-account-menu button:hover {
+  background: rgba(0, 214, 163, 0.12);
+  color: var(--pm-green);
 }
 
 .pm-page-status {
@@ -1819,7 +1948,7 @@ body.admin-command-body[data-portal-role="property-manager"] .metric-card {
   align-items: center;
   display: grid;
   gap: 12px;
-  grid-template-columns: 42px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   min-height: 110px;
   padding: 14px;
   position: relative;
@@ -1827,27 +1956,10 @@ body.admin-command-body[data-portal-role="property-manager"] .metric-card {
 
 .pm-stat-card .pm-link-button {
   bottom: 12px;
-  left: 14px;
+  left: auto;
   position: absolute;
+  right: 12px;
 }
-
-.pm-stat-icon {
-  align-items: center;
-  background: rgba(0, 214, 163, 0.15);
-  border-radius: 9px;
-  color: var(--pm-green);
-  display: flex;
-  font-weight: 900;
-  height: 42px;
-  justify-content: center;
-  width: 42px;
-}
-
-.pm-stat-card.blue .pm-stat-icon { background: rgba(37, 168, 255, 0.15); color: var(--pm-blue); }
-.pm-stat-card.cyan .pm-stat-icon { background: rgba(0, 214, 163, 0.12); color: var(--pm-blue); }
-.pm-stat-card.yellow .pm-stat-icon { background: rgba(255, 173, 56, 0.16); color: var(--pm-yellow); }
-.pm-stat-card.violet .pm-stat-icon { background: rgba(169, 104, 255, 0.16); color: var(--pm-violet); }
-.pm-stat-card.red .pm-stat-icon { background: rgba(255, 93, 108, 0.14); color: var(--pm-red); }
 
 .pm-stat-card small,
 .pm-stat-card em {
@@ -1918,6 +2030,53 @@ body.admin-command-body[data-portal-role="property-manager"] .metric-card {
   color: var(--pm-muted);
   font-size: 12px;
   margin: 4px 0 0;
+}
+
+.pm-schedule-controls {
+  align-items: center;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: 30px minmax(136px, 1fr) 30px;
+}
+
+.pm-schedule-controls button,
+.pm-schedule-controls input {
+  background: rgba(7, 21, 36, 0.92);
+  border: 1px solid var(--pm-border);
+  border-radius: 7px;
+  color: var(--pm-text);
+  color-scheme: dark;
+  min-height: 32px;
+}
+
+.pm-schedule-controls button {
+  position: relative;
+}
+
+.pm-schedule-controls button::before {
+  border-bottom: 2px solid var(--pm-text);
+  border-left: 2px solid var(--pm-text);
+  content: "";
+  height: 7px;
+  left: 12px;
+  position: absolute;
+  top: 11px;
+  transform: rotate(45deg);
+  width: 7px;
+}
+
+.pm-schedule-controls button:last-child::before {
+  border-left: 0;
+  border-right: 2px solid var(--pm-text);
+  left: 9px;
+  transform: rotate(-45deg);
+}
+
+.pm-schedule-controls input {
+  font-size: 12px;
+  font-weight: 800;
+  min-width: 0;
+  padding: 0 8px;
 }
 
 .pm-compact-panel {
@@ -2302,8 +2461,10 @@ body.admin-command-body[data-portal-role="property-manager"] .metric-card {
   grid-template-columns: repeat(7, minmax(0, 1fr));
 }
 
-.pm-week-strip span {
+.pm-week-strip button {
   align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
   border-radius: 999px;
   color: var(--pm-muted);
   display: grid;
@@ -2311,15 +2472,26 @@ body.admin-command-body[data-portal-role="property-manager"] .metric-card {
   gap: 4px;
   justify-items: center;
   min-height: 44px;
+  padding: 4px;
 }
 
-.pm-week-strip span.active {
+.pm-week-strip button.active {
   background: var(--pm-green);
+  border-color: var(--pm-green);
   color: #031712;
+}
+
+.pm-week-strip button.today:not(.active) {
+  border-color: rgba(0, 214, 163, 0.5);
+  color: var(--pm-green);
 }
 
 .pm-week-strip small {
   font-size: 10px;
+}
+
+.pm-week-strip strong {
+  font-size: 13px;
 }
 
 .pm-snapshot-label {
@@ -2831,15 +3003,18 @@ body.admin-command-body[data-portal-role="property-manager"] .metric-card {
     font-size: 24px;
   }
 
-  .pm-search,
   .pm-user-chip,
-  .pm-stat-card,
   .pm-request-form,
   .pm-detail-list dl,
   .pm-video-pair,
   .pm-invoice-row,
   .pm-invoice-row dl {
     grid-template-columns: 1fr;
+  }
+
+  .pm-search {
+    min-width: 0;
+    width: 100%;
   }
 
   .pm-stat-grid-four,
