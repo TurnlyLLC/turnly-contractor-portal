@@ -358,7 +358,7 @@ function dedupeRows(rows = []) {
 
 function missingColumnError(error) {
   const message = String(error?.message || error?.details || "");
-  return /column .* does not exist|could not find .* column|schema cache/i.test(message);
+  return /column .* does not exist|relation .* does not exist|could not find .* column|schema cache/i.test(message);
 }
 
 function recordPrimaryIds(row = {}) {
@@ -488,6 +488,18 @@ async function fetchRowsByColumn(table, column, ids, options = {}) {
     }
   }
   return { rows, error: firstError };
+}
+
+async function fetchPropertyScopeLinks(table, propertyIds, idColumn, options = {}) {
+  const { rows, error } = await fetchRowsByColumn(table, "portal_property_id", propertyIds, {
+    select: options.select || `${idColumn},portal_property_id,link_type,source,metadata`,
+    limit: options.limit || 1000
+  });
+  return {
+    rows,
+    ids: uniqueValues(rows.map((row) => row?.[idColumn])),
+    error
+  };
 }
 
 function managerClientName() {
@@ -956,6 +968,22 @@ async function loadPropertyAssignments(propertyId) {
   const rows = [];
   const hardErrors = [];
   const columns = ["portal_property_id", "recurring_portal_property_id", "property_id", "recurring_property_id", "client_id", "contract_id"];
+  const linkedAssignments = await fetchPropertyScopeLinks("property_assignment_links", ids, "assignment_id");
+
+  if (linkedAssignments.error && !missingColumnError(linkedAssignments.error)) {
+    hardErrors.push(linkedAssignments.error);
+  }
+
+  if (linkedAssignments.ids.length) {
+    const result = await fetchRowsByColumn("assignment_blocks", "id", linkedAssignments.ids, {
+      order: "start_window",
+      ascending: false,
+      nullsFirst: false,
+      limit: 500
+    });
+    rows.push(...result.rows.map((row) => ({ ...row, __propertyScopeLinked: true })));
+    if (result.error && !missingColumnError(result.error)) hardErrors.push(result.error);
+  }
 
   for (const column of columns) {
     const result = await fetchRowsByColumn("assignment_blocks", column, ids, {
@@ -980,7 +1008,7 @@ async function loadPropertyAssignments(propertyId) {
   }
 
   state.assignments = dedupeRows(rows)
-    .filter(rowMatchesManagerProperty)
+    .filter((row) => row.__propertyScopeLinked || rowMatchesManagerProperty(row))
     .sort((a, b) => dateValue(b.start_window || b.recurring_due_at || b.created_at, 0) - dateValue(a.start_window || a.recurring_due_at || a.created_at, 0));
   if (hardErrors.length && !state.assignments.length) return `Assignments unavailable: ${hardErrors[0].message}.`;
   return "";
@@ -1062,7 +1090,14 @@ async function loadManagerVideos() {
   if (!supabase) return "";
   const assignmentIds = state.assignments.map((row) => row.id).filter(Boolean);
   const propertyIds = videoPropertyCandidates();
+  const linkedVideos = await fetchPropertyScopeLinks("property_qa_video_links", propertyIds, "qa_video_id");
   const requests = [
+    ...chunk(linkedVideos.ids, 80).map((ids) => supabase
+      .from("qa_videos")
+      .select("*")
+      .in("id", ids)
+      .order("created_at", { ascending: false })
+      .limit(120)),
     ...propertyIds.slice(0, 10).map((id) => supabase
       .from("qa_videos")
       .select("*")
@@ -1086,7 +1121,7 @@ async function loadManagerVideos() {
   if (!requests.length) return "";
   const results = await Promise.allSettled(requests);
   const byId = new Map();
-  let errors = 0;
+  let errors = linkedVideos.error && !missingColumnError(linkedVideos.error) ? 1 : 0;
   results.forEach((result) => {
     if (result.status !== "fulfilled" || result.value.error) {
       errors += 1;
