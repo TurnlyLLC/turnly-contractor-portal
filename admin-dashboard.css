@@ -2237,6 +2237,10 @@ body.admin-command-body[data-portal-role="property-manager"] .topbar-profile-mes
   grid-column: 1 / 2;
 }
 
+.pm-property-data-panel {
+  grid-column: 1 / -1;
+}
+
 .pm-side-stack {
   display: grid;
   gap: 10px;

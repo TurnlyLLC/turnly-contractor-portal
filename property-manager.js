@@ -16,6 +16,8 @@ const state = {
   property: null,
   propertyLinkPending: false,
   client: null,
+  contract: null,
+  relatedProperties: [],
   units: [],
   assignments: [],
   qaJobs: [],
@@ -315,6 +317,189 @@ function propertyAddress(property = state.property) {
   return property?.address || compact([property?.city, property?.state, property?.postal_code]).join(", ") || "No address on file";
 }
 
+function lookupKey(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function uniqueValues(values = []) {
+  return [...new Set(compact(values))];
+}
+
+function uuidValues(values = []) {
+  return uniqueValues(values).filter((value) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value));
+}
+
+function lookupSet(values = []) {
+  return new Set(uniqueValues(values).map(lookupKey).filter(Boolean));
+}
+
+function lookupMatches(value, keys) {
+  const key = lookupKey(value);
+  if (!key || !keys?.size) return false;
+  if (keys.has(key)) return true;
+  return [...keys].some((candidate) => candidate.length >= 6 && (key.includes(candidate) || candidate.includes(key)));
+}
+
+function dedupeRows(rows = []) {
+  const seen = new Set();
+  return rows.filter((row) => {
+    if (!row) return false;
+    const key = row.id ? `id:${row.id}` : JSON.stringify(row);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function missingColumnError(error) {
+  const message = String(error?.message || error?.details || "");
+  return /column .* does not exist|could not find .* column|schema cache/i.test(message);
+}
+
+function recordPrimaryIds(row = {}) {
+  const meta = rowMeta(row);
+  return [
+    row?.id,
+    row?.client_id,
+    row?.property_id,
+    row?.portal_property_id,
+    row?.contract_id,
+    meta.id,
+    meta.client_id,
+    meta.property_id,
+    meta.portal_property_id,
+    meta.contract_id,
+    meta.source_property_id
+  ];
+}
+
+function linkedDataIds(row = {}) {
+  const meta = rowMeta(row);
+  return [
+    row?.property_id,
+    row?.portal_property_id,
+    row?.recurring_property_id,
+    row?.recurring_portal_property_id,
+    row?.client_id,
+    row?.contract_id,
+    meta.property_id,
+    meta.portal_property_id,
+    meta.recurring_property_id,
+    meta.recurring_portal_property_id,
+    meta.client_id,
+    meta.contract_id,
+    meta.source_property_id
+  ];
+}
+
+function propertyNameValues(row = {}) {
+  const meta = rowMeta(row);
+  return [
+    row?.name,
+    row?.property_name,
+    row?.company_name,
+    row?.client_name,
+    row?.title,
+    row?.display_name,
+    meta.name,
+    meta.property_name,
+    meta.company_name,
+    meta.client_name,
+    meta.title
+  ];
+}
+
+function propertyAddressValues(row = {}) {
+  const meta = rowMeta(row);
+  return [
+    row?.address,
+    row?.billing_address,
+    row?.property_address,
+    row?.service_address,
+    compact([row?.city, row?.state, row?.postal_code]).join(", "),
+    meta.address,
+    meta.billing_address,
+    meta.property_address,
+    meta.service_address
+  ];
+}
+
+function managerPropertyIdValues() {
+  return uniqueValues([
+    ...recordPrimaryIds(state.property),
+    ...recordPrimaryIds(state.client),
+    ...recordPrimaryIds(state.contract),
+    ...state.relatedProperties.flatMap((row) => recordPrimaryIds(row))
+  ]);
+}
+
+function managerPropertyNameKeys() {
+  return lookupSet([
+    state.profile?.requested_property_name,
+    ...propertyNameValues(state.property),
+    ...propertyNameValues(state.client),
+    ...propertyNameValues(state.contract),
+    ...state.relatedProperties.flatMap((row) => propertyNameValues(row))
+  ]);
+}
+
+function managerPropertyAddressKeys() {
+  return lookupSet([
+    ...propertyAddressValues(state.property),
+    ...propertyAddressValues(state.client),
+    ...propertyAddressValues(state.contract),
+    ...state.relatedProperties.flatMap((row) => propertyAddressValues(row))
+  ]);
+}
+
+function rowMatchesManagerProperty(row) {
+  const ids = new Set(managerPropertyIdValues());
+  if (linkedDataIds(row).some((value) => ids.has(String(value || "").trim()))) return true;
+  const nameKeys = managerPropertyNameKeys();
+  if (propertyNameValues(row).some((value) => lookupMatches(value, nameKeys))) return true;
+  const addressKeys = managerPropertyAddressKeys();
+  if (propertyAddressValues(row).some((value) => lookupMatches(value, addressKeys))) return true;
+  return false;
+}
+
+async function fetchRowsByColumn(table, column, ids, options = {}) {
+  const values = uuidValues(ids);
+  const rows = [];
+  let firstError = null;
+  for (const group of chunk(values, 80)) {
+    let query = supabase.from(table).select(options.select || "*").in(column, group);
+    if (options.order) {
+      query = query.order(options.order, {
+        ascending: options.ascending !== false,
+        nullsFirst: options.nullsFirst
+      });
+    }
+    if (options.limit) query = query.limit(options.limit);
+    const { data, error } = await query;
+    if (error) {
+      if (!firstError) firstError = error;
+    } else {
+      rows.push(...(data || []));
+    }
+  }
+  return { rows, error: firstError };
+}
+
+function managerClientName() {
+  return state.client?.company_name
+    || state.client?.client_name
+    || state.client?.name
+    || state.contract?.company_name
+    || state.contract?.property_name
+    || state.contract?.name
+    || "Turnly managed";
+}
+
 function assignmentTitle(row) {
   return row?.title || row?.property_name || propertyTitle() || "Cleaning assignment";
 }
@@ -333,8 +518,8 @@ function matchingUnit(rowOrValue) {
 function unitBedBath(rowOrUnit) {
   const unit = rowOrUnit?.unit_name ? rowOrUnit : matchingUnit(rowOrUnit);
   const meta = rowMeta(rowOrUnit);
-  const bedrooms = unit?.bedrooms || unit?.beds || meta.bedrooms || meta.beds;
-  const bathrooms = unit?.bathrooms || unit?.baths || meta.bathrooms || meta.baths;
+  const bedrooms = unit?.bedroom_count || unit?.bedrooms || unit?.beds || meta.bedroom_count || meta.bedrooms || meta.beds;
+  const bathrooms = unit?.bathroom_count || unit?.bathrooms || unit?.baths || meta.bathroom_count || meta.bathrooms || meta.baths;
   return compact([
     bedrooms ? `${bedrooms} Bed` : "",
     bathrooms ? `${bathrooms} Bath` : ""
@@ -600,6 +785,8 @@ async function requireManagerAccess() {
     state.property = null;
     state.propertyLinkPending = true;
     state.client = null;
+    state.contract = null;
+    state.relatedProperties = [];
     state.units = [];
     state.assignments = [];
     state.qaJobs = [];
@@ -653,6 +840,8 @@ async function loadManagerData() {
   const notes = [];
   const propertyId = state.property?.id;
   state.client = null;
+  state.contract = null;
+  state.relatedProperties = [];
   state.units = [];
   state.assignments = [];
   state.qaJobs = [];
@@ -660,13 +849,18 @@ async function loadManagerData() {
 
   if (!supabase || !propertyId) return;
 
-  const [clientResult, unitResult, assignmentResult] = await Promise.allSettled([
-    loadLinkedClient(),
+  const clientResult = await Promise.resolve().then(loadLinkedClient);
+  if (clientResult) notes.push(clientResult);
+
+  const relatedResult = await Promise.resolve().then(loadRelatedPortalProperties);
+  if (relatedResult) notes.push(relatedResult);
+
+  const [unitResult, assignmentResult] = await Promise.allSettled([
     loadPropertyUnits(propertyId),
     loadPropertyAssignments(propertyId)
   ]);
 
-  for (const result of [clientResult, unitResult, assignmentResult]) {
+  for (const result of [unitResult, assignmentResult]) {
     if (result.status === "fulfilled" && result.value) notes.push(result.value);
     if (result.status === "rejected") notes.push(result.reason?.message || "Some property data could not be loaded.");
   }
@@ -678,56 +872,117 @@ async function loadManagerData() {
   if (qaNote) notes.push(qaNote);
   if (videoNote) notes.push(videoNote);
 
-  state.dataMessage = notes.length ? notes.join(" ") : "Property data synced.";
+  state.dataMessage = notes.length ? notes.join(" ") : `Property data synced: ${state.assignments.length} jobs and ${state.units.length} units loaded.`;
   state.dataError = notes.some((note) => /^Unable|^Some|unavailable/i.test(note));
 }
 
 async function loadLinkedClient() {
-  if (!state.property?.client_id) return "";
-  const { data, error } = await supabase
-    .from("clients")
-    .select("*")
-    .eq("id", state.property.client_id)
-    .maybeSingle();
-  if (error) return `Client details unavailable: ${error.message}.`;
-  state.client = data || null;
+  const ids = uniqueValues([
+    state.property?.client_id,
+    state.property?.property_id,
+    rowMeta(state.property).client_id,
+    rowMeta(state.property).contract_id
+  ]);
+  if (!ids.length) return "";
+
+  const [clientResult, contractResult] = await Promise.allSettled([
+    fetchRowsByColumn("clients", "id", ids, { limit: 5 }),
+    fetchRowsByColumn("client_contracts", "id", ids, { limit: 5 })
+  ]);
+
+  const clientRows = clientResult.status === "fulfilled" && !clientResult.value.error ? clientResult.value.rows : [];
+  const contractRows = contractResult.status === "fulfilled" && !contractResult.value.error ? contractResult.value.rows : [];
+  state.client = clientRows[0] || null;
+  state.contract = contractRows[0] || null;
+  if (!state.client && state.contract) state.client = state.contract;
+
+  const clientError = clientResult.status === "fulfilled" ? clientResult.value.error : clientResult.reason;
+  const contractError = contractResult.status === "fulfilled" ? contractResult.value.error : contractResult.reason;
+  if (!state.client && !state.contract && (clientError || contractError)) {
+    return `Client details unavailable: ${(clientError || contractError)?.message || "access rules blocked the lookup"}.`;
+  }
   return "";
 }
 
-async function loadPropertyUnits(propertyId) {
-  const { data, error } = await supabase
-    .from("property_units")
+async function loadRelatedPortalProperties() {
+  if (!state.property?.id) return "";
+  const propertyIds = uniqueValues([
+    state.property.id,
+    state.property.client_id,
+    state.client?.id,
+    state.contract?.id
+  ]);
+  const rows = [state.property];
+  let blocked = false;
+
+  const direct = await fetchRowsByColumn("portal_properties", "id", propertyIds, { limit: 100 });
+  if (direct.error && !missingColumnError(direct.error)) blocked = true;
+  rows.push(...direct.rows);
+
+  const byClient = await fetchRowsByColumn("portal_properties", "client_id", propertyIds, { limit: 100 });
+  if (byClient.error && !missingColumnError(byClient.error)) blocked = true;
+  rows.push(...byClient.rows);
+
+  const names = managerPropertyNameKeys();
+  const addresses = managerPropertyAddressKeys();
+  const { data: visibleProperties, error: visibleError } = await supabase
+    .from("portal_properties")
     .select("*")
-    .eq("property_id", propertyId)
-    .order("unit_name", { ascending: true })
     .limit(1000);
-  if (error) return `Units unavailable: ${error.message}.`;
-  state.units = data || [];
+  if (visibleError && !missingColumnError(visibleError)) blocked = true;
+  rows.push(...((visibleProperties || []).filter((property) => (
+    propertyNameValues(property).some((value) => lookupMatches(value, names))
+    || propertyAddressValues(property).some((value) => lookupMatches(value, addresses))
+  ))));
+
+  state.relatedProperties = dedupeRows(rows);
+  return blocked && state.relatedProperties.length <= 1 ? "Some related property records are limited by current access rules." : "";
+}
+
+async function loadPropertyUnits(propertyId) {
+  const ids = uniqueValues([propertyId, ...managerPropertyIdValues()]);
+  const { rows, error } = await fetchRowsByColumn("property_units", "property_id", ids, {
+    order: "unit_name",
+    ascending: true,
+    limit: 1000
+  });
+  if (error && !rows.length && !missingColumnError(error)) return `Units unavailable: ${error.message}.`;
+  state.units = dedupeRows(rows).sort((a, b) => String(a.unit_name || a.name || "").localeCompare(String(b.unit_name || b.name || "")));
   return "";
 }
 
 async function loadPropertyAssignments(propertyId) {
-  const filter = `portal_property_id.eq.${propertyId},recurring_portal_property_id.eq.${propertyId}`;
-  let { data, error } = await supabase
-    .from("assignment_blocks")
-    .select("*")
-    .or(filter)
-    .order("start_window", { ascending: false, nullsFirst: false })
-    .limit(500);
+  const ids = uniqueValues([propertyId, ...managerPropertyIdValues()]);
+  const rows = [];
+  const hardErrors = [];
+  const columns = ["portal_property_id", "recurring_portal_property_id", "property_id", "recurring_property_id", "client_id", "contract_id"];
 
-  if (error) {
-    const fallback = await supabase
-      .from("assignment_blocks")
-      .select("*")
-      .eq("portal_property_id", propertyId)
-      .order("start_window", { ascending: false, nullsFirst: false })
-      .limit(500);
-    data = fallback.data;
-    error = fallback.error;
+  for (const column of columns) {
+    const result = await fetchRowsByColumn("assignment_blocks", column, ids, {
+      order: "start_window",
+      ascending: false,
+      nullsFirst: false,
+      limit: 500
+    });
+    rows.push(...result.rows);
+    if (result.error && !missingColumnError(result.error)) hardErrors.push(result.error);
   }
 
-  if (error) return `Assignments unavailable: ${error.message}.`;
-  state.assignments = data || [];
+  const broad = await supabase
+    .from("assignment_blocks")
+    .select("*")
+    .order("start_window", { ascending: false, nullsFirst: false })
+    .limit(1000);
+  if (broad.error && !missingColumnError(broad.error)) {
+    hardErrors.push(broad.error);
+  } else {
+    rows.push(...((broad.data || []).filter(rowMatchesManagerProperty)));
+  }
+
+  state.assignments = dedupeRows(rows)
+    .filter(rowMatchesManagerProperty)
+    .sort((a, b) => dateValue(b.start_window || b.recurring_due_at || b.created_at, 0) - dateValue(a.start_window || a.recurring_due_at || a.created_at, 0));
+  if (hardErrors.length && !state.assignments.length) return `Assignments unavailable: ${hardErrors[0].message}.`;
   return "";
 }
 
@@ -755,18 +1010,33 @@ async function loadManagerQaJobs() {
 
 function videoPropertyCandidates() {
   const propertyMeta = rowMeta(state.property);
-  return [...new Set(compact([
+  return uuidValues([
+    ...managerPropertyIdValues(),
     state.property?.id,
     state.property?.client_id,
     state.property?.property_id,
     state.client?.id,
+    state.contract?.id,
     propertyMeta.client_id,
     propertyMeta.property_id,
     ...state.assignments.flatMap((row) => {
       const meta = rowMeta(row);
-      return [row.property_id, row.portal_property_id, row.recurring_portal_property_id, meta.property_id, meta.portal_property_id];
+      return [
+        row.property_id,
+        row.portal_property_id,
+        row.recurring_property_id,
+        row.recurring_portal_property_id,
+        row.client_id,
+        row.contract_id,
+        meta.property_id,
+        meta.portal_property_id,
+        meta.recurring_property_id,
+        meta.recurring_portal_property_id,
+        meta.client_id,
+        meta.contract_id
+      ];
     })
-  ]))];
+  ]);
 }
 
 async function signedVideoUrl(video) {
@@ -994,7 +1264,50 @@ function renderOverviewView() {
         copy: "Watch recent unit turn videos",
         action: `<button class="pm-link-button" type="button" data-pm-view-button="unit-videos">View all videos</button>`
       })}
+      ${panel("Property Details", renderPropertyDataPreview(), {
+        className: "pm-property-data-panel",
+        action: `<button class="pm-link-button" type="button" data-pm-view-button="settings">View settings</button>`
+      })}
     </section>
+  `;
+}
+
+function renderPropertyDataPreview() {
+  const next = upcomingAssignments(1)[0];
+  const units = state.units.slice(0, 6);
+  const accessNotes = state.property?.access_notes
+    || state.contract?.access_notes
+    || state.client?.access_notes
+    || state.property?.notes
+    || state.contract?.notes
+    || "No access notes on file";
+  return `
+    <div class="pm-detail-list">
+      <dl>
+        <div><dt>Property</dt><dd>${esc(propertyTitle())}</dd></div>
+        <div><dt>Address</dt><dd>${esc(propertyAddress())}</dd></div>
+        <div><dt>Client</dt><dd>${esc(managerClientName())}</dd></div>
+        <div><dt>Next Job</dt><dd>${esc(next ? formatWindow(next) : "No upcoming jobs")}</dd></div>
+        <div><dt>Total Units</dt><dd>${esc(integer(state.units.length))}</dd></div>
+        <div><dt>Total Jobs</dt><dd>${esc(integer(state.assignments.length))}</dd></div>
+      </dl>
+      <h3>Access / Property Notes</h3>
+      <p>${esc(accessNotes)}</p>
+      <h3>Unit Information</h3>
+      ${units.length ? `
+        <div class="pm-unit-table">
+          <div class="pm-unit-head"><span>Unit</span><span>Bed / Bath</span><span>Sq Ft</span><span>Status</span></div>
+          ${units.map((unit) => `
+            <article class="pm-unit-row">
+              <div><strong>${esc(unit.unit_name || unit.name || "Unit")}</strong><span>${esc(unit.notes || unit.unit_instructions || "No unit notes")}</span></div>
+              <span>${esc(unitBedBath(unit))}</span>
+              <span>${esc(integer(unit.square_feet || unit.sq_ft || 0))}</span>
+              ${statusBadge(unit.status || "active")}
+            </article>
+          `).join("")}
+        </div>
+      ` : emptyBlock("No units found", "Unit records will appear here once the linked property data is available.")}
+    </div>
   `;
 }
 
@@ -1639,8 +1952,9 @@ function renderSettingsView() {
           <dl>
             <div><dt>Property</dt><dd>${esc(propertyTitle())}</dd></div>
             <div><dt>Address</dt><dd>${esc(propertyAddress())}</dd></div>
-            <div><dt>Client</dt><dd>${esc(state.client?.company_name || state.client?.client_name || "Turnly managed")}</dd></div>
+            <div><dt>Client</dt><dd>${esc(managerClientName())}</dd></div>
             <div><dt>Units</dt><dd>${esc(integer(state.units.length))}</dd></div>
+            <div><dt>Jobs</dt><dd>${esc(integer(state.assignments.length))}</dd></div>
           </dl>
         </div>
       `)}
