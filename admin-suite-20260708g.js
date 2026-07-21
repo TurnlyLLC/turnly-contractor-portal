@@ -348,6 +348,7 @@ const assignmentWeekdayOptions = [
   [6, "Sat"]
 ];
 const assignmentStatusOptions = [
+  ["pending", "Pending"],
   ["open", "Open"],
   ["preferred_pending", "Preferred Pending"],
   ["claimed", "Claimed"],
@@ -362,7 +363,7 @@ const assignmentAllStatusFilter = "all";
 const assignmentBoardStatusFilter = "board";
 const assignmentClaimedHistoryStatusFilter = "claimed-history";
 const assignmentDefaultStatusFilter = assignmentBoardStatusFilter;
-const assignmentBoardVisibleStatuses = new Set(["open", "preferred-pending", "claimed", "scheduled", "in-progress", "draft"]);
+const assignmentBoardVisibleStatuses = new Set(["pending", "open", "preferred-pending", "claimed", "scheduled", "in-progress", "draft"]);
 const assignmentClosedStatuses = new Set(["completed", "complete", "closed", "done", "cancelled", "canceled", "declined", "qa-pending"]);
 const assignmentFetchPageSize = 1000;
 const assignmentPriorityOptions = [
@@ -3714,6 +3715,7 @@ function renderAssignments() {
         [assignmentAllStatusFilter, "All"],
         [assignmentBoardStatusFilter, "Job Board"],
         [assignmentClaimedHistoryStatusFilter, "Claimed Jobs"],
+        ["pending", "Pending"],
         ["open", "Open"],
         ["preferred_pending", "Preferred"],
         ["in_progress", "In Progress"],
@@ -11050,6 +11052,9 @@ function assignmentRowActions(row, status, id) {
   if (status === "preferred-pending") {
     actions.push(["open", "Release"]);
   }
+  if (status === "pending") {
+    actions.push(["open", "Approve"]);
+  }
   if (status === "claimed") {
     actions.push(["start", "Start"]);
   }
@@ -12232,6 +12237,15 @@ function assignmentStatusPayload(value, currentRow = {}) {
 
   if (status === "open") {
     payload.visibility = "open";
+    if (previousStatus === "pending" || assignmentMetadata(currentRow).source === "property_manager_turn_request") {
+      payload.metadata = {
+        ...assignmentMetadata(currentRow),
+        admin_approval_status: "approved",
+        approved_at: now,
+        approved_by: assignmentState.user?.id || null,
+        approved_by_name: assignmentState.profile?.full_name || assignmentState.user?.email || "Admin"
+      };
+    }
     if (currentRow.claimed_by || currentRow.assigned_to || previousStatus !== "open") {
       Object.assign(payload, {
         claimed_by: null,
@@ -12252,6 +12266,15 @@ function assignmentStatusPayload(value, currentRow = {}) {
 
   if (status === "preferred_pending") {
     payload.visibility = "preferred";
+    return payload;
+  }
+
+  if (status === "pending") {
+    payload.visibility = "pending";
+    payload.metadata = {
+      ...assignmentMetadata(currentRow),
+      admin_approval_status: assignmentMetadata(currentRow).admin_approval_status || "pending"
+    };
     return payload;
   }
 

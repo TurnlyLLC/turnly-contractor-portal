@@ -88,7 +88,8 @@ const navViews = new Set(Object.keys(viewLabels));
 const closedStatuses = new Set(["completed", "complete", "cancelled", "canceled", "declined", "deleted", "archived"]);
 const issueStatuses = new Set(["overdue", "qa_pending", "qa_rejected", "rejected", "needs_rework"]);
 const inProgressStatuses = new Set(["in_progress", "claimed", "started", "active", "qa_pending"]);
-const readyStatuses = new Set(["ready", "open", "scheduled", "pending", "not_started"]);
+const pendingStatuses = new Set(["pending", "pending_approval"]);
+const readyStatuses = new Set(["ready", "open", "scheduled", "not_started"]);
 
 function esc(value) {
   return String(value ?? "")
@@ -614,6 +615,7 @@ function isIssueAssignment(row) {
 function requestGroup(row) {
   const status = assignmentStatus(row);
   if (isCompletedAssignment(row)) return "completed";
+  if (pendingStatuses.has(status)) return "pending";
   if (status.includes("hold") || status.includes("paused")) return "on_hold";
   if (inProgressStatuses.has(status)) return "in_progress";
   if (readyStatuses.has(status)) return status === "ready" ? "ready" : "open";
@@ -716,6 +718,7 @@ function managerMetrics() {
   const completedLastWeek = completed.filter((row) => isDateBetween(row.completed_at || row.checklist_completed_at || row.qa_approved_at || row.start_window, lastWeekStart, thisWeekStart)).length;
   const inProgress = assignments.filter((row) => inProgressStatuses.has(assignmentStatus(row))).length;
   const open = activeAssignments().filter((row) => requestGroup(row) === "open" || requestGroup(row) === "ready").length;
+  const pending = assignments.filter((row) => requestGroup(row) === "pending").length;
   const scheduled = assignments.filter((row) => requestGroup(row) === "scheduled" || isUpcomingAssignment(row)).length;
   const ready = assignments.filter((row) => requestGroup(row) === "ready").length || Math.max(state.units.length - inProgress, 0);
   const beforeVideos = state.videos.filter((video) => normalizeToken(video.video_phase) === "before").length;
@@ -735,6 +738,7 @@ function managerMetrics() {
     completedLastWeek,
     totalRequests: assignments.length,
     open,
+    pending,
     scheduled,
     upcoming: upcomingAssignments(500).length,
     issues: issueAssignments().length,
@@ -1391,7 +1395,7 @@ function renderOverviewRequests() {
   const rows = filteredRequests().slice(0, 5);
   return `
     <div class="pm-tabs">
-      ${["all", "in_progress", "ready", "on_hold"].map((key) => `<button type="button" class="${state.filters.requestStatus === key ? "active" : ""}" data-pm-request-status="${key}">${esc(titleCase(key))}</button>`).join("")}
+      ${["all", "pending", "open", "in_progress", "ready", "on_hold"].map((key) => `<button type="button" class="${state.filters.requestStatus === key ? "active" : ""}" data-pm-request-status="${key}">${esc(key === "all" ? "All" : titleCase(key))}</button>`).join("")}
     </div>
     ${rows.length ? renderRequestTable(rows, true) : emptyBlock("No turn requests", "New unit turns will appear here once Turnly schedules work.")}
     <div class="pm-panel-footer"><button class="pm-link-button" type="button" data-pm-view-button="turn-requests">View all turn requests</button></div>
@@ -1406,9 +1410,9 @@ function renderTurnRequestsView() {
     ${renderRequestToolbar("Search turn requests...")}
     <section class="pm-stat-grid pm-stat-grid-five" aria-label="Turn request metrics">
       ${statCard("Total Requests", integer(metrics.totalRequests), "for linked property", "green")}
+      ${statCard("Pending", integer(metrics.pending), "awaiting Turnly approval", "yellow")}
       ${statCard("Open", integer(metrics.open), "ready to assign", "yellow")}
       ${statCard("In Progress", integer(metrics.inProgress), "being handled now", "blue")}
-      ${statCard("Scheduled", integer(metrics.scheduled), "on the calendar", "violet")}
       ${statCard("Completed This Week", integer(metrics.completedThisWeek), "closed out", "green")}
     </section>
     <section class="pm-workspace-grid">
@@ -1446,7 +1450,7 @@ function renderRequestToolbar(placeholder = "Search...", includeNew = false) {
     <section class="panel-card pm-toolbar pm-turn-toolbar">
       ${renderManagerSearch(placeholder, { className: "pm-local-search", label: "Search turn requests" })}
       <div class="pm-status-segment" aria-label="Request status">
-        ${["all", "open", "in_progress", "ready", "on_hold", "completed"].map((key) => `<button type="button" class="${state.filters.requestStatus === key ? "active" : ""}" data-pm-request-status="${esc(key)}">${esc(key === "all" ? "All" : titleCase(key))}</button>`).join("")}
+        ${["all", "pending", "open", "in_progress", "ready", "on_hold", "completed"].map((key) => `<button type="button" class="${state.filters.requestStatus === key ? "active" : ""}" data-pm-request-status="${esc(key)}">${esc(key === "all" ? "All" : titleCase(key))}</button>`).join("")}
       </div>
       ${includeNew ? renderNewTurnRequestButton("Start Turn Request") : ""}
     </section>
@@ -2307,6 +2311,34 @@ async function createTurnRequest(form) {
   const moveInDateValue = form.elements.move_in_date?.value || "";
   const moveInDate = scheduledMoveInDate(moveInDateValue);
   const notes = form.elements.body?.value?.trim() || "";
+  if (!moveInDate) {
+    setManagerMessageStatus("Choose a scheduled move-in date.", true);
+    renderManagerPortal();
+    return;
+  }
+
+  state.sending = true;
+  setManagerMessageStatus("Submitting turn request...");
+  renderManagerPortal();
+
+  const { data: assignmentId, error: requestError } = await supabase.rpc("create_property_manager_turn_request", {
+    request_payload: {
+      unit,
+      service_type: service,
+      priority,
+      move_in_date: moveInDateValue,
+      move_in_time: MOVE_IN_TIME_LABEL,
+      notes
+    }
+  });
+
+  if (requestError) {
+    state.sending = false;
+    setManagerMessageStatus(`Unable to submit turn request: ${requestError.message}`, true);
+    renderManagerPortal();
+    return;
+  }
+
   const body = [
     `Property: ${propertyTitle()}`,
     unit ? `Unit: ${unit}` : "",
@@ -2315,6 +2347,7 @@ async function createTurnRequest(form) {
     `Scheduled move-in date: ${formatMoveInDate(moveInDateValue)}`,
     `Move-in time: ${MOVE_IN_TIME_LABEL}`,
     moveInDate ? `Scheduled move-in timestamp: ${moveInDate.toLocaleString()}` : "",
+    assignmentId ? `Assignment request ID: ${assignmentId}` : "",
     "",
     notes
   ].filter((line) => line !== "").join("\n");
@@ -2322,11 +2355,18 @@ async function createTurnRequest(form) {
   await createManagerMessageThread(form, {
     subject: `${TURN_REQUEST_SERVICE} request - ${unit || propertyTitle()}`,
     topic: "Unit cleaning request",
-    body
+    body,
+    relatedType: "assignment",
+    relatedId: assignmentId || state.property?.id || "",
+    relatedTitle: `${TURN_REQUEST_SERVICE} request - ${unit || propertyTitle()}`
   });
 
   if (!state.error) {
+    state.selectedAssignmentId = assignmentId || state.selectedAssignmentId;
     state.requestOpen = false;
+    state.dataMessage = "Turn request submitted as pending for Turnly approval.";
+    state.dataError = false;
+    await refreshManagerPortal();
     renderManagerPortal();
   }
 }
@@ -2346,9 +2386,9 @@ async function createManagerMessageThread(form, options = {}) {
       recipient_ids: [],
       subject,
       body: topic ? `[${topic}]\n\n${body}` : body,
-      related_type: "property",
-      related_id: state.property?.id || "",
-      related_title: propertyTitle()
+      related_type: options.relatedType || "property",
+      related_id: options.relatedId || state.property?.id || "",
+      related_title: options.relatedTitle || propertyTitle()
     }
   });
 
