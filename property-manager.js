@@ -818,7 +818,17 @@ async function requireManagerAccess() {
     .maybeSingle();
 
   if (propertyError || !property) {
-    renderLockedState("Property access unavailable", "This account has a property link, but the linked property could not be loaded.");
+    state.property = {
+      id: profile.property_manager_property_id,
+      name: profile.requested_property_name || "Linked Property",
+      property_name: profile.requested_property_name || "Linked Property",
+      access_limited: true
+    };
+    state.propertyLinkPending = false;
+    state.dataMessage = "Loading linked property tables...";
+    state.dataError = false;
+    renderManagerPortal(true);
+    await refreshManagerPortal();
     return;
   }
 
