@@ -54,6 +54,20 @@ const roleDashboards = {
   property_manager: "property-manager.html"
 };
 
+const pmIconPaths = {
+  bell: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
+  "chevron-down": '<path d="m6 9 6 6 6-6"/>',
+  "chevron-right": '<path d="m9 18 6-6-6-6"/>',
+  home: '<path d="m3 11 9-8 9 8"/><path d="M5 10v11h14V10"/><path d="M9 21v-7h6v7"/>',
+  search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8 12 3 7 8"/><path d="M12 3v12"/>'
+};
+
+function pmIcon(name, className = "") {
+  const path = pmIconPaths[name] || pmIconPaths.search;
+  return `<span class="suite-icon ${esc(className)}" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path}</svg></span>`;
+}
+
 const viewLabels = {
   overview: ["Overview", "Your assigned property overview."],
   "turn-requests": ["Turn Requests", "Manage unit turn requests and track progress."],
@@ -158,6 +172,22 @@ function getName(user, profile) {
 function initialsFromName(value) {
   const parts = String(value || "PM").trim().split(/\s+/).filter(Boolean);
   return (parts.length > 1 ? `${parts[0][0]}${parts[1][0]}` : parts[0]?.slice(0, 2) || "PM").toUpperCase();
+}
+
+function managerProfileDefaults() {
+  const email = state.profile?.email || state.user?.email || "";
+  const name = getName(state.user, state.profile);
+  return {
+    name,
+    role: "Property Manager",
+    email,
+    initials: initialsFromName(name || email || "PM"),
+    avatarUrl: state.profile?.avatar_url || state.user?.user_metadata?.avatar_url || ""
+  };
+}
+
+function renderManagerAvatar(profile, id = "", large = false) {
+  return `<span ${id ? `id="${esc(id)}"` : ""} class="user-photo ${large ? "large" : ""}">${profile.avatarUrl ? `<img src="${esc(profile.avatarUrl)}" alt="" />` : esc(profile.initials)}</span>`;
 }
 
 function asNumber(value) {
@@ -426,6 +456,14 @@ function moveScheduleWeek(days) {
   const nextStart = addDays(state.scheduleWeekStart, days);
   state.scheduleWeekStart = dateInputValue(nextStart);
   state.selectedScheduleDate = dateInputValue(nextStart);
+}
+
+function formatWeekRange(startValue) {
+  const start = localDate(startValue);
+  const end = addDays(start, 6);
+  const startLabel = start.toLocaleDateString([], { month: "short", day: "numeric" });
+  const endLabel = end.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+  return `${startLabel} - ${endLabel}`;
 }
 
 function isDateBetween(value, start, end) {
@@ -828,33 +866,53 @@ function renderPropertyLinkNotice() {
 }
 
 function renderTopBar() {
-  const name = getName(state.user, state.profile);
+  const profile = managerProfileDefaults();
   const unread = managerMetrics().unread;
   return `
-    <div class="pm-topbar">
-      <label class="pm-search">
-        <span class="sr-only">Search property manager portal</span>
-        <span class="pm-search-icon" aria-hidden="true"></span>
-        <input data-pm-filter="query" value="${esc(state.filters.query)}" placeholder="Search anything..." />
+    <div class="pm-topbar topbar-tools">
+      <div class="global-search topbar-search-wrap" role="search">
+        ${pmIcon("search")}
+        <input data-manager-global-search data-pm-filter="query" type="search" value="${esc(state.filters.query)}" placeholder="Search anything..." autocomplete="off" />
         <kbd>K</kbd>
-      </label>
-      <button class="notification-btn pm-notification" type="button" aria-label="${unread} unread messages" data-pm-view-button="messages">
-        <span class="pm-bell" aria-hidden="true"></span>
-        <span class="pm-notification-count">${integer(unread)}</span>
-      </button>
-      <div class="pm-account-menu-wrap">
-        <button class="pm-user-chip" type="button" aria-haspopup="menu" aria-expanded="${state.accountMenuOpen ? "true" : "false"}" data-manager-account-toggle>
-          <span class="avatar">${esc(initialsFromName(name))}</span>
-          <span><strong>${esc(name)}</strong><small>Property Manager</small></span>
-          <span class="pm-chevron" aria-hidden="true"></span>
+      </div>
+      <div class="topbar-popover-wrap">
+        <button class="top-icon" type="button" aria-label="${unread} unread messages" data-pm-view-button="messages">
+          ${pmIcon("bell")}
+          <span ${unread ? "" : "hidden"}>${esc(unread > 99 ? "99+" : String(unread))}</span>
         </button>
-        ${state.accountMenuOpen ? `
-          <div class="pm-account-menu" role="menu">
-            <button type="button" role="menuitem" data-manager-logout>Sign Out</button>
+      </div>
+      <div class="topbar-profile-wrap pm-account-menu-wrap">
+        <button id="topProfileBtn" class="top-user" type="button" aria-label="Profile menu" aria-haspopup="menu" aria-expanded="${state.accountMenuOpen ? "true" : "false"}" data-manager-account-toggle>
+          ${renderManagerAvatar(profile, "topUserAvatar")}
+          <span><strong id="topUserName">${esc(profile.name)}</strong><small id="topUserRole">${esc(profile.role)}</small></span>
+          ${pmIcon("chevron-down")}
+        </button>
+        <div id="topProfileMenu" class="topbar-dropdown topbar-profile-menu" role="menu" ${state.accountMenuOpen ? "" : "hidden"}>
+          <div class="topbar-profile-card">
+            ${renderManagerAvatar(profile, "topProfileAvatarLarge", true)}
+            <span><strong id="topProfileName">${esc(profile.name)}</strong><small id="topProfileEmail">${esc(profile.email || profile.role)}</small></span>
           </div>
-        ` : ""}
+          <p id="topProfileMessage" class="topbar-profile-message" aria-live="polite"></p>
+          <input id="managerAvatarInput" type="file" accept="image/*" hidden data-manager-avatar-input />
+          <button id="topAvatarUploadBtn" type="button" role="menuitem" data-manager-avatar-upload>${pmIcon("upload")}<span>Upload Picture</span></button>
+          <a href="property-manager.html#overview" role="menuitem">${pmIcon("home")}<span>Open Dashboard</span></a>
+          <button id="topSignOutBtn" type="button" role="menuitem" data-manager-logout>${pmIcon("chevron-right")}<span>Sign Out</span></button>
+        </div>
       </div>
     </div>
+  `;
+}
+
+function renderManagerSearch(placeholder, options = {}) {
+  const filter = options.filter || "query";
+  const value = state.filters[filter] || "";
+  const className = options.className ? ` ${options.className}` : "";
+  return `
+    <label class="pm-search${className}">
+      <span class="sr-only">${esc(options.label || placeholder)}</span>
+      <span class="pm-search-icon" aria-hidden="true"></span>
+      <input data-pm-filter="${esc(filter)}" type="search" value="${esc(value)}" placeholder="${esc(placeholder)}" autocomplete="off" />
+    </label>
   `;
 }
 
@@ -957,7 +1015,8 @@ function renderTurnRequestsView() {
   const metrics = managerMetrics();
   const rows = filteredRequests();
   return `
-    ${renderRequestToolbar("Search turn requests...", true)}
+    ${renderTurnRequestCallout()}
+    ${renderRequestToolbar("Search turn requests...")}
     <section class="pm-stat-grid pm-stat-grid-five" aria-label="Turn request metrics">
       ${statCard("Total Requests", integer(metrics.totalRequests), "for linked property", "green")}
       ${statCard("Open", integer(metrics.open), "ready to assign", "yellow")}
@@ -976,26 +1035,33 @@ function renderTurnRequestsView() {
   `;
 }
 
+function renderTurnRequestCallout() {
+  const linked = hasLinkedProperty();
+  return `
+    <section class="panel-card pm-action-banner ${linked ? "" : "is-disabled"}">
+      <div>
+        <p class="pm-eyebrow">${linked ? "Submit a Turn" : "Property Link Required"}</p>
+        <h2>${linked ? "Request a unit turn" : "Turn requests unlock after your property is linked"}</h2>
+        <p>${linked ? `Send Turnly the unit, preferred window, service type, and access notes for ${propertyTitle()}.` : propertyLinkPendingMessage()}</p>
+      </div>
+      <dl>
+        <div><dt>Property</dt><dd>${esc(propertyTitle())}</dd></div>
+        <div><dt>Units</dt><dd>${esc(integer(state.units.length))}</dd></div>
+        <div><dt>Open Requests</dt><dd>${esc(integer(managerMetrics().open))}</dd></div>
+      </dl>
+      ${renderNewTurnRequestButton("Start Turn Request")}
+    </section>
+  `;
+}
+
 function renderRequestToolbar(placeholder = "Search...", includeNew = false) {
   return `
-    <section class="panel-card pm-toolbar">
-      <label class="pm-search pm-local-search">
-        <span class="sr-only">${esc(placeholder)}</span>
-        <span>Search</span>
-        <input data-pm-filter="query" value="${esc(state.filters.query)}" placeholder="${esc(placeholder)}" />
-      </label>
-      <select data-pm-filter="requestStatus" aria-label="Status">
-        ${selectOption("all", "Status", state.filters.requestStatus)}
-        ${selectOption("open", "Open", state.filters.requestStatus)}
-        ${selectOption("in_progress", "In Progress", state.filters.requestStatus)}
-        ${selectOption("ready", "Ready", state.filters.requestStatus)}
-        ${selectOption("on_hold", "On Hold", state.filters.requestStatus)}
-        ${selectOption("completed", "Completed", state.filters.requestStatus)}
-      </select>
-      <select aria-label="Unit type"><option>Unit Type</option><option>Standard Turn</option><option>Deep Clean</option><option>Inspection</option></select>
-      <select aria-label="Priority"><option>Priority</option><option>Normal</option><option>High</option><option>Urgent</option></select>
-      <select aria-label="Date range"><option>All Time</option><option>This Week</option><option>Next Week</option></select>
-      ${includeNew ? renderNewTurnRequestButton() : ""}
+    <section class="panel-card pm-toolbar pm-turn-toolbar">
+      ${renderManagerSearch(placeholder, { className: "pm-local-search", label: "Search turn requests" })}
+      <div class="pm-status-segment" aria-label="Request status">
+        ${["all", "open", "in_progress", "ready", "on_hold", "completed"].map((key) => `<button type="button" class="${state.filters.requestStatus === key ? "active" : ""}" data-pm-request-status="${esc(key)}">${esc(key === "all" ? "All" : titleCase(key))}</button>`).join("")}
+      </div>
+      ${includeNew ? renderNewTurnRequestButton("Start Turn Request") : ""}
     </section>
   `;
 }
@@ -1086,25 +1152,18 @@ function renderRequestDetails(row) {
 }
 
 function renderScheduleView() {
+  ensureScheduleState();
   const metrics = managerMetrics();
   const rows = scheduledRows();
+  const weekStart = localDate(state.scheduleWeekStart);
   return `
-    <section class="panel-card pm-toolbar">
-      <label class="pm-search pm-local-search">
-        <span class="sr-only">Search schedule</span>
-        <span>Search</span>
-        <input data-pm-filter="query" value="${esc(state.filters.query)}" placeholder="Search schedule..." />
-      </label>
-      <select data-pm-filter="scheduleStatus" aria-label="Schedule status">
-        ${selectOption("all", "Status", state.filters.scheduleStatus)}
-        ${selectOption("open", "Open", state.filters.scheduleStatus)}
-        ${selectOption("in_progress", "In Progress", state.filters.scheduleStatus)}
-        ${selectOption("ready", "Ready", state.filters.scheduleStatus)}
-        ${selectOption("completed", "Completed", state.filters.scheduleStatus)}
-      </select>
-      <select aria-label="Date range"><option>Date Range</option><option>This Week</option><option>Next Week</option></select>
-      <select aria-label="Calendar view"><option>Week View</option><option>Day View</option><option>Month View</option></select>
-      ${renderNewTurnRequestButton()}
+    <section class="panel-card pm-toolbar pm-schedule-toolbar">
+      ${renderManagerSearch("Search schedule...", { className: "pm-local-search", label: "Search schedule" })}
+      <div class="pm-schedule-toolbar-controls">
+        ${renderScheduleSnapshotControls()}
+        <strong class="pm-week-range">${esc(formatWeekRange(weekStart))}</strong>
+      </div>
+      ${renderNewTurnRequestButton("Request Turn")}
     </section>
     <section class="pm-stat-grid pm-stat-grid-four" aria-label="Schedule metrics">
       ${statCard("Today", integer(todayAssignments().length), "turns today", "green")}
@@ -1124,16 +1183,14 @@ function renderScheduleView() {
 }
 
 function scheduledRows() {
-  const weekStart = startOfWeek(new Date(), true);
-  const weekEnd = endOfWeek(new Date(), true);
-  const status = state.filters.scheduleStatus;
+  ensureScheduleState();
+  const weekStart = localDate(state.scheduleWeekStart);
+  const weekEnd = addDays(weekStart, 7);
   return sortedAssignments(state.assignments.filter((row) => {
     const rowDate = row.start_window || row.recurring_due_at;
     const matchesWeek = isDateBetween(rowDate, weekStart, weekEnd);
-    const group = requestGroup(row);
-    const matchesStatus = status === "all" || group === status || assignmentStatus(row) === status;
     const matchesQuery = queryMatches([assignmentUnit(row), assignmentTitle(row), assignmentCleaner(row), row.service_type]);
-    return matchesWeek && matchesStatus && matchesQuery;
+    return matchesWeek && matchesQuery;
   }));
 }
 
@@ -1146,7 +1203,8 @@ function todayAssignments() {
 }
 
 function renderScheduleGrid(rows) {
-  const weekStart = startOfWeek(new Date(), true);
+  ensureScheduleState();
+  const weekStart = localDate(state.scheduleWeekStart);
   const days = Array.from({ length: 7 }, (_, index) => {
     const date = new Date(weekStart);
     date.setDate(date.getDate() + index);
@@ -1154,11 +1212,6 @@ function renderScheduleGrid(rows) {
   });
   const times = scheduleTimes(rows);
   return `
-    <div class="pm-calendar-controls">
-      <button type="button" disabled>&lt;</button>
-      <select><option>This Week</option></select>
-      <button type="button" disabled>&gt;</button>
-    </div>
     <div class="pm-calendar-grid" style="--pm-time-count:${times.length}">
       <div class="pm-calendar-corner">Time</div>
       ${days.map((day) => `<div class="pm-calendar-day">${esc(day.toLocaleDateString([], { weekday: "short" }))}<small>${esc(day.toLocaleDateString([], { month: "short", day: "numeric" }))}</small></div>`).join("")}
@@ -1274,22 +1327,7 @@ function renderUnitVideosView() {
   const groups = filteredVideoGroups();
   return `
     <section class="panel-card pm-toolbar">
-      <label class="pm-search pm-local-search">
-        <span class="sr-only">Search videos</span>
-        <span>Search</span>
-        <input data-pm-filter="query" value="${esc(state.filters.query)}" placeholder="Search videos..." />
-      </label>
-      <select aria-label="Unit"><option>Unit</option>${state.units.slice(0, 80).map((unit) => `<option>${esc(unit.unit_name || "Unit")}</option>`).join("")}</select>
-      <select data-pm-filter="videoPhase" aria-label="Video type">
-        ${selectOption("all", "Video Type", state.filters.videoPhase)}
-        ${selectOption("before", "Before", state.filters.videoPhase)}
-        ${selectOption("after", "After", state.filters.videoPhase)}
-        ${selectOption("final", "Final", state.filters.videoPhase)}
-        ${selectOption("other", "Other", state.filters.videoPhase)}
-      </select>
-      <select aria-label="Status"><option>Status</option><option>Pending Review</option><option>Approved</option><option>Needs Rework</option></select>
-      <select aria-label="Date range"><option>Date Range</option><option>This Week</option><option>This Month</option></select>
-      <button class="secondary-command-btn pm-compact-btn" type="button" data-manager-refresh>Filter</button>
+      ${renderManagerSearch("Search videos...", { className: "pm-local-search", label: "Search unit videos" })}
     </section>
     <section class="pm-stat-grid pm-stat-grid-four" aria-label="Video metrics">
       ${statCard("Total Videos", integer(state.videos.length), "available clips", "green")}
@@ -1350,16 +1388,14 @@ function videoGroups() {
 }
 
 function filteredVideoGroups() {
-  const phase = state.filters.videoPhase;
   return videoGroups().filter((group) => {
     const assignment = group.assignment;
-    const matchesPhase = phase === "all" || group.videos.some((video) => normalizeToken(video.video_phase) === phase);
     const matchesQuery = queryMatches([
       assignment ? assignmentTitle(assignment) : "",
       assignment ? assignmentUnit(assignment) : "",
       ...group.videos.flatMap((video) => [video.title, video.label, video.unit_name, video.contractor_name, video.notes])
     ]);
-    return matchesPhase && matchesQuery;
+    return matchesQuery;
   });
 }
 
@@ -1489,16 +1525,7 @@ function renderMessagesView() {
   const metrics = managerMetrics();
   return `
     <section class="panel-card pm-toolbar">
-      <label class="pm-search pm-local-search">
-        <span class="sr-only">Search messages</span>
-        <span>Search</span>
-        <input data-pm-filter="query" value="${esc(state.filters.query)}" placeholder="Search messages..." />
-      </label>
-      <select data-pm-filter="messageView" aria-label="Conversation filter">
-        ${selectOption("all", "All Conversations", state.filters.messageView)}
-        ${selectOption("unread", "Unread", state.filters.messageView)}
-        ${selectOption("archived", "Archived", state.filters.messageView)}
-      </select>
+      ${renderManagerSearch("Search messages...", { className: "pm-local-search", label: "Search messages" })}
       <button class="new-btn pm-compact-btn" type="button" data-manager-message-compose>New Message</button>
     </section>
     <section class="pm-stat-grid pm-stat-grid-four" aria-label="Message metrics">
@@ -1519,11 +1546,8 @@ function renderMessagesView() {
 
 function filteredThreads() {
   return state.threads.filter((thread) => {
-    const unread = managerThreadUnread(thread);
-    const view = state.filters.messageView;
-    const matchesView = view === "all" || (view === "unread" && unread);
     const matchesQuery = queryMatches([thread.subject, thread.last_message_preview, managerParticipantLine(thread.id)]);
-    return matchesView && matchesQuery;
+    return matchesQuery;
   });
 }
 
@@ -1671,14 +1695,15 @@ function renderRequestForm() {
   return `
     <section class="panel-card pm-request-form-panel">
       <div class="pm-panel-head">
-        <div><h2>New Turn Request</h2><p>Request a new unit turn or schedule change for ${esc(propertyTitle())}.</p></div>
+        <div><h2>New Turn Request</h2><p>Send Turnly the unit, target window, and any access notes for ${esc(propertyTitle())}.</p></div>
         <button class="secondary-command-btn pm-compact-btn" type="button" data-manager-request-close>Close</button>
       </div>
+      <p class="pm-form-note">Turn requests go straight to Turnly operations. A linked property is required before this form can be submitted.</p>
       <form id="managerTurnRequestForm" class="manager-message-form pm-request-form">
         <label>
           <span>Unit</span>
-          <select name="unit">
-            <option value="">Select unit</option>
+          <select name="unit" required>
+            <option value="">Choose a unit...</option>
             ${state.units.map((unit) => `<option value="${esc(unit.unit_name || "")}">${esc(unit.unit_name || "Unit")}</option>`).join("")}
           </select>
         </label>
@@ -1700,14 +1725,17 @@ function renderRequestForm() {
           </select>
         </label>
         <label>
-          <span>Requested Window</span>
+          <span>Preferred Window</span>
           <input name="requested_at" type="datetime-local" />
         </label>
         <label class="span-all">
-          <span>Notes</span>
-          <textarea name="body" rows="4" placeholder="Access notes, move-in date, special rooms, or follow-up needed..." required></textarea>
+          <span>Access / Turn Notes</span>
+          <textarea name="body" rows="4" placeholder="Move-out date, lockbox or access notes, special rooms, supply concerns, or anything Turnly should know..." required></textarea>
         </label>
-        <button class="new-btn pm-compact-btn" type="submit" ${state.sending ? "disabled" : ""}>Submit Request</button>
+        <div class="pm-form-actions span-all">
+          <button class="new-btn pm-compact-btn" type="submit" ${state.sending ? "disabled" : ""}>Submit Turn Request</button>
+          <small>Turnly will review the request and confirm schedule details in Messages.</small>
+        </div>
       </form>
     </section>
   `;
@@ -1881,6 +1909,13 @@ function renderManagerBubble(message) {
 }
 
 async function createTurnRequest(form) {
+  if (!hasLinkedProperty()) {
+    state.dataMessage = propertyLinkPendingMessage();
+    state.dataError = false;
+    renderManagerPortal();
+    return;
+  }
+
   const unit = form.elements.unit?.value?.trim() || "";
   const service = form.elements.service?.value?.trim() || "Turn Cleaning";
   const priority = form.elements.priority?.value?.trim() || "Normal";
@@ -1970,6 +2005,87 @@ async function sendManagerReply(form) {
   renderManagerPortal();
 }
 
+async function uploadManagerAvatar(file) {
+  if (!supabase) {
+    setTopbarProfileMessage("Supabase config is missing.", true);
+    return;
+  }
+  if (!file.type.startsWith("image/")) {
+    setTopbarProfileMessage("Choose an image file.", true);
+    return;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    setTopbarProfileMessage("Use an image smaller than 5 MB.", true);
+    return;
+  }
+  if (!state.user?.id) {
+    setTopbarProfileMessage("Sign in before uploading a profile picture.", true);
+    return;
+  }
+
+  setTopbarProfileMessage("Uploading picture...");
+  const path = `${state.user.id}/${Date.now()}-${safeStorageFileName(file.name)}`;
+  const { error: uploadError } = await supabase.storage
+    .from("profile-avatars")
+    .upload(path, file, { cacheControl: "3600", contentType: file.type, upsert: true });
+
+  if (uploadError) {
+    setTopbarProfileMessage("Unable to upload picture: " + uploadError.message, true);
+    return;
+  }
+
+  const { data: publicData } = supabase.storage.from("profile-avatars").getPublicUrl(path);
+  const avatarUrl = publicData?.publicUrl || "";
+  let result = await supabase
+    .from("profiles")
+    .update({ avatar_url: avatarUrl, avatar_path: path })
+    .eq("id", state.user.id)
+    .select("id,role,full_name,email,status,property_manager_property_id,requested_property_name,avatar_url,avatar_path")
+    .maybeSingle();
+
+  if (result.error && isMissingManagerAvatarColumn(result.error)) {
+    await supabase.auth.updateUser({ data: { avatar_url: avatarUrl } });
+    result = { data: { ...state.profile, avatar_url: avatarUrl }, error: null };
+  }
+
+  if (result.error) {
+    setTopbarProfileMessage("Uploaded, but profile update failed: " + result.error.message, true);
+    return;
+  }
+
+  state.profile = { ...state.profile, ...(result.data || {}), avatar_url: avatarUrl };
+  state.user = {
+    ...state.user,
+    user_metadata: { ...(state.user.user_metadata || {}), avatar_url: avatarUrl }
+  };
+  const profile = managerProfileDefaults();
+  paintManagerAvatar("topUserAvatar", profile);
+  paintManagerAvatar("topProfileAvatarLarge", profile);
+  setTopbarProfileMessage("Profile picture updated.");
+}
+
+function paintManagerAvatar(id, profile) {
+  const avatar = document.getElementById(id);
+  if (!avatar) return;
+  avatar.innerHTML = profile.avatarUrl ? `<img src="${esc(profile.avatarUrl)}" alt="" />` : esc(profile.initials);
+}
+
+function setTopbarProfileMessage(text, isError = false) {
+  const message = document.getElementById("topProfileMessage");
+  if (!message) return;
+  message.textContent = text || "";
+  message.classList.toggle("error", Boolean(isError));
+}
+
+function safeStorageFileName(name) {
+  return String(name || "avatar.png").toLowerCase().replace(/[^a-z0-9.]+/g, "-").replace(/^-|-$/g, "") || "avatar.png";
+}
+
+function isMissingManagerAvatarColumn(error) {
+  const message = String(error?.message || "").toLowerCase();
+  return message.includes("avatar_url") || message.includes("avatar_path") || message.includes("schema cache");
+}
+
 async function markManagerThreadRead(threadId) {
   if (!supabase || !threadId) return;
   const { error } = await supabase.rpc("mark_message_thread_read", { target_thread_id: threadId });
@@ -2045,6 +2161,11 @@ document.addEventListener("click", async (event) => {
   if (event.target.closest("[data-manager-account-toggle]")) {
     state.accountMenuOpen = !state.accountMenuOpen;
     renderManagerPortal();
+    return;
+  }
+
+  if (event.target.closest("[data-manager-avatar-upload]")) {
+    document.getElementById("managerAvatarInput")?.click();
     return;
   }
 
@@ -2157,7 +2278,22 @@ document.addEventListener("input", (event) => {
   state.filters[filter.dataset.pmFilter] = filter.value;
 });
 
-document.addEventListener("change", (event) => {
+document.addEventListener("keydown", (event) => {
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+    event.preventDefault();
+    document.querySelector("[data-manager-global-search]")?.focus();
+  }
+});
+
+document.addEventListener("change", async (event) => {
+  const avatarInput = event.target.closest("[data-manager-avatar-input]");
+  if (avatarInput) {
+    const file = avatarInput.files?.[0];
+    if (file) await uploadManagerAvatar(file);
+    avatarInput.value = "";
+    return;
+  }
+
   const scheduleDate = event.target.closest("[data-pm-schedule-date]");
   if (scheduleDate) {
     setScheduleDate(scheduleDate.value);
