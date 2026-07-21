@@ -263,6 +263,15 @@ function formatMoveInDate(value, fallback = "Not selected") {
   return date.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
 }
 
+function openNativeDatePicker(control) {
+  if (!control || typeof control.showPicker !== "function") return;
+  try {
+    control.showPicker();
+  } catch {
+    // Some browsers only allow showPicker during direct pointer interaction.
+  }
+}
+
 function addDays(value, days) {
   const date = localDate(value);
   date.setDate(date.getDate() + days);
@@ -2076,10 +2085,13 @@ function renderRequestForm() {
       <form id="managerTurnRequestForm" class="manager-message-form pm-request-form">
         <label>
           <span>Unit</span>
-          <select name="unit" required>
-            <option value="">Choose a unit...</option>
-            ${state.units.map((unit) => `<option value="${esc(unit.unit_name || "")}">${esc(unit.unit_name || "Unit")}</option>`).join("")}
-          </select>
+          <input name="unit" type="search" list="managerUnitOptions" placeholder="Start typing a unit..." autocomplete="off" required />
+          <datalist id="managerUnitOptions">
+            ${state.units.map((unit) => {
+              const name = unit.unit_name || unit.name || unit.unit_number || "";
+              return name ? `<option value="${esc(name)}"></option>` : "";
+            }).join("")}
+          </datalist>
         </label>
         <label>
           <span>Service Type</span>
@@ -2089,7 +2101,7 @@ function renderRequestForm() {
         </label>
         <label>
           <span>Scheduled Move-In Date</span>
-          <input name="move_in_date" type="date" min="${esc(dateInputValue(new Date()))}" required />
+          <input name="move_in_date" type="date" min="${esc(dateInputValue(new Date()))}" data-manager-move-in-date required />
         </label>
         <label>
           <span>Move-In Time</span>
@@ -2439,6 +2451,9 @@ function setActiveNav() {
 }
 
 document.addEventListener("click", async (event) => {
+  const moveInDateInput = event.target.closest("[data-manager-move-in-date]");
+  if (moveInDateInput) openNativeDatePicker(moveInDateInput);
+
   const accountWasOpen = state.accountMenuOpen;
   const accountWrap = event.target.closest(".pm-account-menu-wrap");
   if (!accountWrap && accountWasOpen) state.accountMenuOpen = false;
@@ -2560,6 +2575,12 @@ document.addEventListener("click", async (event) => {
   }
 
   if (!accountWrap && accountWasOpen) renderManagerPortal();
+});
+
+document.addEventListener("focusin", (event) => {
+  if (event.target.matches("[data-manager-move-in-date]")) {
+    openNativeDatePicker(event.target);
+  }
 });
 
 document.addEventListener("input", (event) => {
