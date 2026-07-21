@@ -2,6 +2,9 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 
 const VIDEO_BUCKET = "qa-videos";
 const SIGNED_URL_SECONDS = 60 * 60 * 4;
+const TURN_REQUEST_SERVICE = "Unit Cleaning";
+const MOVE_IN_TIME_LABEL = "2:00 PM";
+const MOVE_IN_HOUR = 14;
 
 const env = window.__ENV || {};
 const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
@@ -245,6 +248,19 @@ function dateInputValue(value = new Date()) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${date.getFullYear()}-${month}-${day}`;
+}
+
+function scheduledMoveInDate(value) {
+  if (!value) return null;
+  const date = localDate(value);
+  date.setHours(MOVE_IN_HOUR, 0, 0, 0);
+  return date;
+}
+
+function formatMoveInDate(value, fallback = "Not selected") {
+  const date = scheduledMoveInDate(value);
+  if (!date) return fallback;
+  return date.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
 }
 
 function addDays(value, days) {
@@ -1404,7 +1420,7 @@ function renderTurnRequestCallout() {
       <div>
         <p class="pm-eyebrow">${linked ? "Submit a Turn" : "Property Link Required"}</p>
         <h2>${linked ? "Request a unit turn" : "Turn requests unlock after your property is linked"}</h2>
-        <p>${linked ? `Send Turnly the unit, preferred window, service type, and access notes for ${propertyTitle()}.` : propertyLinkPendingMessage()}</p>
+        <p>${linked ? `Send Turnly the unit, scheduled move-in date, and access notes for ${propertyTitle()}. Service type is set to ${TURN_REQUEST_SERVICE}.` : propertyLinkPendingMessage()}</p>
       </div>
       <dl>
         <div><dt>Property</dt><dd>${esc(propertyTitle())}</dd></div>
@@ -2053,10 +2069,10 @@ function renderRequestForm() {
   return `
     <section class="panel-card pm-request-form-panel">
       <div class="pm-panel-head">
-        <div><h2>New Turn Request</h2><p>Send Turnly the unit, target window, and any access notes for ${esc(propertyTitle())}.</p></div>
+        <div><h2>New Turn Request</h2><p>Send Turnly the unit, scheduled move-in date, and access notes for ${esc(propertyTitle())}.</p></div>
         <button class="secondary-command-btn pm-compact-btn" type="button" data-manager-request-close>Close</button>
       </div>
-      <p class="pm-form-note">Turn requests go straight to Turnly operations. A linked property is required before this form can be submitted.</p>
+      <p class="pm-form-note">Turn requests go straight to Turnly operations. Service type is fixed to ${esc(TURN_REQUEST_SERVICE)}, and move-in time is automatically set to ${esc(MOVE_IN_TIME_LABEL)}.</p>
       <form id="managerTurnRequestForm" class="manager-message-form pm-request-form">
         <label>
           <span>Unit</span>
@@ -2067,12 +2083,17 @@ function renderRequestForm() {
         </label>
         <label>
           <span>Service Type</span>
-          <select name="service">
-            <option>Turn Cleaning</option>
-            <option>Move-In Ready Clean</option>
-            <option>Inspection Follow-Up</option>
-            <option>Maintenance Cleaning</option>
+          <select name="service" required>
+            <option value="${esc(TURN_REQUEST_SERVICE)}" selected>${esc(TURN_REQUEST_SERVICE)}</option>
           </select>
+        </label>
+        <label>
+          <span>Scheduled Move-In Date</span>
+          <input name="move_in_date" type="date" min="${esc(dateInputValue(new Date()))}" required />
+        </label>
+        <label>
+          <span>Move-In Time</span>
+          <input name="move_in_time" type="text" value="${esc(MOVE_IN_TIME_LABEL)}" readonly aria-readonly="true" />
         </label>
         <label>
           <span>Priority</span>
@@ -2081,10 +2102,6 @@ function renderRequestForm() {
             <option>High</option>
             <option>Urgent</option>
           </select>
-        </label>
-        <label>
-          <span>Preferred Window</span>
-          <input name="requested_at" type="datetime-local" />
         </label>
         <label class="span-all">
           <span>Access / Turn Notes</span>
@@ -2273,23 +2290,26 @@ async function createTurnRequest(form) {
   }
 
   const unit = form.elements.unit?.value?.trim() || "";
-  const service = form.elements.service?.value?.trim() || "Turn Cleaning";
+  const service = TURN_REQUEST_SERVICE;
   const priority = form.elements.priority?.value?.trim() || "Normal";
-  const requested = form.elements.requested_at?.value ? new Date(form.elements.requested_at.value).toLocaleString() : "Flexible";
+  const moveInDateValue = form.elements.move_in_date?.value || "";
+  const moveInDate = scheduledMoveInDate(moveInDateValue);
   const notes = form.elements.body?.value?.trim() || "";
   const body = [
     `Property: ${propertyTitle()}`,
     unit ? `Unit: ${unit}` : "",
     `Service: ${service}`,
     `Priority: ${priority}`,
-    `Requested window: ${requested}`,
+    `Scheduled move-in date: ${formatMoveInDate(moveInDateValue)}`,
+    `Move-in time: ${MOVE_IN_TIME_LABEL}`,
+    moveInDate ? `Scheduled move-in timestamp: ${moveInDate.toLocaleString()}` : "",
     "",
     notes
   ].filter((line) => line !== "").join("\n");
 
   await createManagerMessageThread(form, {
-    subject: `Turn request - ${unit || propertyTitle()}`,
-    topic: "Turn request",
+    subject: `${TURN_REQUEST_SERVICE} request - ${unit || propertyTitle()}`,
+    topic: "Unit cleaning request",
     body
   });
 
