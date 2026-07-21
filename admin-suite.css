@@ -1114,6 +1114,41 @@ a {
   font-size: 11px;
 }
 
+.manager-request-row {
+  align-items: stretch;
+  grid-template-columns: minmax(0, 1fr) minmax(230px, 0.8fr);
+}
+
+.manager-request-actions {
+  align-items: stretch;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) 38px;
+}
+
+.manager-request-select {
+  min-width: 0;
+}
+
+.manager-request-select select {
+  background: rgba(7, 18, 32, 0.88);
+  border: 1px solid var(--suite-border);
+  border-radius: 7px;
+  color: var(--suite-text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  height: 38px;
+  max-width: 100%;
+  padding: 0 10px;
+  width: 100%;
+}
+
+.manager-link-action {
+  height: 38px;
+  width: 38px;
+}
+
 .dashboard-item-action {
   align-items: center;
   background: rgba(17, 32, 50, 0.92);
@@ -5149,6 +5184,10 @@ a {
     grid-template-columns: 1fr;
   }
 
+  .manager-request-actions {
+    grid-template-columns: 1fr;
+  }
+
   .dashboard-item-action {
     justify-self: start;
   }
@@ -5380,6 +5419,7 @@ body.turnly-admin-suite[data-dashboard-theme="light"] .calendar-controls button,
 body.turnly-admin-suite[data-dashboard-theme="light"] .walkthrough-calendar-controls > button,
 body.turnly-admin-suite[data-dashboard-theme="light"] .admin-assignment-actions select,
 body.turnly-admin-suite[data-dashboard-theme="light"] .account-request-actions select,
+body.turnly-admin-suite[data-dashboard-theme="light"] .manager-request-select select,
 body.turnly-admin-suite[data-dashboard-theme="light"] .assignment-status-inline,
 body.turnly-admin-suite[data-dashboard-theme="light"] .secondary-btn,
 body.turnly-admin-suite[data-dashboard-theme="light"] .secondary-command-btn,

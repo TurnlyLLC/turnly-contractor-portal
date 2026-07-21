@@ -87,10 +87,11 @@ const pipelineStages = [
   ["active", "Active", "green"]
 ];
 
-const commandCenterDefaultWidgetIds = ["action-items", "coverage-requests", "qa-alerts", "schedule"];
-const commandCenterStorageKey = "turnlyAdminCommandCenterWidgets";
+const commandCenterDefaultWidgetIds = ["action-items", "property-manager-requests", "coverage-requests", "qa-alerts", "schedule"];
+const commandCenterStorageKey = "turnlyAdminCommandCenterWidgets:20260721";
 const commandCenterWidgetCatalog = [
   { id: "action-items", title: "Action Items", icon: "clipboard-list", href: "assignments.html" },
+  { id: "property-manager-requests", title: "Property Manager Requests", icon: "building", href: "contracts.html" },
   { id: "coverage-requests", title: "Coverage Requests", icon: "shield", href: "coverage-center.html" },
   { id: "qa-alerts", title: "QA Alerts", icon: "alert", href: "qa-queue.html" },
   { id: "schedule", title: "Today's Schedule", icon: "calendar", href: "schedule.html" }
@@ -105,6 +106,9 @@ const commandCenterState = {
   },
   scheduleView: "day",
   actionItems: [],
+  propertyManagerRequests: [],
+  propertyManagerContracts: [],
+  portalProperties: [],
   coverageRequests: [],
   qaAlerts: [],
   scheduleItems: []
@@ -1057,6 +1061,7 @@ function renderCommandWidgetCatalog(activeIds) {
 
 function renderCommandWidget(widgetId) {
   if (widgetId === "action-items") return renderActionItemsWidget();
+  if (widgetId === "property-manager-requests") return renderPropertyManagerRequestsWidget();
   if (widgetId === "coverage-requests") return renderCoverageRequestsWidget();
   if (widgetId === "qa-alerts") return renderQaAlertsWidget();
   if (widgetId === "schedule") return renderScheduleWidget();
@@ -1076,6 +1081,14 @@ function renderActionItemsWidget() {
     <div id="commandActionItemsList" class="dashboard-list">${skeletonRows(3)}</div>
     <a class="panel-bottom-link" href="assignments.html">View All Action Items ${icon("chevron-right")}</a>
   `, { menu: true, key: "action-items", href: "assignments.html" });
+}
+
+function renderPropertyManagerRequestsWidget() {
+  return panel("Property Manager Requests", `
+    <div id="commandPropertyManagerRequestsMessage" class="request-message" aria-live="polite"></div>
+    <div id="commandPropertyManagerRequestsList" class="dashboard-list manager-request-list">${skeletonRows(3)}</div>
+    <a class="panel-bottom-link" href="contracts.html">View Open Contracts ${icon("chevron-right")}</a>
+  `, { menu: true, key: "property-manager-requests", href: "contracts.html" });
 }
 
 function renderCoverageRequestsWidget() {
@@ -1127,6 +1140,13 @@ function handleCommandCenterClick(event) {
   if (approveContractorButton) {
     event.preventDefault();
     void approveDashboardContractor(approveContractorButton);
+    return;
+  }
+
+  const linkManagerButton = event.target.closest("[data-dashboard-link-manager]");
+  if (linkManagerButton) {
+    event.preventDefault();
+    void linkDashboardPropertyManager(linkManagerButton);
     return;
   }
 
@@ -1229,10 +1249,11 @@ async function hydrateCommandWidgetPreferences() {
 
   if (error || !data?.length) return;
 
-  const remoteWidgetIds = normalizeCommandWidgetIds(
-    data.filter((item) => item.is_visible).map((item) => item.widget_key),
-    null
-  );
+  const knownRemoteIds = new Set(data.map((item) => item.widget_key));
+  const remoteWidgetIds = normalizeCommandWidgetIds([
+    ...data.filter((item) => item.is_visible).map((item) => item.widget_key),
+    ...commandCenterDefaultWidgetIds.filter((id) => !knownRemoteIds.has(id))
+  ], null);
   if (remoteWidgetIds.join("|") !== readCommandWidgetIds().join("|")) {
     writeCommandWidgetIds(remoteWidgetIds);
     rerenderCommandCenter({ skipLoad: true, skipRemotePreferences: true });
@@ -1269,6 +1290,7 @@ async function getCommandCenterUser() {
 async function loadCommandCenterData() {
   await Promise.all([
     loadCommandActionItems(),
+    loadCommandPropertyManagerRequests(),
     loadCommandCoverageRequests(),
     loadCommandQaAlerts(),
     loadCommandSchedule()
@@ -1278,6 +1300,7 @@ async function loadCommandCenterData() {
 async function refreshCommandWidget(widgetId) {
   setCommandWidgetLoading(widgetId);
   if (widgetId === "action-items") await loadCommandActionItems();
+  if (widgetId === "property-manager-requests") await loadCommandPropertyManagerRequests();
   if (widgetId === "coverage-requests") await loadCommandCoverageRequests();
   if (widgetId === "qa-alerts") await loadCommandQaAlerts();
   if (widgetId === "schedule") await loadCommandSchedule();
@@ -1286,6 +1309,7 @@ async function refreshCommandWidget(widgetId) {
 function setCommandWidgetLoading(widgetId) {
   const listIds = {
     "action-items": "commandActionItemsList",
+    "property-manager-requests": "commandPropertyManagerRequestsList",
     "coverage-requests": "commandCoverageRequestsList",
     "qa-alerts": "commandQaAlertsList",
     schedule: "commandScheduleList"
@@ -1337,6 +1361,45 @@ async function loadCommandActionItems() {
   renderCommandActionItems();
 }
 
+async function loadCommandPropertyManagerRequests() {
+  setCommandMessage("property-manager-requests", "Syncing...");
+  let profileResult;
+  const [requestResult, contractResult, propertyResult] = await Promise.all([
+    fetchCommandRows("profiles", "id,full_name,email,phone,role,status,contractor_approved,property_manager_property_id,requested_property_name,created_at", { order: "created_at", ascending: false, limit: 120 }),
+    fetchCommandRows(clientContractTable, "id,company_name,property_name,name,billing_address,address,city,state,postal_code,status,client_type,service_model,access_notes,unit_notes,notes", { order: "company_name", ascending: true, limit: 500 }),
+    fetchCommandRows(leadTable, "id,client_id,name,property_name,address", { order: "name", ascending: true, limit: 1000 })
+  ]);
+  profileResult = requestResult;
+
+  if (profileResult.error && commandErrorMentionsColumn(profileResult.error, "requested_property_name")) {
+    profileResult = await fetchCommandRows("profiles", "id,full_name,email,phone,role,status,contractor_approved,property_manager_property_id,created_at", { order: "created_at", ascending: false, limit: 120 });
+  }
+
+  commandCenterState.portalProperties = propertyResult.error ? [] : propertyResult.data;
+  commandCenterState.propertyManagerContracts = contractResult.error ? [] : contractResult.data
+    .filter(isOpenManagerContract)
+    .map((contract) => mapManagerContractOption(contract, commandCenterState.portalProperties))
+    .filter((contract) => contract.id && contract.title)
+    .sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: "base" }));
+  commandCenterState.propertyManagerRequests = profileResult.error ? [] : profileResult.data
+    .filter(isPendingPropertyManagerRequest)
+    .map(mapPropertyManagerRequest)
+    .sort((a, b) => dateValue(b.createdAt, 0) - dateValue(a.createdAt, 0));
+
+  if (profileResult.error) {
+    setCommandMessage("property-manager-requests", `Unable to load property manager requests: ${profileResult.error.message}`, true);
+  } else if (contractResult.error) {
+    setCommandMessage("property-manager-requests", "Requests loaded, but open contracts could not be loaded.", true);
+  } else {
+    const requestCount = commandCenterState.propertyManagerRequests.length;
+    const contractCount = commandCenterState.propertyManagerContracts.length;
+    setCommandMessage("property-manager-requests", requestCount
+      ? `${requestCount} pending request${requestCount === 1 ? "" : "s"}; ${contractCount} open contract${contractCount === 1 ? "" : "s"} available.`
+      : "Synced with Supabase. No pending property manager requests.");
+  }
+  renderCommandPropertyManagerRequests();
+}
+
 async function loadCommandCoverageRequests() {
   setCommandMessage("coverage-requests", "Syncing...");
   const result = await fetchCommandRows("coverage_requests", "*", { order: "requested_start_at", ascending: true, limit: 40 });
@@ -1382,6 +1445,7 @@ async function loadCommandSchedule() {
 
 function renderCommandCenterLists() {
   renderCommandActionItems();
+  renderCommandPropertyManagerRequests();
   renderCommandCoverageRequests();
   renderCommandQaAlerts();
   renderCommandSchedule();
@@ -1406,6 +1470,15 @@ function renderCommandActionItems() {
   list.innerHTML = rows.length
     ? rows.map(renderDashboardItem).join("")
     : emptyState("clipboard-list", "No action items");
+}
+
+function renderCommandPropertyManagerRequests() {
+  const list = document.getElementById("commandPropertyManagerRequestsList");
+  if (!list) return;
+  const rows = commandCenterState.propertyManagerRequests.slice(0, 6);
+  list.innerHTML = rows.length
+    ? rows.map(renderPropertyManagerRequestRow).join("")
+    : emptyState("user-plus", "No pending property managers");
 }
 
 function renderCommandCoverageRequests() {
@@ -1438,6 +1511,7 @@ function renderCommandSchedule() {
 function setCommandMessage(widgetId, text, isError = false) {
   const messageIds = {
     "action-items": "commandActionItemsMessage",
+    "property-manager-requests": "commandPropertyManagerRequestsMessage",
     "coverage-requests": "commandCoverageRequestsMessage",
     "qa-alerts": "commandQaAlertsMessage",
     schedule: "commandScheduleMessage"
@@ -1481,6 +1555,77 @@ function mapProfileActionItem(profile) {
     profileName: name,
     profileEmail: profile.email || ""
   };
+}
+
+function mapPropertyManagerRequest(profile) {
+  const name = profile.full_name || profile.email || "Property manager";
+  return {
+    id: profile.id,
+    name,
+    email: profile.email || "",
+    phone: profile.phone || "",
+    status: profile.status || "pending",
+    requestedPropertyName: profile.requested_property_name || "",
+    createdAt: profile.created_at || null
+  };
+}
+
+function mapManagerContractOption(contract, properties = []) {
+  const linkedProperty = findPortalPropertyForContract(contract, properties);
+  const title = managerContractTitle(contract);
+  const address = managerContractAddress(contract);
+  return {
+    id: contract.id || "",
+    propertyId: linkedProperty?.id || "",
+    title,
+    address,
+    status: contract.status || "active",
+    meta: [address, contract.status ? titleCase(contract.status) : ""].filter(Boolean).join(" - "),
+    contract,
+    linkedProperty
+  };
+}
+
+function renderPropertyManagerRequestRow(request) {
+  const hasContracts = commandCenterState.propertyManagerContracts.length > 0;
+  const contact = [request.email, request.phone].filter(Boolean).join(" - ");
+  return `
+    <article class="dashboard-item-row manager-request-row" data-manager-request="${esc(request.id)}">
+      <div class="dashboard-item-main">
+        <div class="dashboard-item-title">${icon("user-plus")}<strong>${esc(request.name)}</strong></div>
+        ${contact ? `<p>${esc(contact)}</p>` : ""}
+        <div class="dashboard-item-meta">
+          ${request.requestedPropertyName ? `<span>Requested: ${esc(request.requestedPropertyName)}</span>` : "<span>No requested property entered</span>"}
+          ${statusBadge(request.status || "pending")}
+        </div>
+      </div>
+      <div class="manager-request-actions">
+        <label class="manager-request-select">
+          <span class="sr-only">Open contract for ${esc(request.name)}</span>
+          <select data-manager-contract-select="${esc(request.id)}" ${hasContracts ? "" : "disabled"}>
+            ${renderManagerContractOptions()}
+          </select>
+        </label>
+        <button class="dashboard-item-action dashboard-approve-action manager-link-action" type="button" data-dashboard-link-manager="${esc(request.id)}" data-manager-name="${esc(request.name)}" ${hasContracts ? "" : "disabled"} aria-label="Link ${esc(request.name)} to selected contract">
+          ${icon("check")}
+        </button>
+      </div>
+    </article>
+  `;
+}
+
+function renderManagerContractOptions() {
+  if (!commandCenterState.propertyManagerContracts.length) {
+    return `<option value="">No open contracts found</option>`;
+  }
+  return [
+    `<option value="">Choose open contract...</option>`,
+    ...commandCenterState.propertyManagerContracts.map((option) => {
+      const createNote = option.propertyId ? "" : " - create property link";
+      const meta = option.meta ? ` - ${option.meta}` : "";
+      return `<option value="${esc(option.id)}">${esc(`${option.title}${meta}${createNote}`)}</option>`;
+    })
+  ].join("");
 }
 
 function mapCoverageRequest(item) {
@@ -1593,6 +1738,64 @@ async function approveDashboardContractor(button) {
   void loadCommandActionItems();
 }
 
+async function linkDashboardPropertyManager(button) {
+  if (!suiteSupabase) {
+    setCommandMessage("property-manager-requests", "Supabase is not configured, so this property manager could not be linked.", true);
+    return;
+  }
+
+  const profileId = button.dataset.dashboardLinkManager;
+  const managerName = button.dataset.managerName || "this property manager";
+  const select = document.querySelector(`[data-manager-contract-select="${selectorValue(profileId)}"]`);
+  const contractId = select?.value || "";
+  const contractOption = commandCenterState.propertyManagerContracts.find((option) => option.id === contractId);
+
+  if (!profileId || !contractId || !contractOption) {
+    setCommandMessage("property-manager-requests", "Choose an open contract before linking this property manager.", true);
+    return;
+  }
+
+  if (!window.confirm(`Link ${managerName} to ${contractOption.title}?`)) return;
+
+  button.disabled = true;
+  button.classList.add("is-loading");
+  setCommandMessage("property-manager-requests", `Linking ${managerName}...`);
+
+  let portalProperty;
+  try {
+    portalProperty = await ensurePortalPropertyForContract(contractOption.contract);
+  } catch (error) {
+    button.disabled = false;
+    button.classList.remove("is-loading");
+    setCommandMessage("property-manager-requests", `Unable to prepare the property link: ${error.message}`, true);
+    return;
+  }
+
+  const { data, error } = await suiteSupabase
+    .from("profiles")
+    .update({
+      property_manager_property_id: portalProperty.id,
+      contractor_approved: true,
+      status: "active"
+    })
+    .eq("id", profileId)
+    .select("id,full_name,email,role,status,property_manager_property_id")
+    .maybeSingle();
+
+  if (error || !data) {
+    button.disabled = false;
+    button.classList.remove("is-loading");
+    setCommandMessage("property-manager-requests", `Unable to link ${managerName}: ${error?.message || "profile was not found"}`, true);
+    return;
+  }
+
+  commandCenterState.propertyManagerRequests = commandCenterState.propertyManagerRequests.filter((request) => request.id !== profileId);
+  updateManagerContractPropertyLink(contractOption.id, portalProperty);
+  renderCommandPropertyManagerRequests();
+  setCommandMessage("property-manager-requests", `${data.full_name || data.email || managerName} linked to ${portalProperty.name || contractOption.title}.`);
+  void loadCommandActionItems();
+}
+
 function renderScheduleDashboardItem(item) {
   const contractor = item.assigned_to_name || item.assigned_to_email || item.claimed_by_name || item.claimed_by_email || "Unassigned";
   return renderDashboardItem({
@@ -1662,12 +1865,139 @@ function isPendingProfileAction(profile) {
   return false;
 }
 
+function isPendingPropertyManagerRequest(profile) {
+  return normalizeToken(profile.role) === "property-manager" && !profile.property_manager_property_id;
+}
+
+function isOpenManagerContract(contract) {
+  const status = normalizeToken(contract?.status || "active");
+  return !["inactive", "paused", "closed", "cancelled", "canceled", "lost", "declined", "expired", "terminated"].includes(status);
+}
+
 function isApprovedStatus(status) {
   return ["approved", "active", "enabled"].includes(normalizeToken(status));
 }
 
 function isOpenStatus(status) {
   return !["completed", "closed", "cancelled", "canceled", "resolved", "done"].includes(normalizeToken(status));
+}
+
+function managerContractTitle(contract = {}) {
+  return contract.property_name || contract.name || contract.company_name || "Untitled Contract";
+}
+
+function managerContractAddress(contract = {}) {
+  return contract.billing_address || [contract.address, contract.city, contract.state, contract.postal_code].filter(Boolean).join(", ");
+}
+
+function managerLinkKey(name, address = "") {
+  return [name, address]
+    .map((part) => String(part || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .join("|");
+}
+
+function findPortalPropertyForContract(contract = {}, properties = []) {
+  const contractIds = [contract.id, contract.client_id].filter(Boolean).map(String);
+  const byClientId = properties.find((property) => property?.client_id && contractIds.includes(String(property.client_id)));
+  if (byClientId) return byClientId;
+
+  const byPropertyId = properties.find((property) => property?.id && contractIds.includes(String(property.id)));
+  if (byPropertyId) return byPropertyId;
+
+  const contractAddress = managerContractAddress(contract);
+  if (!contractAddress) return null;
+  const contractKey = managerLinkKey(managerContractTitle(contract), contractAddress);
+  return properties.find((property) => managerLinkKey(property?.property_name || property?.name, property?.address) === contractKey) || null;
+}
+
+function updateManagerContractPropertyLink(contractId, property) {
+  if (!property?.id) return;
+  if (!commandCenterState.portalProperties.some((item) => item.id === property.id)) {
+    commandCenterState.portalProperties = [...commandCenterState.portalProperties, property];
+  }
+  commandCenterState.propertyManagerContracts = commandCenterState.propertyManagerContracts.map((option) => (
+    option.id === contractId
+      ? { ...option, propertyId: property.id, linkedProperty: property }
+      : option
+  ));
+}
+
+async function ensurePortalPropertyForContract(contract = {}) {
+  const existing = findPortalPropertyForContract(contract, commandCenterState.portalProperties);
+  if (existing?.id) return existing;
+
+  if (contract.id) {
+    const { data, error } = await suiteSupabase
+      .from(leadTable)
+      .select("id,client_id,name,property_name,address")
+      .eq("client_id", contract.id)
+      .limit(1)
+      .maybeSingle();
+    if (!error && data?.id) {
+      updateManagerContractPropertyLink(contract.id, data);
+      return data;
+    }
+  }
+
+  const created = await createPortalPropertyFromContract(contract);
+  updateManagerContractPropertyLink(contract.id, created);
+  return created;
+}
+
+async function createPortalPropertyFromContract(contract = {}) {
+  const title = managerContractTitle(contract);
+  const payload = {
+    client_id: contract.id || null,
+    name: title,
+    property_name: title,
+    company_name: contract.company_name || title,
+    address: managerContractAddress(contract),
+    pipeline_stage: normalizeToken(contract.status) === "active" ? "active" : "contract_out",
+    default_service_type: contract.service_model || contract.client_type || "",
+    access_notes: contract.access_notes || contract.unit_notes || contract.notes || ""
+  };
+  const optionalColumns = ["company_name", "pipeline_stage", "default_service_type", "access_notes"];
+  for (let attempt = 0; attempt <= optionalColumns.length; attempt += 1) {
+    const { data, error } = await suiteSupabase
+      .from(leadTable)
+      .insert(payload)
+      .select("*")
+      .maybeSingle();
+    if (!error && data?.id) return data;
+
+    const missingColumn = missingCommandColumnName(error);
+    if (missingColumn && optionalColumns.includes(missingColumn) && Object.prototype.hasOwnProperty.call(payload, missingColumn)) {
+      delete payload[missingColumn];
+      continue;
+    }
+
+    if (error && String(error.message || "").toLowerCase().includes("schema cache")) {
+      const nextColumn = optionalColumns.find((column) => Object.prototype.hasOwnProperty.call(payload, column));
+      if (nextColumn) {
+        delete payload[nextColumn];
+        continue;
+      }
+    }
+
+    throw new Error(error?.message || "Portal property could not be created.");
+  }
+  throw new Error("Portal property could not be created.");
+}
+
+function commandErrorMentionsColumn(error, column) {
+  const message = String(error?.message || "").toLowerCase();
+  return message.includes(column.toLowerCase()) || message.includes("schema cache") || message.includes("could not find");
+}
+
+function missingCommandColumnName(error) {
+  const message = String(error?.message || "");
+  const quoted = message.match(/'([a-zA-Z0-9_]+)'\s+column/);
+  if (quoted) return quoted[1].toLowerCase();
+  const schemaCache = message.match(/Could not find the '([a-zA-Z0-9_]+)' column/i);
+  if (schemaCache) return schemaCache[1].toLowerCase();
+  const columnRef = message.match(/column\s+"?([a-zA-Z0-9_]+)"?\s+of relation/i);
+  return columnRef?.[1]?.toLowerCase() || "";
 }
 
 function priorityWeight(priority) {
