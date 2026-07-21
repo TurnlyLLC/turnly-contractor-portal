@@ -20,11 +20,15 @@ const searchParams = new URLSearchParams(window.location.search);
 const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
 const preferredPortal = normalizeRole(searchParams.get("portal") || hashParams.get("portal") || "contractor");
 
-function normalizeRole(role) {
-  return String(role || "contractor")
+function normalizeToken(value) {
+  return String(value || "")
     .trim()
     .toLowerCase()
     .replace(/[\s-]+/g, "_");
+}
+
+function normalizeRole(role) {
+  return normalizeToken(role) || "contractor";
 }
 
 function showStatus(title, message, tone = "", actionHref = "") {
@@ -140,7 +144,10 @@ async function routeUser() {
   showStatus("Email verified", "Your account is verified. Taking you to the right dashboard...", "success");
 
   const profile = await waitForProfile(user.id);
-  const role = normalizeRole(profile?.role || user.user_metadata?.role || preferredPortal);
+  const metadataRole = normalizeToken(user.user_metadata?.role);
+  const role = metadataRole === "property_manager"
+    ? "property_manager"
+    : normalizeRole(profile?.role || metadataRole || preferredPortal);
   const destination = portalByRole[role] || portalByRole[preferredPortal] || "contractor.html";
 
   window.setTimeout(() => {

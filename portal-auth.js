@@ -31,11 +31,15 @@ function authCallbackUrl(role = pageRole) {
   return url.toString();
 }
 
-function normalizeRole(role) {
-  return String(role || "contractor")
+function normalizeToken(value) {
+  return String(value || "")
     .trim()
     .toLowerCase()
     .replace(/[\s-]+/g, "_");
+}
+
+function normalizeRole(role) {
+  return normalizeToken(role) || "contractor";
 }
 
 function value(id) {
@@ -54,6 +58,44 @@ function escapeHtml(value) {
 function getInitialStatus(role = pageRole) {
   const normalizedRole = normalizeRole(role);
   return normalizedRole === "contractor" ? "pending" : "active";
+}
+
+function hasPropertyManagerSignal(user, profile) {
+  return normalizeToken(user?.user_metadata?.role) === "property_manager" ||
+    normalizeToken(profile?.role) === "property_manager" ||
+    Boolean(profile?.property_manager_property_id) ||
+    Boolean(profile?.requested_property_name) ||
+    Boolean(user?.user_metadata?.requested_property_name);
+}
+
+async function repairPropertyManagerProfile(user, profile = {}) {
+  if (!user?.id || !supabase) return { ...profile, role: "property_manager" };
+  const requestedPropertyName = profile?.requested_property_name ||
+    user.user_metadata?.requested_property_name ||
+    user.user_metadata?.associated_property ||
+    user.user_metadata?.property_name ||
+    "";
+  const payload = {
+    id: user.id,
+    email: profile?.email || user.email || "",
+    role: "property_manager",
+    status: "active",
+    contractor_approved: true
+  };
+
+  if (requestedPropertyName) {
+    payload.requested_property_name = requestedPropertyName;
+  }
+
+  const { error } = await supabase
+    .from("profiles")
+    .upsert(payload, { onConflict: "id" });
+
+  if (error) {
+    console.warn("Property manager profile repair skipped:", error.message);
+  }
+
+  return { ...profile, ...payload };
 }
 
 function setMessageTone(tone = "") {
@@ -225,8 +267,14 @@ authMessage?.addEventListener("click", async (event) => {
 showMode("login");
 
 async function routeAuthenticatedUser(user, fallbackRole = pageRole) {
-  const profile = await getProfile(user.id);
-  const role = normalizeRole(profile?.role || user.user_metadata?.role || fallbackRole);
+  let profile = await getProfile(user.id);
+  const propertyManagerLogin = isPropertyManagerPortal && hasPropertyManagerSignal(user, profile);
+  if (propertyManagerLogin) {
+    profile = await repairPropertyManagerProfile(user, profile);
+  }
+  const role = propertyManagerLogin
+    ? "property_manager"
+    : normalizeRole(profile?.role || user.user_metadata?.role || fallbackRole);
 
   if (isPropertyManagerPortal && role !== "property_manager") {
     const target = portalByRole[role] || "contractor.html";

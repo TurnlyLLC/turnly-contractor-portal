@@ -103,6 +103,44 @@ function isActiveProfile(profile) {
   return ["active", "approved", "enabled"].includes(normalizeStatus(profile?.status));
 }
 
+function hasPropertyManagerSignal(user, profile) {
+  return normalizeRole(user?.user_metadata?.role) === "property_manager" ||
+    normalizeRole(profile?.role) === "property_manager" ||
+    Boolean(profile?.property_manager_property_id) ||
+    Boolean(profile?.requested_property_name) ||
+    Boolean(user?.user_metadata?.requested_property_name);
+}
+
+async function repairPropertyManagerProfile(user, profile = {}) {
+  if (!user?.id || !supabase) return { ...profile, role: "property_manager", status: "active", contractor_approved: true };
+  const requestedPropertyName = profile?.requested_property_name ||
+    user.user_metadata?.requested_property_name ||
+    user.user_metadata?.associated_property ||
+    user.user_metadata?.property_name ||
+    "";
+  const payload = {
+    id: user.id,
+    email: profile?.email || user.email || "",
+    role: "property_manager",
+    status: "active",
+    contractor_approved: true
+  };
+
+  if (requestedPropertyName) {
+    payload.requested_property_name = requestedPropertyName;
+  }
+
+  const { error } = await supabase
+    .from("profiles")
+    .upsert(payload, { onConflict: "id" });
+
+  if (error) {
+    console.warn("Property manager profile repair skipped:", error.message);
+  }
+
+  return { ...profile, ...payload };
+}
+
 function getPortalHome(role) {
   return roleDashboards[normalizeRole(role)] || "contractor.html";
 }
@@ -450,12 +488,20 @@ async function requireManagerAccess() {
     profile = fallback.data ? { ...fallback.data, property_manager_property_id: null, access_setup_error: true } : null;
   }
 
-  const role = normalizeRole(profile?.role);
-
   if (!profile) {
-    window.location.href = "property-manager-login.html";
-    return;
+    if (normalizeRole(user.user_metadata?.role) === "property_manager") {
+      profile = await repairPropertyManagerProfile(user, {});
+    } else {
+      window.location.href = "property-manager-login.html";
+      return;
+    }
+  } else if (hasPropertyManagerSignal(user, profile) && normalizeRole(profile.role) !== "property_manager") {
+    profile = await repairPropertyManagerProfile(user, profile);
   }
+
+  const role = hasPropertyManagerSignal(user, profile)
+    ? "property_manager"
+    : normalizeRole(profile?.role);
 
   if (role !== "property_manager") {
     window.location.href = getPortalHome(role);

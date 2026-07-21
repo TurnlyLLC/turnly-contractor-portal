@@ -12,11 +12,15 @@ function showMessage(text) {
   if (message) message.textContent = text;
 }
 
-function normalizeRole(role) {
-  return String(role || "contractor")
+function normalizeToken(value) {
+  return String(value || "")
     .trim()
     .toLowerCase()
     .replace(/[\s-]+/g, "_");
+}
+
+function normalizeRole(role) {
+  return normalizeToken(role) || "contractor";
 }
 
 function getPortalHome(role) {
@@ -61,8 +65,10 @@ loginForm?.addEventListener("submit", async (event) => {
   }
 
   const profile = await getProfile(data.user.id);
-  const metadataRole = normalizeRole(data.user.user_metadata?.role);
-  const role = normalizeRole(profile?.role || metadataRole);
+  const metadataRole = normalizeToken(data.user.user_metadata?.role);
+  const role = metadataRole === "property_manager"
+    ? "property_manager"
+    : normalizeRole(profile?.role || metadataRole);
 
   if (role === "property_manager") {
     await supabase.auth.signOut();

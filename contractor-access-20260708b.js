@@ -20,6 +20,13 @@ function normalizeRole(role) {
     .replace(/[\s-]+/g, "_");
 }
 
+function normalizeToken(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+}
+
 function normalizeStatus(status) {
   return String(status || "")
     .trim()
@@ -95,7 +102,10 @@ if (!supabase) {
     window.location.href = "contractor-login.html";
   } else {
     const profile = await getProfile(user.id);
-    const role = normalizeRole(profile?.role || user.user_metadata?.role);
+    const metadataRole = normalizeToken(user.user_metadata?.role);
+    const role = metadataRole === "property_manager"
+      ? "property_manager"
+      : normalizeRole(profile?.role || user.user_metadata?.role);
 
     if (!profile) {
       window.location.href = "contractor-login.html";
