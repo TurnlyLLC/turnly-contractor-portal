@@ -93,6 +93,10 @@ function showVerificationPrompt(email, accessNote, prefix = "Account created. We
   setMessageTone("success");
 }
 
+function propertyManagerAccessNote(requestedPropertyName = "") {
+  return `A Turnly admin must link this account to ${requestedPropertyName || "the requested property"} before dashboard data is visible.`;
+}
+
 function setFormLoading(form, isLoading, loadingText, readyText) {
   const button = form?.querySelector("button[type='submit']");
   if (!button) return;
@@ -261,6 +265,11 @@ loginForm?.addEventListener("submit", async (event) => {
     setFormLoading(loginForm, false, "Logging In...", "Log In");
 
     if (/email not confirmed/i.test(error.message)) {
+      if (isPropertyManagerPortal) {
+        showMessage("This property manager account is still finishing setup. Please try logging in again shortly.", "error");
+        return;
+      }
+
       const accessNote = pageRole === "contractor"
         ? "After verifying, a Turnly admin must approve the contractor account before dashboard data is visible."
         : "After verifying, a Turnly admin must link this account to a property before dashboard data is visible.";
@@ -355,7 +364,9 @@ signupForm?.addEventListener("submit", async (event) => {
 
   if (data?.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
     showMessage(
-      "That email already has a Turnly account. Use Log In instead. If the email was never verified, logging in will let you resend the verification email.",
+      isPropertyManagerPortal
+        ? "That email already has a Turnly account. Use Log In instead."
+        : "That email already has a Turnly account. Use Log In instead. If the email was never verified, logging in will let you resend the verification email.",
       "error"
     );
     setFormLoading(signupForm, false, "Creating Account...", `Create ${pageLabel} Account`);
@@ -378,9 +389,46 @@ signupForm?.addEventListener("submit", async (event) => {
     return;
   }
 
+  if (isPropertyManagerPortal && data?.user) {
+    await syncSignupProfile(data.user, {
+      email,
+      fullName,
+      phone,
+      role: normalizedSignupRole,
+      requestedPropertyName
+    });
+    await waitForProfile(data.user.id);
+
+    const signInResult = await supabase.auth.signInWithPassword({ email, password });
+
+    if (!signInResult.error && signInResult.data?.user) {
+      const didRoute = await routeAuthenticatedUser(signInResult.data.user, normalizedSignupRole);
+      if (!didRoute) {
+        setFormLoading(signupForm, false, "Creating Account...", `Create ${pageLabel} Account`);
+      }
+      return;
+    }
+
+    if (signInResult.error && !/email not confirmed/i.test(signInResult.error.message)) {
+      showMessage(signInResult.error.message, "error");
+      setFormLoading(signupForm, false, "Creating Account...", `Create ${pageLabel} Account`);
+      return;
+    }
+
+    showMode("login");
+    const loginEmailInput = document.getElementById("loginEmail");
+    if (loginEmailInput) loginEmailInput.value = email;
+    showMessage(
+      `Account created. ${propertyManagerAccessNote(requestedPropertyName)} You can log in without email verification once setup finishes.`,
+      "success"
+    );
+    setFormLoading(signupForm, false, "Creating Account...", `Create ${pageLabel} Account`);
+    return;
+  }
+
   const accessNote = pageRole === "contractor"
     ? "A Turnly admin must approve the contractor account before dashboard data is visible."
-    : `A Turnly admin must link this account to ${requestedPropertyName || "the requested property"} before dashboard data is visible.`;
+    : propertyManagerAccessNote(requestedPropertyName);
   showVerificationPrompt(email, accessNote);
   setFormLoading(signupForm, false, "Creating Account...", `Create ${pageLabel} Account`);
 });
