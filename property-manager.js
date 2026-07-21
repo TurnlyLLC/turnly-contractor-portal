@@ -59,8 +59,8 @@ const pmIconPaths = {
   "chevron-down": '<path d="m6 9 6 6 6-6"/>',
   "chevron-right": '<path d="m9 18 6-6-6-6"/>',
   home: '<path d="m3 11 9-8 9 8"/><path d="M5 10v11h14V10"/><path d="M9 21v-7h6v7"/>',
-  search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
-  upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8 12 3 7 8"/><path d="M12 3v12"/>'
+  plus: '<path d="M12 5v14"/><path d="M5 12h14"/>',
+  search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>'
 };
 
 function pmIcon(name, className = "") {
@@ -870,11 +870,11 @@ function renderTopBar() {
   const unread = managerMetrics().unread;
   return `
     <div class="pm-topbar topbar-tools">
-      <div class="global-search topbar-search-wrap" role="search">
+      ${state.view === "messages" ? "" : `<div class="global-search topbar-search-wrap" role="search">
         ${pmIcon("search")}
         <input data-manager-global-search data-pm-filter="query" type="search" value="${esc(state.filters.query)}" placeholder="Search anything..." autocomplete="off" />
         <kbd>K</kbd>
-      </div>
+      </div>`}
       <div class="topbar-popover-wrap">
         <button class="top-icon" type="button" aria-label="${unread} unread messages" data-pm-view-button="messages">
           ${pmIcon("bell")}
@@ -893,8 +893,6 @@ function renderTopBar() {
             <span><strong id="topProfileName">${esc(profile.name)}</strong><small id="topProfileEmail">${esc(profile.email || profile.role)}</small></span>
           </div>
           <p id="topProfileMessage" class="topbar-profile-message" aria-live="polite"></p>
-          <input id="managerAvatarInput" type="file" accept="image/*" hidden data-manager-avatar-input />
-          <button id="topAvatarUploadBtn" type="button" role="menuitem" data-manager-avatar-upload>${pmIcon("upload")}<span>Upload Picture</span></button>
           <a href="property-manager.html#overview" role="menuitem">${pmIcon("home")}<span>Open Dashboard</span></a>
           <button id="topSignOutBtn" type="button" role="menuitem" data-manager-logout>${pmIcon("chevron-right")}<span>Sign Out</span></button>
         </div>
@@ -1522,48 +1520,43 @@ function renderVideoActivity() {
 }
 
 function renderMessagesView() {
-  const metrics = managerMetrics();
   return `
-    <section class="panel-card pm-toolbar">
-      ${renderManagerSearch("Search messages...", { className: "pm-local-search", label: "Search messages" })}
-      <button class="new-btn pm-compact-btn" type="button" data-manager-message-compose>New Message</button>
+    <section class="panel-card pm-messages-workspace">
+      <aside class="pm-message-sidebar" aria-label="Open conversations">
+        <div class="pm-message-sidebar-head">
+          <div>
+            <h2>Open Conversations</h2>
+            <p>${esc(integer(state.threads.length))} active</p>
+          </div>
+          <button class="new-btn pm-message-compose-icon" type="button" data-manager-message-compose aria-label="New message">${pmIcon("plus")}</button>
+        </div>
+        ${renderManagerThreadList()}
+      </aside>
+      <section class="pm-message-display" aria-label="Message display">
+        ${state.requestOpen ? renderNewMessageForm() : renderManagerConversation()}
+      </section>
     </section>
-    <section class="pm-stat-grid pm-stat-grid-four" aria-label="Message metrics">
-      ${statCard("Inbox", integer(metrics.inbox), "total conversations", "green")}
-      ${statCard("Unread", integer(metrics.unread), "need a reply", "yellow")}
-      ${statCard("Open Conversations", integer(metrics.inbox), "active threads", "blue")}
-      ${statCard("Archived", "0", "hidden from inbox", "violet")}
-    </section>
-    ${state.requestOpen ? renderNewMessageForm() : ""}
-    <section class="pm-message-grid">
-      ${panel("Conversations", renderManagerThreadList(), { className: "pm-conversation-list" })}
-      ${panel("Message Thread", renderManagerConversation(), { className: "pm-thread-panel" })}
-      ${panel("Conversation Details", renderConversationDetails(), { className: "pm-detail-panel" })}
-    </section>
-    ${panel("Recent Updates", renderRecentActivity(), { className: "pm-activity-panel" })}
   `;
 }
 
 function filteredThreads() {
-  return state.threads.filter((thread) => {
-    const matchesQuery = queryMatches([thread.subject, thread.last_message_preview, managerParticipantLine(thread.id)]);
-    return matchesQuery;
-  });
+  return state.threads;
 }
 
 function renderNewMessageForm() {
   return `
-    <section class="panel-card pm-request-form-panel">
+    <div class="pm-message-compose-panel">
       <div class="pm-panel-head">
         <div><h2>New Message</h2><p>Send a note to Turnly operations.</p></div>
         <button class="secondary-command-btn pm-compact-btn" type="button" data-manager-request-close>Close</button>
       </div>
+      <div id="managerMessageStatus" class="manager-message-status ${state.error ? "error" : ""}" aria-live="polite">${esc(state.message || "")}</div>
       <form id="managerNewThreadForm" class="manager-message-form pm-inline-form">
         <label><span>Subject</span><input name="subject" placeholder="Question about service, invoices, or property notes" /></label>
         <label><span>Message</span><textarea name="body" rows="4" placeholder="Type your message..." required></textarea></label>
         <button class="new-btn pm-compact-btn" type="submit" ${state.sending ? "disabled" : ""}>Send Message</button>
       </form>
-    </section>
+    </div>
   `;
 }
 
@@ -1855,9 +1848,6 @@ function renderManagerThreadList() {
   if (!rows.length) return `<div class="manager-message-empty">No conversations yet.</div>`;
   return `
     <div class="manager-message-thread-list">
-      <div class="pm-tabs">
-        ${["all", "unread", "archived"].map((key) => `<button type="button" class="${state.filters.messageView === key ? "active" : ""}" data-pm-message-view="${key}">${esc(titleCase(key))}</button>`).join("")}
-      </div>
       ${rows.map((thread) => `
         <button class="manager-message-thread ${thread.id === state.selectedThreadId ? "active" : ""} ${managerThreadUnread(thread) ? "unread" : ""}" type="button" data-manager-thread-id="${esc(thread.id)}">
           <strong>${esc(thread.subject || "Message")}</strong>
@@ -2005,87 +1995,6 @@ async function sendManagerReply(form) {
   renderManagerPortal();
 }
 
-async function uploadManagerAvatar(file) {
-  if (!supabase) {
-    setTopbarProfileMessage("Supabase config is missing.", true);
-    return;
-  }
-  if (!file.type.startsWith("image/")) {
-    setTopbarProfileMessage("Choose an image file.", true);
-    return;
-  }
-  if (file.size > 5 * 1024 * 1024) {
-    setTopbarProfileMessage("Use an image smaller than 5 MB.", true);
-    return;
-  }
-  if (!state.user?.id) {
-    setTopbarProfileMessage("Sign in before uploading a profile picture.", true);
-    return;
-  }
-
-  setTopbarProfileMessage("Uploading picture...");
-  const path = `${state.user.id}/${Date.now()}-${safeStorageFileName(file.name)}`;
-  const { error: uploadError } = await supabase.storage
-    .from("profile-avatars")
-    .upload(path, file, { cacheControl: "3600", contentType: file.type, upsert: true });
-
-  if (uploadError) {
-    setTopbarProfileMessage("Unable to upload picture: " + uploadError.message, true);
-    return;
-  }
-
-  const { data: publicData } = supabase.storage.from("profile-avatars").getPublicUrl(path);
-  const avatarUrl = publicData?.publicUrl || "";
-  let result = await supabase
-    .from("profiles")
-    .update({ avatar_url: avatarUrl, avatar_path: path })
-    .eq("id", state.user.id)
-    .select("id,role,full_name,email,status,property_manager_property_id,requested_property_name,avatar_url,avatar_path")
-    .maybeSingle();
-
-  if (result.error && isMissingManagerAvatarColumn(result.error)) {
-    await supabase.auth.updateUser({ data: { avatar_url: avatarUrl } });
-    result = { data: { ...state.profile, avatar_url: avatarUrl }, error: null };
-  }
-
-  if (result.error) {
-    setTopbarProfileMessage("Uploaded, but profile update failed: " + result.error.message, true);
-    return;
-  }
-
-  state.profile = { ...state.profile, ...(result.data || {}), avatar_url: avatarUrl };
-  state.user = {
-    ...state.user,
-    user_metadata: { ...(state.user.user_metadata || {}), avatar_url: avatarUrl }
-  };
-  const profile = managerProfileDefaults();
-  paintManagerAvatar("topUserAvatar", profile);
-  paintManagerAvatar("topProfileAvatarLarge", profile);
-  setTopbarProfileMessage("Profile picture updated.");
-}
-
-function paintManagerAvatar(id, profile) {
-  const avatar = document.getElementById(id);
-  if (!avatar) return;
-  avatar.innerHTML = profile.avatarUrl ? `<img src="${esc(profile.avatarUrl)}" alt="" />` : esc(profile.initials);
-}
-
-function setTopbarProfileMessage(text, isError = false) {
-  const message = document.getElementById("topProfileMessage");
-  if (!message) return;
-  message.textContent = text || "";
-  message.classList.toggle("error", Boolean(isError));
-}
-
-function safeStorageFileName(name) {
-  return String(name || "avatar.png").toLowerCase().replace(/[^a-z0-9.]+/g, "-").replace(/^-|-$/g, "") || "avatar.png";
-}
-
-function isMissingManagerAvatarColumn(error) {
-  const message = String(error?.message || "").toLowerCase();
-  return message.includes("avatar_url") || message.includes("avatar_path") || message.includes("schema cache");
-}
-
 async function markManagerThreadRead(threadId) {
   if (!supabase || !threadId) return;
   const { error } = await supabase.rpc("mark_message_thread_read", { target_thread_id: threadId });
@@ -2161,11 +2070,6 @@ document.addEventListener("click", async (event) => {
   if (event.target.closest("[data-manager-account-toggle]")) {
     state.accountMenuOpen = !state.accountMenuOpen;
     renderManagerPortal();
-    return;
-  }
-
-  if (event.target.closest("[data-manager-avatar-upload]")) {
-    document.getElementById("managerAvatarInput")?.click();
     return;
   }
 
@@ -2285,15 +2189,7 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
-document.addEventListener("change", async (event) => {
-  const avatarInput = event.target.closest("[data-manager-avatar-input]");
-  if (avatarInput) {
-    const file = avatarInput.files?.[0];
-    if (file) await uploadManagerAvatar(file);
-    avatarInput.value = "";
-    return;
-  }
-
+document.addEventListener("change", (event) => {
   const scheduleDate = event.target.closest("[data-pm-schedule-date]");
   if (scheduleDate) {
     setScheduleDate(scheduleDate.value);
@@ -2311,6 +2207,10 @@ document.addEventListener("submit", async (event) => {
   if (event.target.matches("#managerNewThreadForm")) {
     event.preventDefault();
     await createManagerMessageThread(event.target);
+    if (!state.error) {
+      state.requestOpen = false;
+      renderManagerPortal();
+    }
   }
   if (event.target.matches("#managerFeedbackForm")) {
     event.preventDefault();

@@ -1947,9 +1947,9 @@ body.admin-command-body[data-portal-role="property-manager"] .topbar-profile-mes
   color: var(--pm-muted);
   display: grid;
   gap: 8px;
-  grid-template-columns: 18px minmax(190px, 1fr) auto;
+  grid-template-columns: 18px minmax(0, 1fr);
   min-height: 38px;
-  min-width: min(34vw, 320px);
+  min-width: 0;
   padding: 0 10px;
 }
 
@@ -2002,7 +2002,8 @@ body.admin-command-body[data-portal-role="property-manager"] .topbar-profile-mes
 }
 
 .pm-local-search {
-  min-width: min(100%, 300px);
+  max-width: 320px;
+  width: min(100%, 320px);
 }
 
 .pm-notification {
@@ -2253,6 +2254,99 @@ body.admin-command-body[data-portal-role="property-manager"] .topbar-profile-mes
   grid-template-columns: minmax(250px, 0.29fr) minmax(0, 0.46fr) minmax(260px, 0.25fr);
 }
 
+.pm-messages-workspace {
+  display: grid;
+  grid-template-columns: minmax(250px, 310px) minmax(0, 1fr);
+  min-height: calc(100vh - 126px);
+  overflow: hidden;
+  padding: 0;
+}
+
+.pm-message-sidebar {
+  border-right: 1px solid rgba(126, 158, 188, 0.16);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+}
+
+.pm-message-sidebar-head {
+  align-items: center;
+  border-bottom: 1px solid rgba(126, 158, 188, 0.16);
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 12px;
+}
+
+.pm-message-sidebar-head h2 {
+  color: var(--pm-text);
+  font-size: 14px;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.pm-message-sidebar-head p {
+  color: var(--pm-muted);
+  font-size: 11px;
+  margin: 4px 0 0;
+}
+
+.pm-message-compose-icon {
+  align-items: center;
+  display: inline-flex;
+  flex: 0 0 34px;
+  height: 34px;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0;
+  width: 34px;
+}
+
+.pm-message-display {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  min-height: 0;
+  min-width: 0;
+  padding: 14px;
+}
+
+.pm-message-display > .manager-message-empty {
+  align-self: center;
+}
+
+.pm-message-display .manager-message-bubbles {
+  align-content: start;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.pm-message-display .manager-message-form.compact {
+  align-self: end;
+  background: rgba(7, 21, 36, 0.72);
+  border: 1px solid rgba(126, 158, 188, 0.14);
+  border-radius: 7px;
+  margin-top: 12px;
+  padding: 10px;
+}
+
+.pm-message-compose-panel {
+  align-self: start;
+  display: grid;
+  gap: 12px;
+  max-width: 760px;
+  width: 100%;
+}
+
+.pm-message-compose-panel .pm-inline-form {
+  max-width: 720px;
+}
+
+.pm-message-sidebar .manager-message-thread-list {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px;
+}
+
 .pm-panel {
   display: grid;
   gap: 12px;
@@ -2341,7 +2435,7 @@ body.admin-command-body[data-portal-role="property-manager"] .topbar-profile-mes
 }
 
 .pm-toolbar .pm-search {
-  flex: 1 1 280px;
+  flex: 0 1 320px;
 }
 
 .pm-action-banner {
@@ -3366,8 +3460,24 @@ body.admin-command-body[data-portal-role="property-manager"] .topbar-profile-mes
   .pm-overview-grid,
   .pm-workspace-grid,
   .pm-two-column-grid,
-  .pm-message-grid {
+  .pm-message-grid,
+  .pm-messages-workspace {
     grid-template-columns: 1fr;
+  }
+
+  .pm-messages-workspace {
+    min-height: auto;
+    overflow: visible;
+  }
+
+  .pm-message-sidebar {
+    border-bottom: 1px solid rgba(126, 158, 188, 0.16);
+    border-right: 0;
+    max-height: 360px;
+  }
+
+  .pm-message-display {
+    min-height: 520px;
   }
 
   .pm-video-overview {
