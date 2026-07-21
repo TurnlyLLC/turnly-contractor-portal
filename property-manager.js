@@ -14,6 +14,7 @@ const state = {
   user: null,
   profile: null,
   property: null,
+  propertyLinkPending: false,
   client: null,
   units: [],
   assignments: [],
@@ -195,11 +196,26 @@ function rowMeta(row) {
   return {};
 }
 
+function hasLinkedProperty() {
+  return Boolean(state.property?.id);
+}
+
+function propertyLinkPendingMessage() {
+  const requested = state.profile?.requested_property_name
+    ? ` Requested property: ${state.profile.requested_property_name}.`
+    : "";
+  if (state.profile?.access_setup_error) {
+    return "Your account is active, but Turnly still needs to finish the property-link setup before data can be matched to this dashboard.";
+  }
+  return `Your account is active. A Turnly admin still needs to link your account to a property before property data appears.${requested}`;
+}
+
 function propertyTitle(property = state.property) {
-  return property?.name || property?.property_name || property?.company_name || "Linked Property";
+  return property?.name || property?.property_name || property?.company_name || "Property Manager Dashboard";
 }
 
 function propertyAddress(property = state.property) {
+  if (!property?.id) return "Waiting for admin property link";
   return property?.address || compact([property?.city, property?.state, property?.postal_code]).join(", ") || "No address on file";
 }
 
@@ -421,7 +437,7 @@ async function requireManagerAccess() {
 
   let { data: profile, error } = await supabase
     .from("profiles")
-    .select("id,role,full_name,email,status,property_manager_property_id")
+    .select("id,role,full_name,email,status,property_manager_property_id,requested_property_name")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -446,16 +462,23 @@ async function requireManagerAccess() {
     return;
   }
 
-  if (!isActiveProfile(profile)) {
-    renderLockedState("Approval pending", "A Turnly admin must approve this property manager account before property data is visible.");
-    return;
-  }
+  state.user = user;
+  state.profile = profile;
+  state.view = currentView();
 
   if (!profile.property_manager_property_id) {
-    const setupText = profile.access_setup_error
-      ? "This account is approved, but the account-access migration is still needed before a property can be linked."
-      : "A Turnly admin must link this property manager account to a specific property before any property data is visible.";
-    renderLockedState("Property link required", setupText);
+    state.property = null;
+    state.propertyLinkPending = true;
+    state.client = null;
+    state.units = [];
+    state.assignments = [];
+    state.qaJobs = [];
+    state.videos = [];
+    state.dataMessage = propertyLinkPendingMessage();
+    state.dataError = false;
+    renderManagerPortal();
+    await loadManagerMessages();
+    renderManagerPortal();
     return;
   }
 
@@ -470,16 +493,20 @@ async function requireManagerAccess() {
     return;
   }
 
-  state.user = user;
-  state.profile = profile;
   state.property = property;
-  state.view = currentView();
+  state.propertyLinkPending = false;
   renderManagerPortal(true);
   await refreshManagerPortal();
 }
 
 async function refreshManagerPortal() {
-  if (!state.property?.id || state.refreshing) return;
+  if (state.refreshing) return;
+  if (!state.property?.id) {
+    state.dataMessage = propertyLinkPendingMessage();
+    state.dataError = false;
+    renderManagerPortal();
+    return;
+  }
   state.refreshing = true;
   state.dataMessage = "Refreshing property data...";
   state.dataError = false;
@@ -673,7 +700,9 @@ function renderManagerPortal(loading = false) {
   setActiveNav();
   const [title, subtitle] = viewLabels[state.view] || viewLabels.overview;
   const headingTitle = state.view === "overview" ? propertyTitle() : title;
-  const headingSubtitle = state.view === "overview" ? "Your assigned property overview." : subtitle;
+  const headingSubtitle = state.view === "overview"
+    ? (hasLinkedProperty() ? "Your assigned property overview." : "Dashboard access is active while your property link is being set up.")
+    : subtitle;
 
   managerMain.innerHTML = `
     <header class="command-header pm-page-header">
@@ -684,8 +713,25 @@ function renderManagerPortal(loading = false) {
       ${renderTopBar()}
     </header>
     ${renderDataStatus(loading)}
+    ${renderPropertyLinkNotice()}
     ${renderRequestForm()}
     ${renderCurrentView()}
+  `;
+}
+
+function renderPropertyLinkNotice() {
+  if (hasLinkedProperty()) return "";
+  return `
+    <section class="panel-card pm-link-pending-panel">
+      <div class="pm-panel-head">
+        <div>
+          <p class="pm-eyebrow">Property Link Pending</p>
+          <h2>Dashboard access is active</h2>
+          <p>${esc(propertyLinkPendingMessage())}</p>
+        </div>
+        <button class="secondary-command-btn pm-compact-btn" type="button" data-pm-view-button="messages">Message Turnly</button>
+      </div>
+    </section>
   `;
 }
 
@@ -742,6 +788,13 @@ function statCard(label, value, caption, tone = "green", view = "") {
   `;
 }
 
+function renderNewTurnRequestButton(label = "+ New Turn Request") {
+  if (!hasLinkedProperty()) {
+    return `<button class="secondary-command-btn pm-compact-btn" type="button" disabled>Property Link Pending</button>`;
+  }
+  return `<button class="new-btn pm-compact-btn" type="button" data-manager-request-toggle>${esc(label)}</button>`;
+}
+
 function panel(title, content, options = {}) {
   const className = options.className ? ` ${options.className}` : "";
   const action = options.action || "";
@@ -773,7 +826,7 @@ function renderOverviewView() {
     <section class="pm-overview-grid">
       ${panel("Turn Requests", renderOverviewRequests(), {
         className: "pm-overview-requests",
-        action: `<button class="new-btn pm-compact-btn" type="button" data-manager-request-toggle>+ New Turn Request</button>`
+        action: renderNewTurnRequestButton()
       })}
       <aside class="pm-side-stack">
         ${panel("Schedule Snapshot", renderScheduleSnapshot(), {
@@ -843,7 +896,7 @@ function renderRequestToolbar(placeholder = "Search...", includeNew = false) {
       <select aria-label="Unit type"><option>Unit Type</option><option>Standard Turn</option><option>Deep Clean</option><option>Inspection</option></select>
       <select aria-label="Priority"><option>Priority</option><option>Normal</option><option>High</option><option>Urgent</option></select>
       <select aria-label="Date range"><option>All Time</option><option>This Week</option><option>Next Week</option></select>
-      ${includeNew ? `<button class="new-btn pm-compact-btn" type="button" data-manager-request-toggle>+ New Turn Request</button>` : ""}
+      ${includeNew ? renderNewTurnRequestButton() : ""}
     </section>
   `;
 }
@@ -952,7 +1005,7 @@ function renderScheduleView() {
       </select>
       <select aria-label="Date range"><option>Date Range</option><option>This Week</option><option>Next Week</option></select>
       <select aria-label="Calendar view"><option>Week View</option><option>Day View</option><option>Month View</option></select>
-      <button class="new-btn pm-compact-btn" type="button" data-manager-request-toggle>+ New Turn Request</button>
+      ${renderNewTurnRequestButton()}
     </section>
     <section class="pm-stat-grid pm-stat-grid-four" aria-label="Schedule metrics">
       ${statCard("Today", integer(todayAssignments().length), "turns today", "green")}
@@ -1489,6 +1542,7 @@ function renderSupportView() {
 
 function renderRequestForm() {
   if (!state.requestOpen || state.view === "messages") return "";
+  if (!hasLinkedProperty()) return "";
   return `
     <section class="panel-card pm-request-form-panel">
       <div class="pm-panel-head">
@@ -1885,6 +1939,12 @@ document.addEventListener("click", async (event) => {
   }
 
   if (event.target.closest("[data-manager-request-toggle]")) {
+    if (!hasLinkedProperty()) {
+      state.dataMessage = propertyLinkPendingMessage();
+      state.dataError = false;
+      renderManagerPortal();
+      return;
+    }
     state.requestOpen = true;
     renderManagerPortal();
     return;

@@ -100,7 +100,7 @@ if (!supabase) {
     if (!profile) {
       window.location.href = "contractor-login.html";
     } else if (role === "property_manager") {
-      window.location.href = "property-manager-login.html";
+      window.location.href = "property-manager.html";
     } else if (role !== "contractor") {
       window.location.href = getPortalHome(role);
     } else if (!isActiveProfile(profile)) {

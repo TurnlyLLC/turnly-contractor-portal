@@ -53,7 +53,7 @@ function escapeHtml(value) {
 
 function getInitialStatus(role = pageRole) {
   const normalizedRole = normalizeRole(role);
-  return ["contractor", "property_manager"].includes(normalizedRole) ? "pending" : "active";
+  return normalizedRole === "contractor" ? "pending" : "active";
 }
 
 function setMessageTone(tone = "") {
@@ -169,7 +169,8 @@ async function syncSignupProfile(user, details) {
     full_name: details.fullName,
     phone: details.phone,
     role,
-    status
+    status,
+    contractor_approved: status === "active"
   };
 
   if (role === "property_manager") {
