@@ -2256,7 +2256,7 @@ body.admin-command-body[data-portal-role="property-manager"] .topbar-profile-mes
 
 .pm-messages-workspace {
   display: grid;
-  grid-template-columns: minmax(250px, 310px) minmax(0, 1fr);
+  grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
   min-height: calc(100vh - 126px);
   overflow: hidden;
   padding: 0;
@@ -2273,14 +2273,14 @@ body.admin-command-body[data-portal-role="property-manager"] .topbar-profile-mes
   align-items: center;
   border-bottom: 1px solid rgba(126, 158, 188, 0.16);
   display: flex;
-  gap: 10px;
+  gap: 8px;
   justify-content: space-between;
-  padding: 12px;
+  padding: 9px 10px;
 }
 
 .pm-message-sidebar-head h2 {
   color: var(--pm-text);
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.2;
   margin: 0;
 }
@@ -2294,12 +2294,12 @@ body.admin-command-body[data-portal-role="property-manager"] .topbar-profile-mes
 .pm-message-compose-icon {
   align-items: center;
   display: inline-flex;
-  flex: 0 0 34px;
-  height: 34px;
+  flex: 0 0 30px;
+  height: 30px;
   justify-content: center;
-  min-height: 34px;
+  min-height: 30px;
   padding: 0;
-  width: 34px;
+  width: 30px;
 }
 
 .pm-message-display {
@@ -2344,7 +2344,7 @@ body.admin-command-body[data-portal-role="property-manager"] .topbar-profile-mes
 .pm-message-sidebar .manager-message-thread-list {
   min-height: 0;
   overflow-y: auto;
-  padding: 8px;
+  padding: 6px;
 }
 
 .pm-panel {
@@ -3249,6 +3249,12 @@ body.admin-command-body[data-portal-role="property-manager"] .topbar-profile-mes
   text-align: left;
 }
 
+.pm-message-sidebar .manager-message-thread {
+  gap: 5px;
+  min-width: 0;
+  padding: 7px 8px;
+}
+
 .manager-message-thread.active,
 .manager-message-thread:hover,
 .manager-message-thread:focus-visible {
@@ -3267,6 +3273,34 @@ body.admin-command-body[data-portal-role="property-manager"] .topbar-profile-mes
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pm-message-sidebar .manager-message-thread p {
+  font-size: 11px;
+  line-height: 1.25;
+  min-width: 0;
+}
+
+.pm-thread-meta {
+  align-items: baseline;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-width: 0;
+}
+
+.pm-thread-meta strong {
+  color: var(--pm-text);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pm-thread-meta time {
+  color: var(--pm-muted);
+  font-size: 10px;
   white-space: nowrap;
 }
 

@@ -1850,9 +1850,10 @@ function renderManagerThreadList() {
     <div class="manager-message-thread-list">
       ${rows.map((thread) => `
         <button class="manager-message-thread ${thread.id === state.selectedThreadId ? "active" : ""} ${managerThreadUnread(thread) ? "unread" : ""}" type="button" data-manager-thread-id="${esc(thread.id)}">
-          <strong>${esc(thread.subject || "Message")}</strong>
-          <small>${esc(managerParticipantLine(thread.id))}</small>
-          <span>${esc(formatManagerMessageTime(thread.last_message_at || thread.created_at))}</span>
+          <div class="pm-thread-meta">
+            <strong>${esc(managerParticipantLine(thread.id))}</strong>
+            <time datetime="${esc(thread.last_message_at || thread.created_at || "")}">${esc(formatManagerMessageTime(thread.last_message_at || thread.created_at))}</time>
+          </div>
           <p>${esc(thread.last_message_preview || "No messages yet.")}</p>
         </button>
       `).join("")}
