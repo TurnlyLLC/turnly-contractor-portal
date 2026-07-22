@@ -17,16 +17,9 @@
   const path = window.location.pathname.toLowerCase();
   if (path.endsWith("/reset-password.html")) return;
 
-  const portalFromPath = path.includes("property-manager")
-    ? "property_manager"
-    : "contractor";
-  const portal = searchParams.get("portal") ||
-    hashParams.get("portal") ||
-    window.localStorage?.getItem("turnly_reset_portal") ||
-    portalFromPath;
   const target = new URL("/reset-password.html", window.location.origin);
   target.search = window.location.search;
-  target.searchParams.set("portal", portal);
+  target.searchParams.delete("portal");
   target.hash = window.location.hash;
   window.location.replace(target.toString());
 })();

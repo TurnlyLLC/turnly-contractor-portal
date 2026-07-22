@@ -33,8 +33,7 @@ function authCallbackUrl(role = pageRole, intent = "") {
   return url.toString();
 }
 
-function passwordResetUrl(role = pageRole) {
-  window.localStorage?.setItem("turnly_reset_portal", normalizeRole(role));
+function passwordResetUrl() {
   return "https://portal.turnlypros.com/reset-password.html";
 }
 

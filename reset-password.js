@@ -7,19 +7,12 @@ const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
 
 const searchParams = new URLSearchParams(window.location.search);
 const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-const preferredPortal = normalizeRole(
-  searchParams.get("portal") ||
-  hashParams.get("portal") ||
-  window.localStorage?.getItem("turnly_reset_portal") ||
-  "contractor"
-);
 
 const titleEl = document.getElementById("resetTitle");
 const messageEl = document.getElementById("resetMessage");
 const actionEl = document.getElementById("resetAction");
 const requestForm = document.getElementById("resetRequestForm");
 const passwordForm = document.getElementById("resetPasswordForm");
-const resetPortal = document.getElementById("resetPortal");
 const resetEmail = document.getElementById("resetEmail");
 const recoveryType = normalizeToken(searchParams.get("type") || hashParams.get("type"));
 const hasRecoveryParams = recoveryType === "recovery" ||
@@ -50,10 +43,6 @@ if (supabase) {
   });
 }
 
-if (resetPortal) {
-  resetPortal.value = preferredPortal === "property_manager" ? "property_manager" : "contractor";
-}
-
 function normalizeToken(value) {
   return String(value || "")
     .trim()
@@ -61,18 +50,11 @@ function normalizeToken(value) {
     .replace(/[\s-]+/g, "_");
 }
 
-function normalizeRole(role) {
-  return normalizeToken(role) || "contractor";
-}
-
 function loginFallback() {
-  return preferredPortal === "property_manager"
-    ? "property-manager-login.html"
-    : "contractor-login.html";
+  return "index.html";
 }
 
-function passwordResetUrl(role = preferredPortal) {
-  window.localStorage?.setItem("turnly_reset_portal", normalizeRole(role));
+function passwordResetUrl() {
   return "https://portal.turnlypros.com/reset-password.html";
 }
 
@@ -194,7 +176,6 @@ requestForm?.addEventListener("submit", async (event) => {
   }
 
   const email = resetEmail?.value.trim().toLowerCase() || "";
-  const role = normalizeRole(resetPortal?.value || preferredPortal);
 
   if (!email) {
     showStatus("Send yourself a reset link", "Enter the email address for your Turnly account.", "error");
@@ -210,7 +191,7 @@ requestForm?.addEventListener("submit", async (event) => {
   showStatus("Sending reset link", "Supabase is sending the password reset email...");
 
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: passwordResetUrl(role)
+    redirectTo: passwordResetUrl()
   });
 
   if (button) {
@@ -234,7 +215,7 @@ passwordForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
 
   if (!supabase) {
-    showStatus("Password reset unavailable", "Supabase config is missing.", "error", loginFallback(), "Return To Log In");
+    showStatus("Password reset unavailable", "Supabase config is missing.", "error", loginFallback(), "Return To Portal Home");
     return;
   }
 
@@ -263,9 +244,8 @@ passwordForm?.addEventListener("submit", async (event) => {
   }
 
   passwordForm.hidden = true;
-  window.localStorage?.removeItem("turnly_reset_portal");
   await supabase.auth.signOut();
-  showStatus("Password updated", "Your password was updated. You can log in with the new password now.", "success", loginFallback(), "Return To Log In");
+  showStatus("Password updated", "Your password was updated. You can log in with the new password now.", "success", loginFallback(), "Return To Portal Home");
 });
 
 initializeReset().catch((error) => {
