@@ -16,9 +16,13 @@ const portalByRole = {
 const titleEl = document.getElementById("callbackTitle");
 const messageEl = document.getElementById("callbackMessage");
 const actionEl = document.getElementById("callbackAction");
+const passwordForm = document.getElementById("callbackPasswordForm");
 const searchParams = new URLSearchParams(window.location.search);
 const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
 const preferredPortal = normalizeRole(searchParams.get("portal") || hashParams.get("portal") || "contractor");
+const callbackIntent = normalizeToken(searchParams.get("intent") || hashParams.get("intent"));
+const callbackType = normalizeToken(searchParams.get("type") || hashParams.get("type"));
+const isPasswordRecovery = callbackIntent === "password_reset" || callbackType === "recovery";
 
 function normalizeToken(value) {
   return String(value || "")
@@ -31,7 +35,13 @@ function normalizeRole(role) {
   return normalizeToken(role) || "contractor";
 }
 
-function showStatus(title, message, tone = "", actionHref = "") {
+function loginFallback() {
+  return preferredPortal === "property_manager"
+    ? "property-manager-login.html"
+    : "contractor-login.html";
+}
+
+function showStatus(title, message, tone = "", actionHref = "", actionText = "") {
   if (titleEl) titleEl.textContent = title;
   if (messageEl) {
     messageEl.textContent = message;
@@ -44,6 +54,7 @@ function showStatus(title, message, tone = "", actionHref = "") {
   if (actionEl) {
     actionEl.hidden = !actionHref;
     if (actionHref) actionEl.href = actionHref;
+    if (actionText) actionEl.textContent = actionText;
   }
 }
 
@@ -141,6 +152,11 @@ async function routeUser() {
     throw new Error("We could not finish signing you in. Please return to the portal and log in.");
   }
 
+  if (isPasswordRecovery) {
+    showPasswordResetForm();
+    return;
+  }
+
   showStatus("Email verified", "Your account is verified. Taking you to the right dashboard...", "success");
 
   const profile = await waitForProfile(user.id);
@@ -155,14 +171,67 @@ async function routeUser() {
   }, 700);
 }
 
+function showPasswordResetForm() {
+  if (passwordForm) passwordForm.hidden = false;
+  showStatus(
+    "Set a new password",
+    "Enter a new password for your Turnly account.",
+    "success",
+    "",
+    ""
+  );
+}
+
+function setPasswordFormLoading(isLoading) {
+  const button = passwordForm?.querySelector("button[type='submit']");
+  if (!button) return;
+  button.disabled = isLoading;
+  button.textContent = isLoading ? "Updating Password..." : "Update Password";
+}
+
+passwordForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  if (!supabase) {
+    showStatus("Password reset unavailable", "Supabase config is missing.", "error", loginFallback(), "Return To Log In");
+    return;
+  }
+
+  const password = document.getElementById("callbackNewPassword")?.value || "";
+  const verifyPassword = document.getElementById("callbackVerifyPassword")?.value || "";
+
+  if (password.length < 6) {
+    showStatus("Set a new password", "Password must be at least 6 characters.", "error");
+    return;
+  }
+
+  if (password !== verifyPassword) {
+    showStatus("Set a new password", "Passwords do not match.", "error");
+    return;
+  }
+
+  setPasswordFormLoading(true);
+  showStatus("Updating password", "Saving your new password...");
+
+  const { error } = await supabase.auth.updateUser({ password });
+  setPasswordFormLoading(false);
+
+  if (error) {
+    showStatus("Password reset failed", error.message, "error");
+    return;
+  }
+
+  passwordForm.hidden = true;
+  await supabase.auth.signOut();
+  showStatus("Password updated", "Your password was updated. You can log in with the new password now.", "success", loginFallback(), "Return To Log In");
+});
+
 routeUser().catch((error) => {
-  const fallback = preferredPortal === "property_manager"
-    ? "property-manager-login.html"
-    : "contractor-login.html";
   showStatus(
     "Verification needs another try",
     error?.message || "This verification link could not be completed.",
     "error",
-    fallback
+    loginFallback(),
+    "Return To Log In"
   );
 });

@@ -63,6 +63,20 @@
             </label>
           </div>
           <button class="public-btn primary full" type="submit">Log In</button>
+          <div class="auth-helper-row">
+            <button class="auth-text-action" type="button" data-auth-mode="reset">Forgot your password?</button>
+          </div>
+        </form>
+
+        <form id="resetPasswordForm" class="public-form auth-panel" data-auth-panel="reset">
+          <div class="public-form-grid">
+            <label class="span-two">
+              Email
+              <input type="email" id="resetEmail" autocomplete="email" required />
+            </label>
+          </div>
+          <button class="public-btn primary full" type="submit">Send Reset Link</button>
+          <button class="public-btn secondary full" type="button" data-auth-mode="login">Back To Log In</button>
         </form>
 
         <form id="signupForm" class="public-form auth-panel" data-auth-panel="signup">
@@ -102,6 +116,6 @@
 
   <script src="env.js"></script>
   <script type="module" src="pwa-register.js?v=20260708a"></script>
-  <script type="module" src="portal-auth.js?v=20260721-pm-role-repair"></script>
+  <script type="module" src="portal-auth.js?v=20260722-password-reset"></script>
 </body>
 </html>

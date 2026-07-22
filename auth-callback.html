@@ -50,6 +50,20 @@
           Hold tight while we finish signing you in.
         </p>
 
+        <form id="callbackPasswordForm" class="public-form callback-reset-form" hidden>
+          <div class="public-form-grid">
+            <label class="span-two">
+              New Password
+              <input type="password" id="callbackNewPassword" autocomplete="new-password" minlength="6" required />
+            </label>
+            <label class="span-two">
+              Verify Password
+              <input type="password" id="callbackVerifyPassword" autocomplete="new-password" minlength="6" required />
+            </label>
+          </div>
+          <button class="public-btn primary full" type="submit">Update Password</button>
+        </form>
+
         <a id="callbackAction" class="public-btn primary full" href="index.html" hidden>
           Return To Portal Home
         </a>
@@ -58,6 +72,6 @@
   </div>
 
   <script src="env.js"></script>
-  <script type="module" src="auth-callback.js?v=20260721-pm-role-repair"></script>
+  <script type="module" src="auth-callback.js?v=20260722-password-reset"></script>
 </body>
 </html>

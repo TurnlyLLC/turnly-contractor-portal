@@ -11,6 +11,7 @@ const pageLabel = document.body.dataset.authLabel || "Portal";
 const isPropertyManagerPortal = pageRole === "property_manager";
 const loginForm = document.getElementById("loginForm");
 const signupForm = document.getElementById("signupForm");
+const resetPasswordForm = document.getElementById("resetPasswordForm");
 const authMessage = document.getElementById("authMessage");
 
 let pendingVerificationEmail = "";
@@ -25,9 +26,10 @@ const portalByRole = {
   sales_team: "sales.html"
 };
 
-function authCallbackUrl(role = pageRole) {
+function authCallbackUrl(role = pageRole, intent = "") {
   const url = new URL("auth-callback.html", window.location.origin);
   url.searchParams.set("portal", normalizeRole(role));
+  if (intent) url.searchParams.set("intent", intent);
   return url.toString();
 }
 
@@ -148,6 +150,12 @@ function setFormLoading(form, isLoading, loadingText, readyText) {
 
 function showMode(mode) {
   clearPendingVerification();
+
+  if (mode === "reset") {
+    const resetEmail = document.getElementById("resetEmail");
+    const loginEmail = value("loginEmail");
+    if (resetEmail && loginEmail && !resetEmail.value) resetEmail.value = loginEmail;
+  }
 
   document.querySelectorAll("[data-auth-mode]").forEach((button) => {
     button.classList.toggle("active", button.dataset.authMode === mode);
@@ -343,6 +351,37 @@ loginForm?.addEventListener("submit", async (event) => {
     showMessage(routeError?.message || "Unable to finish login. Please try again.", "error");
     setFormLoading(loginForm, false, "Logging In...", "Log In");
   }
+});
+
+resetPasswordForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  if (!supabase) {
+    showMessage("Supabase config is missing.", "error");
+    return;
+  }
+
+  const email = value("resetEmail").toLowerCase();
+  if (!email) {
+    showMessage("Enter the email address for your Turnly account.", "error");
+    return;
+  }
+
+  setFormLoading(resetPasswordForm, true, "Sending Reset Link...", "Send Reset Link");
+  showMessage("Sending password reset link...");
+
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: authCallbackUrl(pageRole, "password-reset")
+  });
+
+  setFormLoading(resetPasswordForm, false, "Sending Reset Link...", "Send Reset Link");
+
+  if (error) {
+    showMessage(error.message, "error");
+    return;
+  }
+
+  showMessage("If that email has a Turnly account, a password reset link has been sent. Check spam or promotions if it is not in the inbox.", "success");
 });
 
 signupForm?.addEventListener("submit", async (event) => {
