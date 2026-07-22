@@ -387,6 +387,10 @@ function missingColumnError(error) {
   return /column .* does not exist|relation .* does not exist|could not find .* column|schema cache/i.test(message);
 }
 
+function errorMessage(error, fallback = "Unknown error") {
+  return String(error?.message || error?.details || error || fallback);
+}
+
 function recordPrimaryIds(row = {}) {
   const meta = rowMeta(row);
   return [
@@ -880,11 +884,17 @@ async function refreshManagerPortal() {
   state.dataError = false;
   renderManagerPortal(true);
 
-  await loadManagerData();
-  await loadManagerMessages();
-
-  state.refreshing = false;
-  renderManagerPortal();
+  try {
+    await loadManagerData();
+    await loadManagerMessages();
+  } catch (error) {
+    console.error("[property-manager] Portal refresh failed", error);
+    state.dataMessage = `Unable to finish loading property data: ${errorMessage(error)}.`;
+    state.dataError = true;
+  } finally {
+    state.refreshing = false;
+    renderManagerPortal();
+  }
 }
 
 async function loadManagerData() {
@@ -916,12 +926,15 @@ async function loadManagerData() {
     if (result.status === "rejected") notes.push(result.reason?.message || "Some property data could not be loaded.");
   }
 
-  const [qaNote, videoNote] = await Promise.all([
+  const [qaResult, videoResult] = await Promise.allSettled([
     loadManagerQaJobs(),
     loadManagerVideos()
   ]);
-  if (qaNote) notes.push(qaNote);
-  if (videoNote) notes.push(videoNote);
+
+  if (qaResult.status === "fulfilled" && qaResult.value) notes.push(qaResult.value);
+  if (qaResult.status === "rejected") notes.push(`QA review details are limited right now: ${errorMessage(qaResult.reason)}.`);
+  if (videoResult.status === "fulfilled" && videoResult.value) notes.push(videoResult.value);
+  if (videoResult.status === "rejected") notes.push(`Unit videos are limited right now: ${errorMessage(videoResult.reason)}.`);
 
   state.dataMessage = notes.length ? notes.join(" ") : `Property data synced: ${state.assignments.length} jobs and ${state.units.length} units loaded.`;
   state.dataError = notes.some((note) => /^Unable|^Some|unavailable/i.test(note));
@@ -2678,4 +2691,15 @@ window.addEventListener("hashchange", () => {
   renderManagerPortal();
 });
 
-await requireManagerAccess();
+try {
+  await requireManagerAccess();
+} catch (error) {
+  console.error("[property-manager] Portal startup failed", error);
+  state.dataMessage = `Unable to load the property manager portal: ${errorMessage(error)}.`;
+  state.dataError = true;
+  if (state.user || state.profile) {
+    renderManagerPortal();
+  } else {
+    renderLockedState("Portal loading error", state.dataMessage);
+  }
+}
