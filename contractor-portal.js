@@ -284,6 +284,45 @@ function assignmentSubtitle(item) {
   return [item.address, item.service_type].filter(Boolean).join(" - ") || "Details pending";
 }
 
+function assignmentMetadata(item = {}) {
+  const meta = item.metadata;
+  if (meta && typeof meta === "object" && !Array.isArray(meta)) return meta;
+  if (typeof meta === "string" && meta.trim()) {
+    try {
+      const parsed = JSON.parse(meta);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+function assignmentUnitLabel(item = {}) {
+  const meta = assignmentMetadata(item);
+  const raw = item.unit_number || item.unit_name || meta.unit_number || meta.unit_name || meta.unit_id || "";
+  const text = String(raw || "").trim();
+  if (!text) return "";
+  return /^(unit\b|#)/i.test(text) ? text : `Unit ${text}`;
+}
+
+function assignmentSquareFeetLabel(item = {}) {
+  const meta = assignmentMetadata(item);
+  const raw = item.unit_square_feet || item.square_feet || item.sq_ft || item.sqft ||
+    meta.unit_square_feet || meta.square_feet || meta.sq_ft || meta.sqft || "";
+  const text = String(raw || "").trim();
+  if (!text) return "";
+  const number = Number(text.replace(/,/g, "").replace(/[^\d.]/g, ""));
+  if (Number.isFinite(number) && number > 0) return `${number.toLocaleString()} sq ft`;
+  return /\bsq\s*ft\b/i.test(text) ? text : "";
+}
+
+function renderAssignmentUnitLine(item = {}) {
+  const details = [assignmentUnitLabel(item), assignmentSquareFeetLabel(item)].filter(Boolean);
+  if (!details.length) return "";
+  return `<div class="cp-job-unit-row">${details.map((detail) => `<span>${esc(detail)}</span>`).join("")}</div>`;
+}
+
 function isClosedAssignment(item) {
   return closedAssignmentStatuses.has(normalizeToken(item?.status))
     || Boolean(item?.completed_at || item?.completed_by || item?.checklist_completed_at);
@@ -371,17 +410,8 @@ function isPaidAssignment(item) {
 }
 
 function assignmentPaymentMetadata(item = {}) {
-  const meta = item.metadata;
-  if (meta && typeof meta === "object" && !Array.isArray(meta) && meta.payment && typeof meta.payment === "object") return meta.payment;
-  if (typeof meta === "string" && meta.trim()) {
-    try {
-      const parsed = JSON.parse(meta);
-      return parsed?.payment && typeof parsed.payment === "object" ? parsed.payment : {};
-    } catch {
-      return {};
-    }
-  }
-  return {};
+  const meta = assignmentMetadata(item);
+  return meta.payment && typeof meta.payment === "object" ? meta.payment : {};
 }
 
 function acceptedPayAssignments() {
@@ -586,11 +616,13 @@ function assignmentRow(item, mode = "mine") {
   const status = item.status || "open";
   const actions = assignmentActions(item, mode);
   const openDetails = mode === "open";
+  const unitLine = openDetails ? renderAssignmentUnitLine(item) : "";
   return `
     <article class="cp-job-row ${openDetails ? "cp-job-row-clickable" : ""}" ${openDetails ? `data-open-job-details-id="${esc(item.id)}" role="button" tabindex="0" aria-label="View details for ${esc(assignmentTitle(item))}"` : ""}>
       <div class="cp-job-main">
         <strong>${esc(assignmentTitle(item))}</strong>
         <small>${esc(assignmentSubtitle(item))}</small>
+        ${unitLine}
       </div>
       <div class="cp-job-meta">
         <span>Schedule</span>
@@ -735,11 +767,13 @@ function homeJobCard(item, mode = "mine") {
   const status = item.status || "open";
   const actions = assignmentActions(item, mode);
   const openDetails = mode === "open";
+  const unitLine = openDetails ? renderAssignmentUnitLine(item) : "";
   return `
     <article class="cp-home-job-card ${openDetails ? "cp-job-row-clickable" : ""}" ${openDetails ? `data-open-job-details-id="${esc(item.id)}" role="button" tabindex="0" aria-label="View details for ${esc(assignmentTitle(item))}"` : ""}>
       <div class="cp-home-job-main">
         <strong>${esc(assignmentTitle(item))}</strong>
         <small>${esc(assignmentSubtitle(item))}</small>
+        ${unitLine}
       </div>
       <div class="cp-home-job-meta">
         <span>${esc(formatWindow(item))}</span>
@@ -952,7 +986,7 @@ function filteredMyAssignments() {
     if (state.filters.myStatus === "active" && ["completed", "cancelled", "declined"].includes(status)) return false;
     if (!["active", "all"].includes(state.filters.myStatus) && normalizeToken(state.filters.myStatus) !== status) return false;
     if (!term) return true;
-    return [item.title, item.property_name, item.address, item.service_type, item.scope, item.special_instructions]
+    return [item.title, item.property_name, item.address, item.service_type, assignmentUnitLabel(item), assignmentSquareFeetLabel(item), item.scope, item.special_instructions]
       .some((value) => String(value || "").toLowerCase().includes(term));
   }).sort((a, b) => dateValue(a.start_window) - dateValue(b.start_window));
 }
@@ -963,6 +997,8 @@ function renderSelectedJobDetail(item) {
     <div class="cp-detail-list">
       <div><span>Property</span><strong>${esc(assignmentTitle(item))}</strong></div>
       <div><span>Address</span><strong>${esc(item.address || "Not set")}</strong></div>
+      <div><span>Unit</span><strong>${esc(assignmentUnitLabel(item) || "Not set")}</strong></div>
+      <div><span>Square Feet</span><strong>${esc(assignmentSquareFeetLabel(item) || "Not set")}</strong></div>
       <div><span>Schedule</span><strong>${esc(formatWindow(item))}</strong></div>
       <div><span>Pay</span><strong>${esc(money(item.pay_amount))}</strong></div>
       <div><span>Scope</span><strong>${esc(item.scope || "No scope listed")}</strong></div>
@@ -1092,7 +1128,7 @@ function filteredOpenAssignments() {
     if (state.filters.payRange === "100-200" && (pay < 100 || pay > 200)) return false;
     if (state.filters.payRange === "200" && pay < 200) return false;
     if (!term) return true;
-    return [item.title, item.property_name, item.address, item.service_type, item.scope, item.special_instructions]
+    return [item.title, item.property_name, item.address, item.service_type, assignmentUnitLabel(item), assignmentSquareFeetLabel(item), item.scope, item.special_instructions]
       .some((value) => String(value || "").toLowerCase().includes(term));
   }).sort((a, b) => {
     const preferredSort = Number(isPreferredOffer(b)) - Number(isPreferredOffer(a));

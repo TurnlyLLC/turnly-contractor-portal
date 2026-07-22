@@ -545,6 +545,24 @@
   margin-top: 4px;
 }
 
+.cp-job-unit-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.cp-job-unit-row span {
+  background: rgba(54, 169, 255, 0.1);
+  border: 1px solid rgba(54, 169, 255, 0.24);
+  border-radius: 999px;
+  color: #cceaff;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 6px 8px;
+}
+
 .cp-home-job-meta {
   align-items: center;
   display: flex;
@@ -1458,6 +1476,7 @@
 .contractor-portal-body[data-dashboard-theme="light"] .cp-muted,
 .contractor-portal-body[data-dashboard-theme="light"] .cp-field span,
 .contractor-portal-body[data-dashboard-theme="light"] .cp-job-meta span,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-home-job-meta span,
 .contractor-portal-body[data-dashboard-theme="light"] .cp-mini-row span,
 .contractor-portal-body[data-dashboard-theme="light"] .cp-table th,
 .contractor-portal-body[data-dashboard-theme="light"] .cp-video-card small {
@@ -1490,6 +1509,7 @@
 }
 
 .contractor-portal-body[data-dashboard-theme="light"] .cp-job-row,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-home-job-card,
 .contractor-portal-body[data-dashboard-theme="light"] .cp-chat-item,
 .contractor-portal-body[data-dashboard-theme="light"] .cp-mini-row,
 .contractor-portal-body[data-dashboard-theme="light"] .cp-feed-item,
@@ -1499,6 +1519,12 @@
 .contractor-portal-body[data-dashboard-theme="light"] .cp-pay-card {
   background: #f8fbfd;
   border-color: var(--cp-line);
+}
+
+.contractor-portal-body[data-dashboard-theme="light"] .cp-job-unit-row span {
+  background: rgba(54, 169, 255, 0.12);
+  border-color: rgba(54, 169, 255, 0.24);
+  color: #1b5f95;
 }
 
 .contractor-portal-body[data-dashboard-theme="light"] .cp-ghost-action,
