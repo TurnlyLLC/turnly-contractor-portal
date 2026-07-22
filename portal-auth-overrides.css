@@ -33,19 +33,34 @@
   margin-top: -4px;
 }
 
-.auth-text-action {
+.public-form .auth-text-action,
+button.auth-text-action {
+  all: unset;
+  box-sizing: border-box;
+  display: inline;
+  min-height: 0;
+  width: auto;
   border: 0;
   background: transparent;
-  color: #12d687;
+  color: #60a5fa;
   cursor: pointer;
   font: inherit;
-  font-size: 13px;
-  font-weight: 900;
-  padding: 6px 8px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.4;
+  padding: 2px 0;
 }
 
-.auth-text-action:hover {
+.public-form .auth-text-action:hover,
+button.auth-text-action:hover {
+  color: #93c5fd;
   text-decoration: underline;
+}
+
+.auth-reset-actions {
+  display: grid;
+  gap: 10px;
+  justify-items: center;
 }
 
 .auth-resend-note {

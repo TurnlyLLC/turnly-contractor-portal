@@ -5,24 +5,20 @@ const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
   ? createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY)
   : null;
 
-const portalByRole = {
-  admin: "admin.html",
-  contractor: "contractor.html",
-  property_manager: "property-manager.html",
-  sales: "sales.html",
-  sales_team: "sales.html"
-};
-
-const titleEl = document.getElementById("callbackTitle");
-const messageEl = document.getElementById("callbackMessage");
-const actionEl = document.getElementById("callbackAction");
-const passwordForm = document.getElementById("callbackPasswordForm");
 const searchParams = new URLSearchParams(window.location.search);
 const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-const preferredPortal = normalizeRole(searchParams.get("portal") || hashParams.get("portal") || "contractor");
-const callbackIntent = normalizeToken(searchParams.get("intent") || hashParams.get("intent"));
-const callbackType = normalizeToken(searchParams.get("type") || hashParams.get("type"));
-let isPasswordRecovery = callbackIntent === "password_reset" || callbackType === "recovery";
+const preferredPortal = normalizeRole(
+  searchParams.get("portal") ||
+  hashParams.get("portal") ||
+  window.localStorage?.getItem("turnly_reset_portal") ||
+  "contractor"
+);
+
+const titleEl = document.getElementById("resetTitle");
+const messageEl = document.getElementById("resetMessage");
+const actionEl = document.getElementById("resetAction");
+const passwordForm = document.getElementById("resetPasswordForm");
+
 let recoveryEventSession = null;
 let recoveryEventResolved = false;
 let resolveRecoveryEvent = null;
@@ -36,8 +32,7 @@ const recoveryEventPromise = new Promise((resolve) => {
 
 if (supabase) {
   supabase.auth.onAuthStateChange((event, session) => {
-    if (event === "PASSWORD_RECOVERY") {
-      isPasswordRecovery = true;
+    if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") {
       recoveryEventSession = session || null;
       if (!recoveryEventResolved && resolveRecoveryEvent) {
         recoveryEventResolved = true;
@@ -64,6 +59,12 @@ function loginFallback() {
     : "contractor-login.html";
 }
 
+function getAuthError() {
+  const error = searchParams.get("error") || hashParams.get("error");
+  if (!error) return "";
+  return searchParams.get("error_description") || hashParams.get("error_description") || error;
+}
+
 function showStatus(title, message, tone = "", actionHref = "", actionText = "") {
   if (titleEl) titleEl.textContent = title;
   if (messageEl) {
@@ -81,40 +82,16 @@ function showStatus(title, message, tone = "", actionHref = "", actionText = "")
   }
 }
 
-function getAuthError() {
-  const error = searchParams.get("error") || hashParams.get("error");
-  if (!error) return "";
-  return searchParams.get("error_description") || hashParams.get("error_description") || error;
+function showPasswordForm() {
+  if (passwordForm) passwordForm.hidden = false;
+  showStatus("Set a new password", "Enter and confirm your new Turnly password.", "success");
 }
 
-async function getProfile(userId) {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("role, status, contractor_approved, property_manager_property_id")
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (!error) {
-    return data ? { ...data, role: normalizeRole(data.role) } : null;
-  }
-
-  const fallback = await supabase
-    .from("profiles")
-    .select("role, status")
-    .eq("id", userId)
-    .maybeSingle();
-
-  return fallback.data ? { ...fallback.data, role: normalizeRole(fallback.data.role) } : null;
-}
-
-async function waitForProfile(userId) {
-  for (let attempt = 0; attempt < 6; attempt += 1) {
-    const profile = await getProfile(userId);
-    if (profile?.role) return profile;
-    await new Promise((resolve) => setTimeout(resolve, 350));
-  }
-
-  return null;
+function setPasswordFormLoading(isLoading) {
+  const button = passwordForm?.querySelector("button[type='submit']");
+  if (!button) return;
+  button.disabled = isLoading;
+  button.textContent = isLoading ? "Updating Password..." : "Update Password";
 }
 
 async function resolveSession() {
@@ -130,7 +107,7 @@ async function resolveSession() {
 
   const tokenHash = searchParams.get("token_hash") || hashParams.get("token_hash");
   if (tokenHash) {
-    const type = searchParams.get("type") || hashParams.get("type") || "email";
+    const type = searchParams.get("type") || hashParams.get("type") || "recovery";
     const { data, error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type });
     if (error) throw error;
     return data?.session || null;
@@ -147,6 +124,9 @@ async function resolveSession() {
     return data?.session || null;
   }
 
+  const eventSession = await recoveryEventPromise;
+  if (eventSession?.user) return eventSession;
+
   const { data, error } = await supabase.auth.getSession();
   if (error) throw error;
   if (data?.session) return data.session;
@@ -157,63 +137,21 @@ async function resolveSession() {
   return retry.data?.session || null;
 }
 
-async function routeUser() {
+async function initializeReset() {
   if (!supabase) {
     throw new Error("Supabase config is missing.");
   }
 
   let session = await resolveSession();
-  const eventSession = await recoveryEventPromise;
-  if (eventSession?.user) {
-    session = eventSession;
-  }
-  let user = session?.user || null;
-
-  if (!user) {
-    const { data, error } = await supabase.auth.getUser();
-    if (error) throw error;
-    user = data?.user || null;
+  if (!session?.user && recoveryEventSession?.user) {
+    session = recoveryEventSession;
   }
 
-  if (!user) {
-    throw new Error("We could not finish signing you in. Please return to the portal and log in.");
+  if (!session?.user) {
+    throw new Error("This reset link could not be completed. Please request a new password reset link.");
   }
 
-  if (isPasswordRecovery) {
-    showPasswordResetForm();
-    return;
-  }
-
-  showStatus("Email verified", "Your account is verified. Taking you to the right dashboard...", "success");
-
-  const profile = await waitForProfile(user.id);
-  const metadataRole = normalizeToken(user.user_metadata?.role);
-  const role = metadataRole === "property_manager"
-    ? "property_manager"
-    : normalizeRole(profile?.role || metadataRole || preferredPortal);
-  const destination = portalByRole[role] || portalByRole[preferredPortal] || "contractor.html";
-
-  window.setTimeout(() => {
-    window.location.replace(destination);
-  }, 700);
-}
-
-function showPasswordResetForm() {
-  if (passwordForm) passwordForm.hidden = false;
-  showStatus(
-    "Set a new password",
-    "Enter a new password for your Turnly account.",
-    "success",
-    "",
-    ""
-  );
-}
-
-function setPasswordFormLoading(isLoading) {
-  const button = passwordForm?.querySelector("button[type='submit']");
-  if (!button) return;
-  button.disabled = isLoading;
-  button.textContent = isLoading ? "Updating Password..." : "Update Password";
+  showPasswordForm();
 }
 
 passwordForm?.addEventListener("submit", async (event) => {
@@ -224,8 +162,8 @@ passwordForm?.addEventListener("submit", async (event) => {
     return;
   }
 
-  const password = document.getElementById("callbackNewPassword")?.value || "";
-  const verifyPassword = document.getElementById("callbackVerifyPassword")?.value || "";
+  const password = document.getElementById("newPassword")?.value || "";
+  const verifyPassword = document.getElementById("verifyPassword")?.value || "";
 
   if (password.length < 6) {
     showStatus("Set a new password", "Password must be at least 6 characters.", "error");
@@ -249,16 +187,18 @@ passwordForm?.addEventListener("submit", async (event) => {
   }
 
   passwordForm.hidden = true;
+  window.localStorage?.removeItem("turnly_reset_portal");
   await supabase.auth.signOut();
   showStatus("Password updated", "Your password was updated. You can log in with the new password now.", "success", loginFallback(), "Return To Log In");
 });
 
-routeUser().catch((error) => {
+initializeReset().catch((error) => {
+  if (passwordForm) passwordForm.hidden = true;
   showStatus(
-    "Verification needs another try",
-    error?.message || "This verification link could not be completed.",
+    "Reset link needs another try",
+    error?.message || "This reset link could not be completed.",
     "error",
     loginFallback(),
-    "Return To Log In"
+    "Request New Reset Link"
   );
 });

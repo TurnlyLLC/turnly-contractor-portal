@@ -33,6 +33,12 @@ function authCallbackUrl(role = pageRole, intent = "") {
   return url.toString();
 }
 
+function passwordResetUrl(role = pageRole) {
+  const url = new URL("reset-password.html", window.location.origin);
+  url.searchParams.set("portal", normalizeRole(role));
+  return url.toString();
+}
+
 function normalizeToken(value) {
   return String(value || "")
     .trim()
@@ -369,9 +375,10 @@ resetPasswordForm?.addEventListener("submit", async (event) => {
 
   setFormLoading(resetPasswordForm, true, "Sending Reset Link...", "Send Reset Link");
   showMessage("Sending password reset link...");
+  window.localStorage?.setItem("turnly_reset_portal", normalizeRole(pageRole));
 
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: authCallbackUrl(pageRole, "password-reset")
+    redirectTo: passwordResetUrl(pageRole)
   });
 
   setFormLoading(resetPasswordForm, false, "Sending Reset Link...", "Send Reset Link");

@@ -10,7 +10,7 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png?v=20260624t" />
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="portal-public.css" />
-  <link rel="stylesheet" href="portal-auth-overrides.css" />
+  <link rel="stylesheet" href="portal-auth-overrides.css?v=20260722b" />
 </head>
 <body class="public-portal-body" data-auth-role="property_manager" data-auth-home="property-manager.html" data-auth-label="Property Manager">
   <div class="public-shell">
@@ -68,8 +68,10 @@
               <input type="email" id="resetEmail" autocomplete="email" required />
             </label>
           </div>
-          <button class="public-btn primary full" type="submit">Send Reset Link</button>
-          <button class="public-btn secondary full" type="button" data-auth-mode="login">Back To Log In</button>
+          <div class="auth-reset-actions">
+            <button class="public-btn primary full" type="submit">Send Reset Link</button>
+            <button class="auth-text-action" type="button" data-auth-mode="login">Back to log in</button>
+          </div>
         </form>
 
         <form id="signupForm" class="public-form auth-panel" data-auth-panel="signup">
@@ -112,6 +114,6 @@
   </div>
 
   <script src="env.js"></script>
-  <script type="module" src="portal-auth.js?v=20260722-password-reset"></script>
+  <script type="module" src="portal-auth.js?v=20260722b"></script>
 </body>
 </html>
