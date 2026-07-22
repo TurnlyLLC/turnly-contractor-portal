@@ -34,9 +34,8 @@ function authCallbackUrl(role = pageRole, intent = "") {
 }
 
 function passwordResetUrl(role = pageRole) {
-  const url = new URL("reset-password.html", window.location.origin);
-  url.searchParams.set("portal", normalizeRole(role));
-  return url.toString();
+  window.localStorage?.setItem("turnly_reset_portal", normalizeRole(role));
+  return "https://portal.turnlypros.com/reset-password.html";
 }
 
 function normalizeToken(value) {
@@ -375,7 +374,6 @@ resetPasswordForm?.addEventListener("submit", async (event) => {
 
   setFormLoading(resetPasswordForm, true, "Sending Reset Link...", "Send Reset Link");
   showMessage("Sending password reset link...");
-  window.localStorage?.setItem("turnly_reset_portal", normalizeRole(pageRole));
 
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
     redirectTo: passwordResetUrl(pageRole)
