@@ -651,13 +651,12 @@ function openJobCard(item, className = "cp-job-row") {
   const actions = assignmentActions(item, "open");
   const details = [
     assignmentTitle(item),
-    item.address || "Address not set",
     assignmentUnitLabel(item),
     assignmentSquareFeetLabel(item),
     formatOpenJobWindow(item)
   ].filter(Boolean);
   return `
-    <article class="${esc(className)} cp-open-job-card cp-job-row-clickable" data-open-job-details-id="${esc(item.id)}" role="button" tabindex="0" aria-label="View details for ${esc(assignmentTitle(item))}">
+    <article class="${esc(className)} cp-open-job-card cp-job-row-clickable" data-open-job-details-id="${esc(item.id)}" data-assignment-address="${esc(item.address || "")}" role="button" tabindex="0" aria-label="View details for ${esc(assignmentTitle(item))}">
       <div class="cp-open-job-lines">
         ${details.map((detail, index) => index === 0
           ? `<strong>${esc(detail)}</strong>`
