@@ -10,6 +10,9 @@ const state = {
   dateCursor: new Date(),
   rows: [],
   deletingAssignmentIds: new Set(),
+  movingAssignmentIds: new Set(),
+  draggingAssignmentId: "",
+  dragSuppressClickUntil: 0,
   filters: {
     property: "all",
     contractor: "all",
@@ -114,6 +117,12 @@ function bindScheduleEvents() {
   root.dataset.bound = "true";
 
   root.addEventListener("click", async (event) => {
+    if (Date.now() < state.dragSuppressClickUntil) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+
     const closeDetail = event.target.closest("[data-schedule-detail-close]");
     if (closeDetail) {
       closeScheduleAssignmentModal();
@@ -198,6 +207,12 @@ function bindScheduleEvents() {
     state.filters[select.dataset.scheduleFilter] = select.value || "all";
     renderSchedule();
   });
+
+  root.addEventListener("dragstart", handleScheduleDragStart);
+  root.addEventListener("dragover", handleScheduleDragOver);
+  root.addEventListener("dragleave", handleScheduleDragLeave);
+  root.addEventListener("drop", handleScheduleDrop);
+  root.addEventListener("dragend", handleScheduleDragEnd);
 }
 
 async function loadScheduleRows() {
@@ -271,6 +286,131 @@ async function deleteScheduleAssignment(id, button = null) {
   closeScheduleAssignmentModal();
   showMessage(`${Number(data || 1).toLocaleString()} assignment deleted from Supabase.`);
   renderSchedule();
+}
+
+function handleScheduleDragStart(event) {
+  const card = event.target.closest("[data-schedule-drag-card]");
+  if (!card) return;
+  const id = card.dataset.scheduleAssignmentId || "";
+  if (!id || state.movingAssignmentIds.has(id)) {
+    event.preventDefault();
+    return;
+  }
+  state.draggingAssignmentId = id;
+  card.classList.add("is-dragging");
+  document.querySelector("[data-schedule-live]")?.classList.add("is-dragging-assignment");
+  event.dataTransfer.effectAllowed = "move";
+  event.dataTransfer.setData("text/plain", id);
+  event.dataTransfer.setData("application/x-turnly-schedule-assignment", id);
+}
+
+function handleScheduleDragOver(event) {
+  if (!state.draggingAssignmentId) return;
+  const target = event.target.closest("[data-schedule-drop-date]");
+  if (!target) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = "move";
+  clearScheduleDropTargets(target);
+  target.classList.add("schedule-drop-active");
+}
+
+function handleScheduleDragLeave(event) {
+  const target = event.target.closest("[data-schedule-drop-date]");
+  if (!target || target.contains(event.relatedTarget)) return;
+  target.classList.remove("schedule-drop-active");
+}
+
+async function handleScheduleDrop(event) {
+  const target = event.target.closest("[data-schedule-drop-date]");
+  const id = event.dataTransfer.getData("application/x-turnly-schedule-assignment")
+    || event.dataTransfer.getData("text/plain")
+    || state.draggingAssignmentId;
+  if (!target || !id) return;
+  event.preventDefault();
+  state.dragSuppressClickUntil = Date.now() + 600;
+  clearScheduleDragState();
+  await moveScheduleAssignmentToDate(id, target.dataset.scheduleDropDate || "");
+}
+
+function handleScheduleDragEnd(event) {
+  event.target.closest("[data-schedule-drag-card]")?.classList.remove("is-dragging");
+  state.dragSuppressClickUntil = Date.now() + 300;
+  clearScheduleDragState();
+}
+
+function clearScheduleDragState() {
+  state.draggingAssignmentId = "";
+  document.querySelector("[data-schedule-live]")?.classList.remove("is-dragging-assignment");
+  clearScheduleDropTargets();
+}
+
+function clearScheduleDropTargets(except = null) {
+  document.querySelectorAll("[data-schedule-drop-date].schedule-drop-active").forEach((node) => {
+    if (node !== except) node.classList.remove("schedule-drop-active");
+  });
+}
+
+async function moveScheduleAssignmentToDate(id, targetDateKey) {
+  if (!supabase) {
+    showMessage("Supabase config is missing. Unable to reschedule assignment.", true);
+    return;
+  }
+  const row = state.rows.find((item) => String(item.id || "") === String(id || ""));
+  const targetDate = parseDateKey(targetDateKey);
+  const nextWindow = shiftedAssignmentWindow(row, targetDate);
+  if (!row || !nextWindow) {
+    showMessage("Unable to move assignment. Refresh the schedule and try again.", true);
+    return;
+  }
+  if (sameDay(parseDate(row.start_window), targetDate)) {
+    showMessage("Assignment is already on that day.");
+    return;
+  }
+
+  state.movingAssignmentIds.add(String(id));
+  showMessage(`Moving ${row.property_name || row.title || "assignment"} to ${targetDate.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}...`);
+
+  const payload = {
+    start_window: nextWindow.start.toISOString(),
+    end_window: nextWindow.end ? nextWindow.end.toISOString() : null
+  };
+  const { data, error } = await supabase
+    .from("assignment_blocks")
+    .update(payload)
+    .eq("id", id)
+    .select("*")
+    .maybeSingle();
+
+  state.movingAssignmentIds.delete(String(id));
+  if (error) {
+    showMessage("Unable to move assignment: " + error.message, true);
+    renderSchedule();
+    return;
+  }
+
+  const updated = data || { ...row, ...payload };
+  state.rows = state.rows
+    .map((item) => String(item.id || "") === String(id) ? updated : item)
+    .filter((item) => parseDate(item.start_window))
+    .sort((a, b) => dateValue(a.start_window) - dateValue(b.start_window));
+  showMessage(`Assignment moved to ${targetDate.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}.`);
+  renderSchedule();
+}
+
+function shiftedAssignmentWindow(row, targetDate) {
+  const start = parseDate(row?.start_window);
+  if (!start || !targetDate) return null;
+  const nextStart = startOfDay(targetDate);
+  nextStart.setHours(start.getHours(), start.getMinutes(), start.getSeconds(), start.getMilliseconds());
+
+  const end = parseDate(row?.end_window);
+  let nextEnd = null;
+  if (end) {
+    const dayOffset = Math.round((startOfDay(end).getTime() - startOfDay(start).getTime()) / 86400000);
+    nextEnd = addDays(startOfDay(targetDate), dayOffset);
+    nextEnd.setHours(end.getHours(), end.getMinutes(), end.getSeconds(), end.getMilliseconds());
+  }
+  return { start: nextStart, end: nextEnd };
 }
 
 function renderSchedule() {
@@ -397,7 +537,7 @@ function renderWeek(rows, range) {
           return start && sameDay(start, day);
         });
         return `
-          <div class="schedule-week-day ${sameDay(day, new Date()) ? "today" : ""}">
+          <div class="schedule-week-day ${sameDay(day, new Date()) ? "today" : ""}" data-schedule-drop-date="${escapeHtml(dateKey(day))}">
             <header><strong>${escapeHtml(day.toLocaleDateString([], { weekday: "short" }))}</strong><span>${escapeHtml(day.toLocaleDateString([], { month: "short", day: "numeric" }))}</span></header>
             <div class="schedule-day-events">
               ${dayRows.length ? dayRows.map((row) => eventCard(row)).join("") : `<p>No assignments</p>`}
@@ -427,7 +567,7 @@ function renderMonth(rows, range) {
           const dayRows = rowsByDay.get(dateKey(day)) || [];
           const visibleRows = dayRows.slice(0, 4);
           return `
-            <div class="schedule-month-cell ${day.getMonth() === range.start.getMonth() ? "" : "muted"} ${sameDay(day, new Date()) ? "today" : ""}">
+            <div class="schedule-month-cell ${day.getMonth() === range.start.getMonth() ? "" : "muted"} ${sameDay(day, new Date()) ? "today" : ""}" data-schedule-drop-date="${escapeHtml(dateKey(day))}">
               <span>${escapeHtml(String(day.getDate()))}</span>
               <div class="schedule-month-events">
                 ${visibleRows.map((row) => eventCard(row, { compact: true })).join("")}
@@ -448,7 +588,7 @@ function eventCard(row, options = {}) {
   const subtitle = [unit !== "No unit" ? `Unit ${unit}` : "", row.service_type].filter(Boolean).join(" - ");
   const id = String(row.id || "");
   return `
-    <article class="schedule-event-card ${options.compact ? "compact" : ""}" data-schedule-assignment-id="${escapeHtml(id)}" role="button" tabindex="0" aria-label="View details for ${escapeHtml(title)}">
+    <article class="schedule-event-card ${options.compact ? "compact" : ""} ${state.movingAssignmentIds.has(id) ? "is-moving" : ""}" data-schedule-assignment-id="${escapeHtml(id)}" data-schedule-drag-card draggable="true" role="button" tabindex="0" aria-label="View details for ${escapeHtml(title)}. Drag to another day to reschedule.">
       <div class="schedule-event-time">${escapeHtml(eventTime(row))}</div>
       <strong>${escapeHtml(title)}</strong>
       ${options.compact ? "" : `<p>${escapeHtml(subtitle || row.title || "Assignment")}</p>`}
@@ -732,6 +872,13 @@ function dateKey(value) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
+function parseDateKey(value) {
+  const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 function hourLabel(hour) {
   const date = new Date();
   date.setHours(hour, 0, 0, 0);
@@ -760,6 +907,13 @@ function injectScheduleStyles() {
     document.head.insertAdjacentHTML("beforeend", `
       <style id="scheduleLiveActionStyles">
         .schedule-assignment-actions{display:flex;justify-content:flex-end;margin-top:14px}.schedule-assignment-actions .primary-action{min-width:150px}.schedule-assignment-danger-zone{align-items:center;background:rgba(255,91,104,.06);border:1px solid rgba(255,91,104,.24);border-radius:8px;display:flex;gap:16px;justify-content:space-between;margin-top:16px;padding:14px}.schedule-assignment-danger-zone strong{color:#fff;display:block;font-size:13px}.schedule-assignment-danger-zone p{color:var(--suite-soft);font-size:12px;margin:4px 0 0}.schedule-assignment-danger-zone .danger-btn{border-color:rgba(255,91,104,.7);color:var(--suite-red);min-width:150px}.schedule-assignment-danger-zone .danger-btn:disabled{cursor:wait;opacity:.58}@media(max-width:620px){.schedule-assignment-actions{display:grid}.schedule-assignment-danger-zone{align-items:stretch;flex-direction:column}.schedule-assignment-danger-zone .danger-btn{width:100%}}
+      </style>
+    `);
+  }
+  if (!document.getElementById("scheduleLiveDragStyles")) {
+    document.head.insertAdjacentHTML("beforeend", `
+      <style id="scheduleLiveDragStyles">
+        .schedule-event-card[draggable="true"]{cursor:grab}.schedule-event-card[draggable="true"]:active{cursor:grabbing}.schedule-event-card.is-dragging,.schedule-event-card.is-moving{opacity:.48}.schedule-week-day,.schedule-month-cell{transition:background .16s ease,border-color .16s ease,box-shadow .16s ease}.is-dragging-assignment [data-schedule-drop-date]{outline:1px dashed rgba(0,214,163,.18);outline-offset:-4px}.schedule-drop-active{background:rgba(0,214,163,.12)!important;box-shadow:inset 0 0 0 2px rgba(0,214,163,.58)}.schedule-drop-active header{background:rgba(0,214,163,.16)!important}
       </style>
     `);
   }

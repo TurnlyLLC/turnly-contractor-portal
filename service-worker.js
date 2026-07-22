@@ -85,6 +85,7 @@ function isAdminRuntimeAsset(request) {
     || pathname === "/assignment-unit-metadata.js"
     || pathname === "/client-billing-address.js"
     || pathname.startsWith("/qa-checklists-nav")
+    || pathname === "/schedule-live.js"
     || pathname === "/schedule-add-assignment.js"
     || pathname === "/contractor-directory-source.js"
     || pathname.startsWith("/contractor-directory-source-")
