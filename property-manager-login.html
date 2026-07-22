@@ -10,7 +10,7 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png?v=20260624t" />
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="portal-public.css" />
-  <link rel="stylesheet" href="portal-auth-overrides.css?v=20260722b" />
+  <link rel="stylesheet" href="portal-auth-overrides.css?v=20260722c" />
 </head>
 <body class="public-portal-body" data-auth-role="property_manager" data-auth-home="property-manager.html" data-auth-label="Property Manager">
   <div class="public-shell">
@@ -57,20 +57,7 @@
           </div>
           <button class="public-btn primary full" type="submit">Log In</button>
           <div class="auth-helper-row">
-            <button class="auth-text-action" type="button" data-auth-mode="reset">Forgot your password?</button>
-          </div>
-        </form>
-
-        <form id="resetPasswordForm" class="public-form auth-panel" data-auth-panel="reset">
-          <div class="public-form-grid">
-            <label class="span-two">
-              Email
-              <input type="email" id="resetEmail" autocomplete="email" required />
-            </label>
-          </div>
-          <div class="auth-reset-actions">
-            <button class="public-btn primary full" type="submit">Send Reset Link</button>
-            <button class="auth-text-action" type="button" data-auth-mode="login">Back to log in</button>
+            <a class="auth-text-action" href="reset-password.html?portal=property_manager">Forgot your password?</a>
           </div>
         </form>
 
@@ -114,6 +101,7 @@
   </div>
 
   <script src="env.js"></script>
-  <script type="module" src="portal-auth.js?v=20260722b"></script>
+  <script src="auth-recovery-router.js?v=20260722c"></script>
+  <script type="module" src="portal-auth.js?v=20260722c"></script>
 </body>
 </html>

@@ -17,7 +17,15 @@ const preferredPortal = normalizeRole(
 const titleEl = document.getElementById("resetTitle");
 const messageEl = document.getElementById("resetMessage");
 const actionEl = document.getElementById("resetAction");
+const requestForm = document.getElementById("resetRequestForm");
 const passwordForm = document.getElementById("resetPasswordForm");
+const resetPortal = document.getElementById("resetPortal");
+const resetEmail = document.getElementById("resetEmail");
+const recoveryType = normalizeToken(searchParams.get("type") || hashParams.get("type"));
+const hasRecoveryParams = recoveryType === "recovery" ||
+  Boolean(searchParams.get("code")) ||
+  Boolean(searchParams.get("token_hash") || hashParams.get("token_hash")) ||
+  Boolean(hashParams.get("access_token") && hashParams.get("refresh_token"));
 
 let recoveryEventSession = null;
 let recoveryEventResolved = false;
@@ -42,6 +50,10 @@ if (supabase) {
   });
 }
 
+if (resetPortal) {
+  resetPortal.value = preferredPortal === "property_manager" ? "property_manager" : "contractor";
+}
+
 function normalizeToken(value) {
   return String(value || "")
     .trim()
@@ -57,6 +69,12 @@ function loginFallback() {
   return preferredPortal === "property_manager"
     ? "property-manager-login.html"
     : "contractor-login.html";
+}
+
+function passwordResetUrl(role = preferredPortal) {
+  const url = new URL("reset-password.html", window.location.origin);
+  url.searchParams.set("portal", normalizeRole(role));
+  return url.toString();
 }
 
 function getAuthError() {
@@ -82,7 +100,14 @@ function showStatus(title, message, tone = "", actionHref = "", actionText = "")
   }
 }
 
+function showRequestForm(title = "Send yourself a reset link", message = "Enter the email address connected to your Turnly account.", tone = "") {
+  if (requestForm) requestForm.hidden = false;
+  if (passwordForm) passwordForm.hidden = true;
+  showStatus(title, message, tone);
+}
+
 function showPasswordForm() {
+  if (requestForm) requestForm.hidden = true;
   if (passwordForm) passwordForm.hidden = false;
   showStatus("Set a new password", "Enter and confirm your new Turnly password.", "success");
 }
@@ -142,6 +167,13 @@ async function initializeReset() {
     throw new Error("Supabase config is missing.");
   }
 
+  if (!hasRecoveryParams) {
+    showRequestForm();
+    return;
+  }
+
+  showStatus("Checking your reset link", "Hold tight while we confirm this reset link.");
+
   let session = await resolveSession();
   if (!session?.user && recoveryEventSession?.user) {
     session = recoveryEventSession;
@@ -153,6 +185,52 @@ async function initializeReset() {
 
   showPasswordForm();
 }
+
+requestForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  if (!supabase) {
+    showStatus("Password reset unavailable", "Supabase config is missing.", "error");
+    return;
+  }
+
+  const email = resetEmail?.value.trim().toLowerCase() || "";
+  const role = normalizeRole(resetPortal?.value || preferredPortal);
+
+  if (!email) {
+    showStatus("Send yourself a reset link", "Enter the email address for your Turnly account.", "error");
+    return;
+  }
+
+  const button = requestForm.querySelector("button[type='submit']");
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Sending Reset Link...";
+  }
+
+  showStatus("Sending reset link", "Supabase is sending the password reset email...");
+  window.localStorage?.setItem("turnly_reset_portal", role);
+
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: passwordResetUrl(role)
+  });
+
+  if (button) {
+    button.disabled = false;
+    button.textContent = "Send Reset Link";
+  }
+
+  if (error) {
+    showStatus("Reset link failed", error.message, "error");
+    return;
+  }
+
+  showStatus(
+    "Check your email",
+    "If that email has a Turnly account, a password reset link has been sent. Check spam or promotions if it is not in the inbox.",
+    "success"
+  );
+});
 
 passwordForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -194,11 +272,9 @@ passwordForm?.addEventListener("submit", async (event) => {
 
 initializeReset().catch((error) => {
   if (passwordForm) passwordForm.hidden = true;
-  showStatus(
+  showRequestForm(
     "Reset link needs another try",
-    error?.message || "This reset link could not be completed.",
-    "error",
-    loginFallback(),
-    "Request New Reset Link"
+    error?.message || "This reset link could not be completed. Enter your email to request a new link.",
+    "error"
   );
 });
