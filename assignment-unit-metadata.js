@@ -445,6 +445,7 @@ async function saveAssignment(event) {
   const preferredFirst = Boolean(document.getElementById("preferred_first")?.checked && contractors.length);
   const payAmount = Number(value("pay_amount"));
   const metadata = assignmentMetadataPatch(unitMetadata(), frequency, weekdays);
+  const unitNumber = metadata.unit_number || metadata.unit_name || "";
   const userId = await currentUserId();
   const groupId = frequency === "one_time" ? null : randomGroupId();
   const editId = editingAssignmentId();
@@ -459,6 +460,9 @@ async function saveAssignment(event) {
     address: value("address"),
     service_type: value("service_type"),
     pay_amount: Number.isFinite(payAmount) && payAmount >= 0 ? payAmount : 0,
+    unit_id: metadata.unit_id || null,
+    unit_number: unitNumber,
+    unit_name: metadata.unit_name || unitNumber,
     scope: value("scope"),
     supplies_notes: value("supplies_notes"),
     special_instructions: value("special_instructions"),

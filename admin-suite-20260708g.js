@@ -294,6 +294,9 @@ const assignmentOptionalColumns = [
   "address",
   "service_type",
   "pay_amount",
+  "unit_id",
+  "unit_number",
+  "unit_name",
   "scope",
   "supplies_notes",
   "special_instructions",
@@ -11269,7 +11272,9 @@ function assignmentUnitPayloadDetails(unit = {}, selectedProperty = selectedAssi
   if (bathrooms) metadata.unit_bathrooms = bathrooms;
   if (selectedProperty?.contract_id) metadata.contract_id = selectedProperty.contract_id;
   return {
+    unitId: unit.id || null,
     unitName,
+    unitNumber: unitName,
     contractorPay,
     accessNotes,
     metadata
@@ -11354,6 +11359,9 @@ function collectAssignmentPayloads() {
       ...payload,
       title: unitDetails ? assignmentTitleForUnit(payload.title, unitDetails.unitName, payload.property_name) : payload.title,
       pay_amount: unitPay || payload.pay_amount,
+      unit_id: unitDetails?.unitId || null,
+      unit_number: unitDetails?.unitNumber || "",
+      unit_name: unitDetails?.unitName || "",
       special_instructions: unitDetails?.accessNotes || payload.special_instructions,
       metadata: assignmentFormMetadata(frequency, weekdays, null, unitMetadata),
       start_window: window.start.toISOString(),

@@ -7,11 +7,12 @@ const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
 
 const optionalColumns = [
   "property_id", "address", "service_type", "pay_amount", "scope",
+  "unit_id", "unit_number", "unit_name",
   "supplies_notes", "special_instructions", "priority", "assignment_type",
   "recurrence_frequency", "recurrence_interval", "recurrence_end_date",
   "auto_renewal", "recurring_group_id", "preferred_first",
   "preferred_contractor_ids", "preferred_contractor_names", "preferred_until",
-  "visibility", "declined_contractor_ids", "created_by"
+  "visibility", "declined_contractor_ids", "metadata", "created_by"
 ];
 
 const editorModalId = "scheduleAssignmentEditorModal";
@@ -94,6 +95,7 @@ function modalHtml() {
             <label class="suite-field wide"><span>Select Property</span><select id="scheduleAssignmentProperty" required><option value="">Loading client properties...</option></select></label>
             <label class="suite-field wide"><span>Assignment Title</span><input id="scheduleAssignmentTitle" type="text" required placeholder="Cleaning - Property Name" /></label>
             <label class="suite-field"><span>Property Name</span><input id="scheduleAssignmentPropertyName" type="text" required /></label>
+            <label class="suite-field"><span>Unit Number</span><input id="scheduleAssignmentUnitNumber" type="text" placeholder="Unit 204" /></label>
             <label class="suite-field"><span>Service Type</span><input id="scheduleAssignmentService" type="text" /></label>
             <label class="suite-field wide"><span>Address</span><input id="scheduleAssignmentAddress" type="text" /></label>
             <label class="suite-field"><span>Contractor Pay</span><input id="scheduleAssignmentPay" type="number" min="0" step="0.01" /></label>
@@ -231,6 +233,7 @@ function fillAssignment(row) {
   setValue("scheduleAssignmentProperty", propertyId);
   setValue("scheduleAssignmentTitle", row?.title || "");
   setValue("scheduleAssignmentPropertyName", row?.property_name || propertyTitle(state.properties.find((property) => property.id === propertyId)));
+  setValue("scheduleAssignmentUnitNumber", assignmentUnitNumber(row));
   setValue("scheduleAssignmentService", row?.service_type || "");
   setValue("scheduleAssignmentAddress", row?.address || "");
   setValue("scheduleAssignmentPay", row?.pay_amount ?? "");
@@ -282,7 +285,16 @@ function payloadFromForm(options = {}) {
   const existingPropertyId = state.editingId ? state.editingRow?.property_id || null : null;
   const pay = Number(value("scheduleAssignmentPay"));
   const status = value("scheduleAssignmentStatus") || "open";
+  const unitNumber = value("scheduleAssignmentUnitNumber");
   const specialInstructions = value("scheduleAssignmentInstructions") || propertyAccessNotes(property);
+  const metadata = {
+    ...assignmentMetadata(state.editingRow),
+    ...(unitNumber ? { unit_number: unitNumber, unit_name: unitNumber } : {})
+  };
+  if (!unitNumber) {
+    delete metadata.unit_number;
+    delete metadata.unit_name;
+  }
   const payload = {
     title: value("scheduleAssignmentTitle") || `Cleaning - ${value("scheduleAssignmentPropertyName") || propertyTitle(property) || "Scheduled Assignment"}`,
     property_id: propertyId || existingPropertyId || null,
@@ -290,12 +302,15 @@ function payloadFromForm(options = {}) {
     address: value("scheduleAssignmentAddress") || propertyAddress(property),
     service_type: value("scheduleAssignmentService") || propertyService(property),
     pay_amount: Number.isFinite(pay) && pay >= 0 ? pay : 0,
+    unit_number: unitNumber,
+    unit_name: unitNumber,
     scope: value("scheduleAssignmentScope"),
     special_instructions: specialInstructions,
     priority: value("scheduleAssignmentPriority") || "normal",
     status,
     start_window: start.toISOString(),
-    end_window: end.toISOString()
+    end_window: end.toISOString(),
+    metadata
   };
   if (options.includeDefaults) {
     Object.assign(payload, {
@@ -390,6 +405,23 @@ function value(id) {
 function setValue(id, text) {
   const field = $(id);
   if (field) field.value = text ?? "";
+}
+
+function assignmentMetadata(row) {
+  const metadata = row?.metadata;
+  if (!metadata) return {};
+  if (typeof metadata === "object" && !Array.isArray(metadata)) return metadata;
+  try {
+    const parsed = JSON.parse(metadata);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function assignmentUnitNumber(row) {
+  const metadata = assignmentMetadata(row);
+  return row?.unit_number || row?.unit_name || metadata.unit_number || metadata.unit_name || "";
 }
 
 function setDefaultInstructions(value) {

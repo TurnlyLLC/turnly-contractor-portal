@@ -592,7 +592,7 @@ function assignmentNotes(row) {
 
 function assignmentUnitMeta(row) {
   const metadata = assignmentMetadata(row);
-  const feet = metadata.square_feet || metadata.sq_ft || row?.square_feet || row?.sq_ft;
+  const feet = row?.unit_square_feet || metadata.unit_square_feet || metadata.square_feet || metadata.sq_ft || row?.square_feet || row?.sq_ft;
   return feet ? `${feet} sq ft` : "Unit details";
 }
 
@@ -670,7 +670,7 @@ function contractorText(row) {
 }
 
 function unitLabel(row) {
-  const direct = row?.unit_name || row?.unit_number || row?.unit || row?.unit_id;
+  const direct = row?.unit_number || row?.unit_name || row?.unit || row?.unit_id;
   if (direct) return String(direct);
   const title = String(row?.title || "").replace(/\s+/g, " ").trim();
   const unitMatch = title.match(/\bunit\s+(.+?)(?:,\s*[\d,.]+\s*sq\b|,\s*\d|\s+-\s+|\s+[-]\s+)/i)
