@@ -224,6 +224,11 @@ function formatTime(value, fallback = "") {
   return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
+function formatCompactTime(value, fallback = "") {
+  const formatted = formatTime(value, fallback);
+  return formatted ? formatted.replace(/\s+/g, "").toLowerCase() : fallback;
+}
+
 function formatShortDate(value, fallback = "Not scheduled") {
   if (!value) return fallback;
   const date = new Date(value);
@@ -236,6 +241,14 @@ function formatWindow(item) {
   const startTime = formatTime(item.start_window);
   const endTime = formatTime(item.end_window);
   return `${start}${startTime ? `, ${startTime}` : ""}${endTime ? ` - ${endTime}` : ""}`;
+}
+
+function formatOpenJobWindow(item = {}) {
+  const date = formatDate(item.start_window, "Not scheduled");
+  const startTime = formatCompactTime(item.start_window);
+  const endTime = formatCompactTime(item.end_window);
+  if (!startTime) return date;
+  return `${date} ${startTime}${endTime ? `-${endTime}` : ""}`;
 }
 
 function isSameDay(a, b) {
@@ -315,12 +328,6 @@ function assignmentSquareFeetLabel(item = {}) {
   const number = Number(text.replace(/,/g, "").replace(/[^\d.]/g, ""));
   if (Number.isFinite(number) && number > 0) return `${number.toLocaleString()} sq ft`;
   return /\bsq\s*ft\b/i.test(text) ? text : "";
-}
-
-function renderAssignmentUnitLine(item = {}) {
-  const details = [assignmentUnitLabel(item), assignmentSquareFeetLabel(item)].filter(Boolean);
-  if (!details.length) return "";
-  return `<div class="cp-job-unit-row">${details.map((detail) => `<span>${esc(detail)}</span>`).join("")}</div>`;
 }
 
 function isClosedAssignment(item) {
@@ -616,13 +623,12 @@ function assignmentRow(item, mode = "mine") {
   const status = item.status || "open";
   const actions = assignmentActions(item, mode);
   const openDetails = mode === "open";
-  const unitLine = openDetails ? renderAssignmentUnitLine(item) : "";
+  if (openDetails) return openJobCard(item, "cp-job-row");
   return `
-    <article class="cp-job-row ${openDetails ? "cp-job-row-clickable" : ""}" ${openDetails ? `data-open-job-details-id="${esc(item.id)}" role="button" tabindex="0" aria-label="View details for ${esc(assignmentTitle(item))}"` : ""}>
+    <article class="cp-job-row">
       <div class="cp-job-main">
         <strong>${esc(assignmentTitle(item))}</strong>
         <small>${esc(assignmentSubtitle(item))}</small>
-        ${unitLine}
       </div>
       <div class="cp-job-meta">
         <span>Schedule</span>
@@ -637,6 +643,27 @@ function assignmentRow(item, mode = "mine") {
         <strong class="cp-pill ${statusClass(status)}">${esc(titleCase(status))}</strong>
       </div>
       <div class="cp-job-actions">${actions}</div>
+    </article>
+  `;
+}
+
+function openJobCard(item, className = "cp-job-row") {
+  const actions = assignmentActions(item, "open");
+  const details = [
+    assignmentTitle(item),
+    item.address || "Address not set",
+    assignmentUnitLabel(item),
+    assignmentSquareFeetLabel(item),
+    formatOpenJobWindow(item)
+  ].filter(Boolean);
+  return `
+    <article class="${esc(className)} cp-open-job-card cp-job-row-clickable" data-open-job-details-id="${esc(item.id)}" role="button" tabindex="0" aria-label="View details for ${esc(assignmentTitle(item))}">
+      <div class="cp-open-job-lines">
+        ${details.map((detail, index) => index === 0
+          ? `<strong>${esc(detail)}</strong>`
+          : `<span>${esc(detail)}</span>`).join("")}
+      </div>
+      ${actions ? `<div class="cp-open-job-actions">${actions}</div>` : ""}
     </article>
   `;
 }
@@ -767,13 +794,12 @@ function homeJobCard(item, mode = "mine") {
   const status = item.status || "open";
   const actions = assignmentActions(item, mode);
   const openDetails = mode === "open";
-  const unitLine = openDetails ? renderAssignmentUnitLine(item) : "";
+  if (openDetails) return openJobCard(item, "cp-home-job-card");
   return `
-    <article class="cp-home-job-card ${openDetails ? "cp-job-row-clickable" : ""}" ${openDetails ? `data-open-job-details-id="${esc(item.id)}" role="button" tabindex="0" aria-label="View details for ${esc(assignmentTitle(item))}"` : ""}>
+    <article class="cp-home-job-card">
       <div class="cp-home-job-main">
         <strong>${esc(assignmentTitle(item))}</strong>
         <small>${esc(assignmentSubtitle(item))}</small>
-        ${unitLine}
       </div>
       <div class="cp-home-job-meta">
         <span>${esc(formatWindow(item))}</span>

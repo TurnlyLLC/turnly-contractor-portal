@@ -545,24 +545,6 @@
   margin-top: 4px;
 }
 
-.cp-job-unit-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
-}
-
-.cp-job-unit-row span {
-  background: rgba(54, 169, 255, 0.1);
-  border: 1px solid rgba(54, 169, 255, 0.24);
-  border-radius: 999px;
-  color: #cceaff;
-  font-size: 12px;
-  font-weight: 800;
-  line-height: 1;
-  padding: 6px 8px;
-}
-
 .cp-home-job-meta {
   align-items: center;
   display: flex;
@@ -592,6 +574,35 @@
   gap: 10px;
   grid-template-columns: minmax(190px, 1.2fr) minmax(130px, 0.7fr) minmax(120px, 0.55fr) minmax(120px, 0.5fr) auto;
   padding: 10px;
+}
+
+.cp-open-job-card {
+  align-items: start;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.cp-open-job-lines {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.cp-open-job-lines strong {
+  display: block;
+  font-size: 16px;
+}
+
+.cp-open-job-lines span {
+  color: var(--cp-muted);
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.cp-open-job-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 .cp-job-row-clickable {
@@ -1209,6 +1220,14 @@
     grid-column: 1 / -1;
     justify-content: flex-start;
   }
+
+  .cp-open-job-card {
+    grid-template-columns: 1fr;
+  }
+
+  .cp-open-job-actions {
+    justify-content: flex-start;
+  }
 }
 
 @media (max-width: 780px) {
@@ -1519,12 +1538,6 @@
 .contractor-portal-body[data-dashboard-theme="light"] .cp-pay-card {
   background: #f8fbfd;
   border-color: var(--cp-line);
-}
-
-.contractor-portal-body[data-dashboard-theme="light"] .cp-job-unit-row span {
-  background: rgba(54, 169, 255, 0.12);
-  border-color: rgba(54, 169, 255, 0.24);
-  color: #1b5f95;
 }
 
 .contractor-portal-body[data-dashboard-theme="light"] .cp-ghost-action,
