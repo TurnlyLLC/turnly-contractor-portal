@@ -725,6 +725,45 @@ function renderShell() {
   `;
 }
 
+function acceptedAssignments() {
+  return activeAssignments()
+    .slice()
+    .sort((a, b) => dateValue(a.start_window || a.claimed_at || a.created_at) - dateValue(b.start_window || b.claimed_at || b.created_at));
+}
+
+function homeJobCard(item, mode = "mine") {
+  const status = item.status || "open";
+  const actions = assignmentActions(item, mode);
+  const openDetails = mode === "open";
+  return `
+    <article class="cp-home-job-card ${openDetails ? "cp-job-row-clickable" : ""}" ${openDetails ? `data-open-job-details-id="${esc(item.id)}" role="button" tabindex="0" aria-label="View details for ${esc(assignmentTitle(item))}"` : ""}>
+      <div class="cp-home-job-main">
+        <strong>${esc(assignmentTitle(item))}</strong>
+        <small>${esc(assignmentSubtitle(item))}</small>
+      </div>
+      <div class="cp-home-job-meta">
+        <span>${esc(formatWindow(item))}</span>
+        <span>${esc(money(item.pay_amount))}</span>
+        <strong class="cp-pill ${statusClass(status)}">${esc(titleCase(status))}</strong>
+      </div>
+      ${actions ? `<div class="cp-home-job-actions">${actions}</div>` : ""}
+    </article>
+  `;
+}
+
+function renderHomeJobList(rows, mode, emptyText, limit = 4) {
+  if (!rows.length) return emptyState(emptyText);
+  const visible = rows.slice(0, limit);
+  const remaining = rows.length - visible.length;
+  const href = mode === "open" ? "contractor-available.html" : "contractor-my-assignments.html";
+  return `
+    <div class="cp-home-job-list">
+      ${visible.map((item) => homeJobCard(item, mode)).join("")}
+      ${remaining > 0 ? `<a class="cp-home-more-link" href="${href}">View ${remaining} more</a>` : ""}
+    </div>
+  `;
+}
+
 function renderPage() {
   if (state.loading) return loadingPanels();
   switch (pageKey) {
@@ -769,7 +808,25 @@ function renderMetrics() {
 
 function renderDashboard() {
   const today = todayAssignments();
+  const accepted = acceptedAssignments();
+  const boardRows = filteredOpenAssignments();
+  const preferred = boardRows.filter(isPreferredOffer);
+  const available = boardRows.filter((item) => !isPreferredOffer(item));
   return `
+    <section class="cp-opening-jobs" aria-label="Contractor jobs">
+      ${panel("Accepted Jobs", renderHomeJobList(accepted, "mine", "No accepted jobs yet."), {
+        kicker: "Your Work",
+        action: `<a class="cp-ghost-action" href="contractor-my-assignments.html">All</a>`
+      })}
+      ${panel("Preferred Jobs", renderHomeJobList(preferred, "open", "No preferred jobs right now."), {
+        kicker: "Offered First",
+        action: `<a class="cp-ghost-action" href="contractor-available.html">Jobs</a>`
+      })}
+      ${panel("Available Jobs", renderHomeJobList(available, "open", "No available jobs right now."), {
+        kicker: "Job Board",
+        action: `<a class="cp-ghost-action" href="contractor-available.html">Jobs</a>`
+      })}
+    </section>
     ${renderTodayMetrics(today)}
     <section class="cp-dashboard-grid">
       <div class="cp-stack">
@@ -928,7 +985,7 @@ function renderBoardJobDetails(item) {
 }
 
 function jobDetailDrawer() {
-  if (pageKey !== "job-board") return "";
+  if (!["dashboard", "job-board"].includes(pageKey)) return "";
   const item = selectedBoardJob(filteredOpenAssignments());
   if (!item) return "";
   return `

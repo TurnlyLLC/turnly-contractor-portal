@@ -496,12 +496,19 @@
   grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.7fr);
 }
 
+.cp-opening-jobs {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .cp-stack {
   display: grid;
   gap: 14px;
 }
 
 .cp-job-list,
+.cp-home-job-list,
 .cp-mini-list,
 .cp-feed-list,
 .cp-chat-list,
@@ -512,6 +519,50 @@
 
 .cp-job-list-spaced {
   margin-top: 14px;
+}
+
+.cp-home-job-card {
+  background: rgba(6, 17, 29, 0.72);
+  border: 1px solid rgba(144, 164, 183, 0.12);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 11px;
+}
+
+.cp-home-job-main strong {
+  display: block;
+}
+
+.cp-home-job-main small,
+.cp-home-job-meta span {
+  color: var(--cp-muted);
+}
+
+.cp-home-job-main small {
+  display: block;
+  margin-top: 4px;
+}
+
+.cp-home-job-meta {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cp-home-job-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cp-home-more-link {
+  color: var(--cp-green);
+  font-size: 13px;
+  font-weight: 900;
+  text-decoration: none;
 }
 
 .cp-job-row {
@@ -1121,6 +1172,7 @@
   }
 
   .cp-dashboard-grid,
+  .cp-opening-jobs,
   .cp-two-column,
   .cp-job-board-layout,
   .cp-schedule-layout,
