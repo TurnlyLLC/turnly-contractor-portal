@@ -8,6 +8,7 @@ const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
 const optionalColumns = [
   "property_id", "address", "service_type", "pay_amount", "scope",
   "unit_id", "unit_number", "unit_name",
+  "assigned_to", "assigned_to_name", "assigned_to_email",
   "supplies_notes", "special_instructions", "priority", "assignment_type",
   "recurrence_frequency", "recurrence_interval", "recurrence_end_date",
   "auto_renewal", "recurring_group_id", "preferred_first",
@@ -17,7 +18,7 @@ const optionalColumns = [
 
 const editorModalId = "scheduleAssignmentEditorModal";
 const editorTitleId = "scheduleAssignmentEditorTitle";
-const state = { properties: [], user: null, saving: false, editingId: "", editingRow: null };
+const state = { properties: [], contractors: [], contractorsLoaded: false, user: null, saving: false, editingId: "", editingRow: null };
 const $ = (id) => document.getElementById(id);
 
 function init() {
@@ -79,6 +80,7 @@ function mount(root) {
   });
   loadUser();
   loadProperties();
+  loadContractors();
 }
 
 function modalHtml() {
@@ -99,6 +101,7 @@ function modalHtml() {
             <label class="suite-field"><span>Service Type</span><input id="scheduleAssignmentService" type="text" /></label>
             <label class="suite-field wide"><span>Address</span><input id="scheduleAssignmentAddress" type="text" /></label>
             <label class="suite-field"><span>Contractor Pay</span><input id="scheduleAssignmentPay" type="number" min="0" step="0.01" /></label>
+            <label class="suite-field"><span>Assigned Contractor</span><select id="scheduleAssignmentAssignedContractor"><option value="">Loading active contractors...</option></select></label>
           </div></section>
           <section class="assignment-form-section"><h3>Timing</h3><div class="form-grid assignment-form-grid">
             <label class="suite-field"><span>Start</span><input id="scheduleAssignmentStart" type="datetime-local" required /></label>
@@ -139,6 +142,36 @@ async function loadProperties() {
   populateProperties();
 }
 
+async function loadContractors() {
+  if (!supabase || state.contractorsLoaded) {
+    populateContractors();
+    return state.contractors;
+  }
+  const rows = (await Promise.all(["profiles", "contractors", "contractor_profiles"].map(fetchContractorRows))).flat();
+  const unique = new Map();
+  rows
+    .filter(isActiveContractorRow)
+    .map(normalizeContractor)
+    .filter((contractor) => contractor.id && contractor.name)
+    .forEach((contractor) => {
+      const existing = unique.get(contractor.id);
+      if (!existing || contractor.sourceTable === "profiles") unique.set(contractor.id, contractor);
+    });
+  state.contractors = Array.from(unique.values()).sort((a, b) => a.name.localeCompare(b.name));
+  state.contractorsLoaded = true;
+  populateContractors();
+  return state.contractors;
+}
+
+async function fetchContractorRows(table) {
+  const { data, error } = await supabase.from(table).select("*").limit(1000);
+  if (error) {
+    console.warn(`[schedule-add-assignment] Unable to load ${table}`, error);
+    return [];
+  }
+  return (data || []).map((row) => ({ ...row, __sourceTable: table }));
+}
+
 function populateProperties() {
   const select = $("scheduleAssignmentProperty");
   if (!select) return;
@@ -148,12 +181,41 @@ function populateProperties() {
   if (selected && state.properties.some((row) => row.id === selected)) select.value = selected;
 }
 
+function populateContractors(row = state.editingRow) {
+  const select = $("scheduleAssignmentAssignedContractor");
+  if (!select) return;
+  const selected = selectedAssignmentContractorId(row) || select.value;
+  const options = state.contractors.slice();
+  const hasSelected = selected && options.some((contractor) => String(contractor.id || "") === String(selected));
+  if (selected && !hasSelected) {
+    options.unshift({
+      id: selected,
+      name: row?.assigned_to_name || row?.claimed_by_name || row?.assigned_to_email || row?.claimed_by_email || "Current contractor",
+      email: row?.assigned_to_email || row?.claimed_by_email || "",
+      status: row?.status || "",
+      sourceTable: "assignment_blocks"
+    });
+  }
+  const placeholder = state.contractorsLoaded
+    ? "Unassigned / open to contractors"
+    : "Loading active contractors...";
+  select.innerHTML = `<option value="">${escapeHtml(placeholder)}</option>${options.map((contractor) => {
+    const label = [contractor.name, contractor.email].filter(Boolean).join(" - ");
+    return `<option value="${escapeHtml(contractor.id)}">${escapeHtml(label || "Contractor")}</option>`;
+  }).join("")}`;
+  select.value = selected && options.some((contractor) => String(contractor.id || "") === String(selected)) ? selected : "";
+}
+
 async function openModal() {
   state.editingId = "";
   state.editingRow = null;
   clearForm();
-  if (!state.properties.length) await loadProperties();
+  await Promise.all([
+    state.properties.length ? Promise.resolve() : loadProperties(),
+    state.contractorsLoaded ? Promise.resolve() : loadContractors()
+  ]);
   populateProperties();
+  populateContractors(null);
   updateEditorMode();
   $(editorModalId).hidden = false;
   $("scheduleAssignmentProperty")?.focus();
@@ -165,8 +227,12 @@ async function openEdit(rowOrId) {
   state.editingId = String(row.id || "");
   state.editingRow = row;
   clearForm();
-  if (!state.properties.length) await loadProperties();
+  await Promise.all([
+    state.properties.length ? Promise.resolve() : loadProperties(),
+    state.contractorsLoaded ? Promise.resolve() : loadContractors()
+  ]);
   populateProperties();
+  populateContractors(row);
   fillAssignment(row);
   updateEditorMode();
   $(editorModalId).hidden = false;
@@ -213,6 +279,7 @@ function clearForm() {
   setValue("scheduleAssignmentEnd", datetimeInput(end));
   setValue("scheduleAssignmentStatus", "open");
   setValue("scheduleAssignmentPriority", "normal");
+  setValue("scheduleAssignmentAssignedContractor", "");
   message("");
 }
 
@@ -237,6 +304,8 @@ function fillAssignment(row) {
   setValue("scheduleAssignmentService", row?.service_type || "");
   setValue("scheduleAssignmentAddress", row?.address || "");
   setValue("scheduleAssignmentPay", row?.pay_amount ?? "");
+  populateContractors(row);
+  setValue("scheduleAssignmentAssignedContractor", selectedAssignmentContractorId(row));
   setValue("scheduleAssignmentStart", datetimeInput(row?.start_window));
   setValue("scheduleAssignmentEnd", datetimeInput(row?.end_window));
   setValue("scheduleAssignmentStatus", normalizeStatusValue(row?.status || "open"));
@@ -286,6 +355,7 @@ function payloadFromForm(options = {}) {
   const pay = Number(value("scheduleAssignmentPay"));
   const status = value("scheduleAssignmentStatus") || "open";
   const unitNumber = value("scheduleAssignmentUnitNumber");
+  const assignedContractor = selectedContractor();
   const specialInstructions = value("scheduleAssignmentInstructions") || propertyAccessNotes(property);
   const metadata = {
     ...assignmentMetadata(state.editingRow),
@@ -304,6 +374,9 @@ function payloadFromForm(options = {}) {
     pay_amount: Number.isFinite(pay) && pay >= 0 ? pay : 0,
     unit_number: unitNumber,
     unit_name: unitNumber,
+    assigned_to: assignedContractor?.id || null,
+    assigned_to_name: assignedContractor?.name || null,
+    assigned_to_email: assignedContractor?.email || null,
     scope: value("scheduleAssignmentScope"),
     special_instructions: specialInstructions,
     priority: value("scheduleAssignmentPriority") || "normal",
@@ -422,6 +495,70 @@ function assignmentMetadata(row) {
 function assignmentUnitNumber(row) {
   const metadata = assignmentMetadata(row);
   return row?.unit_number || row?.unit_name || metadata.unit_number || metadata.unit_name || "";
+}
+
+function selectedAssignmentContractorId(row) {
+  return String(row?.assigned_to || row?.claimed_by || "");
+}
+
+function selectedContractor() {
+  const contractorId = value("scheduleAssignmentAssignedContractor");
+  if (!contractorId) return null;
+  const option = state.contractors.find((contractor) => String(contractor.id || "") === String(contractorId));
+  if (option) return option;
+  const field = $("scheduleAssignmentAssignedContractor");
+  const selectedOption = field?.selectedOptions?.[0];
+  const label = selectedOption?.textContent || "";
+  const [name, email] = label.split(" - ").map((part) => part.trim());
+  return { id: contractorId, name: name || label || "Contractor", email: email || "" };
+}
+
+function isActiveContractorRow(row) {
+  const roles = [
+    row?.role,
+    row?.team,
+    row?.account_type,
+    row?.profile_type,
+    row?.user_type,
+    row?.department,
+    row?.title
+  ].map(contractorToken).join("-");
+  const status = contractorToken(row?.status || row?.contractor_status || row?.account_status || row?.approval_status);
+  const approval = contractorToken(row?.approval_status);
+  const inactive = ["inactive", "disabled", "archived", "suspended", "rejected", "declined", "deleted"].includes(status);
+  const sales = roles.includes("sales") || roles.includes("account-executive") || roles.includes("business-development");
+  const manager = roles.includes("property-manager") || roles.includes("property-management") || roles.includes("client-manager");
+  const contractor = Boolean(row?.contractor_approved)
+    || row?.__sourceTable !== "profiles"
+    || roles.includes("contractor")
+    || roles.includes("vendor")
+    || roles.includes("cleaner")
+    || roles.includes("service-provider");
+  const active = Boolean(row?.contractor_approved)
+    || ["active", "approved", "available", "enabled", "onboarded"].includes(status)
+    || approval === "approved";
+  const registered = row?.__sourceTable === "profiles" || row?.profile_id || row?.user_id || row?.auth_user_id;
+  return contractor && active && registered && !inactive && !sales && !manager;
+}
+
+function normalizeContractor(row) {
+  const email = String(row?.email || row?.contact_email || row?.primary_email || "");
+  const id = String(row?.profile_id || row?.user_id || row?.auth_user_id || row?.id || "");
+  const services = Array.isArray(row?.service_types)
+    ? row.service_types.filter(Boolean).join(", ")
+    : row?.service_type || row?.services || row?.specialties || row?.department || row?.title || "";
+  return {
+    id,
+    name: row?.full_name || row?.name || row?.display_name || row?.contractor_name || email.split("@")[0] || "Contractor",
+    email,
+    services,
+    status: row?.status || (row?.contractor_approved ? "approved" : ""),
+    sourceTable: row?.__sourceTable || "profiles"
+  };
+}
+
+function contractorToken(value) {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 
 function setDefaultInstructions(value) {
