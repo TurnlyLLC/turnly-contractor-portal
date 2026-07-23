@@ -1297,7 +1297,7 @@ function renderTopBar() {
         ${pmIcon("search")}
         <input data-manager-global-search data-pm-filter="query" type="search" value="${esc(state.filters.query)}" placeholder="Search anything..." autocomplete="off" />
         <kbd>K</kbd>
-      </div>`}
+      </div>` : ""}
       <div class="topbar-popover-wrap">
         <button class="top-icon" type="button" aria-label="${unread} unread messages" data-pm-view-button="messages">
           ${pmIcon("bell")}
