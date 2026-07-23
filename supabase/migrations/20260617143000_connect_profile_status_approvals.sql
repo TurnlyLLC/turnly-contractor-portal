@@ -8,13 +8,13 @@ alter table public.profiles
 
 update public.profiles
 set status = 'pending'
-where lower(replace(coalesce(role, ''), ' ', '_')) in ('contractor', 'property_manager')
+where lower(replace(coalesce(role::text, ''), ' ', '_')) in ('contractor', 'property_manager')
   and coalesce(nullif(trim(status), ''), 'inactive') in ('inactive', 'pending');
 
 update public.profiles
 set status = 'active',
     contractor_approved = true
-where lower(replace(coalesce(role, ''), ' ', '_')) not in ('contractor', 'property_manager')
+where lower(replace(coalesce(role::text, ''), ' ', '_')) not in ('contractor', 'property_manager')
   and coalesce(nullif(trim(status), ''), 'inactive') in ('inactive', 'pending');
 
 update public.profiles
@@ -33,7 +33,7 @@ as $$
     select 1
     from public.profiles
     where id = auth.uid()
-      and lower(replace(coalesce(role, ''), ' ', '_')) = 'admin'
+      and lower(replace(coalesce(role::text, ''), ' ', '_')) = 'admin'
   );
 $$;
 

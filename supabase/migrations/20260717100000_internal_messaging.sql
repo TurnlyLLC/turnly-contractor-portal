@@ -128,7 +128,7 @@ begin
     select coalesce(array_agg(id), '{}'::uuid[])
     into target_recipients
     from public.profiles
-    where lower(replace(coalesce(role, ''), '-', '_')) = 'admin';
+    where lower(replace(coalesce(role::text, ''), '-', '_')) = 'admin';
   end if;
 
   if coalesce(array_length(target_recipients, 1), 0) = 0 then
