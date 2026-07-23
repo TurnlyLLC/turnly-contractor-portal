@@ -3026,6 +3026,10 @@ a {
 }
 
 .checklist-item-row {
+  grid-template-columns: 36px minmax(96px, 0.13fr) minmax(112px, 0.15fr) minmax(190px, 0.8fr) minmax(190px, 0.8fr) 36px;
+}
+
+.checklist-item-row.has-upload {
   grid-template-columns: 36px minmax(96px, 0.13fr) minmax(112px, 0.15fr) minmax(190px, 0.8fr) minmax(190px, 0.8fr) minmax(210px, 0.34fr) 36px;
 }
 

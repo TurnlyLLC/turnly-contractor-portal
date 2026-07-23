@@ -3867,7 +3867,7 @@ function renderChecklists() {
           </form>
           <div class="checklist-module-tools">
             <div class="checklist-section-composer">
-              <label class="suite-field"><span>Add Module</span><input id="newChecklistSectionTitle" placeholder="Bedroom, kitchen, bathroom, final QA" /></label>
+              <label class="suite-field"><span>Add Module</span><input id="newChecklistSectionTitle" placeholder="Bedroom, kitchen, bathroom, final QA" ${checklistTextAssistAttrs} /></label>
               <button class="secondary-action" type="button" data-checklist-add-section>${icon("plus")}<span>Add Module</span></button>
             </div>
             ${checklistModuleImporterHtml()}
@@ -3954,6 +3954,117 @@ function checklistArray(value) {
   return [];
 }
 
+const checklistTextAssistAttrs = 'spellcheck="true" autocapitalize="sentences" autocorrect="on" autocomplete="off"';
+
+const checklistAutocorrectTerms = {
+  accomodation: "accommodation",
+  accomodations: "accommodations",
+  appliancee: "appliance",
+  appliancees: "appliances",
+  appliace: "appliance",
+  appliaces: "appliances",
+  bathrom: "bathroom",
+  bathrooom: "bathroom",
+  bedrom: "bedroom",
+  cabnet: "cabinet",
+  cabnets: "cabinets",
+  chek: "check",
+  cheklist: "checklist",
+  checklsit: "checklist",
+  cleaing: "cleaning",
+  cleanng: "cleaning",
+  countertopp: "countertop",
+  countertopps: "countertops",
+  diswasher: "dishwasher",
+  dishwaser: "dishwasher",
+  enterance: "entrance",
+  garabage: "garbage",
+  hallyway: "hallway",
+  kitchn: "kitchen",
+  livng: "living",
+  micorwave: "microwave",
+  miror: "mirror",
+  mirors: "mirrors",
+  moduel: "module",
+  moduels: "modules",
+  neccessary: "necessary",
+  recieved: "received",
+  recieve: "receive",
+  reciept: "receipt",
+  refridgerator: "refrigerator",
+  seperate: "separate",
+  seperated: "separated",
+  seperately: "separately",
+  tiolet: "toilet",
+  toliet: "toilet",
+  vaccum: "vacuum",
+  vaccumed: "vacuumed",
+  vaccuming: "vacuuming",
+  vaccuum: "vacuum",
+  vaccuumed: "vacuumed",
+  vaccuuming: "vacuuming",
+  vacume: "vacuum",
+  vacumed: "vacuumed",
+  vacuming: "vacuuming",
+  widnow: "window",
+  windos: "windows"
+};
+
+const checklistUppercaseTerms = {
+  id: "ID",
+  hvac: "HVAC",
+  qa: "QA",
+  tv: "TV",
+  w9: "W-9"
+};
+
+function checklistApplyWordCase(source, replacement) {
+  if (!source) return replacement;
+  if (source === source.toUpperCase()) return replacement.toUpperCase();
+  if (source[0] === source[0].toUpperCase()) return replacement[0].toUpperCase() + replacement.slice(1);
+  return replacement;
+}
+
+function checklistAutocorrectText(value) {
+  return String(value || "").replace(/\b[A-Za-z][A-Za-z0-9'-]*\b/g, (word) => {
+    const key = word.toLowerCase().replace(/-/g, "");
+    if (checklistUppercaseTerms[key]) return checklistUppercaseTerms[key];
+    if (checklistAutocorrectTerms[key]) return checklistApplyWordCase(word, checklistAutocorrectTerms[key]);
+    return word;
+  });
+}
+
+function checklistCapitalizeLine(value) {
+  return String(value || "").replace(/^(\s*[^A-Za-z0-9]*)([A-Za-z])/, (_, prefix, first) => `${prefix}${first.toUpperCase()}`);
+}
+
+function checklistNormalizeEntryText(value) {
+  return checklistAutocorrectText(String(value || "")
+    .replace(/[ \t]+$/gm, "")
+    .split(/\r?\n/)
+    .map(checklistCapitalizeLine)
+    .join("\n"));
+}
+
+function isChecklistTextTarget(target) {
+  return Boolean(target?.matches?.([
+    "#newChecklistSectionTitle",
+    "[data-checklist-section-title]",
+    "[data-checklist-section-description]",
+    "[data-checklist-room-title]",
+    "[data-checklist-item-label]",
+    "[data-checklist-item-description]"
+  ].join(",")));
+}
+
+function normalizeChecklistTextTarget(target) {
+  if (!isChecklistTextTarget(target)) return false;
+  const next = checklistNormalizeEntryText(target.value);
+  if (target.value === next) return false;
+  target.value = next;
+  return true;
+}
+
 function normalizeChecklistItem(item = {}, index = 0) {
   const source = typeof item === "string" ? { label: item } : checklistJsonObject(item);
   const type = checklistItemType(source.type || source.item_type || source.media_required || "check");
@@ -3965,8 +4076,8 @@ function normalizeChecklistItem(item = {}, index = 0) {
     id: source.id || checklistUid("item"),
     type,
     required,
-    label: source.label || source.task || source.title || "",
-    description: source.description || source.notes || source.instructions || "",
+    label: checklistNormalizeEntryText(source.label || source.task || source.title || ""),
+    description: checklistNormalizeEntryText(source.description || source.notes || source.instructions || ""),
     sort_order: Number.isFinite(Number(source.sort_order ?? source.order)) ? Number(source.sort_order ?? source.order) : index
   };
 }
@@ -4017,8 +4128,8 @@ function cleanChecklistItemsForSave(items = []) {
     .map(normalizeChecklistItem)
     .sort((a, b) => Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0))
     .map((item, index) => {
-      const label = String(item.label || "").trim();
-      const description = String(item.description || "").trim();
+      const label = checklistNormalizeEntryText(item.label).trim();
+      const description = checklistNormalizeEntryText(item.description).trim();
       return {
         ...item,
         label: label || description,
@@ -4037,16 +4148,16 @@ function cleanChecklistTemplateForSave(template) {
       const rooms = section.rooms
         .map((room, roomIndex) => ({
           ...room,
-          title: String(room.title || "").trim(),
-          description: String(room.description || "").trim(),
+          title: checklistNormalizeEntryText(room.title).trim(),
+          description: checklistNormalizeEntryText(room.description).trim(),
           sort_order: roomIndex,
           items: cleanChecklistItemsForSave(room.items)
         }))
         .filter((room) => room.title.trim() || room.items.length);
       return {
         ...section,
-        title: section.title.trim() || "Untitled Module",
-        description: String(section.description || "").trim(),
+        title: checklistNormalizeEntryText(section.title).trim() || "Untitled Module",
+        description: checklistNormalizeEntryText(section.description).trim(),
         sort_order: sectionIndex,
         items,
         rooms
@@ -4055,11 +4166,11 @@ function cleanChecklistTemplateForSave(template) {
     .filter((section) => section.title.trim() || section.items.length || section.rooms.length);
   return {
     ...normalized,
-    name: normalized.name.trim(),
-    department: normalized.department.trim(),
-    subdepartment: normalized.subdepartment.trim(),
+    name: checklistNormalizeEntryText(normalized.name).trim(),
+    department: checklistNormalizeEntryText(normalized.department).trim(),
+    subdepartment: checklistNormalizeEntryText(normalized.subdepartment).trim(),
     priority: normalized.priority || "medium",
-    description: normalized.description.trim(),
+    description: checklistNormalizeEntryText(normalized.description).trim(),
     sections: sections.length ? sections : [createChecklistSection()]
   };
 }
@@ -4103,15 +4214,7 @@ function checklistItemMediaKind(value = {}) {
 
 function checklistMediaNoticeHtml(value = {}) {
   const kind = checklistItemMediaKind(value);
-  if (!kind) {
-    return `
-      <div class="checklist-media-option is-empty" data-checklist-media-notice>
-        <span>Upload</span>
-        <strong>No file required</strong>
-        <small>Choose Photo or Video to require proof from the contractor phone.</small>
-      </div>
-    `;
-  }
+  if (!kind) return "";
   const label = kind === "video" ? "Video" : "Photo";
   const required = value.required !== false;
   return `
@@ -4134,8 +4237,18 @@ function checklistRequiredControlHtml(item = {}) {
 }
 
 function updateChecklistMediaNotice(row, value = {}) {
-  const notice = row?.querySelector("[data-checklist-media-notice]");
-  if (notice) notice.outerHTML = checklistMediaNoticeHtml(value);
+  if (!row) return;
+  const hasUpload = Boolean(checklistItemMediaKind(value));
+  row.classList.toggle("has-upload", hasUpload);
+  const markup = checklistMediaNoticeHtml(value);
+  const notice = row.querySelector("[data-checklist-media-notice]");
+  if (notice && markup) {
+    notice.outerHTML = markup;
+  } else if (notice) {
+    notice.remove();
+  } else if (markup) {
+    row.querySelector("[data-checklist-remove-item]")?.insertAdjacentHTML("beforebegin", markup);
+  }
 }
 
 function updateChecklistRequiredControl(row) {
@@ -4180,6 +4293,15 @@ function normalizeChecklistModuleCounts(counts = {}, template = checklistState.b
 
 function checklistSingleModuleCounts(template = checklistState.builder || createBlankChecklistTemplate()) {
   return normalizeChecklistModuleCounts({}, template);
+}
+
+function checklistModuleOptionLabel(module = {}) {
+  const detail = [module.department, module.subdepartment].filter(Boolean).join(" / ");
+  return detail ? `${module.name} - ${detail}` : module.name || "Untitled Module";
+}
+
+function sortChecklistSavedModules(modules = []) {
+  return modules.slice().sort((a, b) => checklistModuleOptionLabel(a).localeCompare(checklistModuleOptionLabel(b), undefined, { sensitivity: "base" }));
 }
 
 function checklistTemplateOptions() {
@@ -4247,7 +4369,7 @@ function mergeSavedChecklistModules(moduleRows = [], templates = checklistState.
   (moduleRows || []).map(normalizeSavedChecklistModule).forEach((module) => {
     if (module.id) merged.set(module.id, module);
   });
-  return Array.from(merged.values()).sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
+  return sortChecklistSavedModules(Array.from(merged.values()));
 }
 
 function isMissingChecklistModulesTableError(error = {}) {
@@ -4262,7 +4384,7 @@ function isMissingChecklistModulesTableError(error = {}) {
 
 function useChecklistTemplateModulesFallback(selectedId = "") {
   checklistState.moduleTableMissing = true;
-  checklistState.savedModules = savedChecklistModulesFromTemplates(checklistState.templates);
+  checklistState.savedModules = sortChecklistSavedModules(savedChecklistModulesFromTemplates(checklistState.templates));
   if (selectedId) checklistState.selectedModuleId = selectedId;
   renderChecklistModuleImporter();
 }
@@ -4271,9 +4393,8 @@ function checklistSavedModuleOptions() {
   if (!checklistState.savedModules.length) return `<option value="">No saved modules yet</option>`;
   return [
     `<option value="">Select saved module...</option>`,
-    ...checklistState.savedModules.map((module) => {
-      const detail = [module.department, module.subdepartment].filter(Boolean).join(" / ");
-      const label = detail ? `${module.name} - ${detail}` : module.name;
+    ...sortChecklistSavedModules(checklistState.savedModules).map((module) => {
+      const label = checklistModuleOptionLabel(module);
       return `<option value="${esc(module.id)}" ${module.id === checklistState.selectedModuleId ? "selected" : ""}>${esc(label)}</option>`;
     })
   ].join("");
@@ -4306,12 +4427,12 @@ function renderChecklistSectionCard(section, index) {
       <div class="checklist-section-head">
         <button class="ghost-icon-btn checklist-collapse-btn" type="button" data-checklist-toggle-section="${esc(section.id)}" aria-expanded="${isCollapsed ? "false" : "true"}" aria-label="${isCollapsed ? "Expand module" : "Collapse module"}">${icon(isCollapsed ? "chevron-right" : "chevron-down")}</button>
         <span class="checklist-drag-handle" role="button" tabindex="0" draggable="true" data-checklist-drag-handle aria-label="Drag module to reorder">${icon("grip")}</span>
-        <label class="suite-field"><span>Module ${index + 1} (${taskCount} task${taskCount === 1 ? "" : "s"})</span><input value="${esc(section.title || "")}" data-checklist-section-title placeholder="Bedroom, kitchen, bathroom" /></label>
+        <label class="suite-field"><span>Module ${index + 1} (${taskCount} task${taskCount === 1 ? "" : "s"})</span><input value="${esc(section.title || "")}" data-checklist-section-title placeholder="Bedroom, kitchen, bathroom" ${checklistTextAssistAttrs} /></label>
         <button class="secondary-action checklist-save-module-btn" type="button" data-checklist-save-section="${esc(section.id)}">${icon("check")}<span data-action-label>Save Module</span></button>
         <button class="ghost-icon-btn danger-btn" type="button" data-checklist-remove-section="${esc(section.id)}" aria-label="Remove module">${icon("trash")}</button>
       </div>
       <div class="checklist-section-body" data-checklist-section-body ${isCollapsed ? "hidden" : ""}>
-        <label class="suite-field checklist-module-description"><span>Module Description</span><input value="${esc(section.description || "")}" data-checklist-section-description placeholder="Reusable notes, room context, service expectations" /></label>
+        <label class="suite-field checklist-module-description"><span>Module Description</span><input value="${esc(section.description || "")}" data-checklist-section-description placeholder="Reusable notes, room context, service expectations" ${checklistTextAssistAttrs} /></label>
         <div class="checklist-item-list" data-checklist-item-list data-checklist-section-items>
           ${sectionItems.map((item) => renderChecklistItemRow(item, "section")).join("")}
         </div>
@@ -4331,7 +4452,7 @@ function renderChecklistRoomCard(sectionId, room) {
   return `
     <div class="checklist-room-card" data-checklist-room-id="${esc(room.id)}">
       <div class="checklist-room-head">
-        <label class="suite-field"><span>Sub-Area</span><input value="${esc(room.title || "")}" data-checklist-room-title placeholder="Closet, shower, appliance area" /></label>
+        <label class="suite-field"><span>Sub-Area</span><input value="${esc(room.title || "")}" data-checklist-room-title placeholder="Closet, shower, appliance area" ${checklistTextAssistAttrs} /></label>
         <button class="ghost-icon-btn danger-btn" type="button" data-checklist-remove-room="${esc(sectionId)}:${esc(room.id)}" aria-label="Remove sub-area">${icon("trash")}</button>
       </div>
       <div class="checklist-item-list" data-checklist-item-list>
@@ -4344,13 +4465,14 @@ function renderChecklistRoomCard(sectionId, room) {
 
 function renderChecklistItemRow(item, scope) {
   const attr = scope === "room" ? "data-checklist-room-item" : "data-checklist-section-item";
+  const hasUpload = Boolean(checklistItemMediaKind(item));
   return `
-    <div class="checklist-item-row" ${attr} data-checklist-item-id="${esc(item.id)}">
+    <div class="checklist-item-row ${hasUpload ? "has-upload" : ""}" ${attr} data-checklist-item-id="${esc(item.id)}">
       <span class="checklist-drag-handle checklist-item-drag-handle" role="button" tabindex="0" draggable="true" data-checklist-item-drag-handle aria-label="Drag checklist item to reorder">${icon("grip")}</span>
       ${checklistRequiredControlHtml(item)}
       <label class="suite-field"><span>Type</span><select data-checklist-item-type>${checklistItemTypeOptions(item.type)}</select></label>
-      <label class="suite-field"><span>Checklist Item</span><input value="${esc(item.label || "")}" data-checklist-item-label placeholder="Make bed, wipe counters, upload final photo" /></label>
-      <label class="suite-field checklist-item-description"><span>Item Description</span><input value="${esc(item.description || "")}" data-checklist-item-description placeholder="Extra detail, proof notes, contractor instructions" /></label>
+      <label class="suite-field"><span>Checklist Item</span><input value="${esc(item.label || "")}" data-checklist-item-label placeholder="Make bed, wipe counters, upload final photo" ${checklistTextAssistAttrs} /></label>
+      <label class="suite-field checklist-item-description"><span>Item Description</span><input value="${esc(item.description || "")}" data-checklist-item-description placeholder="Extra detail, proof notes, contractor instructions" ${checklistTextAssistAttrs} /></label>
       ${checklistMediaNoticeHtml(item)}
       <button class="ghost-icon-btn danger-btn" type="button" data-checklist-remove-item="${esc(item.id)}" aria-label="Remove item">${icon("trash")}</button>
     </div>
@@ -4365,6 +4487,7 @@ function initChecklists() {
   root.addEventListener("submit", handleChecklistSubmit);
   root.addEventListener("input", handleChecklistInput);
   root.addEventListener("change", handleChecklistChange);
+  root.addEventListener("focusout", handleChecklistFocusOut);
   root.addEventListener("dragstart", handleChecklistDragStart);
   root.addEventListener("dragover", handleChecklistDragOver);
   root.addEventListener("drop", handleChecklistDrop);
@@ -4612,6 +4735,13 @@ function handleChecklistInput(event) {
   }
 }
 
+function handleChecklistFocusOut(event) {
+  if (!normalizeChecklistTextTarget(event.target)) return;
+  syncChecklistBuilderFromDom();
+  renderChecklistMetrics();
+  renderChecklistPreview();
+}
+
 function handleChecklistChange(event) {
   const target = event.target;
   if (target?.id === "checklistTemplateSelect") {
@@ -4645,6 +4775,7 @@ function handleChecklistChange(event) {
     updateChecklistRequiredControl(row);
     updateChecklistMediaNotice(row, readChecklistItemNode(row));
   }
+  normalizeChecklistTextTarget(target);
   if (target.closest("#checklistTemplateForm, #checklistSections")) {
     syncChecklistBuilderFromDom();
     renderChecklistAssignmentPanel();
@@ -4776,20 +4907,20 @@ async function refreshSavedChecklistModules(options = {}) {
 
 function syncChecklistBuilderFromDom() {
   const current = checklistState.builder || createBlankChecklistTemplate();
-  const formValue = (id) => (document.getElementById(id)?.value || "").trim();
+  const formValue = (id) => checklistNormalizeEntryText(document.getElementById(id)?.value || "").trim();
   const sections = Array.from(document.querySelectorAll("[data-checklist-section-id]")).map((sectionNode, sectionIndex) => {
     const sectionItems = Array.from(sectionNode.querySelectorAll("[data-checklist-section-item]")).map(readChecklistItemNode);
     const rooms = Array.from(sectionNode.querySelectorAll("[data-checklist-room-id]")).map((roomNode, roomIndex) => ({
       id: roomNode.dataset.checklistRoomId || checklistUid("room"),
-      title: roomNode.querySelector("[data-checklist-room-title]")?.value.trim() || `Room ${roomIndex + 1}`,
+      title: checklistNormalizeEntryText(roomNode.querySelector("[data-checklist-room-title]")?.value || "").trim() || `Room ${roomIndex + 1}`,
       sort_order: roomIndex,
       items: Array.from(roomNode.querySelectorAll("[data-checklist-room-item]")).map(readChecklistItemNode)
     }));
     return {
       id: sectionNode.dataset.checklistSectionId || checklistUid("section"),
       saved_module_id: sectionNode.dataset.checklistSavedModuleId || "",
-      title: sectionNode.querySelector("[data-checklist-section-title]")?.value.trim() || `Section ${sectionIndex + 1}`,
-      description: sectionNode.querySelector("[data-checklist-section-description]")?.value.trim() || "",
+      title: checklistNormalizeEntryText(sectionNode.querySelector("[data-checklist-section-title]")?.value || "").trim() || `Section ${sectionIndex + 1}`,
+      description: checklistNormalizeEntryText(sectionNode.querySelector("[data-checklist-section-description]")?.value || "").trim(),
       sort_order: sectionIndex,
       items: sectionItems,
       rooms
@@ -4814,8 +4945,8 @@ function readChecklistItemNode(node) {
     id: node.dataset.checklistItemId || checklistUid("item"),
     type,
     required: Boolean(node.querySelector("[data-checklist-item-required]")?.checked),
-    label: node.querySelector("[data-checklist-item-label]")?.value.trim() || "",
-    description: node.querySelector("[data-checklist-item-description]")?.value.trim() || ""
+    label: checklistNormalizeEntryText(node.querySelector("[data-checklist-item-label]")?.value || "").trim(),
+    description: checklistNormalizeEntryText(node.querySelector("[data-checklist-item-description]")?.value || "").trim()
   };
 }
 
@@ -4840,7 +4971,7 @@ function startNewChecklistTemplate() {
 
 function addChecklistSection() {
   syncChecklistBuilderFromDom();
-  const title = (document.getElementById("newChecklistSectionTitle")?.value || "").trim() || "New Module";
+  const title = checklistNormalizeEntryText(document.getElementById("newChecklistSectionTitle")?.value || "").trim() || "New Module";
   checklistState.builder.sections.push(createChecklistSection(title));
   const field = document.getElementById("newChecklistSectionTitle");
   if (field) field.value = "";
