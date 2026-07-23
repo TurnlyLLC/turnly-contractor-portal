@@ -241,6 +241,31 @@
   padding: 20px 22px 28px;
 }
 
+.cp-admin-preview-notice {
+  align-items: center;
+  background: rgba(0, 214, 163, 0.1);
+  border: 1px solid rgba(0, 214, 163, 0.28);
+  border-radius: 8px;
+  color: var(--cp-text);
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  min-height: 40px;
+  padding: 9px 12px;
+}
+
+.cp-admin-preview-notice strong {
+  color: var(--cp-green);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cp-admin-preview-notice span {
+  color: var(--cp-soft);
+  font-size: 12px;
+}
+
 .cp-topbar {
   align-items: center;
   display: grid;

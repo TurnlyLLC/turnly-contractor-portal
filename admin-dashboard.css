@@ -1704,6 +1704,29 @@ body.admin-command-body[data-portal-role="property-manager"] .metric-card {
   min-width: min(100%, 500px);
 }
 
+.pm-admin-preview-notice {
+  align-items: center;
+  background: rgba(0, 214, 163, 0.1);
+  border-color: rgba(0, 214, 163, 0.28);
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  min-height: 40px;
+  padding: 9px 12px;
+}
+
+.pm-admin-preview-notice strong {
+  color: var(--pm-green);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pm-admin-preview-notice span {
+  color: var(--pm-muted);
+  font-size: 12px;
+}
+
 body.admin-command-body[data-portal-role="property-manager"] .topbar-tools {
   align-items: center;
   display: flex;

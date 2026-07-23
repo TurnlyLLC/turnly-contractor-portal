@@ -1,4 +1,14 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+import {
+  adminPreviewPortalOptions,
+  adminPreviewPropertyOptions,
+  adminPreviewUserOptions,
+  adminPreviewSummary,
+  adminPreviewTargetUrl,
+  clearAdminPreviewContext,
+  readAdminPreviewContext,
+  writeAdminPreviewContext
+} from "./admin-preview-context.js?v=20260723-admin-preview";
 
 const suiteEnv = window.__ENV || {};
 const suiteSupabase = suiteEnv.SUPABASE_URL && suiteEnv.SUPABASE_ANON_KEY
@@ -458,7 +468,8 @@ const topbarState = {
   messageReadAt: new Map(),
   notificationError: "",
   loaded: false,
-  loading: false
+  loading: false,
+  previewOpen: false
 };
 const internalMessageState = {
   user: null,
@@ -12705,6 +12716,56 @@ function renderSidebar(activeKey) {
   `;
 }
 
+function renderAdminPreviewSelect(label, field, options, selectedValue) {
+  return `
+    <label class="admin-preview-field">
+      <span>${esc(label)}</span>
+      <select data-admin-preview-field="${esc(field)}">
+        ${options.map((option) => `<option value="${esc(option.value)}" ${option.value === selectedValue ? "selected" : ""}>${esc(option.label)}</option>`).join("")}
+      </select>
+    </label>
+  `;
+}
+
+function renderAdminPreviewSwitcher() {
+  const preview = readAdminPreviewContext();
+  return `
+    <div class="admin-preview-wrap">
+      <button id="adminPreviewBtn" class="admin-preview-trigger" type="button" aria-haspopup="menu" aria-expanded="${topbarState.previewOpen ? "true" : "false"}" aria-controls="adminPreviewMenu">
+        ${icon("users")}
+        <span><strong>Portal Preview</strong><small id="adminPreviewSummary">${esc(adminPreviewSummary(preview))}</small></span>
+        ${icon("chevron-down")}
+      </button>
+      <div id="adminPreviewMenu" class="topbar-dropdown admin-preview-menu" ${topbarState.previewOpen ? "" : "hidden"}>
+        <div class="admin-preview-header">
+          ${icon("shield")}
+          <span><strong>Admin Preview Mode</strong><small>Open a portal as a selected user and property.</small></span>
+        </div>
+        ${renderAdminPreviewSelect("View", "portal", adminPreviewPortalOptions, preview.portal)}
+        ${renderAdminPreviewSelect("Property / Contract", "property", adminPreviewPropertyOptions, preview.property)}
+        ${renderAdminPreviewSelect("User", "user", adminPreviewUserOptions, preview.user)}
+        <div class="admin-preview-actions">
+          <button class="primary-action" type="button" data-admin-preview-open>${icon("chevron-right")}<span>Open View</span></button>
+          <button class="secondary-action" type="button" data-admin-preview-clear>${icon("x")}<span>Clear</span></button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function adminPreviewContextFromControls() {
+  const current = readAdminPreviewContext();
+  document.querySelectorAll("[data-admin-preview-field]").forEach((field) => {
+    current[field.dataset.adminPreviewField] = field.value;
+  });
+  return writeAdminPreviewContext(current);
+}
+
+function syncAdminPreviewSummary() {
+  const summary = document.getElementById("adminPreviewSummary");
+  if (summary) summary.textContent = adminPreviewSummary(readAdminPreviewContext());
+}
+
 function renderTopbar(page, activeKey) {
   const actions = page.actions || (page.action ? [page.action] : []);
   const actionMarkup = actions.map((action) => actionLink(action.label, action.icon, action.href, action.tone)).join("");
@@ -12717,6 +12778,7 @@ function renderTopbar(page, activeKey) {
         <p>${esc(page.subtitle || "")}</p>
       </div>
       <div class="topbar-tools">
+        ${renderAdminPreviewSwitcher()}
         <div class="global-search topbar-search-wrap" role="search">
           ${icon("search")}
           <input id="globalSearchInput" type="search" placeholder="Search anything..." autocomplete="off" />
@@ -12761,6 +12823,7 @@ function initTopbar() {
   const avatarButton = document.getElementById("topAvatarUploadBtn");
   const avatarInput = document.getElementById("topAvatarInput");
   const signOutButton = document.getElementById("topSignOutBtn");
+  const previewButton = document.getElementById("adminPreviewBtn");
   const themeToggle = document.querySelector("[data-dashboard-theme-toggle]");
 
   search?.addEventListener("input", () => renderTopbarSearchResults(search.value));
@@ -12780,6 +12843,25 @@ function initTopbar() {
   profileButton?.addEventListener("click", (event) => {
     event.stopPropagation();
     toggleTopbarMenu("profile");
+  });
+  previewButton?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    toggleTopbarMenu("preview");
+  });
+  document.querySelectorAll("[data-admin-preview-field]").forEach((field) => {
+    field.addEventListener("change", () => {
+      adminPreviewContextFromControls();
+      syncAdminPreviewSummary();
+    });
+  });
+  document.querySelector("[data-admin-preview-open]")?.addEventListener("click", () => {
+    const context = adminPreviewContextFromControls();
+    window.location.href = adminPreviewTargetUrl(context);
+  });
+  document.querySelector("[data-admin-preview-clear]")?.addEventListener("click", () => {
+    clearAdminPreviewContext();
+    topbarState.previewOpen = false;
+    window.location.href = "admin.html";
   });
   avatarButton?.addEventListener("click", () => avatarInput?.click());
   avatarInput?.addEventListener("change", () => {
@@ -13055,27 +13137,36 @@ function renderTopbarSearchResults(value) {
 function toggleTopbarMenu(menu) {
   const notifications = document.getElementById("topNotificationsMenu");
   const profile = document.getElementById("topProfileMenu");
+  const preview = document.getElementById("adminPreviewMenu");
   const notificationsButton = document.getElementById("topNotificationsBtn");
   const profileButton = document.getElementById("topProfileBtn");
-  const target = menu === "notifications" ? notifications : profile;
+  const previewButton = document.getElementById("adminPreviewBtn");
+  const target = menu === "notifications" ? notifications : menu === "preview" ? preview : profile;
   const isOpening = Boolean(target?.hidden);
   closeTopbarMenus();
   if (target && isOpening) target.hidden = false;
+  topbarState.previewOpen = menu === "preview" && isOpening;
   notificationsButton?.setAttribute("aria-expanded", menu === "notifications" && isOpening ? "true" : "false");
   profileButton?.setAttribute("aria-expanded", menu === "profile" && isOpening ? "true" : "false");
+  previewButton?.setAttribute("aria-expanded", menu === "preview" && isOpening ? "true" : "false");
 }
 
 function closeTopbarMenus() {
   const searchResults = document.getElementById("globalSearchResults");
   const notifications = document.getElementById("topNotificationsMenu");
   const profile = document.getElementById("topProfileMenu");
+  const preview = document.getElementById("adminPreviewMenu");
   const notificationsButton = document.getElementById("topNotificationsBtn");
   const profileButton = document.getElementById("topProfileBtn");
+  const previewButton = document.getElementById("adminPreviewBtn");
   if (searchResults) searchResults.hidden = true;
   if (notifications) notifications.hidden = true;
   if (profile) profile.hidden = true;
+  if (preview) preview.hidden = true;
+  topbarState.previewOpen = false;
   notificationsButton?.setAttribute("aria-expanded", "false");
   profileButton?.setAttribute("aria-expanded", "false");
+  previewButton?.setAttribute("aria-expanded", "false");
 }
 
 async function uploadTopbarAvatar(file) {

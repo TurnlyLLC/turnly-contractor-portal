@@ -1,4 +1,10 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+import {
+  buildPreviewEffectiveUser,
+  resolvePreviewProfile,
+  resolvePreviewProperty,
+  verifyAdminPreviewSession
+} from "./admin-preview-context.js?v=20260723-admin-preview";
 
 const env = window.__ENV || {};
 const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
@@ -101,6 +107,24 @@ if (!supabase) {
   if (!user) {
     window.location.href = "contractor-login.html";
   } else {
+    const previewSession = await verifyAdminPreviewSession(supabase, user);
+    if (previewSession?.preview?.portal === "contractor") {
+      const previewProfile = await resolvePreviewProfile(supabase, previewSession.preview, "contractor");
+      const previewUser = buildPreviewEffectiveUser(previewProfile, user, "contractor");
+      if (!previewProfile || !previewUser) {
+        renderNotice("Preview unavailable", "Turnly could not find the selected contractor profile for admin preview.");
+      } else {
+        window.turnlyAdminPreviewContext = {
+          ...previewSession,
+          effectiveRole: "contractor",
+          effectiveProfile: previewProfile,
+          effectiveUser: previewUser,
+          property: await resolvePreviewProperty(supabase, previewSession.preview)
+        };
+        await import("./contractor-portal.js?v=20260723-admin-preview");
+        await import("./contractor-job-flow-mobile.js?v=20260715-contract-access-notes");
+      }
+    } else {
     const profile = await getProfile(user.id);
     const metadataRole = normalizeToken(user.user_metadata?.role);
     const role = metadataRole === "property_manager"
@@ -124,6 +148,7 @@ if (!supabase) {
     } else {
       await import("./contractor-portal.js?v=20260720-portal-theme-toggle");
       await import("./contractor-job-flow-mobile.js?v=20260715-contract-access-notes");
+    }
     }
   }
 }

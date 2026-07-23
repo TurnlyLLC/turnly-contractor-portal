@@ -1,4 +1,14 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+import {
+  adminPreviewSummary,
+  buildPreviewEffectiveUser,
+  previewIdentityValues,
+  resolvePreviewProfile,
+  resolvePreviewProperty,
+  rowMatchesPreviewProperty,
+  rowMatchesPreviewUser,
+  verifyAdminPreviewSession
+} from "./admin-preview-context.js?v=20260723-admin-preview";
 
 const env = window.__ENV || {};
 const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
@@ -57,6 +67,9 @@ const state = {
   openAssignments: [],
   myAssignments: [],
   videos: [],
+  adminPreview: null,
+  adminPreviewProperty: null,
+  adminUser: null,
   availability: {
     status: "available",
     days: {
@@ -283,6 +296,58 @@ function initials() {
 
 function contractorName() {
   return state.profile?.full_name || state.user?.user_metadata?.full_name || state.user?.email?.split("@")[0] || "Contractor";
+}
+
+async function applyContractorAdminPreview(authUser) {
+  const existing = window.turnlyAdminPreviewContext;
+  const session = existing?.preview?.portal === "contractor"
+    ? existing
+    : await verifyAdminPreviewSession(supabase, authUser);
+  if (session?.preview?.portal !== "contractor") return false;
+
+  const previewProfile = session.effectiveProfile || await resolvePreviewProfile(supabase, session.preview, "contractor");
+  const previewUser = session.effectiveUser || buildPreviewEffectiveUser(previewProfile, authUser, "contractor");
+  if (!previewProfile || !previewUser) {
+    state.message = "Admin preview could not find the selected contractor profile.";
+    state.messageError = true;
+    return false;
+  }
+
+  state.adminPreview = session.preview;
+  state.adminPreviewProperty = session.property || await resolvePreviewProperty(supabase, session.preview);
+  state.adminUser = session.adminUser || authUser;
+  state.user = previewUser;
+  state.profile = {
+    ...previewProfile,
+    role: "contractor",
+    status: previewProfile.status || "active",
+    contractor_approved: true
+  };
+  return true;
+}
+
+function contractorPreviewIdentityValues() {
+  return previewIdentityValues(state.profile, state.user);
+}
+
+function matchesContractorPreviewUser(row = {}) {
+  if (!state.adminPreview) return true;
+  return rowMatchesPreviewUser(row, contractorPreviewIdentityValues());
+}
+
+function matchesContractorPreviewProperty(row = {}) {
+  if (!state.adminPreview) return true;
+  return rowMatchesPreviewProperty(row, state.adminPreview);
+}
+
+function renderContractorAdminPreviewNotice() {
+  if (!state.adminPreview) return "";
+  return `
+    <aside class="cp-admin-preview-notice">
+      <strong>Admin Preview</strong>
+      <span>${esc(adminPreviewSummary(state.adminPreview))}</span>
+    </aside>
+  `;
 }
 
 function statusClass(status) {
@@ -775,6 +840,7 @@ function renderShell() {
     <main class="cp-shell">
       ${sidebar()}
       <section class="cp-main" id="${pageKey === "dashboard" ? "contractorDashboard" : "contractorPortalMain"}">
+        ${renderContractorAdminPreviewNotice()}
         ${renderPage()}
       </section>
       ${jobDetailDrawer()}
@@ -1587,14 +1653,17 @@ async function loadData() {
   }
 
   const { data: userData } = await supabase.auth.getUser();
-  state.user = userData?.user || null;
-  if (!state.user) {
+  const authUser = userData?.user || null;
+  state.user = authUser;
+  if (!authUser) {
     window.location.href = "contractor-login.html";
     return;
   }
 
+  const previewApplied = await applyContractorAdminPreview(authUser);
+
   await Promise.all([
-    loadProfile(),
+    previewApplied ? Promise.resolve() : loadProfile(),
     loadAvailability(),
     loadOpenAssignments(),
     loadMyAssignments(),
@@ -1646,15 +1715,22 @@ async function loadOpenAssignments() {
     return;
   }
 
-  state.openAssignments = (data || []).filter(isClaimableBoardAssignment);
+  state.openAssignments = (data || [])
+    .filter(isClaimableBoardAssignment)
+    .filter(matchesContractorPreviewProperty);
 }
 
 async function loadMyAssignments() {
-  const { data, error } = await supabase
+  let query = supabase
     .from("assignment_blocks")
     .select("*")
-    .or(`claimed_by.eq.${state.user.id},assigned_to.eq.${state.user.id}`)
     .order("start_window", { ascending: true });
+
+  if (!state.adminPreview) {
+    query = query.or(`claimed_by.eq.${state.user.id},assigned_to.eq.${state.user.id}`);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     state.message = `Unable to load my jobs: ${error.message}`;
@@ -1663,7 +1739,9 @@ async function loadMyAssignments() {
     return;
   }
 
-  state.myAssignments = data || [];
+  state.myAssignments = (data || [])
+    .filter(matchesContractorPreviewUser)
+    .filter(matchesContractorPreviewProperty);
 }
 
 async function loadVideos() {
@@ -1672,7 +1750,10 @@ async function loadVideos() {
     .select("id,title,label,video_phase,property_name,unit_name,contractor_name,recorded_at,notes,created_at")
     .order("created_at", { ascending: false })
     .limit(24);
-  state.videos = error ? [] : data || [];
+  const rows = error ? [] : data || [];
+  state.videos = state.adminPreview
+    ? rows.filter((row) => matchesContractorPreviewProperty(row) && matchesContractorPreviewUser(row))
+    : rows;
 }
 
 async function loadMessageThreads() {
@@ -1886,8 +1967,11 @@ async function claimAssignment(assignmentId) {
   state.messageError = false;
   renderShell();
 
-  let result = await supabase.rpc("claim_assignment_block", { target_assignment_id: assignmentId });
-  if (result.error && /function|schema cache|not found/i.test(result.error.message || "")) {
+  let result = null;
+  if (!state.adminPreview) {
+    result = await supabase.rpc("claim_assignment_block", { target_assignment_id: assignmentId });
+  }
+  if (state.adminPreview || (result?.error && /function|schema cache|not found/i.test(result.error.message || ""))) {
     const contractor = contractorName();
     const claimPayload = {
       status: "claimed",
@@ -1920,7 +2004,7 @@ async function claimAssignment(assignmentId) {
     }
   }
 
-  if (result.error) {
+  if (result?.error) {
     state.message = `Unable to claim assignment: ${result.error.message}`;
     state.messageError = true;
   } else {
@@ -2043,7 +2127,7 @@ function attachEvents() {
     const logoutButton = event.target.closest("[data-contractor-logout], #logoutBtn");
     if (logoutButton) {
       await supabase?.auth.signOut();
-      window.location.href = "contractor-login.html";
+      window.location.href = "https://portal.turnlypros.com/";
       return;
     }
 

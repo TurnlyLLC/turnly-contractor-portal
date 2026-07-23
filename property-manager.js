@@ -1,4 +1,11 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+import {
+  adminPreviewSummary,
+  buildPreviewEffectiveUser,
+  resolvePreviewProfile,
+  resolvePreviewProperty,
+  verifyAdminPreviewSession
+} from "./admin-preview-context.js?v=20260723-admin-preview";
 
 const VIDEO_BUCKET = "qa-videos";
 const SIGNED_URL_SECONDS = 60 * 60 * 4;
@@ -16,6 +23,8 @@ const managerMain = document.querySelector(".command-main");
 const state = {
   user: null,
   profile: null,
+  adminPreview: null,
+  adminUser: null,
   property: null,
   propertyLinkPending: false,
   client: null,
@@ -133,6 +142,61 @@ function hasPropertyManagerSignal(user, profile) {
     Boolean(profile?.property_manager_property_id) ||
     Boolean(profile?.requested_property_name) ||
     Boolean(user?.user_metadata?.requested_property_name);
+}
+
+async function applyManagerAdminPreview(authUser) {
+  const session = await verifyAdminPreviewSession(supabase, authUser);
+  if (session?.preview?.portal !== "property_manager") return false;
+
+  const previewProfile = await resolvePreviewProfile(supabase, session.preview, "property_manager");
+  const previewProperty = await resolvePreviewProperty(supabase, session.preview);
+  const previewUser = buildPreviewEffectiveUser(previewProfile, authUser, "property_manager");
+  if (!previewProfile || !previewUser) {
+    state.dataMessage = "Admin preview could not find the selected property manager profile.";
+    state.dataError = true;
+    return false;
+  }
+
+  state.adminPreview = session.preview;
+  state.adminUser = authUser;
+  state.user = previewUser;
+  state.profile = {
+    ...previewProfile,
+    role: "property_manager",
+    status: previewProfile.status || "active",
+    property_manager_property_id: previewProperty?.id || previewProfile.property_manager_property_id || null,
+    requested_property_name: session.preview.propertyLabel || previewProfile.requested_property_name || ""
+  };
+  state.view = currentView();
+
+  if (!state.profile.property_manager_property_id) {
+    state.property = null;
+    state.propertyLinkPending = true;
+    state.client = null;
+    state.contract = null;
+    state.relatedProperties = [];
+    state.units = [];
+    state.assignments = [];
+    state.qaJobs = [];
+    state.videos = [];
+    state.dataMessage = `Admin preview could not find ${session.preview.propertyLabel} in portal properties.`;
+    state.dataError = true;
+    renderManagerPortal();
+    await loadManagerMessages();
+    renderManagerPortal();
+    return true;
+  }
+
+  state.property = previewProperty || {
+    id: state.profile.property_manager_property_id,
+    name: state.profile.requested_property_name,
+    property_name: state.profile.requested_property_name,
+    access_limited: true
+  };
+  state.propertyLinkPending = false;
+  renderManagerPortal(true);
+  await refreshManagerPortal();
+  return true;
 }
 
 async function repairPropertyManagerProfile(user, profile = {}) {
@@ -847,6 +911,10 @@ async function requireManagerAccess() {
     return;
   }
 
+  if (await applyManagerAdminPreview(user)) {
+    return;
+  }
+
   let { data: profile, error } = await supabase
     .from("profiles")
     .select("id,role,full_name,email,status,property_manager_property_id,requested_property_name")
@@ -1265,10 +1333,21 @@ function renderManagerPortal(loading = false) {
       </div>
       ${renderTopBar()}
     </header>
+    ${renderManagerAdminPreviewNotice()}
     ${renderDataStatus(loading)}
     ${renderPropertyLinkNotice()}
     ${renderRequestForm()}
     ${renderCurrentView()}
+  `;
+}
+
+function renderManagerAdminPreviewNotice() {
+  if (!state.adminPreview) return "";
+  return `
+    <aside class="panel-card pm-admin-preview-notice">
+      <strong>Admin Preview</strong>
+      <span>${esc(adminPreviewSummary(state.adminPreview))}</span>
+    </aside>
   `;
 }
 
@@ -2546,16 +2625,33 @@ async function createTurnRequest(form) {
   setManagerMessageStatus("Submitting turn request...");
   renderManagerPortal();
 
-  const { data: assignmentId, error: requestError } = await supabase.rpc("create_property_manager_turn_request", {
-    request_payload: {
+  let assignmentId = "";
+  let requestError = null;
+  if (state.adminPreview) {
+    const result = await createAdminPreviewTurnRequest({
       unit,
-      service_type: service,
+      service,
       priority,
-      move_in_date: moveInDateValue,
-      move_in_time: MOVE_IN_TIME_LABEL,
+      moveInDateValue,
+      moveInDate,
       notes
-    }
-  });
+    });
+    assignmentId = result.assignmentId || "";
+    requestError = result.error || null;
+  } else {
+    const result = await supabase.rpc("create_property_manager_turn_request", {
+      request_payload: {
+        unit,
+        service_type: service,
+        priority,
+        move_in_date: moveInDateValue,
+        move_in_time: MOVE_IN_TIME_LABEL,
+        notes
+      }
+    });
+    assignmentId = result.data || "";
+    requestError = result.error || null;
+  }
 
   if (requestError) {
     state.sending = false;
@@ -2594,6 +2690,94 @@ async function createTurnRequest(form) {
     await refreshManagerPortal();
     renderManagerPortal();
   }
+}
+
+async function createAdminPreviewTurnRequest({ unit, service, priority, moveInDateValue, moveInDate, notes }) {
+  const unitRecord = unit ? matchingUnit({ unit_name: unit, unit_number: unit }) : null;
+  const start = moveInDate || scheduledMoveInDate(moveInDateValue);
+  const end = start ? new Date(start.getTime() + 2 * 60 * 60 * 1000) : null;
+  const propertyId = state.profile?.property_manager_property_id || state.property?.id || null;
+  const propertyName = propertyTitle();
+  const requesterName = getName(state.user, state.profile);
+  const requesterEmail = state.profile?.email || state.user?.email || "";
+  if (!propertyId) {
+    return { assignmentId: "", error: new Error("Select a linked portal property before submitting a preview turn request.") };
+  }
+
+  const metadata = {
+    source: "property_manager_turn_request",
+    admin_preview_source: true,
+    admin_approval_status: "pending",
+    requested_by: state.user?.id || "",
+    requested_by_name: requesterName,
+    requested_by_email: requesterEmail,
+    requested_at: new Date().toISOString(),
+    portal_property_id: propertyId,
+    property_name: propertyName,
+    unit_id: unitRecord?.id || null,
+    unit_name: unit || null,
+    unit_number: unit || null,
+    unit_square_feet: unitRecord?.square_feet ?? unitRecord?.sq_ft ?? null,
+    unit_customer_price: unitRecord?.customer_price ?? null,
+    unit_contractor_pay: unitRecord?.contractor_pay ?? null,
+    move_in_date: moveInDateValue,
+    move_in_time: MOVE_IN_TIME_LABEL,
+    property_manager_notes: notes || "",
+    admin_only_editable: ["start_window", "end_window"]
+  };
+
+  const payload = {
+    title: `${service}${unit ? ` - Unit ${unit}` : ""}`,
+    property_name: propertyName,
+    address: propertyAddress(),
+    service_type: service,
+    pay_amount: Number(unitRecord?.contractor_pay || 0),
+    unit_id: unitRecord?.id || null,
+    unit_number: unit || "",
+    unit_name: unit || "",
+    scope: "Property manager submitted unit cleaning request.",
+    supplies_notes: "",
+    special_instructions: notes || "",
+    status: "pending",
+    priority: normalizeToken(priority || "normal"),
+    start_window: start ? start.toISOString() : null,
+    end_window: end ? end.toISOString() : null,
+    assignment_type: "one_time",
+    recurrence_frequency: "one_time",
+    recurrence_interval: 1,
+    auto_renewal: false,
+    visibility: "pending",
+    created_by: state.user?.id || null,
+    portal_property_id: propertyId,
+    recurring_portal_property_id: propertyId,
+    metadata
+  };
+
+  const { data, error } = await supabase
+    .from("assignment_blocks")
+    .insert(payload)
+    .select("id")
+    .maybeSingle();
+
+  if (error || !data?.id) return { assignmentId: "", error: error || new Error("Turn request was created without an assignment id.") };
+
+  const linkPayload = {
+    portal_property_id: propertyId,
+    assignment_id: data.id,
+    link_type: "primary",
+    source: "property_manager_turn_request",
+    metadata: {
+      assignment_status: "pending",
+      assignment_start_window: start ? start.toISOString() : null,
+      requested_by: state.user?.id || ""
+    }
+  };
+
+  const { error: linkError } = await supabase
+    .from("property_assignment_links")
+    .upsert(linkPayload, { onConflict: "portal_property_id,assignment_id,link_type" });
+
+  return { assignmentId: data.id, error: linkError || null };
 }
 
 async function createManagerMessageThread(form, options = {}) {
