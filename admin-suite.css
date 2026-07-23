@@ -2926,6 +2926,13 @@ a {
   padding: 12px;
 }
 
+.checklist-module-import-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .checklist-editor-panel {
   min-width: 0;
 }

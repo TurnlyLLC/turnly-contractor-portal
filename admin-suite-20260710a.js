@@ -378,6 +378,7 @@ const checklistState = {
   user: null,
   isSaving: false,
   isSavingModule: false,
+  isDeletingModule: false,
   isApplying: false,
   moduleTableMissing: false,
   draggingSectionId: "",
@@ -4038,12 +4039,16 @@ function checklistCapitalizeLine(value) {
   return String(value || "").replace(/^(\s*[^A-Za-z0-9]*)([A-Za-z])/, (_, prefix, first) => `${prefix}${first.toUpperCase()}`);
 }
 
-function checklistNormalizeEntryText(value) {
-  return checklistAutocorrectText(String(value || "")
-    .replace(/[ \t]+$/gm, "")
+function checklistCapitalizeEntryText(value) {
+  return String(value || "")
     .split(/\r?\n/)
     .map(checklistCapitalizeLine)
-    .join("\n"));
+    .join("\n");
+}
+
+function checklistNormalizeEntryText(value) {
+  return checklistAutocorrectText(checklistCapitalizeEntryText(String(value || "")
+    .replace(/[ \t]+$/gm, "")));
 }
 
 function isChecklistTextTarget(target) {
@@ -4062,6 +4067,19 @@ function normalizeChecklistTextTarget(target) {
   const next = checklistNormalizeEntryText(target.value);
   if (target.value === next) return false;
   target.value = next;
+  return true;
+}
+
+function capitalizeChecklistTextTarget(target) {
+  if (!isChecklistTextTarget(target)) return false;
+  const next = checklistCapitalizeEntryText(target.value);
+  if (target.value === next) return false;
+  const start = target.selectionStart;
+  const end = target.selectionEnd;
+  target.value = next;
+  if (Number.isInteger(start) && Number.isInteger(end) && typeof target.setSelectionRange === "function") {
+    target.setSelectionRange(start, end);
+  }
   return true;
 }
 
@@ -4300,8 +4318,35 @@ function checklistModuleOptionLabel(module = {}) {
   return detail ? `${module.name} - ${detail}` : module.name || "Untitled Module";
 }
 
+const checklistModuleCategoryGroups = [
+  ["apartment", "Apartment Modules"],
+  ["commercial", "Commercial Modules"],
+  ["leasing-office", "Leasing Office Modules"]
+];
+
+function checklistModuleCategory(module = {}) {
+  const section = checklistJsonObject(module.section);
+  const haystack = [
+    module.name,
+    module.department,
+    module.subdepartment,
+    module.description,
+    section.title,
+    section.description
+  ].join(" ").toLowerCase();
+
+  if (/\b(leasing|lease|clubhouse|model|tour|prospect|resident office)\b/.test(haystack)) return "leasing-office";
+  if (/\b(commercial|office|retail|workspace|work space|lobby|conference|breakroom|restroom|common area|corridor)\b/.test(haystack)) return "commercial";
+  return "apartment";
+}
+
 function sortChecklistSavedModules(modules = []) {
   return modules.slice().sort((a, b) => checklistModuleOptionLabel(a).localeCompare(checklistModuleOptionLabel(b), undefined, { sensitivity: "base" }));
+}
+
+function selectedChecklistSavedModule() {
+  const id = document.getElementById("checklistModuleImportSelect")?.value || checklistState.selectedModuleId || "";
+  return checklistState.savedModules.find((module) => module.id === id) || null;
 }
 
 function checklistTemplateOptions() {
@@ -4391,23 +4436,30 @@ function useChecklistTemplateModulesFallback(selectedId = "") {
 
 function checklistSavedModuleOptions() {
   if (!checklistState.savedModules.length) return `<option value="">No saved modules yet</option>`;
-  return [
-    `<option value="">Select saved module...</option>`,
-    ...sortChecklistSavedModules(checklistState.savedModules).map((module) => {
-      const label = checklistModuleOptionLabel(module);
-      return `<option value="${esc(module.id)}" ${module.id === checklistState.selectedModuleId ? "selected" : ""}>${esc(label)}</option>`;
-    })
-  ].join("");
+  const grouped = checklistModuleCategoryGroups.map(([key, label]) => {
+    const modules = sortChecklistSavedModules(checklistState.savedModules.filter((module) => checklistModuleCategory(module) === key));
+    if (!modules.length) return "";
+    return `
+      <optgroup label="${esc(label)}">
+        ${modules.map((module) => `<option value="${esc(module.id)}" ${module.id === checklistState.selectedModuleId ? "selected" : ""}>${esc(checklistModuleOptionLabel(module))}</option>`).join("")}
+      </optgroup>
+    `;
+  }).join("");
+  return [`<option value="">Select saved module...</option>`, grouped].join("");
 }
 
 function checklistModuleImporterHtml() {
+  const hasSelection = Boolean(checklistState.selectedModuleId && checklistState.savedModules.some((module) => module.id === checklistState.selectedModuleId));
   return `
     <div class="checklist-module-importer">
       <label class="suite-field">
         <span>Import Saved Module</span>
         <select id="checklistModuleImportSelect">${checklistSavedModuleOptions()}</select>
       </label>
-      <button class="secondary-action" type="button" data-checklist-import-module ${checklistState.savedModules.length ? "" : "disabled"}>${icon("download")}<span>Import Module</span></button>
+      <div class="checklist-module-import-actions">
+        <button class="secondary-action" type="button" data-checklist-import-module ${checklistState.savedModules.length ? "" : "disabled"}>${icon("download")}<span>Import Module</span></button>
+        <button class="secondary-action danger-btn" type="button" data-checklist-remove-saved-module ${hasSelection && !checklistState.isDeletingModule ? "" : "disabled"}>${icon("trash")}<span data-action-label>${checklistState.isDeletingModule ? "Removing..." : "Remove"}</span></button>
+      </div>
     </div>
   `;
 }
@@ -4626,6 +4678,11 @@ function handleChecklistClick(event) {
     return;
   }
 
+  if (event.target.closest("[data-checklist-remove-saved-module]")) {
+    void removeSelectedChecklistModule();
+    return;
+  }
+
   const saveSection = event.target.closest("[data-checklist-save-section]");
   if (saveSection) {
     void saveChecklistModule(saveSection.dataset.checklistSaveSection);
@@ -4727,6 +4784,7 @@ function handleChecklistInput(event) {
     renderChecklistAssignmentPanel({ restoreUnitSearchFocus: true });
     return;
   }
+  capitalizeChecklistTextTarget(event.target);
   if (event.target.closest("#checklistTemplateForm, #checklistSections")) {
     syncChecklistBuilderFromDom();
     renderChecklistAssignmentPanel();
@@ -4759,6 +4817,7 @@ function handleChecklistChange(event) {
   }
   if (target?.id === "checklistModuleImportSelect") {
     checklistState.selectedModuleId = target.value || "";
+    renderChecklistModuleImporter();
     return;
   }
   if (target?.matches("[data-checklist-unit-option]")) {
@@ -4813,7 +4872,7 @@ async function loadChecklistData() {
   checklistState.templates = (templatesResult.data || []).map(normalizeChecklistTemplate);
   checklistState.moduleTableMissing = Boolean(modulesResult.error && isMissingChecklistModulesTableError(modulesResult.error));
   checklistState.savedModules = modulesResult.error
-    ? savedChecklistModulesFromTemplates(checklistState.templates)
+    ? sortChecklistSavedModules(savedChecklistModulesFromTemplates(checklistState.templates))
     : mergeSavedChecklistModules(modulesResult.data || [], checklistState.templates);
   checklistState.properties = (propertiesResult.data || [])
     .filter((row) => propertyUnitPropertyTitle(row))
@@ -4879,8 +4938,14 @@ function renderChecklistModuleImporter() {
     select.innerHTML = checklistSavedModuleOptions();
     select.value = checklistState.selectedModuleId || "";
   }
-  const button = document.querySelector("[data-checklist-import-module]");
-  if (button) button.disabled = !checklistState.savedModules.length;
+  const importButton = document.querySelector("[data-checklist-import-module]");
+  if (importButton) importButton.disabled = !checklistState.savedModules.length;
+  const removeButton = document.querySelector("[data-checklist-remove-saved-module]");
+  if (removeButton) {
+    removeButton.disabled = checklistState.isDeletingModule || !selectedChecklistSavedModule();
+    const label = removeButton.querySelector("[data-action-label]");
+    if (label) label.textContent = checklistState.isDeletingModule ? "Removing..." : "Remove";
+  }
 }
 
 async function refreshSavedChecklistModules(options = {}) {
@@ -5016,12 +5081,12 @@ function cleanChecklistSectionForSave(section = {}) {
     .slice()
     .sort((a, b) => Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0))
     .map((room, roomIndex) => {
-      const title = String(room.title || "").trim();
+      const title = checklistNormalizeEntryText(room.title).trim();
       const items = cleanChecklistItemsForSave(room.items);
       return {
         ...room,
         title,
-        description: String(room.description || "").trim(),
+        description: checklistNormalizeEntryText(room.description).trim(),
         sort_order: roomIndex,
         items
       };
@@ -5033,8 +5098,8 @@ function cleanChecklistSectionForSave(section = {}) {
     }));
   return {
     ...normalized,
-    title: String(normalized.title || "").trim() || "Untitled Module",
-    description: String(normalized.description || "").trim(),
+    title: checklistNormalizeEntryText(normalized.title).trim() || "Untitled Module",
+    description: checklistNormalizeEntryText(normalized.description).trim(),
     items,
     rooms
   };
@@ -5067,6 +5132,91 @@ async function importSavedChecklistModule() {
   renderChecklistMetrics();
   renderChecklistPreview();
   showChecklistMessage(`${savedModule.name} imported with ${savedItemCount.toLocaleString()} checklist item${savedItemCount === 1 ? "" : "s"}.`);
+}
+
+function checklistTemplateWithClearedModule(template = {}, moduleId = "") {
+  const normalized = normalizeChecklistTemplate(template);
+  let changed = false;
+  const sections = normalized.sections.map((section) => {
+    if (section.saved_module_id !== moduleId) return section;
+    changed = true;
+    return { ...section, saved_module_id: "" };
+  });
+  return {
+    changed,
+    template: changed ? { ...normalized, sections } : normalized
+  };
+}
+
+async function clearChecklistModuleReferences(moduleId = "") {
+  const updates = new Map();
+  const builderId = checklistState.builder?.id || "";
+
+  checklistState.templates = checklistState.templates.map((template) => {
+    const source = template.id && template.id === builderId ? checklistState.builder : template;
+    const result = checklistTemplateWithClearedModule(source, moduleId);
+    if (result.changed && result.template.id) updates.set(result.template.id, result.template);
+    return result.changed ? result.template : template;
+  });
+
+  const builderResult = checklistTemplateWithClearedModule(checklistState.builder || {}, moduleId);
+  if (builderResult.changed) {
+    checklistState.builder = builderResult.template;
+    if (builderResult.template.id) updates.set(builderResult.template.id, builderResult.template);
+  }
+
+  if (!suiteSupabase || !updates.size) return null;
+  const results = await Promise.all(Array.from(updates.values()).map((template) => (
+    suiteSupabase
+      .from(checklistTemplatesTable)
+      .update({ sections: template.sections })
+      .eq("id", template.id)
+  )));
+  return results.find((result) => result.error)?.error || null;
+}
+
+async function removeSelectedChecklistModule() {
+  if (checklistState.isDeletingModule) return;
+  syncChecklistBuilderFromDom();
+  const module = selectedChecklistSavedModule();
+  if (!module) {
+    showChecklistMessage("Select a saved module before removing it.", true);
+    return;
+  }
+
+  const confirmed = window.confirm(`Remove "${module.name || "this module"}" from the saved module import list? Existing checklist items already using it will stay in place.`);
+  if (!confirmed) return;
+
+  checklistState.isDeletingModule = true;
+  renderChecklistModuleImporter();
+  showChecklistMessage(`Removing ${module.name || "saved module"}...`);
+
+  const shouldDeleteModuleRow = suiteSupabase && !checklistState.moduleTableMissing && module.source !== "checklist_templates";
+  if (shouldDeleteModuleRow) {
+    const result = await suiteSupabase
+      .from(checklistModulesTable)
+      .delete()
+      .eq("id", module.id);
+
+    if (result.error && !isMissingChecklistModulesTableError(result.error)) {
+      checklistState.isDeletingModule = false;
+      renderChecklistModuleImporter();
+      showChecklistMessage("Unable to remove saved module: " + result.error.message, true);
+      return;
+    }
+  }
+
+  const referenceError = await clearChecklistModuleReferences(module.id);
+  checklistState.savedModules = sortChecklistSavedModules(checklistState.savedModules.filter((candidate) => candidate.id !== module.id));
+  checklistState.selectedModuleId = "";
+  checklistState.isDeletingModule = false;
+  renderChecklistData();
+
+  if (referenceError) {
+    showChecklistMessage(`Removed ${module.name || "saved module"}, but some checklist links could not be cleared: ${referenceError.message}`, true);
+    return;
+  }
+  showChecklistMessage(`${module.name || "Saved module"} removed from the import list.`);
 }
 
 function findChecklistSection(sectionId) {
