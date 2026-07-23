@@ -85,6 +85,7 @@ const viewLabels = {
 };
 
 const navViews = new Set(Object.keys(viewLabels));
+const searchlessViews = new Set(["turn-requests", "schedule", "unit-videos", "messages"]);
 const closedStatuses = new Set(["completed", "complete", "cancelled", "canceled", "declined", "deleted", "archived"]);
 const issueStatuses = new Set(["overdue", "qa_pending", "qa_rejected", "rejected", "needs_rework"]);
 const inProgressStatuses = new Set(["in_progress", "claimed", "started", "active", "qa_pending"]);
@@ -548,28 +549,73 @@ function assignmentTitle(row) {
 
 function assignmentUnit(row) {
   const meta = rowMeta(row);
-  return row?.unit_number || row?.unit_name || row?.property_unit_name || meta.unit_number || meta.unit_name || meta.unit_id || "";
+  const direct = row?.unit_number || row?.unit_name || row?.property_unit_name || row?.unit || meta.unit_number || meta.unit_name || meta.property_unit_name || meta.unit || "";
+  if (direct) return direct;
+  const unit = matchingUnit(row?.unit_id || meta.unit_id || row?.property_unit_id || meta.property_unit_id);
+  return unit?.unit_number || unit?.unit_name || unit?.name || "";
+}
+
+function normalizeUnitLookup(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function unitLookupValues(value) {
+  const meta = typeof value === "object" ? rowMeta(value) : {};
+  return compact([
+    typeof value === "string" || typeof value === "number" ? value : "",
+    value?.id,
+    value?.unit_id,
+    value?.property_unit_id,
+    value?.unit_number,
+    value?.unit_name,
+    value?.property_unit_name,
+    value?.name,
+    value?.unit,
+    meta.unit_id,
+    meta.property_unit_id,
+    meta.unit_number,
+    meta.unit_name,
+    meta.property_unit_name,
+    meta.unit
+  ]).map(normalizeUnitLookup).filter(Boolean);
 }
 
 function matchingUnit(rowOrValue) {
-  const unitName = typeof rowOrValue === "string" ? rowOrValue : assignmentUnit(rowOrValue);
-  if (!unitName) return null;
-  return state.units.find((unit) => String(unit.unit_name || "").toLowerCase() === String(unitName).toLowerCase()) || null;
+  const directValues = unitLookupValues(rowOrValue);
+  const assignmentValue = typeof rowOrValue === "object" ? normalizeUnitLookup(assignmentUnit(rowOrValue)) : "";
+  const values = new Set(compact([...directValues, assignmentValue]));
+  if (!values.size) return null;
+  return state.units.find((unit) => unitLookupValues(unit).some((value) => values.has(value))) || null;
 }
 
 function unitBedBath(rowOrUnit) {
-  const unit = rowOrUnit?.unit_name ? rowOrUnit : matchingUnit(rowOrUnit);
+  const unit = matchingUnit(rowOrUnit) || (rowOrUnit?.unit_name || rowOrUnit?.unit_number || rowOrUnit?.name ? rowOrUnit : null);
   const meta = rowMeta(rowOrUnit);
-  const bedrooms = unit?.bedroom_count || unit?.bedrooms || unit?.beds || meta.bedroom_count || meta.bedrooms || meta.beds;
-  const bathrooms = unit?.bathroom_count || unit?.bathrooms || unit?.baths || meta.bathroom_count || meta.bathrooms || meta.baths;
+  const bedrooms = unit?.bedroom_count ?? unit?.bedrooms ?? unit?.beds ?? unit?.bed_count ?? meta.bedroom_count ?? meta.bedrooms ?? meta.beds ?? meta.bed_count;
+  const bathrooms = unit?.bathroom_count ?? unit?.bathrooms ?? unit?.baths ?? unit?.bath_count ?? meta.bathroom_count ?? meta.bathrooms ?? meta.baths ?? meta.bath_count;
   return compact([
-    bedrooms ? `${bedrooms} Bed` : "",
-    bathrooms ? `${bathrooms} Bath` : ""
-  ]).join(" / ") || rowOrUnit?.service_type || "Standard Turn";
+    bedrooms !== undefined && bedrooms !== null && bedrooms !== "" ? `${bedrooms} Bed` : "",
+    bathrooms !== undefined && bathrooms !== null && bathrooms !== "" ? `${bathrooms} Bath` : ""
+  ]).join(" / ") || "Bed/Bath not set";
 }
 
 function assignmentCleaner(row) {
   return row?.assigned_to_name || row?.claimed_by_name || row?.completed_by_name || "Turnly crew";
+}
+
+function assignmentContractorText(row) {
+  const meta = rowMeta(row);
+  const names = Array.isArray(row?.preferred_contractor_names)
+    ? row.preferred_contractor_names.filter(Boolean)
+    : (Array.isArray(meta.preferred_contractor_names) ? meta.preferred_contractor_names.filter(Boolean) : []);
+  return row?.assigned_to_name
+    || row?.assigned_to_email
+    || row?.contractor_name
+    || row?.contractor_email
+    || row?.claimed_by_name
+    || row?.claimed_by_email
+    || names.join(", ")
+    || "Unassigned";
 }
 
 function assignmentCustomerAmount(row) {
@@ -606,6 +652,10 @@ function isCompletedAssignment(row) {
   return assignmentStatus(row) === "completed" || Boolean(row?.completed_at || row?.checklist_completed_at || row?.qa_approved_at);
 }
 
+function completionDateValue(row) {
+  return row?.completed_at || row?.checklist_completed_at || row?.qa_approved_at || row?.end_window || row?.start_window || row?.updated_at || row?.created_at;
+}
+
 function isUpcomingAssignment(row) {
   return !isClosedAssignment(row) && dateValue(row?.start_window || row?.recurring_due_at, Infinity) >= Date.now() - 86400000;
 }
@@ -635,8 +685,13 @@ function activeAssignments() {
   return sortedAssignments(state.assignments.filter((row) => !isClosedAssignment(row)));
 }
 
-function recentCompletedAssignments() {
+function completedAssignments() {
   return sortedAssignments(state.assignments.filter(isCompletedAssignment), "desc");
+}
+
+function recentCompletedAssignments(days = 30) {
+  const cutoff = Date.now() - days * 86400000;
+  return completedAssignments().filter((row) => dateValue(completionDateValue(row), 0) >= cutoff);
 }
 
 function upcomingAssignments(limit = 8) {
@@ -704,7 +759,12 @@ function currentView() {
   return navViews.has(raw) ? raw : "overview";
 }
 
+function viewSupportsSearch(view = state.view) {
+  return !searchlessViews.has(view);
+}
+
 function queryMatches(values) {
+  if (!viewSupportsSearch()) return true;
   const term = state.filters.query.trim().toLowerCase();
   if (!term) return true;
   return values.some((value) => String(value || "").toLowerCase().includes(term));
@@ -718,13 +778,13 @@ function managerMetrics() {
   lastWeekStart.setDate(lastWeekStart.getDate() - 7);
   const assignments = state.assignments;
   const completed = assignments.filter(isCompletedAssignment);
-  const completedThisWeek = completed.filter((row) => isDateBetween(row.completed_at || row.checklist_completed_at || row.qa_approved_at || row.start_window, thisWeekStart, thisWeekEnd)).length;
-  const completedLastWeek = completed.filter((row) => isDateBetween(row.completed_at || row.checklist_completed_at || row.qa_approved_at || row.start_window, lastWeekStart, thisWeekStart)).length;
+  const completedThisWeek = completed.filter((row) => isDateBetween(completionDateValue(row), thisWeekStart, thisWeekEnd)).length;
+  const completedLastWeek = completed.filter((row) => isDateBetween(completionDateValue(row), lastWeekStart, thisWeekStart)).length;
   const inProgress = assignments.filter((row) => inProgressStatuses.has(assignmentStatus(row))).length;
   const open = activeAssignments().filter((row) => requestGroup(row) === "open" || requestGroup(row) === "ready").length;
   const pending = assignments.filter((row) => requestGroup(row) === "pending").length;
   const scheduled = assignments.filter((row) => requestGroup(row) === "scheduled" || isUpcomingAssignment(row)).length;
-  const ready = assignments.filter((row) => requestGroup(row) === "ready").length || Math.max(state.units.length - inProgress, 0);
+  const ready = recentCompletedAssignments(30).length;
   const beforeVideos = state.videos.filter((video) => normalizeToken(video.video_phase) === "before").length;
   const afterVideos = state.videos.filter((video) => ["after", "final"].includes(normalizeToken(video.video_phase))).length;
   const videoSets = new Set(state.videos.map((video) => video.assignment_id || video.pair_id || video.id).filter(Boolean)).size;
@@ -1233,7 +1293,7 @@ function renderTopBar() {
   const unread = managerMetrics().unread;
   return `
     <div class="pm-topbar topbar-tools">
-      ${state.view === "messages" ? "" : `<div class="global-search topbar-search-wrap" role="search">
+      ${viewSupportsSearch() ? `<div class="global-search topbar-search-wrap" role="search">
         ${pmIcon("search")}
         <input data-manager-global-search data-pm-filter="query" type="search" value="${esc(state.filters.query)}" placeholder="Search anything..." autocomplete="off" />
         <kbd>K</kbd>
@@ -1335,7 +1395,7 @@ function renderOverviewView() {
     : (metrics.completedThisWeek ? 100 : 0);
   return `
     <section class="pm-stat-grid pm-stat-grid-four" aria-label="Property manager overview">
-      ${statCard("Units Ready", integer(metrics.ready), "Ready for Move-In", "green", "turn-requests")}
+      ${statCard("Units Ready", integer(metrics.ready), "completed last 30 days", "green", "turn-requests")}
       ${statCard("In Progress", integer(metrics.inProgress), "Currently Being Cleaned", "violet", "turn-requests")}
       ${statCard("Before & After Videos", integer(metrics.beforeAfter), "Ready to Watch", "blue", "unit-videos")}
       ${statCard("Completed This Week", integer(metrics.completedThisWeek), `${delta >= 0 ? "+" : ""}${delta}% vs last week`, "cyan", "schedule")}
@@ -1420,7 +1480,7 @@ function renderTurnRequestsView() {
   const rows = filteredRequests();
   return `
     ${renderTurnRequestCallout()}
-    ${renderRequestToolbar("Search turn requests...")}
+    ${renderRequestToolbar()}
     <section class="pm-stat-grid pm-stat-grid-five" aria-label="Turn request metrics">
       ${statCard("Total Requests", integer(metrics.totalRequests), "for linked property", "green")}
       ${statCard("Pending", integer(metrics.pending), "awaiting Turnly approval", "yellow")}
@@ -1429,7 +1489,7 @@ function renderTurnRequestsView() {
       ${statCard("Completed This Week", integer(metrics.completedThisWeek), "closed out", "green")}
     </section>
     <section class="pm-workspace-grid">
-      ${panel("Turn Requests", rows.length ? renderRequestTable(rows) : emptyBlock("No matching requests", "Try clearing the search or status filter."), { className: "pm-table-panel" })}
+      ${panel("Turn Requests", rows.length ? renderRequestTable(rows) : emptyBlock("No matching requests", "Try changing the status filter."), { className: "pm-table-panel" })}
       ${panel("Request Details", renderRequestDetails(selectedAssignment(rows)), { className: "pm-detail-panel" })}
     </section>
     <section class="pm-two-column-grid">
@@ -1461,7 +1521,6 @@ function renderTurnRequestCallout() {
 function renderRequestToolbar(placeholder = "Search...", includeNew = false) {
   return `
     <section class="panel-card pm-toolbar pm-turn-toolbar">
-      ${renderManagerSearch(placeholder, { className: "pm-local-search", label: "Search turn requests" })}
       <div class="pm-status-segment" aria-label="Request status">
         ${["all", "pending", "open", "in_progress", "ready", "on_hold", "completed"].map((key) => `<button type="button" class="${state.filters.requestStatus === key ? "active" : ""}" data-pm-request-status="${esc(key)}">${esc(key === "all" ? "All" : titleCase(key))}</button>`).join("")}
       </div>
@@ -1528,22 +1587,138 @@ function selectedAssignment(rows = state.assignments) {
   return rows.find((row) => row.id === state.selectedAssignmentId) || rows[0] || state.assignments[0] || null;
 }
 
-function renderRequestDetails(row) {
-  if (!row) return emptyBlock("No request selected", "Choose a turn request to see schedule, service notes, and videos.");
+function scheduleStatusKey(value) {
+  return String(value || "scheduled").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "scheduled";
+}
+
+function scheduleAcceptanceStatus(row) {
+  const status = scheduleStatusKey(row?.status);
+  if (["cancelled", "canceled", "declined"].includes(status)) return { label: titleCase(status), tone: status };
+  if (row?.accepted_at || row?.claimed_at || row?.claimed_by || ["claimed", "in-progress", "completed", "qa-pending"].includes(status)) {
+    return { label: "Accepted", tone: "accepted" };
+  }
+  if (row?.assigned_to || row?.assigned_to_name || row?.assigned_to_email || row?.contractor_id || row?.contractor_name) {
+    return { label: "Assigned", tone: "assigned" };
+  }
+  if (status === "preferred-pending" || pendingStatuses.has(assignmentStatus(row))) return { label: "Awaiting Accept", tone: "pending" };
+  return { label: "Not Accepted", tone: "not-accepted" };
+}
+
+function scheduleEventTime(row) {
+  const start = parseDate(row?.start_window || row?.recurring_due_at);
+  const end = parseDate(row?.end_window);
+  if (!start) return "Time not set";
+  const startText = start.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  if (!end) return startText;
+  return `${startText} - ${end.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+}
+
+function assignmentDateWindow(row) {
+  const start = parseDate(row?.start_window || row?.recurring_due_at);
+  const end = parseDate(row?.end_window);
+  if (!start) return "No start time";
+  const startText = start.toLocaleString([], { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+  if (!end) return startText;
+  const sameDate = sameDay(start, end);
+  const endText = end.toLocaleString([], sameDate
+    ? { hour: "numeric", minute: "2-digit" }
+    : { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+  return `${startText} - ${endText}`;
+}
+
+function assignmentFrequencyLabel(row) {
+  return titleCase(row?.recurrence_frequency || row?.assignment_type || "one_time");
+}
+
+function assignmentRoutingMeta(row) {
   const meta = rowMeta(row);
+  const names = Array.isArray(row?.preferred_contractor_names)
+    ? row.preferred_contractor_names.filter(Boolean)
+    : (Array.isArray(meta.preferred_contractor_names) ? meta.preferred_contractor_names.filter(Boolean) : []);
+  if (row?.assigned_to || row?.assigned_to_name || row?.assigned_to_email || row?.contractor_id || row?.contractor_name) return "Assigned contractor";
+  if (row?.claimed_by || row?.claimed_by_name || row?.claimed_by_email) return "Claimed contractor";
+  if (names.length) return `${names.length} preferred contractor${names.length === 1 ? "" : "s"}`;
+  return "Open to contractors";
+}
+
+function assignmentPayAmount(row) {
+  const meta = rowMeta(row);
+  return asNumber(row?.pay_amount ?? row?.contractor_pay ?? row?.contractor_amount ?? meta.contractor_pay ?? meta.unit_contractor_pay);
+}
+
+function assignmentNotes(row) {
+  const meta = rowMeta(row);
+  return {
+    scope: row?.scope || meta.scope || meta.scope_of_work || "",
+    supplies: row?.supplies_notes || meta.supplies_notes || "",
+    special: row?.special_instructions || row?.special_notes || row?.notes || meta.unit_notes || meta.special_notes || meta.instructions || ""
+  };
+}
+
+function assignmentUnitMeta(row) {
+  const unit = matchingUnit(row);
+  const meta = rowMeta(row);
+  const feet = unit?.square_feet ?? unit?.sq_ft ?? row?.unit_square_feet ?? meta.unit_square_feet ?? meta.square_feet ?? meta.sq_ft ?? row?.square_feet ?? row?.sq_ft;
+  const bedBath = unitBedBath(row);
+  return compact([
+    bedBath === "Bed/Bath not set" ? "" : bedBath,
+    feet ? `${integer(feet)} sq ft` : ""
+  ]).join(" - ") || "Unit details";
+}
+
+function assignmentAddress(row) {
+  const meta = rowMeta(row);
+  return row?.address || row?.property_address || meta.address || meta.property_address || propertyAddress() || "No address";
+}
+
+function assignmentShortId(row) {
+  return row?.id ? `A-${String(row.id).slice(0, 8).toUpperCase()}` : "Assignment";
+}
+
+function renderAssignmentDetailsCard(row, emptyTitle = "No request selected") {
+  if (!row) return emptyBlock(emptyTitle, "Choose an assignment to see schedule, service notes, and videos.");
+  const meta = rowMeta(row);
+  const accepted = scheduleAcceptanceStatus(row);
+  const title = assignmentTitle(row);
+  const notes = assignmentNotes(row);
   const videos = videosForAssignment(row);
   const before = videos.find((video) => normalizeToken(video.video_phase) === "before");
   const after = videos.find((video) => ["after", "final"].includes(normalizeToken(video.video_phase)));
+  const detailItems = [
+    ["Property Name", title, assignmentAddress(row)],
+    ["Unit Number", assignmentUnit(row) || "Unit", assignmentUnitMeta(row)],
+    ["Schedule", assignmentDateWindow(row), assignmentFrequencyLabel(row)],
+    ["Contractor Routing", assignmentContractorText(row), assignmentRoutingMeta(row)],
+    ["Contractor Pay", money(assignmentPayAmount(row)), row.service_type || "No service type"],
+    ["Special Notes", notes.special || notes.scope || "No special notes", notes.special ? "Special instructions" : "Scope"]
+  ];
   return `
-    <div class="pm-detail-list">
-      <dl>
-        <div><dt>Unit</dt><dd>${esc(assignmentUnit(row) || "Unit")}</dd></div>
-        <div><dt>Service</dt><dd>${esc(row.service_type || row.assignment_type || "Turn Service")}</dd></div>
-        <div><dt>Priority</dt><dd>${esc(assignmentPriority(row))}</dd></div>
-        <div><dt>Scheduled</dt><dd>${esc(formatWindow(row))}</dd></div>
-      </dl>
-      <h3>Service Notes</h3>
-      <p>${esc(row.special_notes || row.notes || meta.special_notes || meta.instructions || "No service notes have been added yet.")}</p>
+    <section class="schedule-assignment-detail pm-assignment-detail-card">
+      <div class="schedule-assignment-hero">
+        <div>
+          <span>${esc(assignmentShortId(row))}</span>
+          <h3>${esc(row.title || title)}</h3>
+          <p>${esc([assignmentAddress(row), row.service_type].filter(Boolean).join(" - ") || "Assignment details")}</p>
+        </div>
+        <div class="schedule-assignment-badges">
+          <span class="status-badge status-${esc(scheduleStatusKey(row.status || requestGroup(row)))}">${esc(titleCase(row.status || requestGroup(row) || "scheduled"))}</span>
+          <span class="status-badge schedule-acceptance-badge is-${esc(accepted.tone)}">${esc(accepted.label)}</span>
+        </div>
+      </div>
+      <div class="schedule-assignment-detail-grid">
+        ${detailItems.map(([label, value, subtext]) => `
+          <div>
+            <span>${esc(label)}</span>
+            <strong>${esc(value)}</strong>
+            <small>${esc(subtext)}</small>
+          </div>
+        `).join("")}
+      </div>
+      <div class="schedule-assignment-notes">
+        <div><span>Scope of Work</span><p>${esc(notes.scope || meta.scope || "No scope entered.")}</p></div>
+        <div><span>Supplies Notes</span><p>${esc(notes.supplies || "No supplies notes entered.")}</p></div>
+        <div><span>Special Instructions</span><p>${esc(notes.special || "No special instructions entered.")}</p></div>
+      </div>
       <h3>Requested Services</h3>
       <div class="pm-chip-row">${compact([row.service_type, meta.scope, meta.checklist_name, assignmentCleaner(row)]).slice(0, 5).map((item) => `<span>${esc(item)}</span>`).join("") || "<span>Standard turn</span>"}</div>
       <h3>Before & After Videos</h3>
@@ -1551,8 +1726,12 @@ function renderRequestDetails(row) {
         ${renderVideoSlot(before, "Before Video")}
         ${renderVideoSlot(after, "After Video")}
       </div>
-    </div>
+    </section>
   `;
+}
+
+function renderRequestDetails(row) {
+  return renderAssignmentDetailsCard(row);
 }
 
 function renderScheduleView() {
@@ -1562,7 +1741,6 @@ function renderScheduleView() {
   const weekStart = localDate(state.scheduleWeekStart);
   return `
     <section class="panel-card pm-toolbar pm-schedule-toolbar">
-      ${renderManagerSearch("Search schedule...", { className: "pm-local-search", label: "Search schedule" })}
       <div class="pm-schedule-toolbar-controls">
         ${renderScheduleSnapshotControls()}
         <strong class="pm-week-range">${esc(formatWeekRange(weekStart))}</strong>
@@ -1593,8 +1771,7 @@ function scheduledRows() {
   return sortedAssignments(state.assignments.filter((row) => {
     const rowDate = row.start_window || row.recurring_due_at;
     const matchesWeek = isDateBetween(rowDate, weekStart, weekEnd);
-    const matchesQuery = queryMatches([assignmentUnit(row), assignmentTitle(row), assignmentCleaner(row), row.service_type]);
-    return matchesWeek && matchesQuery;
+    return matchesWeek;
   }));
 }
 
@@ -1645,27 +1822,26 @@ function sameDay(value, day) {
 }
 
 function renderScheduleEvent(row) {
+  const accepted = scheduleAcceptanceStatus(row);
+  const title = assignmentTitle(row);
+  const unit = assignmentUnit(row);
+  const subtitle = [unit ? `Unit ${unit}` : "", row.service_type].filter(Boolean).join(" - ");
   return `
-    <button class="pm-schedule-event ${esc(requestGroup(row))}" type="button" data-manager-select-assignment="${esc(row.id || "")}">
-      <strong>${esc(formatShortTime(row.start_window || row.recurring_due_at))}</strong>
-      <span>${esc(assignmentUnit(row) ? `Unit ${assignmentUnit(row)}` : assignmentTitle(row))}</span>
-      ${statusBadge(requestGroup(row))}
-    </button>
+    <article class="schedule-event-card pm-schedule-event-card ${esc(requestGroup(row))}" data-manager-select-assignment="${esc(row.id || "")}" role="button" tabindex="0" aria-label="View details for ${esc(title)}.">
+      <div class="schedule-event-time">${esc(scheduleEventTime(row))}</div>
+      <strong>${esc(title)}</strong>
+      <p>${esc(subtitle || row.title || "Assignment")}</p>
+      <small>${esc(assignmentContractorText(row))}</small>
+      <div class="schedule-event-badges">
+        <span class="status-badge status-${esc(scheduleStatusKey(row.status || requestGroup(row)))}">${esc(titleCase(row.status || requestGroup(row) || "scheduled"))}</span>
+        <span class="status-badge schedule-acceptance-badge is-${esc(accepted.tone)}">${esc(accepted.label)}</span>
+      </div>
+    </article>
   `;
 }
 
 function renderScheduleDetails(row) {
-  if (!row) return emptyBlock("No scheduled turn selected", "Scheduled unit details will appear here.");
-  return `
-    <div class="pm-detail-list">
-      <dl>
-        <div><dt>Window</dt><dd>${esc(formatWindow(row))}</dd></div>
-        <div><dt>Unit</dt><dd>${esc(assignmentUnit(row) || "Unit")}</dd></div>
-        <div><dt>Status</dt><dd>${esc(titleCase(requestGroup(row)))}</dd></div>
-      </dl>
-      <p>${esc(compact([row.service_type, unitBedBath(row), assignmentCleaner(row)]).join(" - ") || "Turn service details")}</p>
-    </div>
-  `;
+  return renderAssignmentDetailsCard(row, "No scheduled turn selected");
 }
 
 function renderScheduleSnapshot() {
@@ -1730,9 +1906,6 @@ function renderUnitVideosView() {
   const metrics = managerMetrics();
   const groups = filteredVideoGroups();
   return `
-    <section class="panel-card pm-toolbar">
-      ${renderManagerSearch("Search videos...", { className: "pm-local-search", label: "Search unit videos" })}
-    </section>
     <section class="pm-stat-grid pm-stat-grid-four" aria-label="Video metrics">
       ${statCard("Total Videos", integer(state.videos.length), "available clips", "green")}
       ${statCard("Before Videos", integer(metrics.beforeVideos), "before work proof", "yellow")}
@@ -1757,24 +1930,58 @@ function recentVideos() {
 
 function videosForAssignment(row) {
   const id = String(row?.id || "");
-  const qaJobId = rowMeta(row).qa_job_id || row?.qa_job_id || "";
-  const unit = assignmentUnit(row);
+  const meta = rowMeta(row);
+  const qaJobId = meta.qa_job_id || row?.qa_job_id || "";
+  const unit = matchingUnit(row);
+  const unitValues = new Set([...unitLookupValues(row), ...unitLookupValues(unit)]);
   return state.videos.filter((video) => {
+    const videoMeta = rowMeta(video);
+    const videoQaJobId = video.qa_job_id || video.job_id || videoMeta.qa_job_id || videoMeta.job_id || "";
     return String(video.assignment_id || "") === id ||
-      (qaJobId && String(video.qa_job_id || "") === String(qaJobId)) ||
-      (unit && String(video.unit_name || "").toLowerCase() === String(unit).toLowerCase());
+      String(video.assignment_block_id || "") === id ||
+      String(videoMeta.assignment_id || "") === id ||
+      String(videoMeta.assignment_block_id || "") === id ||
+      (qaJobId && String(videoQaJobId) === String(qaJobId)) ||
+      (unitValues.size && unitLookupValues(video).some((value) => unitValues.has(value)));
   });
+}
+
+function qaJobForVideo(video) {
+  const meta = rowMeta(video);
+  const ids = new Set(compact([video?.qa_job_id, video?.job_id, meta.qa_job_id, meta.job_id]).map(String));
+  if (!ids.size) return null;
+  return state.qaJobs.find((job) => ids.has(String(job.id || ""))) || null;
+}
+
+function assignmentForVideo(video) {
+  const meta = rowMeta(video);
+  const qaJob = qaJobForVideo(video);
+  const ids = new Set(compact([
+    video?.assignment_id,
+    video?.assignment_block_id,
+    meta.assignment_id,
+    meta.assignment_block_id,
+    qaJob?.assignment_id
+  ]).map(String));
+  const direct = state.assignments.find((row) => ids.has(String(row.id || "")));
+  if (direct) return direct;
+  const unit = matchingUnit(video);
+  if (!unit) return null;
+  const unitValues = new Set(unitLookupValues(unit));
+  return state.assignments.find((row) => unitLookupValues(row).some((value) => unitValues.has(value))) || null;
 }
 
 function videoGroups() {
   const map = new Map();
   state.videos.forEach((video) => {
-    const key = String(video.assignment_id || video.pair_id || video.qa_job_id || video.id);
+    const assignment = assignmentForVideo(video);
+    const key = String(assignment?.id || video.assignment_id || video.pair_id || video.qa_job_id || video.id);
     const existing = map.get(key) || {
       key,
-      assignment: state.assignments.find((row) => String(row.id || "") === String(video.assignment_id || "")) || null,
+      assignment: assignment || null,
       videos: []
     };
+    if (!existing.assignment && assignment) existing.assignment = assignment;
     existing.videos.push(video);
     map.set(key, existing);
   });
@@ -1793,7 +2000,7 @@ function videoGroups() {
 
 function filteredVideoGroups() {
   return videoGroups().filter((group) => {
-    const assignment = group.assignment;
+    const assignment = assignmentForVideoGroup(group);
     const matchesQuery = queryMatches([
       assignment ? assignmentTitle(assignment) : "",
       assignment ? assignmentUnit(assignment) : "",
@@ -1804,7 +2011,11 @@ function filteredVideoGroups() {
 }
 
 function selectedVideoGroup(groups = videoGroups()) {
-  return groups.find((group) => group.key === state.selectedVideoKey) || groups[0] || null;
+  return groups.find((group) => String(group.key) === String(state.selectedVideoKey)) || groups[0] || null;
+}
+
+function assignmentForVideoGroup(group) {
+  return group?.assignment || (group?.videos || []).map(assignmentForVideo).find(Boolean) || null;
 }
 
 function renderVideoTable(groups) {
@@ -1824,7 +2035,7 @@ function renderVideoTable(groups) {
         </thead>
         <tbody>
           ${groups.slice(0, 10).map((group) => {
-            const assignment = group.assignment;
+            const assignment = assignmentForVideoGroup(group);
             const before = group.videos.find((video) => normalizeToken(video.video_phase) === "before");
             const after = group.videos.find((video) => ["after", "final"].includes(normalizeToken(video.video_phase)));
             const status = group.videos[0]?.review_status || (assignment ? requestGroup(assignment) : "pending_review");
@@ -1833,8 +2044,8 @@ function renderVideoTable(groups) {
                 <td>${esc(assignment ? assignmentUnit(assignment) || "Unit" : group.videos[0]?.unit_name || "Unit")}</td>
                 <td>${esc(assignment ? unitBedBath(assignment) : unitBedBath(group.videos[0]?.unit_name || ""))}</td>
                 <td>${esc(formatDate(assignment?.completed_at || assignment?.start_window || group.videos[0]?.recorded_at || group.videos[0]?.created_at, "Not dated"))}</td>
-                <td>${renderVideoPill(before, "Before")}</td>
-                <td>${renderVideoPill(after, "After")}</td>
+                <td>${renderVideoPill(before, "Before", group.key)}</td>
+                <td>${renderVideoPill(after, "After", group.key)}</td>
                 <td>${statusBadge(status)}</td>
                 <td><button class="pm-row-action" type="button" data-manager-select-video="${esc(group.key)}">Details</button></td>
               </tr>
@@ -1846,9 +2057,9 @@ function renderVideoTable(groups) {
   `;
 }
 
-function renderVideoPill(video, label) {
+function renderVideoPill(video, label, groupKey = "") {
   if (!video) return `<span class="pm-video-pill muted">${esc(label)} Pending</span>`;
-  return `<button class="pm-video-pill" type="button" data-manager-select-video="${esc(video.assignment_id || video.pair_id || video.qa_job_id || video.id)}">${esc(label)} Ready</button>`;
+  return `<button class="pm-video-pill" type="button" data-manager-select-video="${esc(groupKey || video.assignment_id || video.pair_id || video.qa_job_id || video.id)}">${esc(label)} Ready</button>`;
 }
 
 function renderVideoSlot(video, label) {
@@ -1866,7 +2077,8 @@ function renderVideoSlot(video, label) {
 
 function renderVideoDetails(group) {
   if (!group) return emptyBlock("No video selected", "Choose a video row to view before and after clips.");
-  const assignment = group.assignment;
+  const assignment = assignmentForVideoGroup(group);
+  if (assignment) return renderAssignmentDetailsCard(assignment, "No assignment selected");
   const before = group.videos.find((video) => normalizeToken(video.video_phase) === "before");
   const after = group.videos.find((video) => ["after", "final"].includes(normalizeToken(video.video_phase)));
   return `
@@ -1893,7 +2105,7 @@ function renderVideoRail() {
   return `
     <div class="pm-video-rail">
       ${groups.map((group) => {
-        const assignment = group.assignment;
+        const assignment = assignmentForVideoGroup(group);
         const before = group.videos.find((video) => normalizeToken(video.video_phase) === "before");
         const after = group.videos.find((video) => ["after", "final"].includes(normalizeToken(video.video_phase)));
         return `
@@ -1996,7 +2208,7 @@ function renderInvoicesView() {
   const metrics = managerMetrics();
   return `
     <section class="pm-stat-grid pm-stat-grid-four" aria-label="Invoice metrics">
-      ${statCard("Completed Services", integer(recentCompletedAssignments().length), "ready for billing", "green")}
+      ${statCard("Completed Services", integer(completedAssignments().length), "ready for billing", "green")}
       ${statCard("Invoice Total", money(metrics.invoiceTotal), "customer charges", "blue")}
       ${statCard("Approved", money(metrics.approvedTotal), "approved services", "violet")}
       ${statCard("Open Requests", integer(metrics.open), "not completed", "yellow")}
@@ -2006,11 +2218,11 @@ function renderInvoicesView() {
 }
 
 function renderInvoicesSection() {
-  const completed = recentCompletedAssignments();
+  const completed = completedAssignments();
   if (!completed.length) return emptyBlock("No invoice activity", "Completed services will populate this summary.");
   const groups = new Map();
   completed.forEach((row) => {
-    const key = monthKey(row.completed_at || row.checklist_completed_at || row.qa_approved_at || row.start_window);
+    const key = monthKey(completionDateValue(row));
     const group = groups.get(key) || { count: 0, total: 0, approved: 0, paid: 0 };
     group.count += 1;
     group.total += assignmentCustomerAmount(row);
@@ -2644,8 +2856,18 @@ document.addEventListener("input", (event) => {
 
 document.addEventListener("keydown", (event) => {
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+    if (!viewSupportsSearch()) return;
     event.preventDefault();
     document.querySelector("[data-manager-global-search]")?.focus();
+    return;
+  }
+
+  if (!["Enter", " "].includes(event.key)) return;
+  const assignmentCard = event.target.closest("[data-manager-select-assignment][role='button']");
+  if (assignmentCard) {
+    event.preventDefault();
+    state.selectedAssignmentId = assignmentCard.dataset.managerSelectAssignment || "";
+    renderManagerPortal();
   }
 });
 

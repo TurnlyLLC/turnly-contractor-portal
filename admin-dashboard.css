@@ -3078,40 +3078,203 @@ body.admin-command-body[data-portal-role="property-manager"] .topbar-profile-mes
   min-height: 70px;
 }
 
-.pm-schedule-event {
-  background: rgba(37, 168, 255, 0.12);
-  border: 1px solid rgba(37, 168, 255, 0.28);
-  border-radius: 6px;
-  color: var(--pm-text);
+body.admin-command-body[data-portal-role="property-manager"] .schedule-event-card {
+  background: rgba(4, 14, 25, 0.78);
+  border: 1px solid rgba(124, 151, 176, 0.16);
+  border-left: 3px solid rgba(57, 169, 255, 0.82);
+  border-radius: 7px;
+  cursor: pointer;
   display: grid;
   gap: 4px;
   padding: 8px;
-  text-align: left;
 }
 
-.pm-schedule-event.ready {
-  background: rgba(0, 214, 163, 0.12);
-  border-color: rgba(0, 214, 163, 0.28);
+body.admin-command-body[data-portal-role="property-manager"] .schedule-event-card.ready,
+body.admin-command-body[data-portal-role="property-manager"] .schedule-event-card.completed {
+  border-left-color: var(--pm-green);
 }
 
-.pm-schedule-event.in_progress {
-  background: rgba(37, 168, 255, 0.14);
+body.admin-command-body[data-portal-role="property-manager"] .schedule-event-card.in_progress {
+  border-left-color: var(--pm-blue);
 }
 
-.pm-schedule-event.on_hold {
-  background: rgba(255, 173, 56, 0.13);
-  border-color: rgba(255, 173, 56, 0.28);
+body.admin-command-body[data-portal-role="property-manager"] .schedule-event-card.on_hold,
+body.admin-command-body[data-portal-role="property-manager"] .schedule-event-card.pending {
+  border-left-color: var(--pm-yellow);
 }
 
-.pm-schedule-event strong {
-  color: var(--pm-green);
-  font-size: 11px;
+body.admin-command-body[data-portal-role="property-manager"] .schedule-event-card:focus-visible {
+  outline: 2px solid rgba(0, 214, 163, 0.62);
+  outline-offset: 2px;
 }
 
-.pm-schedule-event span {
+body.admin-command-body[data-portal-role="property-manager"] .schedule-event-card strong,
+body.admin-command-body[data-portal-role="property-manager"] .schedule-event-card p,
+body.admin-command-body[data-portal-role="property-manager"] .schedule-event-card small {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.admin-command-body[data-portal-role="property-manager"] .schedule-event-card strong {
   color: var(--pm-text);
+  font-size: 12px;
+}
+
+body.admin-command-body[data-portal-role="property-manager"] .schedule-event-card p,
+body.admin-command-body[data-portal-role="property-manager"] .schedule-event-card small {
+  color: var(--pm-muted);
   font-size: 11px;
-  font-weight: 800;
+}
+
+body.admin-command-body[data-portal-role="property-manager"] .schedule-event-time {
+  color: var(--pm-green);
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+body.admin-command-body[data-portal-role="property-manager"] .schedule-event-badges,
+body.admin-command-body[data-portal-role="property-manager"] .schedule-assignment-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+body.admin-command-body[data-portal-role="property-manager"] .status-badge {
+  align-items: center;
+  background: rgba(126, 158, 188, 0.14);
+  border-radius: 999px;
+  color: var(--pm-muted);
+  display: inline-flex;
+  font-size: 9px;
+  font-weight: 900;
+  min-height: 18px;
+  padding: 2px 6px;
+}
+
+body.admin-command-body[data-portal-role="property-manager"] .status-open,
+body.admin-command-body[data-portal-role="property-manager"] .status-ready,
+body.admin-command-body[data-portal-role="property-manager"] .status-completed {
+  background: rgba(0, 214, 163, 0.14);
+  color: var(--pm-green);
+}
+
+body.admin-command-body[data-portal-role="property-manager"] .status-pending,
+body.admin-command-body[data-portal-role="property-manager"] .status-pending-approval,
+body.admin-command-body[data-portal-role="property-manager"] .status-on-hold {
+  background: rgba(255, 173, 56, 0.14);
+  color: var(--pm-yellow);
+}
+
+body.admin-command-body[data-portal-role="property-manager"] .status-in-progress,
+body.admin-command-body[data-portal-role="property-manager"] .status-qa-pending {
+  background: rgba(37, 168, 255, 0.16);
+  color: var(--pm-blue);
+}
+
+body.admin-command-body[data-portal-role="property-manager"] .schedule-acceptance-badge.is-accepted {
+  background: rgba(0, 214, 163, 0.16);
+  color: var(--pm-green);
+}
+
+body.admin-command-body[data-portal-role="property-manager"] .schedule-acceptance-badge.is-assigned,
+body.admin-command-body[data-portal-role="property-manager"] .schedule-acceptance-badge.is-pending {
+  background: rgba(255, 212, 61, 0.14);
+  color: var(--pm-yellow);
+}
+
+body.admin-command-body[data-portal-role="property-manager"] .schedule-acceptance-badge.is-not-accepted,
+body.admin-command-body[data-portal-role="property-manager"] .schedule-acceptance-badge.is-declined,
+body.admin-command-body[data-portal-role="property-manager"] .schedule-acceptance-badge.is-cancelled,
+body.admin-command-body[data-portal-role="property-manager"] .schedule-acceptance-badge.is-canceled {
+  background: rgba(255, 91, 104, 0.12);
+  color: var(--pm-red);
+}
+
+body.admin-command-body[data-portal-role="property-manager"] .schedule-assignment-detail {
+  display: grid;
+  gap: 14px;
+}
+
+body.admin-command-body[data-portal-role="property-manager"] .schedule-assignment-hero {
+  align-items: start;
+  background: rgba(7, 18, 32, 0.58);
+  border: 1px solid var(--pm-border);
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 12px;
+}
+
+body.admin-command-body[data-portal-role="property-manager"] .schedule-assignment-hero span,
+body.admin-command-body[data-portal-role="property-manager"] .schedule-assignment-detail-grid span,
+body.admin-command-body[data-portal-role="property-manager"] .schedule-assignment-notes span {
+  color: var(--pm-faint);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+body.admin-command-body[data-portal-role="property-manager"] .schedule-assignment-hero h3 {
+  color: var(--pm-text);
+  font-size: 16px;
+  margin: 4px 0;
+}
+
+body.admin-command-body[data-portal-role="property-manager"] .schedule-assignment-hero p {
+  color: var(--pm-muted);
+  font-size: 12px;
+  margin: 0;
+}
+
+body.admin-command-body[data-portal-role="property-manager"] .schedule-assignment-detail-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+body.admin-command-body[data-portal-role="property-manager"] .schedule-assignment-detail-grid > div,
+body.admin-command-body[data-portal-role="property-manager"] .schedule-assignment-notes > div {
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--pm-border);
+  border-radius: 7px;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px;
+}
+
+body.admin-command-body[data-portal-role="property-manager"] .schedule-assignment-detail-grid strong {
+  color: var(--pm-text);
+  font-size: 12px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.admin-command-body[data-portal-role="property-manager"] .schedule-assignment-detail-grid small,
+body.admin-command-body[data-portal-role="property-manager"] .schedule-assignment-notes p {
+  color: var(--pm-muted);
+  font-size: 11px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+body.admin-command-body[data-portal-role="property-manager"] .schedule-assignment-notes {
+  display: grid;
+  gap: 8px;
+}
+
+body.admin-command-body[data-portal-role="property-manager"] .pm-assignment-detail-card > h3 {
+  color: var(--pm-text);
+  font-size: 13px;
+  margin: 2px 0 0;
 }
 
 .pm-request-form-panel {
