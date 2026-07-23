@@ -265,16 +265,31 @@ begin
     end,
     property_name = coalesce(nullif(assignment.property_name, ''), 'Vetra Forest Hills'),
     updated_at = now()
-  where assignment.portal_property_id is distinct from vetra_property_id
-     or assignment.recurring_portal_property_id is distinct from case
+  where (
+      assignment.portal_property_id is distinct from vetra_property_id
+      or assignment.recurring_portal_property_id is distinct from case
           when assignment.recurring_portal_property_id is not null
             or assignment.recurring_due_at is not null
             or coalesce(assignment.assignment_type, '') <> 'one_time'
           then vetra_property_id
           else assignment.recurring_portal_property_id
         end
-     or assignment.property_name is null
-     or assignment.property_name = '';
+      or assignment.property_name is null
+      or assignment.property_name = ''
+    )
+    and (
+      assignment.status is distinct from 'completed'
+      or (
+        assignment.completed_at is not null
+        and assignment.completed_by is not null
+        and assignment.checklist_completed_at is not null
+        and case
+          when jsonb_typeof(assignment.checklist_responses) = 'array'
+          then jsonb_array_length(assignment.checklist_responses) > 0
+          else false
+        end
+      )
+    );
 
   get diagnostics assignment_rows = row_count;
 
@@ -282,7 +297,20 @@ begin
     update public.assignment_blocks as assignment
     set property_id = vetra_property_id,
         updated_at = now()
-    where assignment.property_id is distinct from vetra_property_id;
+    where assignment.property_id is distinct from vetra_property_id
+      and (
+        assignment.status is distinct from 'completed'
+        or (
+          assignment.completed_at is not null
+          and assignment.completed_by is not null
+          and assignment.checklist_completed_at is not null
+          and case
+            when jsonb_typeof(assignment.checklist_responses) = 'array'
+            then jsonb_array_length(assignment.checklist_responses) > 0
+            else false
+          end
+        )
+      );
   exception
     when foreign_key_violation then
       raise notice 'Skipped assignment_blocks.property_id backfill because an existing foreign key does not point at portal_properties.';
