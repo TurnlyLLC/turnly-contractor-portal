@@ -20,7 +20,7 @@ alter table public.profiles
 
 alter table public.profiles
   add constraint profiles_role_supported
-  check (role in ('admin', 'contractor', 'sales', 'sales_team', 'property_manager'))
+  check (role::text in ('admin', 'contractor', 'sales', 'sales_team', 'property_manager'))
   not valid;
 
 create index if not exists profiles_role_idx
@@ -97,7 +97,7 @@ create policy "Portal roles can view portal properties"
       select 1
       from public.profiles
       where profiles.id = auth.uid()
-        and profiles.role in ('admin', 'sales', 'sales_team', 'property_manager')
+        and profiles.role::text in ('admin', 'sales', 'sales_team', 'property_manager')
     )
   );
 
@@ -110,7 +110,7 @@ create policy "Portal roles can insert portal properties"
       select 1
       from public.profiles
       where profiles.id = auth.uid()
-        and profiles.role in ('admin', 'sales', 'sales_team', 'property_manager')
+        and profiles.role::text in ('admin', 'sales', 'sales_team', 'property_manager')
     )
   );
 
@@ -123,7 +123,7 @@ create policy "Portal roles can update portal properties"
       select 1
       from public.profiles
       where profiles.id = auth.uid()
-        and profiles.role in ('admin', 'sales', 'sales_team', 'property_manager')
+        and profiles.role::text in ('admin', 'sales', 'sales_team', 'property_manager')
     )
   )
   with check (
@@ -131,7 +131,7 @@ create policy "Portal roles can update portal properties"
       select 1
       from public.profiles
       where profiles.id = auth.uid()
-        and profiles.role in ('admin', 'sales', 'sales_team', 'property_manager')
+        and profiles.role::text in ('admin', 'sales', 'sales_team', 'property_manager')
     )
   );
 
@@ -144,7 +144,7 @@ create policy "Admins can delete portal properties"
       select 1
       from public.profiles
       where profiles.id = auth.uid()
-        and profiles.role = 'admin'
+        and profiles.role::text = 'admin'
     )
   );
 
@@ -166,7 +166,7 @@ create policy "Portal roles can view clients"
       select 1
       from public.profiles
       where profiles.id = auth.uid()
-        and profiles.role in ('admin', 'sales', 'sales_team', 'property_manager')
+        and profiles.role::text in ('admin', 'sales', 'sales_team', 'property_manager')
     )
   );
 
@@ -179,7 +179,7 @@ create policy "Portal roles can insert clients"
       select 1
       from public.profiles
       where profiles.id = auth.uid()
-        and profiles.role in ('admin', 'sales', 'sales_team', 'property_manager')
+        and profiles.role::text in ('admin', 'sales', 'sales_team', 'property_manager')
     )
   );
 
@@ -192,7 +192,7 @@ create policy "Portal roles can update clients"
       select 1
       from public.profiles
       where profiles.id = auth.uid()
-        and profiles.role in ('admin', 'sales', 'sales_team', 'property_manager')
+        and profiles.role::text in ('admin', 'sales', 'sales_team', 'property_manager')
     )
   )
   with check (
@@ -200,7 +200,7 @@ create policy "Portal roles can update clients"
       select 1
       from public.profiles
       where profiles.id = auth.uid()
-        and profiles.role in ('admin', 'sales', 'sales_team', 'property_manager')
+        and profiles.role::text in ('admin', 'sales', 'sales_team', 'property_manager')
     )
   );
 
@@ -213,7 +213,7 @@ create policy "Admins can delete clients"
       select 1
       from public.profiles
       where profiles.id = auth.uid()
-        and profiles.role = 'admin'
+        and profiles.role::text = 'admin'
     )
   );
 

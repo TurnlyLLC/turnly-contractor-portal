@@ -52,7 +52,7 @@ as $$
     select 1
     from public.profiles
     where profiles.id = auth.uid()
-      and profiles.role = any(allowed_roles)
+      and profiles.role::text = any(allowed_roles)
   );
 $$;
 
@@ -156,13 +156,13 @@ create policy "Business roles can view portal properties"
       select 1
       from public.profiles
       where profiles.id = auth.uid()
-        and profiles.role in ('admin', 'sales', 'sales_team')
+        and profiles.role::text in ('admin', 'sales', 'sales_team')
     )
     or exists (
       select 1
       from public.profiles
       where profiles.id = auth.uid()
-        and profiles.role = 'property_manager'
+        and profiles.role::text = 'property_manager'
         and profiles.property_manager_property_id = portal_properties.id
     )
   );
@@ -176,7 +176,7 @@ create policy "Business roles can insert portal properties"
       select 1
       from public.profiles
       where profiles.id = auth.uid()
-        and profiles.role in ('admin', 'sales', 'sales_team')
+        and profiles.role::text in ('admin', 'sales', 'sales_team')
     )
   );
 
@@ -189,7 +189,7 @@ create policy "Business roles can update portal properties"
       select 1
       from public.profiles
       where profiles.id = auth.uid()
-        and profiles.role in ('admin', 'sales', 'sales_team')
+        and profiles.role::text in ('admin', 'sales', 'sales_team')
     )
   )
   with check (
@@ -197,7 +197,7 @@ create policy "Business roles can update portal properties"
       select 1
       from public.profiles
       where profiles.id = auth.uid()
-        and profiles.role in ('admin', 'sales', 'sales_team')
+        and profiles.role::text in ('admin', 'sales', 'sales_team')
     )
   );
 
@@ -217,7 +217,7 @@ create policy "Business roles can view clients"
       select 1
       from public.profiles
       where profiles.id = auth.uid()
-        and profiles.role in ('admin', 'sales', 'sales_team')
+        and profiles.role::text in ('admin', 'sales', 'sales_team')
     )
     or exists (
       select 1
@@ -225,7 +225,7 @@ create policy "Business roles can view clients"
       join public.portal_properties
         on portal_properties.id = profiles.property_manager_property_id
       where profiles.id = auth.uid()
-        and profiles.role = 'property_manager'
+        and profiles.role::text = 'property_manager'
         and portal_properties.client_id = clients.id
     )
   );
@@ -239,7 +239,7 @@ create policy "Business roles can insert clients"
       select 1
       from public.profiles
       where profiles.id = auth.uid()
-        and profiles.role in ('admin', 'sales', 'sales_team')
+        and profiles.role::text in ('admin', 'sales', 'sales_team')
     )
   );
 
@@ -252,7 +252,7 @@ create policy "Business roles can update clients"
       select 1
       from public.profiles
       where profiles.id = auth.uid()
-        and profiles.role in ('admin', 'sales', 'sales_team')
+        and profiles.role::text in ('admin', 'sales', 'sales_team')
     )
   )
   with check (
@@ -260,7 +260,7 @@ create policy "Business roles can update clients"
       select 1
       from public.profiles
       where profiles.id = auth.uid()
-        and profiles.role in ('admin', 'sales', 'sales_team')
+        and profiles.role::text in ('admin', 'sales', 'sales_team')
     )
   );
 
@@ -281,7 +281,7 @@ create policy "Admins can manage assignments"
       select 1
       from public.profiles
       where profiles.id = auth.uid()
-        and profiles.role = 'admin'
+        and profiles.role::text = 'admin'
     )
   )
   with check (
@@ -289,7 +289,7 @@ create policy "Admins can manage assignments"
       select 1
       from public.profiles
       where profiles.id = auth.uid()
-        and profiles.role = 'admin'
+        and profiles.role::text = 'admin'
     )
   );
 
@@ -302,7 +302,7 @@ create policy "Approved contractors can view assignments"
       select 1
       from public.profiles
       where profiles.id = auth.uid()
-        and profiles.role = 'contractor'
+        and profiles.role::text = 'contractor'
         and profiles.contractor_approved = true
     )
     and (
@@ -322,7 +322,7 @@ create policy "Approved contractors can claim open assignments"
       select 1
       from public.profiles
       where profiles.id = auth.uid()
-        and profiles.role = 'contractor'
+        and profiles.role::text = 'contractor'
         and profiles.contractor_approved = true
     )
   )
@@ -334,7 +334,7 @@ create policy "Approved contractors can claim open assignments"
       select 1
       from public.profiles
       where profiles.id = auth.uid()
-        and profiles.role = 'contractor'
+        and profiles.role::text = 'contractor'
         and profiles.contractor_approved = true
     )
   );
@@ -348,7 +348,7 @@ create policy "Linked property managers can view assignments"
       select 1
       from public.profiles
       where profiles.id = auth.uid()
-        and profiles.role = 'property_manager'
+        and profiles.role::text = 'property_manager'
         and profiles.property_manager_property_id is not null
         and profiles.property_manager_property_id in (
           assignment_blocks.portal_property_id,

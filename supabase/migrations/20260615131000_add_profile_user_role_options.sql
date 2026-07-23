@@ -44,7 +44,7 @@ begin
 
     alter table public.profiles
       add constraint profiles_role_supported
-      check (role in ('admin', 'contractor', 'sales', 'sales_team', 'property_manager'))
+      check (role::text in ('admin', 'contractor', 'sales', 'sales_team', 'property_manager'))
       not valid;
   elsif role_type in ('user_role', 'public.user_role') then
     execute 'alter table public.profiles alter column role set default ''contractor''::public.user_role';
