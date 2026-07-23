@@ -3073,12 +3073,15 @@ body.admin-command-body[data-portal-role="property-manager"] .topbar-profile-mes
 }
 
 .pm-calendar-cell {
+  align-content: start;
+  align-items: start;
   display: grid;
   gap: 6px;
   min-height: 70px;
 }
 
 body.admin-command-body[data-portal-role="property-manager"] .schedule-event-card {
+  align-self: start;
   background: rgba(4, 14, 25, 0.78);
   border: 1px solid rgba(124, 151, 176, 0.16);
   border-left: 3px solid rgba(57, 169, 255, 0.82);
@@ -3087,6 +3090,7 @@ body.admin-command-body[data-portal-role="property-manager"] .schedule-event-car
   display: grid;
   gap: 4px;
   padding: 8px;
+  width: 100%;
 }
 
 body.admin-command-body[data-portal-role="property-manager"] .schedule-event-card.ready,
