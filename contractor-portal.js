@@ -1,14 +1,20 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 import {
+  adminPreviewPortalOptions,
+  adminPreviewPropertyOptions,
   adminPreviewSummary,
+  adminPreviewTargetUrl,
+  adminPreviewUsersForPortal,
   buildPreviewEffectiveUser,
+  normalizeAdminPreviewContext,
   previewIdentityValues,
   resolvePreviewProfile,
   resolvePreviewProperty,
   rowMatchesPreviewProperty,
   rowMatchesPreviewUser,
-  verifyAdminPreviewSession
-} from "./admin-preview-context.js?v=20260723-admin-preview";
+  verifyAdminPreviewSession,
+  writeAdminPreviewContext
+} from "./admin-preview-context.js?v=20260723-admin-preview-roles";
 
 const env = window.__ENV || {};
 const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
@@ -340,14 +346,65 @@ function matchesContractorPreviewProperty(row = {}) {
   return rowMatchesPreviewProperty(row, state.adminPreview);
 }
 
+function renderPortalPreviewSelect(label, field, options, selectedValue) {
+  return `
+    <label class="portal-preview-field">
+      <span>${esc(label)}</span>
+      <select data-portal-preview-field="${esc(field)}">
+        ${options.map((option) => `<option value="${esc(option.value)}" ${option.value === selectedValue ? "selected" : ""}>${esc(option.label)}</option>`).join("")}
+      </select>
+    </label>
+  `;
+}
+
 function renderContractorAdminPreviewNotice() {
   if (!state.adminPreview) return "";
+  const preview = normalizeAdminPreviewContext(state.adminPreview);
+  const userOptions = adminPreviewUsersForPortal(preview.portal);
   return `
-    <aside class="cp-admin-preview-notice">
-      <strong>Admin Preview</strong>
-      <span>${esc(adminPreviewSummary(state.adminPreview))}</span>
+    <aside class="cp-admin-preview-notice" data-portal-preview-switcher>
+      <div class="portal-preview-summary">
+        <strong>Admin Preview</strong>
+        <span data-portal-preview-summary>${esc(adminPreviewSummary(preview))}</span>
+      </div>
+      <div class="portal-preview-controls">
+        ${renderPortalPreviewSelect("View", "portal", adminPreviewPortalOptions, preview.portal)}
+        ${renderPortalPreviewSelect("Property", "property", adminPreviewPropertyOptions, preview.property)}
+        ${renderPortalPreviewSelect("User", "user", userOptions, preview.user)}
+        <button class="portal-preview-open" type="button" data-portal-preview-open>Open View</button>
+      </div>
     </aside>
   `;
+}
+
+function syncPortalPreviewControls(context = state.adminPreview) {
+  const normalized = normalizeAdminPreviewContext(context || {});
+  const portalField = document.querySelector("[data-portal-preview-field='portal']");
+  const propertyField = document.querySelector("[data-portal-preview-field='property']");
+  const userField = document.querySelector("[data-portal-preview-field='user']");
+  if (portalField) portalField.value = normalized.portal;
+  if (propertyField) propertyField.value = normalized.property;
+  if (userField) {
+    const userOptions = adminPreviewUsersForPortal(normalized.portal);
+    userField.innerHTML = userOptions
+      .map((option) => `<option value="${esc(option.value)}" ${option.value === normalized.user ? "selected" : ""}>${esc(option.label)}</option>`)
+      .join("");
+    userField.value = normalized.user;
+  }
+  const summary = document.querySelector("[data-portal-preview-summary]");
+  if (summary) summary.textContent = adminPreviewSummary(normalized);
+  return normalized;
+}
+
+function portalPreviewContextFromControls() {
+  const current = { ...(state.adminPreview || {}) };
+  document.querySelectorAll("[data-portal-preview-field]").forEach((field) => {
+    current[field.dataset.portalPreviewField] = field.value;
+  });
+  const context = writeAdminPreviewContext(current);
+  state.adminPreview = context;
+  syncPortalPreviewControls(context);
+  return context;
 }
 
 function statusClass(status) {
@@ -2105,6 +2162,13 @@ function attachEvents() {
       return;
     }
 
+    const previewOpenButton = event.target.closest("[data-portal-preview-open]");
+    if (previewOpenButton) {
+      const context = portalPreviewContextFromControls();
+      window.location.href = adminPreviewTargetUrl(context);
+      return;
+    }
+
     const mobileMoreButton = event.target.closest("[data-mobile-more-toggle]");
     if (mobileMoreButton) {
       const open = mobileMoreButton.getAttribute("aria-expanded") !== "true";
@@ -2218,6 +2282,10 @@ function attachEvents() {
   });
 
   root?.addEventListener("change", (event) => {
+    if (event.target.matches("[data-portal-preview-field]")) {
+      portalPreviewContextFromControls();
+      return;
+    }
     if (event.target.matches("#cpJobType")) {
       state.filters.jobType = event.target.value;
       renderShell();

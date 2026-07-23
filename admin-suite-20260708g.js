@@ -2,13 +2,14 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 import {
   adminPreviewPortalOptions,
   adminPreviewPropertyOptions,
-  adminPreviewUserOptions,
+  adminPreviewUsersForPortal,
   adminPreviewSummary,
   adminPreviewTargetUrl,
   clearAdminPreviewContext,
+  normalizeAdminPreviewContext,
   readAdminPreviewContext,
   writeAdminPreviewContext
-} from "./admin-preview-context.js?v=20260723-admin-preview";
+} from "./admin-preview-context.js?v=20260723-admin-preview-roles";
 
 const suiteEnv = window.__ENV || {};
 const suiteSupabase = suiteEnv.SUPABASE_URL && suiteEnv.SUPABASE_ANON_KEY
@@ -12729,6 +12730,7 @@ function renderAdminPreviewSelect(label, field, options, selectedValue) {
 
 function renderAdminPreviewSwitcher() {
   const preview = readAdminPreviewContext();
+  const userOptions = adminPreviewUsersForPortal(preview.portal);
   return `
     <div class="admin-preview-wrap">
       <button id="adminPreviewBtn" class="admin-preview-trigger" type="button" aria-haspopup="menu" aria-expanded="${topbarState.previewOpen ? "true" : "false"}" aria-controls="adminPreviewMenu">
@@ -12743,7 +12745,7 @@ function renderAdminPreviewSwitcher() {
         </div>
         ${renderAdminPreviewSelect("View", "portal", adminPreviewPortalOptions, preview.portal)}
         ${renderAdminPreviewSelect("Property / Contract", "property", adminPreviewPropertyOptions, preview.property)}
-        ${renderAdminPreviewSelect("User", "user", adminPreviewUserOptions, preview.user)}
+        ${renderAdminPreviewSelect("User", "user", userOptions, preview.user)}
         <div class="admin-preview-actions">
           <button class="primary-action" type="button" data-admin-preview-open>${icon("chevron-right")}<span>Open View</span></button>
           <button class="secondary-action" type="button" data-admin-preview-clear>${icon("x")}<span>Clear</span></button>
@@ -12758,12 +12760,32 @@ function adminPreviewContextFromControls() {
   document.querySelectorAll("[data-admin-preview-field]").forEach((field) => {
     current[field.dataset.adminPreviewField] = field.value;
   });
-  return writeAdminPreviewContext(current);
+  const context = writeAdminPreviewContext(current);
+  syncAdminPreviewControls(context);
+  return context;
 }
 
-function syncAdminPreviewSummary() {
+function syncAdminPreviewControls(context = readAdminPreviewContext()) {
+  const normalized = normalizeAdminPreviewContext(context);
+  const portalField = document.querySelector("[data-admin-preview-field='portal']");
+  const propertyField = document.querySelector("[data-admin-preview-field='property']");
+  const userField = document.querySelector("[data-admin-preview-field='user']");
+  if (portalField) portalField.value = normalized.portal;
+  if (propertyField) propertyField.value = normalized.property;
+  if (userField) {
+    const userOptions = adminPreviewUsersForPortal(normalized.portal);
+    userField.innerHTML = userOptions
+      .map((option) => `<option value="${esc(option.value)}" ${option.value === normalized.user ? "selected" : ""}>${esc(option.label)}</option>`)
+      .join("");
+    userField.value = normalized.user;
+  }
+  syncAdminPreviewSummary(normalized);
+  return normalized;
+}
+
+function syncAdminPreviewSummary(context = readAdminPreviewContext()) {
   const summary = document.getElementById("adminPreviewSummary");
-  if (summary) summary.textContent = adminPreviewSummary(readAdminPreviewContext());
+  if (summary) summary.textContent = adminPreviewSummary(context);
 }
 
 function renderTopbar(page, activeKey) {
@@ -12851,7 +12873,6 @@ function initTopbar() {
   document.querySelectorAll("[data-admin-preview-field]").forEach((field) => {
     field.addEventListener("change", () => {
       adminPreviewContextFromControls();
-      syncAdminPreviewSummary();
     });
   });
   document.querySelector("[data-admin-preview-open]")?.addEventListener("click", () => {

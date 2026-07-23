@@ -247,23 +247,90 @@
   border: 1px solid rgba(0, 214, 163, 0.28);
   border-radius: 8px;
   color: var(--cp-text);
-  display: flex;
+  display: grid;
   gap: 10px;
-  justify-content: space-between;
+  grid-template-columns: minmax(180px, 1fr) auto;
   min-height: 40px;
   padding: 9px 12px;
+  position: sticky;
+  top: 10px;
+  z-index: 35;
 }
 
-.cp-admin-preview-notice strong {
+.portal-preview-summary {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cp-admin-preview-notice strong,
+.portal-preview-field span {
   color: var(--cp-green);
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
-.cp-admin-preview-notice span {
+.cp-admin-preview-notice span,
+.portal-preview-field span {
   color: var(--cp-soft);
   font-size: 12px;
+}
+
+.portal-preview-controls {
+  align-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.portal-preview-field {
+  display: grid;
+  gap: 4px;
+  min-width: 150px;
+}
+
+.portal-preview-field select {
+  background: rgba(5, 15, 25, 0.96);
+  border: 1px solid var(--cp-line);
+  border-radius: 7px;
+  color: var(--cp-text);
+  min-height: 34px;
+  outline: 0;
+  padding: 0 9px;
+}
+
+.portal-preview-open {
+  align-items: center;
+  background: var(--cp-green);
+  border: 1px solid rgba(0, 214, 163, 0.46);
+  border-radius: 7px;
+  color: #031d15;
+  cursor: pointer;
+  display: inline-flex;
+  font-weight: 900;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 12px;
+}
+
+.portal-preview-open:hover {
+  filter: brightness(1.05);
+}
+
+@media (max-width: 920px) {
+  .cp-admin-preview-notice {
+    grid-template-columns: 1fr;
+  }
+
+  .portal-preview-controls {
+    justify-content: flex-start;
+  }
+
+  .portal-preview-field {
+    min-width: min(100%, 170px);
+  }
 }
 
 .cp-topbar {
@@ -1494,7 +1561,8 @@
 
 .contractor-portal-body[data-dashboard-theme="light"] .cp-sidebar,
 .contractor-portal-body[data-dashboard-theme="light"] .cp-support,
-.contractor-portal-body[data-dashboard-theme="light"] .cp-profile-menu {
+.contractor-portal-body[data-dashboard-theme="light"] .cp-profile-menu,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-admin-preview-notice {
   background: #f8fbfd;
   border-color: var(--cp-line);
 }
@@ -1532,7 +1600,8 @@
 .contractor-portal-body[data-dashboard-theme="light"] .cp-field input,
 .contractor-portal-body[data-dashboard-theme="light"] .cp-field select,
 .contractor-portal-body[data-dashboard-theme="light"] .cp-field textarea,
-.contractor-portal-body[data-dashboard-theme="light"] .cp-theme-toggle {
+.contractor-portal-body[data-dashboard-theme="light"] .cp-theme-toggle,
+.contractor-portal-body[data-dashboard-theme="light"] .portal-preview-field select {
   background: #ffffff;
   border-color: var(--cp-line);
   color: var(--cp-text);

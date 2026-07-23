@@ -1,11 +1,17 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 import {
+  adminPreviewPortalOptions,
+  adminPreviewPropertyOptions,
   adminPreviewSummary,
+  adminPreviewTargetUrl,
+  adminPreviewUsersForPortal,
   buildPreviewEffectiveUser,
+  normalizeAdminPreviewContext,
   resolvePreviewProfile,
   resolvePreviewProperty,
-  verifyAdminPreviewSession
-} from "./admin-preview-context.js?v=20260723-admin-preview";
+  verifyAdminPreviewSession,
+  writeAdminPreviewContext
+} from "./admin-preview-context.js?v=20260723-admin-preview-roles";
 
 const VIDEO_BUCKET = "qa-videos";
 const SIGNED_URL_SECONDS = 60 * 60 * 4;
@@ -1343,12 +1349,63 @@ function renderManagerPortal(loading = false) {
 
 function renderManagerAdminPreviewNotice() {
   if (!state.adminPreview) return "";
+  const preview = normalizeAdminPreviewContext(state.adminPreview);
+  const userOptions = adminPreviewUsersForPortal(preview.portal);
   return `
-    <aside class="panel-card pm-admin-preview-notice">
-      <strong>Admin Preview</strong>
-      <span>${esc(adminPreviewSummary(state.adminPreview))}</span>
+    <aside class="panel-card pm-admin-preview-notice" data-portal-preview-switcher>
+      <div class="portal-preview-summary">
+        <strong>Admin Preview</strong>
+        <span data-portal-preview-summary>${esc(adminPreviewSummary(preview))}</span>
+      </div>
+      <div class="portal-preview-controls">
+        ${renderPortalPreviewSelect("View", "portal", adminPreviewPortalOptions, preview.portal)}
+        ${renderPortalPreviewSelect("Property", "property", adminPreviewPropertyOptions, preview.property)}
+        ${renderPortalPreviewSelect("User", "user", userOptions, preview.user)}
+        <button class="portal-preview-open" type="button" data-portal-preview-open>Open View</button>
+      </div>
     </aside>
   `;
+}
+
+function renderPortalPreviewSelect(label, field, options, selectedValue) {
+  return `
+    <label class="portal-preview-field">
+      <span>${esc(label)}</span>
+      <select data-portal-preview-field="${esc(field)}">
+        ${options.map((option) => `<option value="${esc(option.value)}" ${option.value === selectedValue ? "selected" : ""}>${esc(option.label)}</option>`).join("")}
+      </select>
+    </label>
+  `;
+}
+
+function syncPortalPreviewControls(context = state.adminPreview) {
+  const normalized = normalizeAdminPreviewContext(context || {});
+  const portalField = document.querySelector("[data-portal-preview-field='portal']");
+  const propertyField = document.querySelector("[data-portal-preview-field='property']");
+  const userField = document.querySelector("[data-portal-preview-field='user']");
+  if (portalField) portalField.value = normalized.portal;
+  if (propertyField) propertyField.value = normalized.property;
+  if (userField) {
+    const userOptions = adminPreviewUsersForPortal(normalized.portal);
+    userField.innerHTML = userOptions
+      .map((option) => `<option value="${esc(option.value)}" ${option.value === normalized.user ? "selected" : ""}>${esc(option.label)}</option>`)
+      .join("");
+    userField.value = normalized.user;
+  }
+  const summary = document.querySelector("[data-portal-preview-summary]");
+  if (summary) summary.textContent = adminPreviewSummary(normalized);
+  return normalized;
+}
+
+function portalPreviewContextFromControls() {
+  const current = { ...(state.adminPreview || {}) };
+  document.querySelectorAll("[data-portal-preview-field]").forEach((field) => {
+    current[field.dataset.portalPreviewField] = field.value;
+  });
+  const context = writeAdminPreviewContext(current);
+  state.adminPreview = context;
+  syncPortalPreviewControls(context);
+  return context;
 }
 
 function renderPropertyLinkNotice() {
@@ -2903,6 +2960,14 @@ document.addEventListener("click", async (event) => {
   const moveInDateInput = event.target.closest("[data-manager-move-in-date]");
   if (moveInDateInput) openNativeDatePicker(moveInDateInput);
 
+  const previewOpenButton = event.target.closest("[data-portal-preview-open]");
+  if (previewOpenButton) {
+    event.preventDefault();
+    const context = portalPreviewContextFromControls();
+    window.location.href = adminPreviewTargetUrl(context);
+    return;
+  }
+
   const accountWasOpen = state.accountMenuOpen;
   const accountWrap = event.target.closest(".pm-account-menu-wrap");
   if (!accountWrap && accountWasOpen) state.accountMenuOpen = false;
@@ -3056,6 +3121,12 @@ document.addEventListener("keydown", (event) => {
 });
 
 document.addEventListener("change", (event) => {
+  const previewField = event.target.closest("[data-portal-preview-field]");
+  if (previewField) {
+    portalPreviewContextFromControls();
+    return;
+  }
+
   const scheduleDate = event.target.closest("[data-pm-schedule-date]");
   if (scheduleDate) {
     setScheduleDate(scheduleDate.value);

@@ -4,7 +4,7 @@ import {
   resolvePreviewProfile,
   resolvePreviewProperty,
   verifyAdminPreviewSession
-} from "./admin-preview-context.js?v=20260723-admin-preview";
+} from "./admin-preview-context.js?v=20260723-admin-preview-roles";
 
 const env = window.__ENV || {};
 const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
@@ -121,7 +121,7 @@ if (!supabase) {
           effectiveUser: previewUser,
           property: await resolvePreviewProperty(supabase, previewSession.preview)
         };
-        await import("./contractor-portal.js?v=20260723-admin-preview");
+        await import("./contractor-portal.js?v=20260723-admin-preview-roles");
         await import("./contractor-job-flow-mobile.js?v=20260715-contract-access-notes");
       }
     } else {
