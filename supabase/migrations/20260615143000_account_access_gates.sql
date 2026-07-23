@@ -41,7 +41,7 @@ create index if not exists profiles_contractor_approved_idx
   on public.profiles (contractor_approved)
   where role = 'contractor';
 
-create or replace function public.current_user_has_role(allowed_roles text[])
+create or replace function public.current_user_has_role(required_roles text[])
 returns boolean
 language sql
 stable
@@ -52,7 +52,7 @@ as $$
     select 1
     from public.profiles
     where profiles.id = auth.uid()
-      and profiles.role::text = any(allowed_roles)
+      and profiles.role::text = any(required_roles)
   );
 $$;
 
