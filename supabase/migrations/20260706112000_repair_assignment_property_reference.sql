@@ -10,6 +10,19 @@ update public.assignment_blocks as assignment
 set property_id = assignment.portal_property_id
 where assignment.property_id is null
   and assignment.portal_property_id is not null
+  and (
+    assignment.status is distinct from 'completed'
+    or (
+      assignment.completed_at is not null
+      and assignment.completed_by is not null
+      and assignment.checklist_completed_at is not null
+      and case
+        when jsonb_typeof(assignment.checklist_responses) = 'array'
+        then jsonb_array_length(assignment.checklist_responses) > 0
+        else false
+      end
+    )
+  )
   and exists (
     select 1
     from public.portal_properties as property
@@ -20,6 +33,19 @@ update public.assignment_blocks as assignment
 set portal_property_id = assignment.property_id
 where assignment.portal_property_id is null
   and assignment.property_id is not null
+  and (
+    assignment.status is distinct from 'completed'
+    or (
+      assignment.completed_at is not null
+      and assignment.completed_by is not null
+      and assignment.checklist_completed_at is not null
+      and case
+        when jsonb_typeof(assignment.checklist_responses) = 'array'
+        then jsonb_array_length(assignment.checklist_responses) > 0
+        else false
+      end
+    )
+  )
   and exists (
     select 1
     from public.portal_properties as property
@@ -29,6 +55,19 @@ where assignment.portal_property_id is null
 update public.assignment_blocks as assignment
 set property_id = null
 where assignment.property_id is not null
+  and (
+    assignment.status is distinct from 'completed'
+    or (
+      assignment.completed_at is not null
+      and assignment.completed_by is not null
+      and assignment.checklist_completed_at is not null
+      and case
+        when jsonb_typeof(assignment.checklist_responses) = 'array'
+        then jsonb_array_length(assignment.checklist_responses) > 0
+        else false
+      end
+    )
+  )
   and not exists (
     select 1
     from public.portal_properties as property
@@ -38,6 +77,19 @@ where assignment.property_id is not null
 update public.assignment_blocks as assignment
 set portal_property_id = null
 where assignment.portal_property_id is not null
+  and (
+    assignment.status is distinct from 'completed'
+    or (
+      assignment.completed_at is not null
+      and assignment.completed_by is not null
+      and assignment.checklist_completed_at is not null
+      and case
+        when jsonb_typeof(assignment.checklist_responses) = 'array'
+        then jsonb_array_length(assignment.checklist_responses) > 0
+        else false
+      end
+    )
+  )
   and not exists (
     select 1
     from public.portal_properties as property
