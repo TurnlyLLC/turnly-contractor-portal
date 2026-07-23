@@ -6,6 +6,7 @@ import {
   adminPreviewTargetUrl,
   adminPreviewUsersForPortal,
   buildPreviewEffectiveUser,
+  clearAdminPreviewContext,
   normalizeAdminPreviewContext,
   previewIdentityValues,
   resolvePreviewProfile,
@@ -14,7 +15,7 @@ import {
   rowMatchesPreviewUser,
   verifyAdminPreviewSession,
   writeAdminPreviewContext
-} from "./admin-preview-context.js?v=20260723-admin-preview-roles";
+} from "./admin-preview-context.js?v=20260723-admin-preview-unified";
 
 const env = window.__ENV || {};
 const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
@@ -106,6 +107,7 @@ const state = {
   messageStatusError: false,
   messageSending: false,
   profileMenuOpen: false,
+  adminPreviewMenuOpen: false,
   loading: true,
   message: "",
   messageError: false,
@@ -145,6 +147,19 @@ function esc(value) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+}
+
+const cpIconPaths = {
+  "chevron-down": '<path d="m6 9 6 6 6-6"/>',
+  "chevron-right": '<path d="m9 18 6-6-6-6"/>',
+  shield: '<path d="M20 13c0 5-3.5 7.5-8 9-4.5-1.5-8-4-8-9V5l8-3 8 3v8Z"/><path d="m9 12 2 2 4-4"/>',
+  users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'
+};
+
+function cpIcon(name, className = "") {
+  const path = cpIconPaths[name] || cpIconPaths.users;
+  return `<span class="suite-icon ${esc(className)}" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path}</svg></span>`;
 }
 
 function readDashboardTheme() {
@@ -346,42 +361,50 @@ function matchesContractorPreviewProperty(row = {}) {
   return rowMatchesPreviewProperty(row, state.adminPreview);
 }
 
-function renderPortalPreviewSelect(label, field, options, selectedValue) {
+function renderAdminPreviewSelect(label, field, options, selectedValue) {
   return `
-    <label class="portal-preview-field">
+    <label class="admin-preview-field">
       <span>${esc(label)}</span>
-      <select data-portal-preview-field="${esc(field)}">
+      <select data-admin-preview-field="${esc(field)}">
         ${options.map((option) => `<option value="${esc(option.value)}" ${option.value === selectedValue ? "selected" : ""}>${esc(option.label)}</option>`).join("")}
       </select>
     </label>
   `;
 }
 
-function renderContractorAdminPreviewNotice() {
+function renderContractorAdminPreviewSwitcher() {
   if (!state.adminPreview) return "";
   const preview = normalizeAdminPreviewContext(state.adminPreview);
   const userOptions = adminPreviewUsersForPortal(preview.portal);
   return `
-    <aside class="cp-admin-preview-notice" data-portal-preview-switcher>
-      <div class="portal-preview-summary">
-        <strong>Admin Preview</strong>
-        <span data-portal-preview-summary>${esc(adminPreviewSummary(preview))}</span>
+    <div class="admin-preview-wrap">
+      <button id="adminPreviewBtn" class="admin-preview-trigger" type="button" aria-haspopup="menu" aria-expanded="${state.adminPreviewMenuOpen ? "true" : "false"}" aria-controls="adminPreviewMenu">
+        ${cpIcon("users")}
+        <span><strong>Portal Preview</strong><small id="adminPreviewSummary">${esc(adminPreviewSummary(preview))}</small></span>
+        ${cpIcon("chevron-down")}
+      </button>
+      <div id="adminPreviewMenu" class="topbar-dropdown admin-preview-menu" ${state.adminPreviewMenuOpen ? "" : "hidden"}>
+        <div class="admin-preview-header">
+          ${cpIcon("shield")}
+          <span><strong>Admin Preview Mode</strong><small>Open a portal as a selected user and property.</small></span>
+        </div>
+        ${renderAdminPreviewSelect("View", "portal", adminPreviewPortalOptions, preview.portal)}
+        ${renderAdminPreviewSelect("Property / Contract", "property", adminPreviewPropertyOptions, preview.property)}
+        ${renderAdminPreviewSelect("User", "user", userOptions, preview.user)}
+        <div class="admin-preview-actions">
+          <button class="primary-action" type="button" data-admin-preview-open>${cpIcon("chevron-right")}<span>Open View</span></button>
+          <button class="secondary-action" type="button" data-admin-preview-clear>${cpIcon("x")}<span>Clear</span></button>
+        </div>
       </div>
-      <div class="portal-preview-controls">
-        ${renderPortalPreviewSelect("View", "portal", adminPreviewPortalOptions, preview.portal)}
-        ${renderPortalPreviewSelect("Property", "property", adminPreviewPropertyOptions, preview.property)}
-        ${renderPortalPreviewSelect("User", "user", userOptions, preview.user)}
-        <button class="portal-preview-open" type="button" data-portal-preview-open>Open View</button>
-      </div>
-    </aside>
+    </div>
   `;
 }
 
-function syncPortalPreviewControls(context = state.adminPreview) {
+function syncAdminPreviewControls(context = state.adminPreview) {
   const normalized = normalizeAdminPreviewContext(context || {});
-  const portalField = document.querySelector("[data-portal-preview-field='portal']");
-  const propertyField = document.querySelector("[data-portal-preview-field='property']");
-  const userField = document.querySelector("[data-portal-preview-field='user']");
+  const portalField = document.querySelector("[data-admin-preview-field='portal']");
+  const propertyField = document.querySelector("[data-admin-preview-field='property']");
+  const userField = document.querySelector("[data-admin-preview-field='user']");
   if (portalField) portalField.value = normalized.portal;
   if (propertyField) propertyField.value = normalized.property;
   if (userField) {
@@ -391,19 +414,19 @@ function syncPortalPreviewControls(context = state.adminPreview) {
       .join("");
     userField.value = normalized.user;
   }
-  const summary = document.querySelector("[data-portal-preview-summary]");
+  const summary = document.getElementById("adminPreviewSummary");
   if (summary) summary.textContent = adminPreviewSummary(normalized);
   return normalized;
 }
 
-function portalPreviewContextFromControls() {
+function adminPreviewContextFromControls() {
   const current = { ...(state.adminPreview || {}) };
-  document.querySelectorAll("[data-portal-preview-field]").forEach((field) => {
-    current[field.dataset.portalPreviewField] = field.value;
+  document.querySelectorAll("[data-admin-preview-field]").forEach((field) => {
+    current[field.dataset.adminPreviewField] = field.value;
   });
   const context = writeAdminPreviewContext(current);
   state.adminPreview = context;
-  syncPortalPreviewControls(context);
+  syncAdminPreviewControls(context);
   return context;
 }
 
@@ -897,7 +920,7 @@ function renderShell() {
     <main class="cp-shell">
       ${sidebar()}
       <section class="cp-main" id="${pageKey === "dashboard" ? "contractorDashboard" : "contractorPortalMain"}">
-        ${renderContractorAdminPreviewNotice()}
+        ${renderContractorAdminPreviewSwitcher()}
         ${renderPage()}
       </section>
       ${jobDetailDrawer()}
@@ -2162,10 +2185,32 @@ function attachEvents() {
       return;
     }
 
-    const previewOpenButton = event.target.closest("[data-portal-preview-open]");
+    const previewButton = event.target.closest("#adminPreviewBtn");
+    if (previewButton) {
+      state.adminPreviewMenuOpen = !state.adminPreviewMenuOpen;
+      state.profileMenuOpen = false;
+      renderShell();
+      return;
+    }
+
+    const previewOpenButton = event.target.closest("[data-admin-preview-open]");
     if (previewOpenButton) {
-      const context = portalPreviewContextFromControls();
+      const context = adminPreviewContextFromControls();
       window.location.href = adminPreviewTargetUrl(context);
+      return;
+    }
+
+    const previewClearButton = event.target.closest("[data-admin-preview-clear]");
+    if (previewClearButton) {
+      clearAdminPreviewContext();
+      state.adminPreviewMenuOpen = false;
+      window.location.href = "admin.html";
+      return;
+    }
+
+    if (state.adminPreviewMenuOpen && !event.target.closest(".admin-preview-wrap")) {
+      state.adminPreviewMenuOpen = false;
+      renderShell();
       return;
     }
 
@@ -2198,6 +2243,7 @@ function attachEvents() {
     const profileToggle = event.target.closest("[data-contractor-profile-toggle]");
     if (profileToggle) {
       state.profileMenuOpen = !state.profileMenuOpen;
+      state.adminPreviewMenuOpen = false;
       renderShell();
       return;
     }
@@ -2282,8 +2328,8 @@ function attachEvents() {
   });
 
   root?.addEventListener("change", (event) => {
-    if (event.target.matches("[data-portal-preview-field]")) {
-      portalPreviewContextFromControls();
+    if (event.target.matches("[data-admin-preview-field]")) {
+      adminPreviewContextFromControls();
       return;
     }
     if (event.target.matches("#cpJobType")) {
@@ -2332,6 +2378,10 @@ function attachEvents() {
     }
     if (event.key === "Escape" && state.profileMenuOpen) {
       state.profileMenuOpen = false;
+      renderShell();
+    }
+    if (event.key === "Escape" && state.adminPreviewMenuOpen) {
+      state.adminPreviewMenuOpen = false;
       renderShell();
     }
   });

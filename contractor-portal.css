@@ -241,95 +241,245 @@
   padding: 20px 22px 28px;
 }
 
-.cp-admin-preview-notice {
-  align-items: center;
-  background: rgba(0, 214, 163, 0.1);
-  border: 1px solid rgba(0, 214, 163, 0.28);
-  border-radius: 8px;
-  color: var(--cp-text);
-  display: grid;
-  gap: 10px;
-  grid-template-columns: minmax(180px, 1fr) auto;
-  min-height: 40px;
-  padding: 9px 12px;
+.cp-main > .admin-preview-wrap {
+  justify-self: end;
   position: sticky;
   top: 10px;
-  z-index: 35;
+  z-index: 36;
 }
 
-.portal-preview-summary {
+.admin-preview-wrap {
+  position: relative;
+}
+
+.suite-icon {
+  align-items: center;
+  display: inline-flex;
+  height: 16px;
+  justify-content: center;
+  width: 16px;
+}
+
+.suite-icon svg {
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
+.admin-preview-trigger {
+  align-items: center;
+  background: rgba(17, 32, 50, 0.92);
+  border: 1px solid var(--cp-line);
+  border-radius: 7px;
+  color: var(--cp-text);
+  cursor: pointer;
+  display: inline-flex;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 10px;
+  white-space: nowrap;
+}
+
+.admin-preview-trigger span:nth-child(2) {
   display: grid;
-  gap: 2px;
+  gap: 1px;
   min-width: 0;
+  text-align: left;
 }
 
-.cp-admin-preview-notice strong,
-.portal-preview-field span {
-  color: var(--cp-green);
+.admin-preview-trigger strong {
   font-size: 11px;
+  line-height: 1.1;
+}
+
+.admin-preview-trigger small {
+  color: var(--cp-muted);
+  display: block;
+  font-size: 10px;
+  max-width: 230px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-preview-menu {
+  gap: 10px;
+  min-width: 340px;
+  padding: 12px;
+}
+
+.admin-preview-header {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  padding: 4px 2px 2px;
+}
+
+.admin-preview-header .suite-icon {
+  color: var(--cp-green);
+}
+
+.admin-preview-field {
+  display: grid;
+  gap: 5px;
+}
+
+.admin-preview-field span {
+  color: var(--cp-muted);
+  font-size: 10px;
+  font-weight: 900;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
-.cp-admin-preview-notice span,
-.portal-preview-field span {
-  color: var(--cp-soft);
-  font-size: 12px;
-}
-
-.portal-preview-controls {
-  align-items: end;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: flex-end;
-}
-
-.portal-preview-field {
-  display: grid;
-  gap: 4px;
-  min-width: 150px;
-}
-
-.portal-preview-field select {
-  background: rgba(5, 15, 25, 0.96);
+.admin-preview-field select {
+  background: rgba(17, 32, 50, 0.92);
   border: 1px solid var(--cp-line);
   border-radius: 7px;
   color: var(--cp-text);
-  min-height: 34px;
+  min-height: 36px;
   outline: 0;
-  padding: 0 9px;
+  padding: 0 10px;
+  width: 100%;
 }
 
-.portal-preview-open {
+.admin-preview-actions {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr auto;
+  padding-top: 2px;
+}
+
+.primary-action,
+.secondary-action {
   align-items: center;
-  background: var(--cp-green);
-  border: 1px solid rgba(0, 214, 163, 0.46);
   border-radius: 7px;
-  color: #031d15;
   cursor: pointer;
   display: inline-flex;
-  font-weight: 900;
+  gap: 8px;
   justify-content: center;
   min-height: 34px;
-  padding: 0 12px;
+  text-decoration: none;
 }
 
-.portal-preview-open:hover {
-  filter: brightness(1.05);
+.primary-action {
+  background: linear-gradient(135deg, var(--cp-green), #0fcfbe);
+  border: 1px solid rgba(18, 217, 155, 0.85);
+  color: #041d15;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 0 13px;
+}
+
+.secondary-action {
+  background: rgba(14, 27, 43, 0.94);
+  border: 1px solid var(--cp-line);
+  color: #d8e7f6;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 0 13px;
+}
+
+.topbar-dropdown {
+  background: rgba(10, 23, 38, 0.98);
+  border: 1px solid var(--cp-line);
+  border-radius: 8px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.34);
+  display: grid;
+  gap: 6px;
+  min-width: 260px;
+  padding: 8px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 9px);
+  z-index: 40;
+}
+
+.topbar-dropdown[hidden] {
+  display: none;
+}
+
+.topbar-dropdown a,
+.topbar-dropdown button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  color: var(--cp-text);
+  display: flex;
+  gap: 10px;
+  min-height: 38px;
+  padding: 8px;
+  text-align: left;
+  text-decoration: none;
+  width: 100%;
+}
+
+.topbar-dropdown a:hover,
+.topbar-dropdown button:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.admin-preview-actions .primary-action {
+  background: var(--cp-green);
+  border: 1px solid rgba(0, 214, 163, 0.48);
+  color: #031d15;
+  font-weight: 900;
+  justify-content: center;
+}
+
+.admin-preview-actions .secondary-action {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--cp-line);
+  color: var(--cp-text);
+  justify-content: center;
+}
+
+.admin-preview-actions .primary-action:hover {
+  background: #0fcfbe;
+}
+
+.admin-preview-actions .secondary-action:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.topbar-dropdown strong,
+.topbar-dropdown small {
+  display: block;
+}
+
+.topbar-dropdown strong {
+  font-size: 12px;
+}
+
+.topbar-dropdown small {
+  color: var(--cp-muted);
+  font-size: 11px;
+  margin-top: 2px;
 }
 
 @media (max-width: 920px) {
-  .cp-admin-preview-notice {
+  .cp-main > .admin-preview-wrap {
+    justify-self: stretch;
+    width: 100%;
+  }
+
+  .admin-preview-trigger {
+    width: 100%;
+  }
+
+  .admin-preview-menu {
+    left: 0;
+    min-width: min(340px, calc(100vw - 32px));
+    right: auto;
+  }
+
+  .admin-preview-actions {
     grid-template-columns: 1fr;
   }
 
-  .portal-preview-controls {
-    justify-content: flex-start;
-  }
-
-  .portal-preview-field {
-    min-width: min(100%, 170px);
+  .topbar-dropdown {
+    max-width: calc(100vw - 32px);
   }
 }
 
@@ -1562,7 +1712,7 @@
 .contractor-portal-body[data-dashboard-theme="light"] .cp-sidebar,
 .contractor-portal-body[data-dashboard-theme="light"] .cp-support,
 .contractor-portal-body[data-dashboard-theme="light"] .cp-profile-menu,
-.contractor-portal-body[data-dashboard-theme="light"] .cp-admin-preview-notice {
+.contractor-portal-body[data-dashboard-theme="light"] .topbar-dropdown {
   background: #f8fbfd;
   border-color: var(--cp-line);
 }
@@ -1571,6 +1721,7 @@
 .contractor-portal-body[data-dashboard-theme="light"] .cp-profile,
 .contractor-portal-body[data-dashboard-theme="light"] .cp-profile-menu-action,
 .contractor-portal-body[data-dashboard-theme="light"] .cp-ghost-action,
+.contractor-portal-body[data-dashboard-theme="light"] .admin-preview-trigger,
 .contractor-portal-body[data-dashboard-theme="light"] .cp-theme-toggle,
 .contractor-portal-body[data-dashboard-theme="light"] .cp-table td {
   color: var(--cp-text);
@@ -1601,10 +1752,37 @@
 .contractor-portal-body[data-dashboard-theme="light"] .cp-field select,
 .contractor-portal-body[data-dashboard-theme="light"] .cp-field textarea,
 .contractor-portal-body[data-dashboard-theme="light"] .cp-theme-toggle,
-.contractor-portal-body[data-dashboard-theme="light"] .portal-preview-field select {
+.contractor-portal-body[data-dashboard-theme="light"] .admin-preview-trigger,
+.contractor-portal-body[data-dashboard-theme="light"] .admin-preview-field select {
   background: #ffffff;
   border-color: var(--cp-line);
   color: var(--cp-text);
+}
+
+.contractor-portal-body[data-dashboard-theme="light"] .admin-preview-actions .secondary-action {
+  background: #f8fbfd;
+  border-color: var(--cp-line);
+  color: var(--cp-text);
+}
+
+.contractor-portal-body[data-dashboard-theme="light"] .admin-preview-actions .secondary-action:hover,
+.contractor-portal-body[data-dashboard-theme="light"] .topbar-dropdown a:hover,
+.contractor-portal-body[data-dashboard-theme="light"] .topbar-dropdown button:hover {
+  background: #edf3f8;
+}
+
+.contractor-portal-body[data-dashboard-theme="light"] .topbar-dropdown {
+  box-shadow: 0 18px 44px rgba(15, 35, 55, 0.13);
+}
+
+.contractor-portal-body[data-dashboard-theme="light"] .topbar-dropdown a,
+.contractor-portal-body[data-dashboard-theme="light"] .topbar-dropdown button {
+  color: var(--cp-text);
+}
+
+.contractor-portal-body[data-dashboard-theme="light"] .admin-preview-actions .primary-action {
+  background: var(--cp-green);
+  color: #031d15;
 }
 
 .contractor-portal-body[data-dashboard-theme="light"] .cp-search input {

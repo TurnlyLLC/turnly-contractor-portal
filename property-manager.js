@@ -6,12 +6,13 @@ import {
   adminPreviewTargetUrl,
   adminPreviewUsersForPortal,
   buildPreviewEffectiveUser,
+  clearAdminPreviewContext,
   normalizeAdminPreviewContext,
   resolvePreviewProfile,
   resolvePreviewProperty,
   verifyAdminPreviewSession,
   writeAdminPreviewContext
-} from "./admin-preview-context.js?v=20260723-admin-preview-roles";
+} from "./admin-preview-context.js?v=20260723-admin-preview-unified";
 
 const VIDEO_BUCKET = "qa-videos";
 const SIGNED_URL_SECONDS = 60 * 60 * 4;
@@ -53,6 +54,7 @@ const state = {
   view: "overview",
   requestOpen: false,
   accountMenuOpen: false,
+  adminPreviewMenuOpen: false,
   filters: {
     query: "",
     requestStatus: "all",
@@ -80,7 +82,10 @@ const pmIconPaths = {
   "chevron-right": '<path d="m9 18 6-6-6-6"/>',
   home: '<path d="m3 11 9-8 9 8"/><path d="M5 10v11h14V10"/><path d="M9 21v-7h6v7"/>',
   plus: '<path d="M12 5v14"/><path d="M5 12h14"/>',
-  search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>'
+  search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  shield: '<path d="M20 13c0 5-3.5 7.5-8 9-4.5-1.5-8-4-8-9V5l8-3 8 3v8Z"/><path d="m9 12 2 2 4-4"/>',
+  users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'
 };
 
 function pmIcon(name, className = "") {
@@ -1339,7 +1344,6 @@ function renderManagerPortal(loading = false) {
       </div>
       ${renderTopBar()}
     </header>
-    ${renderManagerAdminPreviewNotice()}
     ${renderDataStatus(loading)}
     ${renderPropertyLinkNotice()}
     ${renderRequestForm()}
@@ -1347,42 +1351,50 @@ function renderManagerPortal(loading = false) {
   `;
 }
 
-function renderManagerAdminPreviewNotice() {
+function renderManagerAdminPreviewSwitcher() {
   if (!state.adminPreview) return "";
   const preview = normalizeAdminPreviewContext(state.adminPreview);
   const userOptions = adminPreviewUsersForPortal(preview.portal);
   return `
-    <aside class="panel-card pm-admin-preview-notice" data-portal-preview-switcher>
-      <div class="portal-preview-summary">
-        <strong>Admin Preview</strong>
-        <span data-portal-preview-summary>${esc(adminPreviewSummary(preview))}</span>
+    <div class="admin-preview-wrap">
+      <button id="adminPreviewBtn" class="admin-preview-trigger" type="button" aria-haspopup="menu" aria-expanded="${state.adminPreviewMenuOpen ? "true" : "false"}" aria-controls="adminPreviewMenu">
+        ${pmIcon("users")}
+        <span><strong>Portal Preview</strong><small id="adminPreviewSummary">${esc(adminPreviewSummary(preview))}</small></span>
+        ${pmIcon("chevron-down")}
+      </button>
+      <div id="adminPreviewMenu" class="topbar-dropdown admin-preview-menu" ${state.adminPreviewMenuOpen ? "" : "hidden"}>
+        <div class="admin-preview-header">
+          ${pmIcon("shield")}
+          <span><strong>Admin Preview Mode</strong><small>Open a portal as a selected user and property.</small></span>
+        </div>
+        ${renderAdminPreviewSelect("View", "portal", adminPreviewPortalOptions, preview.portal)}
+        ${renderAdminPreviewSelect("Property / Contract", "property", adminPreviewPropertyOptions, preview.property)}
+        ${renderAdminPreviewSelect("User", "user", userOptions, preview.user)}
+        <div class="admin-preview-actions">
+          <button class="primary-action" type="button" data-admin-preview-open>${pmIcon("chevron-right")}<span>Open View</span></button>
+          <button class="secondary-action" type="button" data-admin-preview-clear>${pmIcon("x")}<span>Clear</span></button>
+        </div>
       </div>
-      <div class="portal-preview-controls">
-        ${renderPortalPreviewSelect("View", "portal", adminPreviewPortalOptions, preview.portal)}
-        ${renderPortalPreviewSelect("Property", "property", adminPreviewPropertyOptions, preview.property)}
-        ${renderPortalPreviewSelect("User", "user", userOptions, preview.user)}
-        <button class="portal-preview-open" type="button" data-portal-preview-open>Open View</button>
-      </div>
-    </aside>
+    </div>
   `;
 }
 
-function renderPortalPreviewSelect(label, field, options, selectedValue) {
+function renderAdminPreviewSelect(label, field, options, selectedValue) {
   return `
-    <label class="portal-preview-field">
+    <label class="admin-preview-field">
       <span>${esc(label)}</span>
-      <select data-portal-preview-field="${esc(field)}">
+      <select data-admin-preview-field="${esc(field)}">
         ${options.map((option) => `<option value="${esc(option.value)}" ${option.value === selectedValue ? "selected" : ""}>${esc(option.label)}</option>`).join("")}
       </select>
     </label>
   `;
 }
 
-function syncPortalPreviewControls(context = state.adminPreview) {
+function syncAdminPreviewControls(context = state.adminPreview) {
   const normalized = normalizeAdminPreviewContext(context || {});
-  const portalField = document.querySelector("[data-portal-preview-field='portal']");
-  const propertyField = document.querySelector("[data-portal-preview-field='property']");
-  const userField = document.querySelector("[data-portal-preview-field='user']");
+  const portalField = document.querySelector("[data-admin-preview-field='portal']");
+  const propertyField = document.querySelector("[data-admin-preview-field='property']");
+  const userField = document.querySelector("[data-admin-preview-field='user']");
   if (portalField) portalField.value = normalized.portal;
   if (propertyField) propertyField.value = normalized.property;
   if (userField) {
@@ -1392,19 +1404,19 @@ function syncPortalPreviewControls(context = state.adminPreview) {
       .join("");
     userField.value = normalized.user;
   }
-  const summary = document.querySelector("[data-portal-preview-summary]");
+  const summary = document.getElementById("adminPreviewSummary");
   if (summary) summary.textContent = adminPreviewSummary(normalized);
   return normalized;
 }
 
-function portalPreviewContextFromControls() {
+function adminPreviewContextFromControls() {
   const current = { ...(state.adminPreview || {}) };
-  document.querySelectorAll("[data-portal-preview-field]").forEach((field) => {
-    current[field.dataset.portalPreviewField] = field.value;
+  document.querySelectorAll("[data-admin-preview-field]").forEach((field) => {
+    current[field.dataset.adminPreviewField] = field.value;
   });
   const context = writeAdminPreviewContext(current);
   state.adminPreview = context;
-  syncPortalPreviewControls(context);
+  syncAdminPreviewControls(context);
   return context;
 }
 
@@ -1429,6 +1441,7 @@ function renderTopBar() {
   const unread = managerMetrics().unread;
   return `
     <div class="pm-topbar topbar-tools">
+      ${renderManagerAdminPreviewSwitcher()}
       ${viewSupportsSearch() ? `<div class="global-search topbar-search-wrap" role="search">
         ${pmIcon("search")}
         <input data-manager-global-search data-pm-filter="query" type="search" value="${esc(state.filters.query)}" placeholder="Search anything..." autocomplete="off" />
@@ -2960,17 +2973,40 @@ document.addEventListener("click", async (event) => {
   const moveInDateInput = event.target.closest("[data-manager-move-in-date]");
   if (moveInDateInput) openNativeDatePicker(moveInDateInput);
 
-  const previewOpenButton = event.target.closest("[data-portal-preview-open]");
+  const previewButton = event.target.closest("#adminPreviewBtn");
+  if (previewButton) {
+    event.preventDefault();
+    state.adminPreviewMenuOpen = !state.adminPreviewMenuOpen;
+    state.accountMenuOpen = false;
+    renderManagerPortal();
+    return;
+  }
+
+  const previewOpenButton = event.target.closest("[data-admin-preview-open]");
   if (previewOpenButton) {
     event.preventDefault();
-    const context = portalPreviewContextFromControls();
+    const context = adminPreviewContextFromControls();
     window.location.href = adminPreviewTargetUrl(context);
+    return;
+  }
+
+  const previewClearButton = event.target.closest("[data-admin-preview-clear]");
+  if (previewClearButton) {
+    event.preventDefault();
+    clearAdminPreviewContext();
+    state.adminPreviewMenuOpen = false;
+    window.location.href = "admin.html";
     return;
   }
 
   const accountWasOpen = state.accountMenuOpen;
   const accountWrap = event.target.closest(".pm-account-menu-wrap");
   if (!accountWrap && accountWasOpen) state.accountMenuOpen = false;
+  if (state.adminPreviewMenuOpen && !event.target.closest(".admin-preview-wrap")) {
+    state.adminPreviewMenuOpen = false;
+    renderManagerPortal();
+    return;
+  }
 
   const navLink = event.target.closest(".command-nav .nav-link[data-pm-view]");
   if (navLink) {
@@ -2984,6 +3020,7 @@ document.addEventListener("click", async (event) => {
 
   if (event.target.closest("[data-manager-account-toggle]")) {
     state.accountMenuOpen = !state.accountMenuOpen;
+    state.adminPreviewMenuOpen = false;
     renderManagerPortal();
     return;
   }
@@ -3121,9 +3158,9 @@ document.addEventListener("keydown", (event) => {
 });
 
 document.addEventListener("change", (event) => {
-  const previewField = event.target.closest("[data-portal-preview-field]");
+  const previewField = event.target.closest("[data-admin-preview-field]");
   if (previewField) {
-    portalPreviewContextFromControls();
+    adminPreviewContextFromControls();
     return;
   }
 

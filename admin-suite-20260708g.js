@@ -9,7 +9,7 @@ import {
   normalizeAdminPreviewContext,
   readAdminPreviewContext,
   writeAdminPreviewContext
-} from "./admin-preview-context.js?v=20260723-admin-preview-roles";
+} from "./admin-preview-context.js?v=20260723-admin-preview-unified";
 
 const suiteEnv = window.__ENV || {};
 const suiteSupabase = suiteEnv.SUPABASE_URL && suiteEnv.SUPABASE_ANON_KEY
