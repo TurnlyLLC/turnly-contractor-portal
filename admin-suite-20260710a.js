@@ -105,6 +105,7 @@ const commandCenterState = {
   scheduleItems: []
 };
 const leadTable = "portal_properties";
+const clientContractTable = "client_contracts";
 const leadOptionalColumns = [
   "company_name",
   "contact_name",
@@ -368,11 +369,13 @@ const checklistState = {
   templates: [],
   savedModules: [],
   properties: [],
+  portalProperties: [],
   units: [],
   selectedTemplateId: "",
   selectedModuleId: "",
   selectedPropertyId: "",
   unitSearch: "",
+  unitFilters: { beds: "all", baths: "all" },
   selectedUnitIds: new Set(),
   builder: null,
   user: null,
@@ -1603,6 +1606,40 @@ function isApprovedStatus(status) {
 
 function isOpenStatus(status) {
   return !["completed", "closed", "cancelled", "canceled", "resolved", "done"].includes(normalizeToken(status));
+}
+
+function isOpenManagerContract(contract) {
+  const status = normalizeToken(contract?.status || "active");
+  return !["inactive", "paused", "closed", "cancelled", "canceled", "lost", "declined", "expired", "terminated"].includes(status);
+}
+
+function managerContractTitle(contract = {}) {
+  return contract.property_name || contract.name || contract.company_name || "Untitled Contract";
+}
+
+function managerContractAddress(contract = {}) {
+  return contract.billing_address || [contract.address, contract.city, contract.state, contract.postal_code].filter(Boolean).join(", ");
+}
+
+function managerLinkKey(name, address = "") {
+  return [name, address]
+    .map((part) => String(part || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .join("|");
+}
+
+function findPortalPropertyForContract(contract = {}, properties = []) {
+  const contractIds = [contract.id, contract.client_id].filter(Boolean).map(String);
+  const byClientId = properties.find((property) => property?.client_id && contractIds.includes(String(property.client_id)));
+  if (byClientId) return byClientId;
+
+  const byPropertyId = properties.find((property) => property?.id && contractIds.includes(String(property.id)));
+  if (byPropertyId) return byPropertyId;
+
+  const contractAddress = managerContractAddress(contract);
+  if (!contractAddress) return null;
+  const contractKey = managerLinkKey(managerContractTitle(contract), contractAddress);
+  return properties.find((property) => managerLinkKey(property?.property_name || property?.name, property?.address) === contractKey) || null;
 }
 
 function priorityWeight(priority) {
@@ -3791,7 +3828,7 @@ function propertyUnitPropertyTitle(row) {
 }
 
 function propertyUnitPropertyAddress(row) {
-  return [row?.address, row?.city, row?.state, row?.postal_code].filter(Boolean).join(", ");
+  return row?.billing_address || [row?.address, row?.city, row?.state, row?.postal_code].filter(Boolean).join(", ");
 }
 
 function focusPropertyUnitQuickAdd() {
@@ -4809,10 +4846,22 @@ function handleChecklistChange(event) {
   if (target?.id === "checklistAssignmentPropertySelect") {
     checklistState.selectedPropertyId = target.value || "";
     checklistState.unitSearch = "";
+    checklistState.unitFilters = { beds: "all", baths: "all" };
     checklistState.selectedUnitIds = new Set();
     renderChecklistAssignmentPanel();
     renderChecklistPropertySummary();
     renderChecklistMetrics();
+    return;
+  }
+  if (target?.matches("[data-checklist-unit-filter]")) {
+    const filterKey = target.dataset.checklistUnitFilter;
+    if (filterKey === "beds" || filterKey === "baths") {
+      checklistState.unitFilters = {
+        ...checklistState.unitFilters,
+        [filterKey]: target.value || "all"
+      };
+      renderChecklistAssignmentPanel({ preserveUnitScroll: true });
+    }
     return;
   }
   if (target?.id === "checklistModuleImportSelect") {
@@ -4853,9 +4902,10 @@ async function loadChecklistData() {
   const { data: userData } = await suiteSupabase.auth.getUser();
   checklistState.user = userData?.user || null;
 
-  const [templatesResult, modulesResult, propertiesResult, unitsResult] = await Promise.all([
+  const [templatesResult, modulesResult, contractsResult, portalPropertiesResult, unitsResult] = await Promise.all([
     suiteSupabase.from(checklistTemplatesTable).select("*").order("updated_at", { ascending: false }),
     suiteSupabase.from(checklistModulesTable).select("*").order("updated_at", { ascending: false }),
+    suiteSupabase.from(clientContractTable).select("*").limit(1000),
     suiteSupabase.from(leadTable).select("*").limit(1000),
     suiteSupabase.from(propertyUnitsTable).select("*").order("unit_name", { ascending: true }).limit(3000)
   ]);
@@ -4864,8 +4914,8 @@ async function loadChecklistData() {
     showChecklistMessage("Unable to load checklist templates: " + templatesResult.error.message, true);
     return;
   }
-  if (propertiesResult.error) {
-    showChecklistMessage("Unable to load properties: " + propertiesResult.error.message, true);
+  if (contractsResult.error) {
+    showChecklistMessage("Unable to load active contracts: " + contractsResult.error.message, true);
     return;
   }
 
@@ -4874,8 +4924,11 @@ async function loadChecklistData() {
   checklistState.savedModules = modulesResult.error
     ? sortChecklistSavedModules(savedChecklistModulesFromTemplates(checklistState.templates))
     : mergeSavedChecklistModules(modulesResult.data || [], checklistState.templates);
-  checklistState.properties = (propertiesResult.data || [])
-    .filter((row) => propertyUnitPropertyTitle(row))
+  checklistState.portalProperties = portalPropertiesResult.error ? [] : (portalPropertiesResult.data || []);
+  checklistState.properties = (contractsResult.data || [])
+    .filter(isOpenManagerContract)
+    .map((contract) => mapChecklistContractProperty(contract, checklistState.portalProperties))
+    .filter((row) => row.id && propertyUnitPropertyTitle(row))
     .sort((a, b) => propertyUnitPropertyTitle(a).localeCompare(propertyUnitPropertyTitle(b)));
   checklistState.units = unitsResult.error ? [] : (unitsResult.data || []);
 
@@ -4886,6 +4939,12 @@ async function loadChecklistData() {
     checklistState.selectedTemplateId = checklistState.templates[0].id;
     checklistState.builder = normalizeChecklistTemplate(checklistState.templates[0]);
   }
+  if (checklistState.selectedPropertyId && !checklistState.properties.some((property) => property.id === checklistState.selectedPropertyId)) {
+    checklistState.selectedPropertyId = "";
+    checklistState.unitSearch = "";
+    checklistState.unitFilters = { beds: "all", baths: "all" };
+    checklistState.selectedUnitIds = new Set();
+  }
   if (!checklistState.selectedPropertyId && checklistState.properties[0]) {
     checklistState.selectedPropertyId = checklistState.properties[0].id;
   }
@@ -4893,6 +4952,7 @@ async function loadChecklistData() {
   renderChecklistData();
   const loadNotes = [];
   if (unitsResult.error) loadNotes.push("Unit assignments will be available after the property unit migration is applied.");
+  if (portalPropertiesResult.error) loadNotes.push("Property-level assignments can be saved after portal properties load successfully.");
   if (modulesResult.error && !checklistState.moduleTableMissing) loadNotes.push("Saved modules will be available after the checklist module migration is applied.");
   showChecklistMessage(loadNotes.length
     ? `Checklists loaded. ${loadNotes.join(" ")}`
@@ -5460,6 +5520,7 @@ async function applyChecklistToProperty() {
 
   const template = await ensureSavedChecklistTemplate();
   if (!template) return;
+  const property = getChecklistSelectedProperty();
 
   checklistState.isApplying = true;
   showChecklistMessage("Assigning checklist to property...");
@@ -5469,12 +5530,7 @@ async function applyChecklistToProperty() {
     checklist_items: flattenChecklistTemplate(template, moduleCounts),
     checklist_module_counts: moduleCounts
   };
-  const result = await suiteSupabase
-    .from(leadTable)
-    .update(payload)
-    .eq("id", checklistState.selectedPropertyId)
-    .select("*")
-    .single();
+  const result = await updateChecklistPropertyAssignment(property, payload);
   checklistState.isApplying = false;
 
   if (result.error) {
@@ -5482,8 +5538,6 @@ async function applyChecklistToProperty() {
     return;
   }
 
-  const index = checklistState.properties.findIndex((property) => property.id === result.data.id);
-  if (index >= 0) checklistState.properties[index] = result.data;
   renderChecklistData();
   showChecklistMessage("Checklist assigned to property.");
 }
@@ -5532,6 +5586,102 @@ async function applyChecklistToUnits() {
   showChecklistMessage(`Checklist assigned to ${updated.length || ids.length} unit${(updated.length || ids.length) === 1 ? "" : "s"}.`);
 }
 
+function mapChecklistContractProperty(contract = {}, portalProperties = []) {
+  const linkedProperty = findPortalPropertyForContract(contract, portalProperties);
+  const title = managerContractTitle(contract);
+  const address = managerContractAddress(contract);
+  return {
+    ...(linkedProperty || {}),
+    ...contract,
+    id: contract.id || linkedProperty?.client_id || linkedProperty?.id || "",
+    client_id: contract.client_id || linkedProperty?.client_id || contract.id || "",
+    contract_id: contract.id || contract.contract_id || "",
+    property_name: contract.property_name || contract.name || contract.company_name || linkedProperty?.property_name || linkedProperty?.name || title,
+    name: contract.name || contract.property_name || linkedProperty?.name || title,
+    billing_address: contract.billing_address || address,
+    address: address || linkedProperty?.address || "",
+    checklist_template_id: linkedProperty?.checklist_template_id || contract.checklist_template_id || "",
+    checklist_items: linkedProperty?.checklist_items || contract.checklist_items || [],
+    checklist_module_counts: linkedProperty?.checklist_module_counts || contract.checklist_module_counts || {},
+    portal_property_id: linkedProperty?.id || "",
+    _checklist_source: clientContractTable,
+    _contract: contract,
+    _portal_property: linkedProperty || null
+  };
+}
+
+async function updateChecklistPropertyAssignment(property, payload) {
+  const portalProperty = await findChecklistPortalProperty(property);
+  if (!portalProperty?.id) {
+    return { data: null, error: { message: "This active contract is not linked to a portal property yet." } };
+  }
+  const result = await suiteSupabase
+    .from(leadTable)
+    .update(payload)
+    .eq("id", portalProperty.id)
+    .select("*")
+    .single();
+  if (!result.error && result.data) syncChecklistPortalProperty(property, result.data);
+  return result;
+}
+
+async function findChecklistPortalProperty(property = {}) {
+  if (property?._portal_property?.id) return property._portal_property;
+  const portalId = property?.portal_property_id || "";
+  if (portalId) {
+    const existing = checklistState.portalProperties.find((row) => row.id === portalId);
+    if (existing) return existing;
+  }
+
+  const contract = property?._contract || property?.contract || property;
+  const linked = findPortalPropertyForContract(contract, checklistState.portalProperties);
+  if (linked?.id) return linked;
+
+  const contractIds = Array.from(new Set([
+    contract?.id,
+    property?.contract_id,
+    contract?.client_id,
+    property?.client_id
+  ].filter(Boolean).map(String)));
+  for (const contractId of contractIds) {
+    const { data, error } = await suiteSupabase
+      .from(leadTable)
+      .select("*")
+      .eq("client_id", contractId)
+      .limit(1)
+      .maybeSingle();
+    if (!error && data?.id) {
+      syncChecklistPortalProperty(property, data);
+      return data;
+    }
+    if (error) console.warn("[admin-suite] Unable to locate portal property for checklist contract", error);
+  }
+  return null;
+}
+
+function syncChecklistPortalProperty(property = {}, portalProperty = {}) {
+  if (!portalProperty?.id) return;
+  const portalIndex = checklistState.portalProperties.findIndex((row) => row.id === portalProperty.id);
+  if (portalIndex >= 0) {
+    checklistState.portalProperties[portalIndex] = portalProperty;
+  } else {
+    checklistState.portalProperties = [...checklistState.portalProperties, portalProperty];
+  }
+
+  const propertyId = property?.id || portalProperty.client_id || "";
+  const index = checklistState.properties.findIndex((row) => row.id === propertyId || row.portal_property_id === portalProperty.id);
+  if (index >= 0) {
+    checklistState.properties[index] = {
+      ...checklistState.properties[index],
+      portal_property_id: portalProperty.id,
+      _portal_property: portalProperty,
+      checklist_template_id: portalProperty.checklist_template_id || "",
+      checklist_items: portalProperty.checklist_items || [],
+      checklist_module_counts: portalProperty.checklist_module_counts || {}
+    };
+  }
+}
+
 function flattenChecklistTemplate(template, moduleCounts = null) {
   const items = [];
   const counts = moduleCounts ? normalizeChecklistModuleCounts(moduleCounts, template) : normalizeChecklistModuleCounts({}, template);
@@ -5578,12 +5728,11 @@ function flattenChecklistItem(item, category, module = {}, moduleInstance = 1) {
 
 function checklistAssignmentPanelHtml() {
   const property = getChecklistSelectedProperty();
-  const allUnits = getChecklistSelectedPropertyUnits();
+  const allUnits = getChecklistSelectedPropertyUnits(false);
   const units = getChecklistFilteredPropertyUnits();
   const selectedCount = allUnits.filter((unit) => checklistState.selectedUnitIds.has(unit.id)).length;
   const visibleSelectedCount = units.filter((unit) => checklistState.selectedUnitIds.has(unit.id)).length;
-  const allSelected = Boolean(units.length && visibleSelectedCount === units.length);
-  const unitSearch = checklistState.unitSearch || "";
+  const allVisibleSelected = Boolean(units.length && visibleSelectedCount === units.length);
   return `
     <div class="checklist-assignment-stack">
       <label class="suite-field">
@@ -5595,36 +5744,78 @@ function checklistAssignmentPanelHtml() {
         </select>
       </label>
       <button class="primary-action full-width" type="button" data-checklist-apply-property ${property ? "" : "disabled"}>${icon("check")}<span>Apply to Property</span></button>
-      <label class="inline-search checklist-unit-search">
-        <span class="sr-only">Search units</span>
-        ${icon("search")}
-        <input id="checklistUnitSearch" type="search" value="${esc(unitSearch)}" placeholder="Search units..." ${property ? "" : "disabled"} />
-      </label>
+      ${checklistUnitFiltersHtml(allUnits, units)}
       <div class="checklist-unit-toolbar">
         <div>
           <strong>Property Units</strong>
-          <small>${esc(allUnits.length ? `Showing ${units.length.toLocaleString()} of ${allUnits.length.toLocaleString()}` : "No units available")}</small>
+          <small>${units.length.toLocaleString()} of ${allUnits.length.toLocaleString()} visible${selectedCount ? ` - ${selectedCount.toLocaleString()} selected` : ""}</small>
         </div>
-        <button type="button" data-checklist-select-all-units ${units.length ? "" : "disabled"}>${allSelected ? "Clear Shown" : "Select Shown"}</button>
+        <button type="button" data-checklist-select-all-units ${units.length ? "" : "disabled"}>${allVisibleSelected ? "Clear Visible" : "Select Visible"}</button>
       </div>
       <div class="checklist-unit-list" data-checklist-unit-list>
-        ${units.length ? units.map(renderChecklistUnitOption).join("") : emptyState("building", "No units found", property ? (unitSearch ? "Try a different unit search." : "Add units on the Property Units page first.") : "Select a property.")}
+        ${units.length
+          ? units.map(renderChecklistUnitOption).join("")
+          : emptyState("building", allUnits.length ? "No units match these filters" : "No units found", property ? (allUnits.length ? "Adjust the bed or bath filters above." : "Add units on the Property Units page first.") : "Select a property.")}
       </div>
       <button class="secondary-action full-width" type="button" data-checklist-apply-units ${selectedCount ? "" : "disabled"}>${icon("check")}<span>Apply to ${selectedCount || 0} Selected Unit${selectedCount === 1 ? "" : "s"}</span></button>
     </div>
   `;
 }
 
+function checklistUnitFiltersHtml(allUnits = [], visibleUnits = []) {
+  if (!allUnits.length) return "";
+  return `
+    <div class="checklist-unit-filters">
+      <label class="suite-field">
+        <span>Bed Count</span>
+        <select data-checklist-unit-filter="beds">
+          ${checklistUnitFilterOptions("beds", allUnits)}
+        </select>
+      </label>
+      <label class="suite-field">
+        <span>Bath Count</span>
+        <select data-checklist-unit-filter="baths">
+          ${checklistUnitFilterOptions("baths", allUnits)}
+        </select>
+      </label>
+      <p>${visibleUnits.length.toLocaleString()} matching unit${visibleUnits.length === 1 ? "" : "s"}</p>
+    </div>
+  `;
+}
+
+function checklistUnitFilterOptions(kind, units = []) {
+  const active = checklistState.unitFilters?.[kind] || "all";
+  const label = kind === "beds" ? "beds" : "baths";
+  const noun = kind === "beds" ? "Bed" : "Bath";
+  const values = Array.from(new Set(units.map((unit) => checklistUnitCountKey(checklistUnitCount(unit, kind)))))
+    .sort((a, b) => Number(a) - Number(b));
+  return [
+    `<option value="all" ${active === "all" ? "selected" : ""}>All ${label}</option>`,
+    ...values.map((value) => `<option value="${esc(value)}" ${value === active ? "selected" : ""}>${esc(checklistUnitFilterLabel(value, noun))}</option>`)
+  ].join("");
+}
+
+function checklistUnitFilterLabel(value, noun) {
+  const number = checklistUnitCountValue(value);
+  if (!number) return "0 / Not set";
+  return `${checklistUnitCountDisplay(number)} ${noun}${number === 1 ? "" : "s"}`;
+}
+
 function renderChecklistUnitOption(unit) {
   const templateName = checklistTemplateName(unit.checklist_template_id);
   const selected = checklistState.selectedUnitIds.has(unit.id);
+  const details = [
+    checklistUnitBedBathText(unit),
+    checklistUnitSquareFeet(unit),
+    templateName ? `Checklist: ${templateName}` : "No checklist assigned"
+  ].filter(Boolean).join(" - ");
   return `
     <div class="checklist-unit-option ${selected ? "is-selected" : ""}">
       <label class="checklist-unit-select">
         <input type="checkbox" value="${esc(unit.id)}" data-checklist-unit-option ${selected ? "checked" : ""} />
         <span>
-          <strong>${esc(unit.unit_name || "Unnamed unit")}</strong>
-          <small>${esc([unit.square_feet ? `${Number(unit.square_feet).toLocaleString()} sq ft` : "", templateName ? `Checklist: ${templateName}` : "No checklist assigned"].filter(Boolean).join(" - "))}</small>
+          <strong>${esc(checklistUnitName(unit))}</strong>
+          <small>${esc(details)}</small>
         </span>
       </label>
     </div>
@@ -5725,33 +5916,28 @@ function getChecklistSelectedProperty() {
 
 function getChecklistSelectedPropertyUnitKeys() {
   const property = getChecklistSelectedProperty();
-  return [checklistState.selectedPropertyId, property?.client_id].filter(Boolean).map(String);
+  return new Set([
+    checklistState.selectedPropertyId,
+    property?.id,
+    property?.client_id,
+    property?.contract_id,
+    property?._contract?.client_id,
+    property?.portal_property_id,
+    property?._portal_property?.id
+  ].filter(Boolean).map(String));
 }
 
 function getChecklistSelectedPropertyUnits() {
   const keys = getChecklistSelectedPropertyUnitKeys();
-  if (!keys.length) return [];
+  if (!keys.size) return [];
   return checklistState.units
-    .filter((row) => keys.includes(String(row.property_id || "")))
+    .filter((row) => keys.has(String(row.property_id || "")))
     .sort(propertyUnitSort);
 }
 
 function getChecklistFilteredPropertyUnits() {
   const units = getChecklistSelectedPropertyUnits();
-  const term = String(checklistState.unitSearch || "").trim().toLowerCase();
-  if (!term) return units;
-  return units.filter((unit) => {
-    const templateName = checklistTemplateName(unit.checklist_template_id);
-    return [
-      unit.unit_name,
-      unit.name,
-      unit.unit_number,
-      unit.square_feet,
-      unit.customer_price,
-      unit.contractor_pay,
-      templateName
-    ].some((value) => String(value || "").toLowerCase().includes(term));
-  });
+  return units.filter(checklistUnitMatchesFilters);
 }
 
 function toggleChecklistUnitSelection() {
@@ -5763,6 +5949,56 @@ function toggleChecklistUnitSelection() {
     units.forEach((unit) => checklistState.selectedUnitIds.add(unit.id));
   }
   renderChecklistAssignmentPanel({ preserveUnitScroll: true });
+}
+
+function checklistUnitMatchesFilters(unit = {}) {
+  const filters = checklistState.unitFilters || {};
+  return ["beds", "baths"].every((kind) => {
+    const active = filters[kind] || "all";
+    return active === "all" || checklistUnitCountKey(checklistUnitCount(unit, kind)) === active;
+  });
+}
+
+function checklistUnitName(unit = {}) {
+  return unit.unit_name || unit.name || unit.unit_number || "Unnamed unit";
+}
+
+function checklistUnitSquareFeet(unit = {}) {
+  const squareFeet = propertyUnitNumber(unit.square_feet);
+  return squareFeet ? `${squareFeet.toLocaleString()} sq ft` : "";
+}
+
+function checklistUnitBedBathText(unit = {}) {
+  const beds = checklistUnitCount(unit, "beds");
+  const baths = checklistUnitCount(unit, "baths");
+  if (!beds && !baths) return "Bed/bath not set";
+  return `${checklistUnitRoomCountLabel(beds, "Bed")} / ${checklistUnitRoomCountLabel(baths, "Bath")}`;
+}
+
+function checklistUnitRoomCountLabel(number, noun) {
+  if (!number) return `${noun} not set`;
+  return `${checklistUnitCountDisplay(number)} ${noun}${number === 1 ? "" : "s"}`;
+}
+
+function checklistUnitCount(unit = {}, kind = "beds") {
+  return checklistUnitCountValue(kind === "beds"
+    ? unit.bedroom_count ?? unit.bedrooms ?? unit.bed_count
+    : unit.bathroom_count ?? unit.bathrooms ?? unit.bath_count);
+}
+
+function checklistUnitCountValue(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : 0;
+}
+
+function checklistUnitCountKey(value) {
+  const number = checklistUnitCountValue(value);
+  return Number.isInteger(number) ? String(number) : String(Number(number.toFixed(2)));
+}
+
+function checklistUnitCountDisplay(value) {
+  const number = checklistUnitCountValue(value);
+  return Number.isInteger(number) ? number.toLocaleString() : String(Number(number.toFixed(2)));
 }
 
 function checklistTemplateName(id) {

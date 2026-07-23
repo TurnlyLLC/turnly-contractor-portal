@@ -3136,6 +3136,21 @@ a {
   width: 100%;
 }
 
+.checklist-unit-filters {
+  align-items: end;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+}
+
+.checklist-unit-filters p {
+  color: var(--suite-soft);
+  font-size: 11px;
+  font-weight: 900;
+  margin: 0 0 10px;
+  white-space: nowrap;
+}
+
 .checklist-unit-toolbar strong {
   font-size: 13px;
 }
@@ -5188,6 +5203,7 @@ a {
   .checklist-template-form,
   .checklist-section-composer,
   .checklist-module-importer,
+  .checklist-unit-filters,
   .checklist-section-head,
   .checklist-item-row {
     grid-template-columns: 1fr;
