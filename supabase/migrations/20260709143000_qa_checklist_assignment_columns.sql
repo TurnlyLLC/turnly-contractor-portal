@@ -75,7 +75,9 @@ set
   checklist_module_counts = coalesce(checklist_module_counts, '{}'::jsonb);
 
 update public.assignment_blocks
-set checklist_responses = coalesce(checklist_responses, '[]'::jsonb);
+set checklist_responses = '[]'::jsonb
+where checklist_responses is null
+  and status is distinct from 'completed';
 
 create index if not exists checklist_templates_updated_at_idx
   on public.checklist_templates (updated_at desc);
