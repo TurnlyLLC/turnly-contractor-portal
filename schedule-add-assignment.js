@@ -9,6 +9,10 @@ const optionalColumns = [
   "property_id", "address", "service_type", "pay_amount", "scope",
   "unit_id", "unit_number", "unit_name",
   "assigned_to", "assigned_to_name", "assigned_to_email",
+  "claimed_by", "claimed_by_name", "claimed_by_email", "claimed_at",
+  "accepted_at", "started_by", "started_at", "completed_by", "completed_at",
+  "checklist_completed_at", "checklist_responses", "completion_notes",
+  "payment_status", "pay_status", "payout_status",
   "supplies_notes", "special_instructions", "priority", "assignment_type",
   "recurrence_frequency", "recurrence_interval", "recurrence_end_date",
   "auto_renewal", "recurring_group_id", "preferred_first",
@@ -335,7 +339,7 @@ async function saveAssignment(event, root) {
   state.saving = false;
   setSaving(false);
   if (result.error) {
-    message("Unable to save assignment: " + result.error.message, true);
+    message("Unable to save assignment: " + friendlySaveError(result.error), true);
     return;
   }
   closeModal();
@@ -353,9 +357,12 @@ function payloadFromForm(options = {}) {
   const property = state.properties.find((row) => row.id === propertyId);
   const existingPropertyId = state.editingId ? state.editingRow?.property_id || null : null;
   const pay = Number(value("scheduleAssignmentPay"));
-  const status = value("scheduleAssignmentStatus") || "open";
+  const status = normalizeStatusValue(value("scheduleAssignmentStatus") || "open");
   const unitNumber = value("scheduleAssignmentUnitNumber");
   const assignedContractor = selectedContractor();
+  if (status === "completed" && !completionUserId(state.editingRow, assignedContractor)) {
+    throw new Error("Completed assignments need an assigned contractor or signed-in admin.");
+  }
   const specialInstructions = value("scheduleAssignmentInstructions") || propertyAccessNotes(property);
   const metadata = {
     ...assignmentMetadata(state.editingRow),
@@ -385,6 +392,7 @@ function payloadFromForm(options = {}) {
     end_window: end.toISOString(),
     metadata
   };
+  Object.assign(payload, statusPayload(status, assignedContractor, start, end, state.editingRow));
   if (options.includeDefaults) {
     Object.assign(payload, {
       supplies_notes: "",
@@ -398,12 +406,64 @@ function payloadFromForm(options = {}) {
       preferred_contractor_ids: [],
       preferred_contractor_names: [],
       preferred_until: null,
-      visibility: status === "preferred_pending" ? "preferred" : "open",
+      visibility: payload.visibility || (status === "preferred_pending" ? "preferred" : "open"),
       declined_contractor_ids: [],
       created_by: state.user?.id || null
     });
   }
   return payload;
+}
+
+function statusPayload(status, assignedContractor, start, end, row = {}) {
+  const next = {};
+  const now = new Date().toISOString();
+  const startAt = start?.toISOString?.() || now;
+  const endAt = end?.toISOString?.() || now;
+  const worker = assignmentWorker(row, assignedContractor);
+
+  if (status === "preferred_pending") {
+    next.visibility = "preferred";
+    return next;
+  }
+
+  if (status === "open") {
+    next.visibility = "open";
+    return next;
+  }
+
+  if (["claimed", "in_progress", "completed"].includes(status)) {
+    next.visibility = status === "completed" ? "closed" : "claimed";
+    if (worker.id) {
+      next.claimed_by = row?.claimed_by || worker.id;
+      next.claimed_by_name = row?.claimed_by_name || worker.name || null;
+      next.claimed_by_email = row?.claimed_by_email || worker.email || null;
+      next.claimed_at = row?.claimed_at || startAt;
+      next.accepted_at = row?.accepted_at || startAt;
+    }
+  }
+
+  if (["in_progress", "completed"].includes(status)) {
+    const starterId = row?.started_by || worker.id || state.user?.id || null;
+    next.started_by = starterId;
+    next.started_at = row?.started_at || startAt;
+  }
+
+  if (status === "completed") {
+    next.completed_by = completionUserId({ ...row, ...next }, assignedContractor);
+    next.completed_at = row?.completed_at || endAt;
+    next.checklist_completed_at = row?.checklist_completed_at || endAt;
+    next.checklist_responses = completionResponses(row, endAt);
+    next.completion_notes = row?.completion_notes || "Completed from admin schedule editor.";
+    next.payment_status = row?.payment_status || "unpaid";
+    next.pay_status = row?.pay_status || "unpaid";
+    next.payout_status = row?.payout_status || "unpaid";
+  }
+
+  if (status === "qa_pending" || status === "cancelled") {
+    next.visibility = "closed";
+  }
+
+  return next;
 }
 
 async function insertWithFallback(payload) {
@@ -513,6 +573,26 @@ function selectedContractor() {
   return { id: contractorId, name: name || label || "Contractor", email: email || "" };
 }
 
+function assignmentWorker(row = {}, assignedContractor = null) {
+  const id = assignedContractor?.id || row?.assigned_to || row?.claimed_by || row?.started_by || "";
+  if (!id) return { id: "", name: "", email: "" };
+  return {
+    id,
+    name: assignedContractor?.name || row?.assigned_to_name || row?.claimed_by_name || row?.assigned_to_email || row?.claimed_by_email || "",
+    email: assignedContractor?.email || row?.assigned_to_email || row?.claimed_by_email || ""
+  };
+}
+
+function completionUserId(row = {}, assignedContractor = null) {
+  return assignedContractor?.id || row?.completed_by || row?.claimed_by || row?.assigned_to || row?.started_by || state.user?.id || "";
+}
+
+function completionResponses(row = {}, completedAt = new Date().toISOString()) {
+  return Array.isArray(row?.checklist_responses) && row.checklist_responses.length
+    ? row.checklist_responses
+    : [{ type: "admin_status_update", label: "Completed from admin schedule editor", completed_at: completedAt }];
+}
+
 function isActiveContractorRow(row) {
   const roles = [
     row?.role,
@@ -586,6 +666,14 @@ function message(text, isError = false) {
   if (!field) return;
   field.textContent = text || "";
   field.classList.toggle("error", isError);
+}
+
+function friendlySaveError(error) {
+  const text = String(error?.message || error || "");
+  if (text.includes("assignment_blocks_completed_with_checklist_check")) {
+    return "Completed assignments need completion details and checklist confirmation. This page will add those automatically; refresh and try again if you still see this.";
+  }
+  return text;
 }
 
 function setScheduleMessage(text, isError = false) {
