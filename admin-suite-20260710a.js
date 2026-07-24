@@ -4507,6 +4507,10 @@ function renderChecklistSectionsMarkup() {
   return template.sections.map(renderChecklistSectionCard).join("");
 }
 
+function collapseChecklistSections(template = checklistState.builder || createBlankChecklistTemplate()) {
+  checklistState.collapsedSectionIds = new Set((template.sections || []).map((section) => section.id).filter(Boolean));
+}
+
 function renderChecklistSectionCard(section, index) {
   const sectionItems = section.items || [];
   const rooms = section.rooms || [];
@@ -4940,6 +4944,7 @@ async function loadChecklistData() {
     checklistState.selectedTemplateId = checklistState.templates[0].id;
     checklistState.builder = normalizeChecklistTemplate(checklistState.templates[0]);
   }
+  collapseChecklistSections();
   if (checklistState.selectedPropertyId && !checklistState.properties.some((property) => property.id === checklistState.selectedPropertyId)) {
     checklistState.selectedPropertyId = "";
     checklistState.unitSearch = "";
@@ -5081,7 +5086,7 @@ function selectChecklistTemplate(id) {
   checklistState.selectedTemplateId = id || "";
   const selected = checklistState.templates.find((template) => template.id === id);
   checklistState.builder = selected ? normalizeChecklistTemplate(selected) : createBlankChecklistTemplate();
-  checklistState.collapsedSectionIds.clear();
+  collapseChecklistSections();
   renderChecklistData();
   showChecklistMessage(selected ? `Editing ${selected.name}.` : "Started a new unsaved checklist.");
 }
@@ -5089,7 +5094,7 @@ function selectChecklistTemplate(id) {
 function startNewChecklistTemplate() {
   checklistState.selectedTemplateId = "";
   checklistState.builder = createBlankChecklistTemplate();
-  checklistState.collapsedSectionIds.clear();
+  collapseChecklistSections();
   renderChecklistData();
   document.getElementById("checklist_template_name")?.focus();
   showChecklistMessage("Started a new checklist.");
