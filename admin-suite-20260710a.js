@@ -5187,6 +5187,7 @@ async function importSavedChecklistModule() {
     title: savedSection.title || savedModule.name
   });
   checklistState.builder.sections.push(imported);
+  checklistState.collapsedSectionIds.add(imported.id);
   checklistState.selectedModuleId = savedModule.id;
   renderChecklistForm();
   renderChecklistAssignmentPanel();
