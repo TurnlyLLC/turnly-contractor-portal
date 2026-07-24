@@ -9,7 +9,7 @@ import {
   normalizeAdminPreviewContext,
   readAdminPreviewContext,
   writeAdminPreviewContext
-} from "./admin-preview-context.js?v=20260723-checklist-contract-units";
+} from "./admin-preview-context.js?v=20260724-admin-preview-menu-fix";
 
 const suiteEnv = window.__ENV || {};
 const suiteSupabase = suiteEnv.SUPABASE_URL && suiteEnv.SUPABASE_ANON_KEY

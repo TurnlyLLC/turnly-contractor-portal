@@ -12,7 +12,7 @@ import {
   resolvePreviewProperty,
   verifyAdminPreviewSession,
   writeAdminPreviewContext
-} from "./admin-preview-context.js?v=20260723-checklist-contract-units";
+} from "./admin-preview-context.js?v=20260724-admin-preview-menu-fix";
 
 const VIDEO_BUCKET = "qa-videos";
 const SIGNED_URL_SECONDS = 60 * 60 * 4;

@@ -15,7 +15,7 @@ import {
   rowMatchesPreviewUser,
   verifyAdminPreviewSession,
   writeAdminPreviewContext
-} from "./admin-preview-context.js?v=20260723-checklist-contract-units";
+} from "./admin-preview-context.js?v=20260724-admin-preview-menu-fix";
 
 const env = window.__ENV || {};
 const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY

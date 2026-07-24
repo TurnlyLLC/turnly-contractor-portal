@@ -306,6 +306,7 @@
   gap: 10px;
   min-width: 340px;
   padding: 12px;
+  width: min(340px, calc(100vw - 32px));
 }
 
 .admin-preview-header {
@@ -317,6 +318,21 @@
 
 .admin-preview-header .suite-icon {
   color: var(--cp-green);
+}
+
+.admin-preview-trigger > .suite-icon,
+.admin-preview-header > .suite-icon,
+.admin-preview-actions .suite-icon {
+  flex: 0 0 16px;
+  height: 16px;
+  min-width: 16px;
+  width: 16px;
+}
+
+.admin-preview-header span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
 }
 
 .admin-preview-field {
@@ -393,6 +409,14 @@
   right: 0;
   top: calc(100% + 9px);
   z-index: 40;
+}
+
+.admin-preview-menu.topbar-dropdown {
+  max-width: calc(100vw - 32px);
+  min-width: min(340px, calc(100vw - 32px));
+  padding: 12px;
+  width: min(340px, calc(100vw - 32px));
+  z-index: 80;
 }
 
 .topbar-dropdown[hidden] {
