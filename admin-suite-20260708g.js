@@ -9428,7 +9428,7 @@ function initInvoiceReport() {
     void loadInvoiceReport();
   });
   root.querySelector("[data-invoice-print]")?.addEventListener("click", () => {
-    window.print();
+    printInvoiceReport(root);
   });
   void loadInvoiceReport();
 }
@@ -9489,7 +9489,7 @@ async function loadInvoiceReport() {
   const invoiceGroups = invoiceGroupsForRows(weekRows);
   setInvoiceReportMessage(assignmentsResult.error
     ? `Loaded ${weekRows.length.toLocaleString()} current-week job${weekRows.length === 1 ? "" : "s"} before Supabase returned an error.`
-    : `Loaded ${invoiceGroups.length.toLocaleString()} invoice${invoiceGroups.length === 1 ? "" : "s"} for ${weekRows.length.toLocaleString()} current-week job${weekRows.length === 1 ? "" : "s"}.`);
+    : `Loaded one weekly invoice with ${invoiceGroups.length.toLocaleString()} propert${invoiceGroups.length === 1 ? "y" : "ies"} and ${weekRows.length.toLocaleString()} job${weekRows.length === 1 ? "" : "s"}.`);
 }
 
 function renderInvoiceReportData() {
@@ -9502,7 +9502,7 @@ function renderInvoiceReportData() {
   setText("invoiceJobCount", weekRows.length.toLocaleString());
   setText("invoiceWeekTotal", salesMoney(total));
   setInvoiceHtml("invoiceReportInvoices", invoiceGroups.length
-    ? invoiceGroups.map(renderInvoiceGroup).join("")
+    ? renderInvoiceDocument(invoiceGroups, total, range, weekRows)
     : emptyState("document", "No current-week invoices", "Scheduled jobs from this Sunday through Saturday will appear here."));
 }
 
@@ -9521,7 +9521,22 @@ function setInvoiceHtml(id, html) {
 }
 
 function invoiceReportPlaceholder() {
-  return panel("Weekly Invoices", emptyState("document", "Loading invoices", "Current-week scheduled jobs are syncing from Supabase."), { className: "span-all" });
+  return panel("Weekly Invoice", emptyState("document", "Loading invoice", "Current-week scheduled jobs are syncing from Supabase."), { className: "span-all invoice-file-card" });
+}
+
+function printInvoiceReport(root = document.querySelector("[data-invoice-report-page]")) {
+  const closedGroups = Array.from(root?.querySelectorAll(".invoice-property-details:not([open])") || []);
+  closedGroups.forEach((details) => {
+    details.open = true;
+  });
+  const restore = () => {
+    closedGroups.forEach((details) => {
+      details.open = false;
+    });
+    window.removeEventListener("afterprint", restore);
+  };
+  if (closedGroups.length) window.addEventListener("afterprint", restore, { once: true });
+  window.print();
 }
 
 function invoiceWeekRange(reference = new Date()) {
@@ -9640,31 +9655,59 @@ function invoiceUnitMatchKey(value) {
   return normalizeToken(String(value || "").replace(/^unit\s+/i, ""));
 }
 
-function renderInvoiceGroup(group) {
+function renderInvoiceDocument(groups, total, range, rows = []) {
   return `
-    <section class="suite-panel invoice-card">
-      <div class="invoice-card-head">
+    <section class="suite-panel invoice-file-card">
+      <div class="invoice-file-head">
         <div>
-          <p>Invoice</p>
-          <h2>${esc(group.propertyName)}</h2>
-          ${group.address ? `<span>${esc(group.address)}</span>` : ""}
+          <p>Weekly Invoice File</p>
+          <h2>Current Week Invoice</h2>
+          <span>${esc(invoiceWeekLabel(range.start, range.end))}</span>
         </div>
-        <div class="invoice-total">
-          <span>Total</span>
-          <strong>${esc(salesMoney(group.total))}</strong>
+        <div class="invoice-file-total">
+          <span>Total Customer Charges</span>
+          <strong>${esc(salesMoney(total))}</strong>
         </div>
       </div>
-      <div class="table-scroll invoice-line-scroll">
-        <table class="suite-table invoice-line-table">
-          <thead>
-            <tr><th>Description</th><th>Schedule</th><th>Status</th><th>Customer Charge</th></tr>
-          </thead>
-          <tbody>
-            ${group.items.map(renderInvoiceLine).join("")}
-          </tbody>
-        </table>
+      <div class="invoice-file-summary-grid">
+        <div><span>Properties</span><strong>${esc(groups.length.toLocaleString())}</strong></div>
+        <div><span>Assignments</span><strong>${esc(rows.length.toLocaleString())}</strong></div>
+        <div><span>Week</span><strong>${esc(invoiceWeekLabel(range.start, range.end))}</strong></div>
+      </div>
+      <div class="invoice-property-list">
+        ${groups.map(renderInvoicePropertyGroup).join("")}
       </div>
     </section>
+  `;
+}
+
+function renderInvoicePropertyGroup(group) {
+  return `
+    <details class="invoice-property-details" open>
+      <summary class="invoice-property-summary">
+        <span class="invoice-collapse-indicator">${icon("chevron-right")}</span>
+        <div>
+          <strong>${esc(group.propertyName)}</strong>
+          ${group.address ? `<small>${esc(group.address)}</small>` : ""}
+        </div>
+        <div class="invoice-property-summary-meta">
+          <span>${esc(group.items.length.toLocaleString())} job${group.items.length === 1 ? "" : "s"}</span>
+          <strong>${esc(salesMoney(group.total))}</strong>
+        </div>
+      </summary>
+      <div class="invoice-property-body">
+        <div class="table-scroll invoice-line-scroll">
+          <table class="suite-table invoice-line-table">
+            <thead>
+              <tr><th>Description</th><th>Schedule</th><th>Status</th><th>Customer Charge</th></tr>
+            </thead>
+            <tbody>
+              ${group.items.map(renderInvoiceLine).join("")}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </details>
   `;
 }
 
