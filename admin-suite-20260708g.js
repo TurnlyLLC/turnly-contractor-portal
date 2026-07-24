@@ -9746,6 +9746,7 @@ function renderSalesReport() {
         ${panel("Completed Financials", `<div id="salesCompletedSummary" class="property-unit-summary">${salesSummaryPlaceholder("Completed assignment totals")}</div>`, { className: "span-half", subtitle: "All assignments marked complete or carrying a completion timestamp." })}
         ${panel("Upcoming Projection", `<div id="salesUpcomingSummary" class="property-unit-summary">${salesSummaryPlaceholder("Upcoming assignment projection")}</div>`, { className: "span-half", subtitle: "Future assignments that are not completed, cancelled, or declined." })}
         ${panel("Monthly Revenue vs Profit", `<div id="salesMonthlyBarChart" class="sales-chart-shell">${salesChartEmpty("Monthly financials will appear once assignments load.")}</div>`, { className: "span-half", subtitle: "Switch months to compare customer revenue against profit." })}
+        ${panel("This Week Contractor Pay", `<div id="salesWeeklyPayChart" class="sales-chart-shell">${salesChartEmpty("This week contractor pay will appear once assignments load.")}</div>`, { className: "span-half", subtitle: "Projected contractor payout from Sunday through Saturday." })}
         ${panel("Revenue and Profit Trend", `<div id="salesMonthlyTrendChart" class="sales-chart-shell">${salesChartEmpty("Revenue and profit trends will appear once assignments load.")}</div>`, { className: "span-half", subtitle: "Revenue and profit by month, using completed actuals and upcoming projections." })}
       </section>
     </section>
@@ -9837,6 +9838,9 @@ function renderSalesReportData() {
 
   setSalesHtml("salesCompletedSummary", salesSummaryHtml(completed, "Completed assignment totals", "completed"));
   setSalesHtml("salesUpcomingSummary", salesSummaryHtml(upcoming, "Upcoming assignment projection", "upcoming"));
+  const weekRange = invoiceWeekRange();
+  const weeklyPayRows = salesWeeklyPayAssignments(rows, weekRange);
+  setSalesHtml("salesWeeklyPayChart", salesWeeklyPayPieChart(salesWeeklyContractorPayGroups(weeklyPayRows), weekRange, weeklyPayRows));
   const monthly = salesMonthlyFinancials(completed, upcoming);
   salesReportState.selectedMonthKey = salesSelectedMonthKey(monthly, salesReportState.selectedMonthKey);
   setSalesHtml("salesMonthlyBarChart", salesMonthlyComparisonChart(monthly));
@@ -9872,6 +9876,105 @@ function salesSummaryPlaceholder(title) {
 
 function salesChartEmpty(text) {
   return `<div class="sales-chart-empty">${icon("bar-chart")}<strong>${esc(text)}</strong></div>`;
+}
+
+function salesWeeklyPayAssignments(rows = [], range = invoiceWeekRange()) {
+  return (rows || [])
+    .filter((row) => invoiceAssignmentFallsInWeek(row, range))
+    .filter(invoiceAssignmentIsBillable)
+    .sort((a, b) => dateValue(a.start_window, 0) - dateValue(b.start_window, 0)
+      || salesAssignmentPayeeLabel(a).localeCompare(salesAssignmentPayeeLabel(b), undefined, { sensitivity: "base" }));
+}
+
+function salesWeeklyContractorPayGroups(rows = []) {
+  const groups = new Map();
+  rows.forEach((row) => {
+    const amount = salesAssignmentContractorPay(row, "projected");
+    if (!amount) return;
+    const label = salesAssignmentPayeeLabel(row);
+    const key = row.assigned_to || row.claimed_by || normalizeToken(label) || "unassigned";
+    if (!groups.has(key)) {
+      groups.set(key, { key, label, amount: 0, count: 0 });
+    }
+    const group = groups.get(key);
+    group.amount += amount;
+    group.count += 1;
+  });
+  return Array.from(groups.values()).sort((a, b) => b.amount - a.amount || a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+}
+
+function salesAssignmentPayeeLabel(row = {}) {
+  return row.assigned_to_name
+    || row.assigned_to_email
+    || row.claimed_by_name
+    || row.claimed_by_email
+    || "Unassigned";
+}
+
+function salesWeeklyPayPieChart(groups = [], range = invoiceWeekRange(), rows = []) {
+  const total = groups.reduce((sum, group) => sum + group.amount, 0);
+  if (!groups.length || !total) {
+    return salesChartEmpty("No contractor pay is scheduled for this Sunday through Saturday.");
+  }
+  let cursor = 0;
+  const gradient = groups.map((group, index) => {
+    const start = cursor;
+    const end = cursor + (group.amount / total) * 100;
+    cursor = end;
+    return `${salesPieColor(index)} ${start.toFixed(2)}% ${end.toFixed(2)}%`;
+  }).join(", ");
+  return `
+    <div class="sales-chart-control">
+      <div>
+        <strong>${esc(salesMoney(total))}</strong>
+        <small>${esc(invoiceWeekLabel(range.start, range.end))}</small>
+      </div>
+      <span>${esc(rows.length.toLocaleString())} scheduled job${rows.length === 1 ? "" : "s"}</span>
+    </div>
+    <div class="sales-pie-layout">
+      <div class="sales-pie-visual" style="background: conic-gradient(${gradient});" role="img" aria-label="${esc(`This week contractor pay totals ${salesMoney(total)} split across ${groups.length} contractor${groups.length === 1 ? "" : "s"}.`)}">
+        <div class="sales-pie-center">
+          <span>This Week</span>
+          <strong>${esc(salesMoney(total))}</strong>
+        </div>
+      </div>
+      <div class="sales-pie-list">
+        ${groups.map((group, index) => salesWeeklyPayLegendRow(group, total, index)).join("")}
+      </div>
+    </div>
+    <dl class="sales-chart-stat-grid">
+      <div><dt>Total Pay</dt><dd>${esc(salesMoney(total))}</dd></div>
+      <div><dt>Contractors</dt><dd>${esc(groups.length.toLocaleString())}</dd></div>
+      <div><dt>Jobs</dt><dd>${esc(rows.length.toLocaleString())}</dd></div>
+      <div><dt>Week</dt><dd>${esc(invoiceWeekLabel(range.start, range.end))}</dd></div>
+    </dl>
+  `;
+}
+
+function salesWeeklyPayLegendRow(group, total, index) {
+  const percent = total ? (group.amount / total) * 100 : 0;
+  return `
+    <div class="sales-pie-row">
+      <i style="background:${salesPieColor(index)}"></i>
+      <strong>${esc(group.label)}</strong>
+      <span>${esc(salesMoney(group.amount))}</span>
+      <small>${esc(group.count.toLocaleString())} job${group.count === 1 ? "" : "s"} - ${esc(salesPercent(percent))}</small>
+    </div>
+  `;
+}
+
+function salesPieColor(index) {
+  const colors = [
+    "var(--suite-green)",
+    "var(--suite-blue)",
+    "var(--suite-purple)",
+    "var(--suite-orange)",
+    "#facc15",
+    "var(--suite-red)",
+    "#14b8a6",
+    "#ec4899"
+  ];
+  return colors[index % colors.length];
 }
 
 function salesCompletedAssignments(rows = []) {
