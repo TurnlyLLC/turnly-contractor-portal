@@ -176,7 +176,7 @@ function injectStyles() {
   const style = document.createElement("style");
   style.id = "contractorDirectorySourceStyles";
   style.textContent = `
-    .contractor-directory-workspace{display:grid;gap:14px}.contractor-directory-card .suite-toolbar{padding:14px 16px 0}.contractor-directory-card .request-message{padding:0 16px 8px}.contractor-directory-card td strong,.contractor-directory-card td small{display:block}.contractor-directory-card td small{color:var(--suite-soft);font-size:11px;margin-top:3px}.contractor-file-name-link{color:var(--suite-text);text-decoration:none}.contractor-file-name-link:hover strong{color:var(--suite-green)}.compact-field{min-width:150px}.compact-field select{min-height:36px}.contractor-actions{align-items:center;display:flex;flex-wrap:wrap;gap:6px}.contractor-actions .secondary-action,.contractor-actions .primary-action{min-height:32px;padding:0 10px;white-space:nowrap}.contractor-form .checkbox-field{align-self:center}@media(max-width:980px){.contractor-directory-card .suite-toolbar,.contractor-directory-card .toolbar-left,.contractor-directory-card .toolbar-right{align-items:stretch;display:grid;grid-template-columns:1fr}}
+    .contractor-directory-workspace{display:grid;gap:14px}.contractor-directory-card .suite-toolbar{padding:14px 16px 0}.contractor-directory-card .request-message{padding:0 16px 8px}.contractor-directory-card td strong,.contractor-directory-card td small{display:block}.contractor-directory-card td small{color:var(--suite-soft);font-size:11px;margin-top:3px}.contractor-file-name-link{color:var(--suite-text);text-decoration:none}.contractor-file-name-link:hover strong{color:var(--suite-green)}.compact-field{min-width:150px}.compact-field select{min-height:36px}.contractor-actions{align-items:center;display:flex;flex-wrap:wrap;gap:6px}.contractor-actions .secondary-action,.contractor-actions .primary-action{min-height:32px;padding:0 10px;white-space:nowrap}.contractor-form .checkbox-field{align-self:center}.contractor-password-note{background:rgba(6,214,160,.1);border:1px solid rgba(6,214,160,.28);border-radius:8px;color:var(--suite-text);font-size:12px;line-height:1.5;margin:0;padding:12px}.contractor-password-message{font-size:12px;margin:0}.contractor-password-message.error{color:#ff5c7a}.contractor-password-message.success{color:var(--suite-green)}@media(max-width:980px){.contractor-directory-card .suite-toolbar,.contractor-directory-card .toolbar-left,.contractor-directory-card .toolbar-right{align-items:stretch;display:grid;grid-template-columns:1fr}}
   `;
   document.head.appendChild(style);
 }
@@ -274,6 +274,9 @@ function renderRows() {
     const fileLink = person.team === "contractor"
       ? `<a class="secondary-action" href="${esc(contractorFileUrl(person))}"><span>File</span></a>`
       : "";
+    const resetPassword = person.team === "contractor" && (person.profileId || person.email)
+      ? `<button class="secondary-action" type="button" data-reset-password="${esc(person.key)}"><span>Reset Password</span></button>`
+      : "";
     const nameCell = person.team === "contractor"
       ? `<a class="contractor-file-name-link" href="${esc(contractorFileUrl(person))}"><strong>${esc(person.name)}</strong><small>${esc(person.email || "No email")}</small></a>`
       : `<strong>${esc(person.name)}</strong><small>${esc(person.email || "No email")}</small>`;
@@ -281,7 +284,7 @@ function renderRows() {
       <td>${nameCell}</td>
       <td>${badge(person.teamLabel)}</td><td>${esc(person.company || "-")}</td><td>${badge(person.status)}</td>
       <td>${esc(person.service || "-")}</td><td>${esc(person.location || "-")}</td><td>${esc(person.phone || "-")}</td><td>${esc(person.sourceLabel)}</td>
-      <td><div class="contractor-actions">${fileLink}${approve}<button class="secondary-action" type="button" data-edit="${esc(person.key)}"><span>Edit</span></button></div></td>
+      <td><div class="contractor-actions">${fileLink}${approve}${resetPassword}<button class="secondary-action" type="button" data-edit="${esc(person.key)}"><span>Edit</span></button></div></td>
     </tr>`;
   }).join("");
   if (empty) empty.hidden = Boolean(rows.length);
@@ -331,6 +334,20 @@ function formMarkup(person = null) {
   </form>`;
 }
 
+function passwordFormMarkup(person) {
+  const profileId = person?.profileId || (person?.source === "profiles" ? person?.id || "" : "");
+  return `<form id="contractorPasswordForm" class="lead-form contractor-form" data-profile-id="${esc(profileId)}" data-email="${esc(person?.email || "")}" data-name="${esc(person?.name || "this contractor")}">
+    <div class="form-grid">
+      <label class="suite-field wide"><span>Contractor</span><input type="text" value="${esc([person?.name, person?.email].filter(Boolean).join(" - ") || "Contractor")}" disabled /></label>
+      ${field("contractorTempPassword", "Temporary Password", "password", "", "autocomplete=\"new-password\" minlength=\"8\" required")}
+      ${field("contractorTempPasswordConfirm", "Confirm Temporary Password", "password", "", "autocomplete=\"new-password\" minlength=\"8\" required")}
+      <p class="contractor-password-note wide">The contractor can sign in with this temporary password one time. On their next login, Turnly will require them to choose a new password before the portal opens.</p>
+      <p id="contractorPasswordMessage" class="contractor-password-message wide" aria-live="polite"></p>
+    </div>
+    <div class="lead-form-actions"><button class="secondary-action" type="button" data-modal-close><span>Cancel</span></button><button id="contractorPasswordSave" class="primary-action" type="submit"><span>Reset Password</span></button></div>
+  </form>`;
+}
+
 function openModal(person = null) {
   const modal = document.getElementById("contractorModal");
   const body = document.getElementById("contractorModalBody");
@@ -342,6 +359,17 @@ function openModal(person = null) {
   document.getElementById("contractorName")?.focus();
 }
 
+function openPasswordModal(person) {
+  const modal = document.getElementById("contractorModal");
+  const body = document.getElementById("contractorModalBody");
+  const heading = document.getElementById("contractorModalTitle");
+  if (!modal || !body || !person) return;
+  if (heading) heading.textContent = `Reset password for ${person.name}`;
+  body.innerHTML = passwordFormMarkup(person);
+  modal.hidden = false;
+  document.getElementById("contractorTempPassword")?.focus();
+}
+
 function closeModal() {
   const modal = document.getElementById("contractorModal");
   if (modal) modal.hidden = true;
@@ -349,6 +377,14 @@ function closeModal() {
 
 function value(id) {
   return (document.getElementById(id)?.value || "").trim();
+}
+
+function setPasswordFormMessage(text, error = false) {
+  const el = document.getElementById("contractorPasswordMessage");
+  if (!el) return;
+  el.textContent = text || "";
+  el.classList.toggle("error", error);
+  el.classList.toggle("success", Boolean(text) && !error);
 }
 
 function formPayload(table) {
@@ -491,6 +527,59 @@ async function approvePerson(person) {
   setMessage(`${person.name} is approved and available for assignments.`);
 }
 
+async function resetContractorPassword(event) {
+  event.preventDefault();
+  if (!supabase || state.saving) return;
+  const form = event.target;
+  const password = value("contractorTempPassword");
+  const confirmPassword = value("contractorTempPasswordConfirm");
+  const contractorName = form.dataset.name || "This contractor";
+
+  if (password.length < 8) {
+    setPasswordFormMessage("Password must be at least 8 characters.", true);
+    return;
+  }
+  if (password !== confirmPassword) {
+    setPasswordFormMessage("Passwords do not match.", true);
+    return;
+  }
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData?.session?.access_token || "";
+  if (!accessToken) {
+    setPasswordFormMessage("Your admin session expired. Log in again, then retry.", true);
+    return;
+  }
+
+  state.saving = true;
+  setPasswordFormMessage(`Resetting ${contractorName}'s password...`);
+
+  try {
+    const response = await fetch("/api/admin-reset-contractor-password", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${accessToken}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        contractorUserId: form.dataset.profileId || "",
+        email: form.dataset.email || "",
+        password
+      })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || "Unable to reset contractor password.");
+
+    closeModal();
+    await loadPeople();
+    setMessage(`${contractorName}'s password was reset. They will be prompted to change it on their next login.`);
+  } catch (error) {
+    setPasswordFormMessage(error?.message || "Unable to reset contractor password.", true);
+  } finally {
+    state.saving = false;
+  }
+}
+
 function bind(root) {
   root.addEventListener("input", (event) => {
     if (event.target?.id !== "contractorSearch") return;
@@ -514,9 +603,12 @@ function bind(root) {
     if (edit) return openModal(state.people.find((person) => person.key === edit.dataset.edit));
     const approve = event.target.closest("[data-approve]");
     if (approve) return void approvePerson(state.people.find((person) => person.key === approve.dataset.approve));
+    const resetPassword = event.target.closest("[data-reset-password]");
+    if (resetPassword) return openPasswordModal(state.people.find((person) => person.key === resetPassword.dataset.resetPassword));
   });
   root.addEventListener("submit", (event) => {
     if (event.target?.id === "contractorForm") void saveContractor(event);
+    if (event.target?.id === "contractorPasswordForm") void resetContractorPassword(event);
   });
 }
 
