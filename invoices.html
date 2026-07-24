@@ -3,78 +3,18 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Invoices | Turnly</title>
+  <title>Invoices | Turnly Admin</title>
   <link rel="icon" href="/favicon.ico?v=20260624t" sizes="any" />
   <link rel="shortcut icon" href="/favicon.ico?v=20260624t" />
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=20260624t" />
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png?v=20260624t" />
-  <link rel="stylesheet" href="style.css" />
-  <link rel="stylesheet" href="admin-dashboard.css" />
+  <link rel="stylesheet" href="admin-suite.css?v=20260724-invoices-report" />
 </head>
-<body class="admin-command-body">
-  <main class="admin-command">
-    <aside class="command-sidebar">
-      <div class="command-brand">
-        <div class="brand-mark">T</div>
-        <span>TURNLY</span>
-      </div>
-
-      <nav class="command-nav" aria-label="Admin navigation">
-        <a class="nav-link" href="admin.html"><span>⌂</span>Dashboard</a>
-
-        <p>Sales</p>
-        <a class="nav-link" href="leads.html"><span>◇</span>Leads</a>
-        <a class="nav-link" href="walkthroughs.html"><span>⌑</span>Walkthroughs</a>
-        <a class="nav-link" href="quotes.html"><span>□</span>Quotes</a>
-
-        <p>Operations</p>
-        <a class="nav-link" href="properties.html"><span>▤</span>Properties</a>
-        <a class="nav-link" href="assignments.html"><span>◫</span>Assignments</a>
-        <a class="nav-link" href="claimed-assignments.html"><span>♙</span>Contractors</a>
-        <a class="nav-link" href="checklists.html"><span>☑</span>Checklists</a>
-
-        <p>Quality</p>
-        <a class="nav-link" href="qa-reviews.html"><span>▣</span>QA Reviews</a>
-        <a class="nav-link" href="videos.html"><span>▻</span>Videos</a>
-
-        <p>Finance</p>
-        <a class="nav-link active" href="invoices.html"><span>▥</span>Invoices</a>
-        <a class="nav-link" href="revenue.html"><span>◇</span>Revenue</a>
-
-        <p>Settings</p>
-        <a class="nav-link" href="settings.html"><span>⚙</span>Settings</a>
-      </nav>
-
-      <button id="logoutBtn" class="admin-user-card" type="button">
-        <span class="avatar">RA</span>
-        <span>
-          <strong>Ryan Admin</strong>
-          <small>Admin</small>
-        </span>
-        <span class="chevron">⌄</span>
-      </button>
-    </aside>
-
-    <section class="command-main wip-main">
-      <header class="command-header">
-        <div>
-          <h1>Invoices</h1>
-          <p>Finance workspace</p>
-        </div>
-        <div class="command-tools">
-          <a class="secondary-command-btn" href="admin.html">Back</a>
-        </div>
-      </header>
-
-      <section class="panel-card wip-panel">
-        <p class="wip-kicker">Finance</p>
-        <h2>Work in progress</h2>
-        <p>This page is being built for the Turnly admin portal.</p>
-      </section>
-    </section>
-  </main>
-
+<body class="turnly-admin-suite" data-admin-page="invoices">
+  <div id="adminSuiteApp"></div>
   <script src="env.js"></script>
+  <script type="module" src="admin-suite-20260708g.js?v=20260724-invoices-report"></script>
   <script type="module" src="app.js?v=20260720-home-logout"></script>
+  <script type="module" src="qa-checklists-nav-20260715a.js?v=20260715-contracts-tab"></script>
 </body>
 </html>

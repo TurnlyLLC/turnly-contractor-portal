@@ -57,6 +57,7 @@ const navSections = [
     title: "Reports",
     links: [
       { key: "reports-sales", label: "Sales", href: "reports-sales.html", icon: "wallet" },
+      { key: "invoices", label: "Invoices", href: "invoices.html", icon: "document" },
       { key: "reports-operations", label: "Operations", href: "reports-operations.html", icon: "settings" },
       { key: "contractor-performance", label: "Contractor Performance", href: "contractor-performance.html", icon: "trophy" },
       { key: "growth", label: "Growth", href: "growth.html", icon: "trending-up" }

@@ -73,6 +73,7 @@ const navSections = [
     title: "Reports",
     links: [
       { key: "reports-sales", label: "Sales", href: "reports-sales.html", icon: "wallet" },
+      { key: "invoices", label: "Invoices", href: "invoices.html", icon: "document" },
       { key: "reports-operations", label: "Operations", href: "reports-operations.html", icon: "settings" },
       { key: "contractor-performance", label: "Contractor Performance", href: "contractor-performance.html", icon: "trophy" },
       { key: "growth", label: "Growth", href: "growth.html", icon: "trending-up" }
@@ -414,6 +415,14 @@ const salesReportState = {
   message: "",
   error: false
 };
+const invoiceReportState = {
+  rows: [],
+  units: [],
+  properties: [],
+  loading: false,
+  message: "",
+  error: false
+};
 const propertyUnitsTable = "property_units";
 const checklistTemplatesTable = "checklist_templates";
 const checklistModulesTable = "checklist_modules";
@@ -632,6 +641,11 @@ const pages = {
       { label: "Assignments", icon: "clipboard-list", href: "assignments.html", tone: "secondary" }
     ],
     render: renderSalesReport
+  },
+  "invoices": {
+    title: "Invoices",
+    subtitle: "Build current-week invoices by property from scheduled assignment jobs.",
+    render: renderInvoiceReport
   },
   "reports-operations": {
     title: "Operations",
@@ -9386,6 +9400,285 @@ function isWithinPastDays(value, days) {
   return date >= addDays(today, -days) && date <= addDays(today, 1);
 }
 
+function renderInvoiceReport() {
+  const range = invoiceWeekRange();
+  return `
+    <section class="invoice-report-workspace" data-invoice-report-page>
+      ${toolbar(
+        `<p id="invoiceReportMessage" class="status-message" aria-live="polite">Loading current-week invoices...</p>`,
+        `<button class="secondary-action" type="button" data-invoice-print>${icon("download")}<span>Print</span></button><button class="secondary-action" type="button" data-invoice-refresh>${icon("refresh")}<span>Refresh</span></button>`
+      )}
+      <section class="metric-strip invoice-metric-strip">
+        ${metric("Week", invoiceWeekLabel(range.start, range.end), "Sunday through Saturday", "calendar", "blue", 'id="invoiceWeekRange"')}
+        ${metric("Properties", "0", "with scheduled jobs", "building", "green", 'id="invoicePropertyCount"')}
+        ${metric("Jobs", "0", "invoice line items", "clipboard-list", "purple", 'id="invoiceJobCount"')}
+        ${metric("Invoice Total", "$0", "customer charges", "badge-dollar", "yellow", 'id="invoiceWeekTotal"')}
+      </section>
+      <section id="invoiceReportInvoices" class="invoice-report-list">
+        ${invoiceReportPlaceholder()}
+      </section>
+    </section>
+  `;
+}
+
+function initInvoiceReport() {
+  const root = document.querySelector("[data-invoice-report-page]");
+  if (!root) return;
+  root.querySelector("[data-invoice-refresh]")?.addEventListener("click", () => {
+    void loadInvoiceReport();
+  });
+  root.querySelector("[data-invoice-print]")?.addEventListener("click", () => {
+    window.print();
+  });
+  void loadInvoiceReport();
+}
+
+async function loadInvoiceReport() {
+  if (!suiteSupabase) {
+    invoiceReportState.rows = [];
+    invoiceReportState.units = [];
+    invoiceReportState.properties = [];
+    renderInvoiceReportData();
+    setInvoiceReportMessage("Supabase config is missing. Add env.js values before using invoices.", true);
+    return;
+  }
+
+  invoiceReportState.loading = true;
+  setInvoiceReportMessage("Loading current-week invoices...");
+  const { data: userData } = await suiteSupabase.auth.getUser();
+  const user = userData?.user || null;
+  if (!user) {
+    invoiceReportState.rows = [];
+    invoiceReportState.units = [];
+    invoiceReportState.properties = [];
+    invoiceReportState.loading = false;
+    renderInvoiceReportData();
+    setInvoiceReportMessage("Sign in as an admin to load invoices.", true);
+    return;
+  }
+
+  const { data: profile, error: profileError } = await suiteSupabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (profileError || normalizeToken(profile?.role) !== "admin") {
+    invoiceReportState.rows = [];
+    invoiceReportState.units = [];
+    invoiceReportState.properties = [];
+    invoiceReportState.loading = false;
+    renderInvoiceReportData();
+    setInvoiceReportMessage(profileError
+      ? "Unable to verify admin access: " + profileError.message
+      : "Admin access is required to load invoices.", true);
+    return;
+  }
+
+  const [properties, units, assignmentsResult] = await Promise.all([
+    loadAssignmentProperties(),
+    loadAssignmentUnits(),
+    loadAssignmentRows()
+  ]);
+  invoiceReportState.properties = properties || [];
+  invoiceReportState.units = units || [];
+  invoiceReportState.rows = enrichAssignmentRowsWithContractAccess(assignmentsResult.rows, invoiceReportState.properties);
+  invoiceReportState.loading = false;
+  renderInvoiceReportData();
+
+  const weekRows = invoiceWeekAssignments(invoiceReportState.rows);
+  const invoiceGroups = invoiceGroupsForRows(weekRows);
+  setInvoiceReportMessage(assignmentsResult.error
+    ? `Loaded ${weekRows.length.toLocaleString()} current-week job${weekRows.length === 1 ? "" : "s"} before Supabase returned an error.`
+    : `Loaded ${invoiceGroups.length.toLocaleString()} invoice${invoiceGroups.length === 1 ? "" : "s"} for ${weekRows.length.toLocaleString()} current-week job${weekRows.length === 1 ? "" : "s"}.`);
+}
+
+function renderInvoiceReportData() {
+  const range = invoiceWeekRange();
+  const weekRows = invoiceWeekAssignments(invoiceReportState.rows, range);
+  const invoiceGroups = invoiceGroupsForRows(weekRows);
+  const total = invoiceGroups.reduce((sum, group) => sum + group.total, 0);
+  setText("invoiceWeekRange", invoiceWeekLabel(range.start, range.end));
+  setText("invoicePropertyCount", invoiceGroups.length.toLocaleString());
+  setText("invoiceJobCount", weekRows.length.toLocaleString());
+  setText("invoiceWeekTotal", salesMoney(total));
+  setInvoiceHtml("invoiceReportInvoices", invoiceGroups.length
+    ? invoiceGroups.map(renderInvoiceGroup).join("")
+    : emptyState("document", "No current-week invoices", "Scheduled jobs from this Sunday through Saturday will appear here."));
+}
+
+function setInvoiceReportMessage(text = "", isError = false) {
+  invoiceReportState.message = text;
+  invoiceReportState.error = Boolean(isError);
+  const message = document.getElementById("invoiceReportMessage");
+  if (!message) return;
+  message.textContent = text || "";
+  message.classList.toggle("error", Boolean(isError));
+}
+
+function setInvoiceHtml(id, html) {
+  const node = document.getElementById(id);
+  if (node) node.innerHTML = html;
+}
+
+function invoiceReportPlaceholder() {
+  return panel("Weekly Invoices", emptyState("document", "Loading invoices", "Current-week scheduled jobs are syncing from Supabase."), { className: "span-all" });
+}
+
+function invoiceWeekRange(reference = new Date()) {
+  const start = new Date(reference);
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - start.getDay());
+  return { start, end: addDays(start, 7) };
+}
+
+function invoiceWeekLabel(start, end) {
+  const finish = addDays(end, -1);
+  return `${formatDateOnly(start)} - ${formatDateOnly(finish)}`;
+}
+
+function invoiceWeekAssignments(rows = [], range = invoiceWeekRange()) {
+  return (rows || [])
+    .filter((row) => invoiceAssignmentFallsInWeek(row, range))
+    .filter(invoiceAssignmentIsBillable)
+    .sort((a, b) => dateValue(a.start_window, 0) - dateValue(b.start_window, 0)
+      || String(a.property_name || a.title || "").localeCompare(String(b.property_name || b.title || ""), undefined, { sensitivity: "base" }));
+}
+
+function invoiceAssignmentFallsInWeek(row = {}, range = invoiceWeekRange()) {
+  const start = parseDate(row.start_window);
+  const end = parseDate(row.end_window) || start;
+  return Boolean(start && end && start < range.end && end >= range.start);
+}
+
+function invoiceAssignmentIsBillable(row = {}) {
+  const status = assignmentStatusKey(row.status);
+  return !["cancelled", "canceled", "declined", "draft", "pending", "preferred-pending"].includes(status);
+}
+
+function invoiceGroupsForRows(rows = []) {
+  const groups = new Map();
+  rows.forEach((row) => {
+    const property = assignmentPropertyForRow(row, invoiceReportState.properties);
+    const metadata = assignmentMetadata(row);
+    const key = String(property?.id || property?.contract_id || property?.client_id || row.property_id || metadata.contract_id || row.property_name || "unknown");
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        propertyName: assignmentPropertyTitle(property) || row.property_name || "Unassigned Property",
+        address: assignmentPropertyAddress(property) || row.address || "",
+        items: [],
+        total: 0
+      });
+    }
+    const item = invoiceLineItem(row);
+    const group = groups.get(key);
+    group.items.push(item);
+    group.total += item.amount;
+  });
+  return Array.from(groups.values())
+    .map((group) => ({ ...group, items: group.items.sort((a, b) => dateValue(a.startWindow, 0) - dateValue(b.startWindow, 0) || a.unit.localeCompare(b.unit, undefined, { numeric: true, sensitivity: "base" })) }))
+    .sort((a, b) => a.propertyName.localeCompare(b.propertyName, undefined, { sensitivity: "base" }));
+}
+
+function invoiceLineItem(row = {}) {
+  const unit = invoiceAssignmentUnitNumber(row);
+  return {
+    id: row.id || "",
+    unit,
+    description: `Professional cleaning of unit: ${unit || "Unspecified"}`,
+    startWindow: row.start_window,
+    schedule: formatDateWindow(row.start_window, row.end_window),
+    amount: invoiceAssignmentCustomerCharge(row),
+    status: assignmentStatusKey(row.status || "open")
+  };
+}
+
+function invoiceAssignmentCustomerCharge(row = {}) {
+  const stored = salesAssignmentRevenue(row);
+  if (stored) return stored;
+  const unit = invoiceUnitForAssignment(row);
+  return propertyUnitNumber(unit?.customer_price);
+}
+
+function invoiceAssignmentUnitNumber(row = {}) {
+  const metadata = assignmentMetadata(row);
+  return row.unit_number
+    || row.unit_name
+    || metadata.unit_number
+    || metadata.unit_name
+    || metadata.property_unit_name
+    || "";
+}
+
+function invoiceUnitForAssignment(row = {}) {
+  const metadata = assignmentMetadata(row);
+  const unitId = row.unit_id || metadata.unit_id;
+  if (unitId) {
+    const byId = invoiceReportState.units.find((unit) => String(unit.id || "") === String(unitId));
+    if (byId) return byId;
+  }
+
+  const label = invoiceUnitMatchKey(invoiceAssignmentUnitNumber(row));
+  if (!label) return null;
+  const property = assignmentPropertyForRow(row, invoiceReportState.properties);
+  const propertyKeys = new Set([
+    property?.id,
+    property?.contract_id,
+    property?.client_id,
+    row.property_id,
+    row.contract_id,
+    metadata.property_id,
+    metadata.contract_id
+  ].filter(Boolean).map(String));
+  return invoiceReportState.units.find((unit) => {
+    const propertyMatches = !propertyKeys.size || propertyKeys.has(String(unit.property_id || ""));
+    return propertyMatches && invoiceUnitMatchKey(assignmentUnitName(unit)) === label;
+  }) || null;
+}
+
+function invoiceUnitMatchKey(value) {
+  return normalizeToken(String(value || "").replace(/^unit\s+/i, ""));
+}
+
+function renderInvoiceGroup(group) {
+  return `
+    <section class="suite-panel invoice-card">
+      <div class="invoice-card-head">
+        <div>
+          <p>Invoice</p>
+          <h2>${esc(group.propertyName)}</h2>
+          ${group.address ? `<span>${esc(group.address)}</span>` : ""}
+        </div>
+        <div class="invoice-total">
+          <span>Total</span>
+          <strong>${esc(salesMoney(group.total))}</strong>
+        </div>
+      </div>
+      <div class="table-scroll invoice-line-scroll">
+        <table class="suite-table invoice-line-table">
+          <thead>
+            <tr><th>Description</th><th>Schedule</th><th>Status</th><th>Customer Charge</th></tr>
+          </thead>
+          <tbody>
+            ${group.items.map(renderInvoiceLine).join("")}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+function renderInvoiceLine(item) {
+  return `
+    <tr>
+      <td><strong>${esc(item.description)}</strong><small>${item.id ? `Job ${esc(String(item.id).slice(0, 8).toUpperCase())}` : ""}</small></td>
+      <td>${esc(item.schedule)}</td>
+      <td>${statusBadge(item.status)}</td>
+      <td><strong>${esc(salesMoney(item.amount))}</strong></td>
+    </tr>
+  `;
+}
+
 function renderSalesReport() {
   return `
     <section class="sales-report-workspace" data-sales-report-page>
@@ -13618,6 +13911,9 @@ function renderApp() {
   }
   if (activeKey === "reports-sales") {
     initSalesReport();
+  }
+  if (activeKey === "invoices") {
+    initInvoiceReport();
   }
   if (activeKey === "client-directory" || activeKey === "contracts") {
     initClientDirectory();

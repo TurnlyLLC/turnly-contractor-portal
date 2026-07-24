@@ -4398,6 +4398,86 @@ a {
   margin: 0;
 }
 
+.invoice-report-workspace {
+  display: grid;
+  gap: 14px;
+}
+
+.invoice-report-workspace .status-message {
+  margin: 0;
+}
+
+.invoice-metric-strip {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.invoice-report-list {
+  display: grid;
+  gap: 14px;
+}
+
+.invoice-card {
+  gap: 14px;
+}
+
+.invoice-card-head {
+  align-items: start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.invoice-card-head p,
+.invoice-total span {
+  color: var(--suite-soft);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  margin: 0 0 4px;
+  text-transform: uppercase;
+}
+
+.invoice-card-head h2 {
+  color: var(--suite-text);
+  font-size: 18px;
+  margin: 0;
+}
+
+.invoice-card-head span {
+  color: var(--suite-muted);
+  display: block;
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.invoice-total {
+  text-align: right;
+}
+
+.invoice-total strong {
+  color: var(--suite-text);
+  display: block;
+  font-size: 24px;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.invoice-line-scroll {
+  border: 1px solid var(--suite-border-soft);
+  border-radius: 8px;
+}
+
+.invoice-line-table td strong {
+  display: block;
+}
+
+.invoice-line-table td small {
+  color: var(--suite-muted);
+  display: block;
+  font-size: 11px;
+  margin-top: 3px;
+}
+
 .sales-chart-shell {
   display: grid;
   gap: 14px;
@@ -5195,6 +5275,14 @@ a {
     grid-template-columns: 1fr;
   }
 
+  .invoice-card-head {
+    display: grid;
+  }
+
+  .invoice-total {
+    text-align: left;
+  }
+
   .message-center-layout {
     grid-template-columns: 1fr;
   }
@@ -5766,5 +5854,27 @@ body.turnly-admin-suite[data-dashboard-theme="light"] .sales-trend-tooltip .sale
   body.turnly-admin-suite[data-dashboard-theme="light"] .dashboard-theme-toggle {
     justify-content: space-between;
     width: 100%;
+  }
+}
+
+@media print {
+  .suite-sidebar,
+  .suite-topbar,
+  .suite-toolbar {
+    display: none !important;
+  }
+
+  .suite-main {
+    margin: 0 !important;
+  }
+
+  .suite-content,
+  .invoice-report-workspace {
+    padding: 0 !important;
+  }
+
+  .invoice-card {
+    break-inside: avoid;
+    box-shadow: none !important;
   }
 }
