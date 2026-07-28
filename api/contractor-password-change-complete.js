@@ -7,14 +7,22 @@ function sendJson(res, statusCode, body) {
 }
 
 function getSupabaseAdmin() {
-  const url = process.env.SUPABASE_URL;
+  const url = process.env.SUPABASE_URL
+    || process.env.NEXT_PUBLIC_SUPABASE_URL
+    || process.env.VITE_SUPABASE_URL
+    || "https://nwnzdoveskthebfyndcs.supabase.co";
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
     || process.env.SUPABASE_SERVICE_KEY
-    || process.env.SUPABASE_SERVICE_ROLE;
+    || process.env.SUPABASE_SERVICE_ROLE
+    || process.env.SUPABASE_SECRET_KEY;
 
   if (!url || !serviceKey) {
+    const missing = [
+      !url ? "SUPABASE_URL" : "",
+      !serviceKey ? "SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SECRET_KEY" : ""
+    ].filter(Boolean).join(" and ");
     return {
-      error: new Error("Server reset route is missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.")
+      error: new Error(`Server reset route is missing ${missing}. Add it to the production server environment, then redeploy.`)
     };
   }
 
