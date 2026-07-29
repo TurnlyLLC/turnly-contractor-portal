@@ -6,6 +6,8 @@ const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
   : null;
 
 const EARTH_RADIUS_MILES = 3958.7613;
+const CHECKLIST_MEDIA_DB_NAME = "turnly-checklist-media-drafts";
+const CHECKLIST_MEDIA_STORE_NAME = "media";
 const geocodeCache = new Map();
 
 let activeAssignment = null;
@@ -19,6 +21,7 @@ let activeChecklistDrafts = [];
 let checklistAutosaveTimer = null;
 let checklistAutosaveInFlight = false;
 let checklistAutosavePending = false;
+let checklistMediaDbPromise = null;
 let activeQaJobId = null;
 let activeDirectoryDetails = null;
 let activeIssueDraft = "";
@@ -258,6 +261,131 @@ function clearLocalChecklistDraft() {
   } catch {
     // Ignore storage cleanup failures.
   }
+}
+
+function checklistMediaDraftKey(index, assignment = activeAssignment, user = activeUser) {
+  const draftKey = checklistDraftStorageKey(assignment, user);
+  return draftKey ? `${draftKey}:media:${index}` : "";
+}
+
+function openChecklistMediaDb() {
+  if (!("indexedDB" in window)) return Promise.resolve(null);
+  if (checklistMediaDbPromise) return checklistMediaDbPromise;
+
+  checklistMediaDbPromise = new Promise((resolve) => {
+    const request = window.indexedDB.open(CHECKLIST_MEDIA_DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(CHECKLIST_MEDIA_STORE_NAME)) {
+        db.createObjectStore(CHECKLIST_MEDIA_STORE_NAME, { keyPath: "id" });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => {
+      console.warn("[contractor-job-flow] Unable to open checklist media draft database", request.error);
+      checklistMediaDbPromise = null;
+      resolve(null);
+    };
+    request.onblocked = () => {
+      console.warn("[contractor-job-flow] Checklist media draft database is blocked by another tab.");
+    };
+  });
+
+  return checklistMediaDbPromise;
+}
+
+function checklistMediaStore(mode = "readonly") {
+  return openChecklistMediaDb().then((db) => {
+    if (!db) return null;
+    return db.transaction(CHECKLIST_MEDIA_STORE_NAME, mode).objectStore(CHECKLIST_MEDIA_STORE_NAME);
+  });
+}
+
+function mediaRequestResult(request) {
+  return new Promise((resolve, reject) => {
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function saveChecklistMediaDraft(index, file, kind = "") {
+  const id = checklistMediaDraftKey(index);
+  if (!id) return false;
+
+  if (!file) {
+    await deleteChecklistMediaDraft(index);
+    return true;
+  }
+
+  const store = await checklistMediaStore("readwrite");
+  if (!store) return false;
+
+  const record = {
+    id,
+    assignment_id: activeAssignment.id,
+    user_id: activeUser.id,
+    index,
+    kind,
+    file,
+    name: file.name || `${kind || "checklist"}-upload`,
+    type: file.type || "",
+    size: file.size || 0,
+    last_modified: file.lastModified || Date.now(),
+    saved_at: new Date().toISOString()
+  };
+
+  await mediaRequestResult(store.put(record));
+  return true;
+}
+
+async function getChecklistMediaDraft(index) {
+  const id = checklistMediaDraftKey(index);
+  if (!id) return null;
+  const store = await checklistMediaStore("readonly");
+  if (!store) return null;
+  return await mediaRequestResult(store.get(id));
+}
+
+async function deleteChecklistMediaDraft(index) {
+  const id = checklistMediaDraftKey(index);
+  if (!id) return;
+  const store = await checklistMediaStore("readwrite");
+  if (!store) return;
+  await mediaRequestResult(store.delete(id));
+}
+
+async function clearChecklistMediaDrafts() {
+  if (!activeChecklistItems.length) return;
+  await Promise.all(activeChecklistItems.map((_, index) => deleteChecklistMediaDraft(index)));
+}
+
+function mediaRecordFile(record) {
+  if (!record?.file) return null;
+  if (typeof File !== "undefined" && record.file instanceof File) return record.file;
+  if (typeof Blob !== "undefined" && record.file instanceof Blob) {
+    return new File([record.file], record.name || "saved-upload", {
+      type: record.type || record.file.type || "",
+      lastModified: record.last_modified || Date.now()
+    });
+  }
+  return null;
+}
+
+async function hydrateChecklistMediaDrafts() {
+  if (!activeChecklistItems.length) return;
+
+  await Promise.all(activeChecklistItems.map(async (item, index) => {
+    if (!checklistMediaKind(item)) return;
+    try {
+      const record = await getChecklistMediaDraft(index);
+      const file = mediaRecordFile(record);
+      if (!file) return;
+      const draft = checklistDraft(index);
+      draft.file = file;
+    } catch (error) {
+      console.warn("[contractor-job-flow] Unable to restore checklist media draft", error);
+    }
+  }));
 }
 
 function checklistResponseItemKey(response = {}) {
@@ -2406,7 +2534,7 @@ function ensureChecklistModal() {
       await moveChecklistStep(1);
     }
   });
-  modal.addEventListener("change", (event) => {
+  modal.addEventListener("change", async (event) => {
     const check = event.target?.matches("[data-tc-check]") ? event.target : null;
     if (check) {
       const draft = checklistDraft(Number(check.dataset.tcCheck));
@@ -2418,11 +2546,29 @@ function ensureChecklistModal() {
     }
     const input = event.target?.matches("[data-tc-media]") ? event.target : null;
     if (!input) return;
-    const draft = checklistDraft(Number(input.dataset.tcMedia));
-    draft.file = input.files?.[0] || null;
+    const index = Number(input.dataset.tcMedia);
+    const draft = checklistDraft(index);
+    const file = input.files?.[0] || null;
+    draft.file = file;
     const name = input.closest(".tc-upload-card")?.querySelector("[data-tc-media-name]");
-    if (name) name.textContent = input.files?.[0]?.name || "No file selected";
+    if (name) name.textContent = file?.name || "No file selected";
     input.closest(".tc-upload-card")?.classList.toggle("has-file", Boolean(draft.file));
+    if (file) {
+      setChecklistMessage("Saving upload on this device...");
+      try {
+        const saved = await saveChecklistMediaDraft(index, file, checklistMediaKind(draft.item));
+        if (saved) {
+          setChecklistMessage("Upload saved on this device.");
+        } else {
+          setChecklistMessage("Unable to save upload on this device. Keep the checklist open until you submit.", "error");
+        }
+      } catch (error) {
+        console.warn("[contractor-job-flow] Unable to save checklist media draft", error);
+        setChecklistMessage("Unable to save upload on this device. Keep the checklist open until you submit.", "error");
+      }
+    } else {
+      await deleteChecklistMediaDraft(index);
+    }
     scheduleChecklistAutosave(0);
   });
   modal.addEventListener("input", (event) => {
@@ -2447,6 +2593,7 @@ async function openChecklistModal(assignmentOrId) {
   activeChecklistDrafts = [];
   ensureChecklistDrafts(activeChecklistItems);
   hydrateChecklistDraftsFromSavedResponses();
+  await hydrateChecklistMediaDrafts();
   const modal = ensureChecklistModal();
   modal.hidden = false;
   toggleChecklistOverview(false);
@@ -2523,6 +2670,11 @@ async function completeJob() {
 
   showPageMessage("Job submitted to QA for review.");
   clearLocalChecklistDraft();
+  try {
+    await clearChecklistMediaDrafts();
+  } catch (error) {
+    console.warn("[contractor-job-flow] Unable to clear checklist media drafts", error);
+  }
   window.location.reload();
 }
 
