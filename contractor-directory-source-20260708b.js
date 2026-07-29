@@ -317,10 +317,11 @@ function formMarkup(person = null) {
   const team = person?.team || "contractor";
   const status = person?.status || "active";
   const approved = person ? person.approved : team === "contractor";
+  const isNew = !person;
   return `<form id="contractorForm" class="lead-form contractor-form" data-source="${esc(person?.source || "")}" data-id="${esc(person?.id || "")}" data-profile-id="${esc(person?.profileId || "")}">
     <div class="form-grid">
       ${field("contractorName", "Name", "text", person?.name || "", "required")}
-      ${field("contractorEmail", "Email", "email", person?.email || "")}
+      ${field("contractorEmail", "Email", "email", person?.email || "", isNew ? "required" : "")}
       ${field("contractorPhone", "Phone", "tel", person?.phone || "")}
       ${selectField("contractorTeam", "Team", [["contractor", "Contractor"], ["sales", "Sales Team"]], team)}
       ${selectField("contractorStatus", "Status", [["active", "Active"], ["pending_approval", "Pending Approval"], ["inactive", "Inactive"], ["suspended", "Suspended"]], status)}
@@ -329,6 +330,15 @@ function formMarkup(person = null) {
       ${field("contractorLocation", "Location / Market", "text", person?.location || "")}
       <label class="suite-field wide"><span>Notes</span><textarea id="contractorNotes" rows="3">${esc(person?.notes || "")}</textarea></label>
       <label class="checkbox-field wide"><input id="contractorApproved" type="checkbox" ${approved ? "checked" : ""} /> <span>Approved / auto approve on signup</span></label>
+      ${isNew ? `
+        <div id="contractorLiveAccountFields" class="contractor-live-account-fields wide">
+          <div class="form-grid">
+            ${field("contractorTempPassword", "Temporary Password", "password", "", "autocomplete=\"new-password\" minlength=\"8\" required")}
+            ${field("contractorTempPasswordConfirm", "Confirm Temporary Password", "password", "", "autocomplete=\"new-password\" minlength=\"8\" required")}
+          </div>
+          <p class="contractor-password-note">New contractors are created as live portal users with this temporary password. On first login, Turnly will require them to choose a new password before the contractor portal opens.</p>
+        </div>
+      ` : ""}
     </div>
     <div class="lead-form-actions"><button class="secondary-action" type="button" data-modal-close><span>Cancel</span></button><button id="contractorSave" class="primary-action" type="submit"><span>Save to Supabase</span></button></div>
   </form>`;
@@ -385,6 +395,18 @@ function setPasswordFormMessage(text, error = false) {
   el.textContent = text || "";
   el.classList.toggle("error", error);
   el.classList.toggle("success", Boolean(text) && !error);
+}
+
+function setLiveAccountFieldsVisible() {
+  const team = value("contractorTeam") || "contractor";
+  const wrap = document.getElementById("contractorLiveAccountFields");
+  if (!wrap) return;
+  const isContractor = team === "contractor";
+  wrap.hidden = !isContractor;
+  wrap.querySelectorAll("input").forEach((input) => {
+    input.required = isContractor;
+    if (!isContractor) input.value = "";
+  });
 }
 
 function formPayload(table) {
@@ -484,6 +506,39 @@ async function syncInvite(payload, profileId = "") {
   return supabase.from("contractor_invites").insert(invite).select("*").maybeSingle();
 }
 
+async function createLiveContractorAccount() {
+  const password = value("contractorTempPassword");
+  const confirmPassword = value("contractorTempPasswordConfirm");
+  if (!value("contractorEmail")) throw new Error("Email is required for a live contractor account.");
+  if (password.length < 8) throw new Error("Temporary password must be at least 8 characters.");
+  if (password !== confirmPassword) throw new Error("Temporary passwords do not match.");
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData?.session?.access_token || "";
+  if (!accessToken) throw new Error("Your admin session expired. Log in again, then retry.");
+
+  const payload = formPayload("profiles");
+  const response = await fetch("/api/admin-upsert-contractor-user", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${accessToken}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      ...payload,
+      name: value("contractorName"),
+      company_name: value("contractorCompany"),
+      service_type: value("contractorService"),
+      market: value("contractorLocation"),
+      notes: value("contractorNotes"),
+      password
+    })
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || "Unable to create live contractor account.");
+  return result;
+}
+
 async function saveContractor(event) {
   event.preventDefault();
   if (!supabase || state.saving) return;
@@ -492,6 +547,24 @@ async function saveContractor(event) {
   const source = form.dataset.source || "";
   const id = form.dataset.id || "";
   const profileId = form.dataset.profileId || "";
+  const isNewLiveContractor = !id && !profileId && value("contractorTeam") === "contractor";
+
+  if (isNewLiveContractor) {
+    const contractorName = value("contractorName") || value("contractorEmail") || "Contractor";
+    setMessage(`Creating live contractor account for ${contractorName}...`);
+    try {
+      await createLiveContractorAccount();
+      closeModal();
+      await loadPeople();
+      setMessage(`${contractorName} was added as a live contractor. They must change their temporary password on first login.`);
+    } catch (error) {
+      setMessage("Unable to create live contractor: " + (error?.message || "Unknown error"), true);
+    } finally {
+      state.saving = false;
+    }
+    return;
+  }
+
   const table = source || "contractors";
   const result = await writeFallback(table, formPayload(table), id);
   if (result.error) {
@@ -592,6 +665,7 @@ function bind(root) {
     if (event.target?.id === "contractorTeam") {
       const label = document.getElementById("contractorService")?.closest(".suite-field")?.querySelector("span");
       if (label) label.textContent = event.target.value === "sales" ? "Sales Role" : "Service Types";
+      setLiveAccountFieldsVisible();
     }
     renderRows();
   });
