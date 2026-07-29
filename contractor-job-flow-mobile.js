@@ -212,6 +212,10 @@ function ensureChecklistDrafts(items = []) {
       checked: Boolean(existing.checked),
       note: existing.note || "",
       file: existing.file || null,
+      media: existing.media || null,
+      media_uploading: Boolean(existing.media_uploading),
+      media_upload_error: existing.media_upload_error || "",
+      media_upload_promise: existing.media_upload_promise || null,
       completed_at: existing.completed_at || null
     };
   });
@@ -377,10 +381,11 @@ async function hydrateChecklistMediaDrafts() {
   await Promise.all(activeChecklistItems.map(async (item, index) => {
     if (!checklistMediaKind(item)) return;
     try {
+      const draft = checklistDraft(index);
+      if (draft.media) return;
       const record = await getChecklistMediaDraft(index);
       const file = mediaRecordFile(record);
       if (!file) return;
-      const draft = checklistDraft(index);
       draft.file = file;
     } catch (error) {
       console.warn("[contractor-job-flow] Unable to restore checklist media draft", error);
@@ -450,6 +455,7 @@ function hydrateChecklistDraftsFromSavedResponses() {
       ...draft,
       checked: Boolean(response.completed ?? response.checked),
       note: response.note || "",
+      media: response.media || draft.media || null,
       completed_at: response.completed_at || null
     };
   });
@@ -464,6 +470,10 @@ function checklistDraft(index) {
       checked: false,
       note: "",
       file: null,
+      media: null,
+      media_uploading: false,
+      media_upload_error: "",
+      media_upload_promise: null,
       completed_at: null
     };
   }
@@ -472,7 +482,7 @@ function checklistDraft(index) {
 
 function checklistResponseFromDraft(item, index) {
   const draft = checklistDraft(index);
-  return {
+  const response = {
     category: item.category || "General",
     task: item.task || "Untitled task",
     module_id: item.module_id || "",
@@ -485,6 +495,8 @@ function checklistResponseFromDraft(item, index) {
     note: draft.note || "",
     completed_at: draft.checked ? (draft.completed_at || new Date().toISOString()) : null
   };
+  if (draft.media) response.media = draft.media;
+  return response;
 }
 
 function checklistDraftResponses() {
@@ -602,7 +614,7 @@ function validateChecklistModule(module = currentChecklistModule(), showMessage 
   }
   const missingMedia = module.items.filter(({ item, index }) => {
     const draft = checklistDraft(index);
-    return checklistMediaKind(item) && draft.checked && !draft.file;
+    return checklistMediaKind(item) && draft.checked && !draft.file && !draft.media;
   });
   if (missingMedia.length) {
     if (showMessage) setChecklistMessage(`Upload ${missingMedia.length} required media file${missingMedia.length === 1 ? "" : "s"} before moving on.`, "error");
@@ -632,15 +644,20 @@ function checklistUploadCard(item, index) {
   const draft = checklistDraft(index);
   const label = kind === "video" ? "Upload QA Video" : "Upload QA Photo";
   const accept = kind === "video" ? "video/*" : "image/*";
-  const fileName = draft.file?.name || (item.required === false ? "Optional file" : "Required before completion");
+  const fileName = draft.file?.name || draft.media?.file_name || (item.required === false ? "Optional file" : "Required before completion");
+  const uploadStatus = draft.media_uploading
+    ? "Saving upload..."
+    : draft.media
+      ? "Saved upload"
+      : kind === "video" ? "MP4, MOV - Max 500MB" : "JPG, PNG, HEIC";
   return `
-    <label class="tc-upload-card ${draft.file ? "has-file" : ""}">
+    <label class="tc-upload-card ${draft.file || draft.media ? "has-file" : ""}">
       <input type="file" data-tc-media="${index}" accept="${escapeHtml(accept)}" />
       <span class="tc-upload-frame">
         <span class="tc-upload-icon" aria-hidden="true">&#8593;</span>
         <strong>${escapeHtml(label)}</strong>
         <em>Tap to upload or drag and drop</em>
-        <small>${escapeHtml(kind === "video" ? "MP4, MOV - Max 500MB" : "JPG, PNG, HEIC")}</small>
+        <small>${escapeHtml(uploadStatus)}</small>
         <b data-tc-media-name>${escapeHtml(fileName)}</b>
       </span>
     </label>
@@ -886,27 +903,43 @@ function checklistMediaBasePayload(item, file, kind, index, storagePath, complet
   };
 }
 
-async function uploadChecklistMedia(item, file, kind, index, completedAt, note) {
-  const bucket = kind === "video" ? "qa-videos" : "qa-photos";
-  const table = kind === "video" ? "qa_videos" : "qa_photos";
-  const datePath = new Date().toISOString().slice(0, 10);
-  const path = `${activeUser.id}/${datePath}/${activeAssignment.id}-${index + 1}-${kind}-${Date.now()}-${safeMediaFileName(file.name)}`;
+function checklistMediaSummary(kind, table, row, bucket, path, file, extra = {}) {
+  return {
+    kind,
+    table,
+    id: row?.id || "",
+    bucket,
+    path,
+    file_name: file.name || "",
+    mime_type: file.type || "",
+    file_size: file.size || 0,
+    ...extra
+  };
+}
 
-  const uploadResult = await supabase.storage
-    .from(bucket)
-    .upload(path, file, {
-      contentType: file.type || (kind === "video" ? "video/mp4" : "image/jpeg"),
-      upsert: false
-    });
-  if (uploadResult.error) throw uploadResult.error;
+async function insertChecklistMediaRecord(item, media, kind, index, completedAt, note) {
+  const table = kind === "video" ? "qa_videos" : "qa_photos";
+  const file = {
+    name: media.file_name || media.name || `${kind}-upload`,
+    type: media.mime_type || media.type || "",
+    size: media.file_size || media.size || 0
+  };
+  const path = media.path || media.storage_path || "";
+  if (!path) throw new Error("Saved upload is missing its storage path.");
 
   const payload = checklistMediaBasePayload(item, file, kind, index, path, completedAt, note);
+  payload.metadata = {
+    ...payload.metadata,
+    draft_uploaded_at: media.saved_at || "",
+    draft_storage_path: path
+  };
   if (kind === "video") {
     payload.qa_job_id = await ensureAssignmentQaJob();
     payload.room_name = item.module_name || item.category || assignmentUnit(activeAssignment) || "";
     payload.file_size_bytes = file.size || 0;
     payload.video_phase = "other";
-    payload.duration_seconds = await fileDuration(file);
+    payload.duration_seconds = media.duration_seconds || null;
+    payload.review_status = "pending_review";
   } else {
     payload.photo_phase = "other";
   }
@@ -918,16 +951,56 @@ async function uploadChecklistMedia(item, file, kind, index, completedAt, note) 
     .single();
   if (insertResult.error) throw insertResult.error;
 
-  return {
+  return checklistMediaSummary(kind, table, insertResult.data, payload.storage_bucket, path, file, {
+    saved_at: media.saved_at || "",
+    duration_seconds: payload.duration_seconds || null
+  });
+}
+
+async function uploadChecklistMediaDraft(item, file, kind, index) {
+  if (!supabase) throw new Error("Supabase is not configured for uploads.");
+  const bucket = kind === "video" ? "qa-videos" : "qa-photos";
+  const datePath = new Date().toISOString().slice(0, 10);
+  const path = `${activeUser.id}/${datePath}/drafts/${activeAssignment.id}-${index + 1}-${kind}-${Date.now()}-${safeMediaFileName(file.name)}`;
+
+  const uploadResult = await supabase.storage
+    .from(bucket)
+    .upload(path, file, {
+      contentType: file.type || (kind === "video" ? "video/mp4" : "image/jpeg"),
+      upsert: false
+    });
+  if (uploadResult.error) throw uploadResult.error;
+
+  return checklistMediaSummary(kind, "", null, bucket, path, file, {
+    draft: true,
+    saved_at: new Date().toISOString(),
+    duration_seconds: kind === "video" ? await fileDuration(file) : null
+  });
+}
+
+async function uploadChecklistMedia(item, file, kind, index, completedAt, note) {
+  const bucket = kind === "video" ? "qa-videos" : "qa-photos";
+  const datePath = new Date().toISOString().slice(0, 10);
+  const path = `${activeUser.id}/${datePath}/${activeAssignment.id}-${index + 1}-${kind}-${Date.now()}-${safeMediaFileName(file.name)}`;
+
+  const uploadResult = await supabase.storage
+    .from(bucket)
+    .upload(path, file, {
+      contentType: file.type || (kind === "video" ? "video/mp4" : "image/jpeg"),
+      upsert: false
+    });
+  if (uploadResult.error) throw uploadResult.error;
+
+  const media = {
     kind,
-    table,
-    id: insertResult.data?.id || "",
     bucket,
     path,
     file_name: file.name || "",
     mime_type: file.type || "",
-    file_size: file.size || 0
+    file_size: file.size || 0,
+    duration_seconds: kind === "video" ? await fileDuration(file) : null
   };
+  return insertChecklistMediaRecord(item, media, kind, index, completedAt, note);
 }
 
 function description(assignment) {
@@ -2550,23 +2623,50 @@ function ensureChecklistModal() {
     const draft = checklistDraft(index);
     const file = input.files?.[0] || null;
     draft.file = file;
+    draft.media = null;
+    draft.media_uploading = Boolean(file);
+    draft.media_upload_error = "";
     const name = input.closest(".tc-upload-card")?.querySelector("[data-tc-media-name]");
     if (name) name.textContent = file?.name || "No file selected";
     input.closest(".tc-upload-card")?.classList.toggle("has-file", Boolean(draft.file));
     if (file) {
-      setChecklistMessage("Saving upload on this device...");
-      try {
-        const saved = await saveChecklistMediaDraft(index, file, checklistMediaKind(draft.item));
-        if (saved) {
-          setChecklistMessage("Upload saved on this device.");
-        } else {
-          setChecklistMessage("Unable to save upload on this device. Keep the checklist open until you submit.", "error");
+      const kind = checklistMediaKind(draft.item);
+      setChecklistMessage("Saving upload to Turnly. Keep this screen open until it finishes...");
+      renderChecklistStep();
+      const uploadPromise = (async () => {
+        try {
+          try {
+            await saveChecklistMediaDraft(index, file, kind);
+          } catch (error) {
+            console.warn("[contractor-job-flow] Unable to save local checklist media backup", error);
+          }
+          const savedMedia = await uploadChecklistMediaDraft(draft.item, file, kind, index);
+          const latestDraft = checklistDraft(index);
+          latestDraft.media = savedMedia;
+          latestDraft.media_uploading = false;
+          latestDraft.media_upload_error = "";
+          await saveChecklistProgress();
+          try {
+            await deleteChecklistMediaDraft(index);
+          } catch (error) {
+            console.warn("[contractor-job-flow] Unable to clear local checklist media backup", error);
+          }
+          renderChecklistStep();
+          setChecklistMessage("Upload saved to Turnly. You can close and come back to this checklist.");
+        } catch (error) {
+          const latestDraft = checklistDraft(index);
+          latestDraft.media_uploading = false;
+          latestDraft.media_upload_error = error?.message || "Unable to save upload.";
+          console.warn("[contractor-job-flow] Unable to save checklist media draft", error);
+          renderChecklistStep();
+          setChecklistMessage("Unable to save upload to Turnly. Keep the checklist open until you submit, or try the upload again.", "error");
         }
-      } catch (error) {
-        console.warn("[contractor-job-flow] Unable to save checklist media draft", error);
-        setChecklistMessage("Unable to save upload on this device. Keep the checklist open until you submit.", "error");
-      }
+      })();
+      draft.media_upload_promise = uploadPromise;
+      await uploadPromise;
     } else {
+      draft.media_uploading = false;
+      draft.media_upload_error = "";
       await deleteChecklistMediaDraft(index);
     }
     scheduleChecklistAutosave(0);
@@ -2619,6 +2719,7 @@ async function completeJob() {
       index,
       mediaKind,
       mediaFile: draft.file || null,
+      mediaUploadPromise: draft.media_upload_promise || null,
       response: checklistResponseFromDraft(item, index)
     };
   });
@@ -2629,7 +2730,7 @@ async function completeJob() {
     return;
   }
 
-  const missingMedia = drafts.filter((draft) => draft.mediaKind && draft.response.completed && !draft.mediaFile);
+  const missingMedia = drafts.filter((draft) => draft.mediaKind && draft.response.completed && !draft.response.media && !draft.mediaFile);
   if (missingMedia.length) {
     if (message) message.textContent = `Upload ${missingMedia.length} required photo/video file${missingMedia.length === 1 ? "" : "s"} before finishing the job.`;
     return;
@@ -2642,8 +2743,15 @@ async function completeJob() {
   const responses = [];
   try {
     for (const draft of drafts) {
-      const response = { ...draft.response };
-      if (draft.mediaKind && draft.response.completed && draft.mediaFile) {
+      let response = { ...draft.response };
+      if (draft.mediaKind && response.completed && !response.media && draft.mediaUploadPromise) {
+        if (message) message.textContent = "Finishing saved upload...";
+        await draft.mediaUploadPromise;
+        response = checklistResponseFromDraft(draft.item, draft.index);
+      }
+      if (draft.mediaKind && response.completed && response.media?.path && !response.media?.id) {
+        response.media = await insertChecklistMediaRecord(draft.item, response.media, draft.mediaKind, draft.index, completedAt, response.note);
+      } else if (draft.mediaKind && response.completed && !response.media && draft.mediaFile) {
         response.media = await uploadChecklistMedia(draft.item, draft.mediaFile, draft.mediaKind, draft.index, completedAt, draft.response.note);
       }
       responses.push(response);
