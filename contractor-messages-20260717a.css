@@ -14,6 +14,37 @@ body[data-contractor-page="messages"] .cp-message-panel > .cp-panel-heading {
   flex: 0 0 auto;
 }
 
+body[data-contractor-page="messages"] .cp-message-toolbar {
+  justify-content: space-between;
+}
+
+body[data-contractor-page="messages"] .cp-message-toolbar .cp-action,
+body[data-contractor-page="messages"] .cp-message-toolbar .cp-ghost-action {
+  flex: 1 1 126px;
+}
+
+body[data-contractor-page="messages"] .cp-new-message-form {
+  align-content: start;
+  display: grid;
+  gap: 14px;
+  max-width: 720px;
+}
+
+body[data-contractor-page="messages"] .cp-new-message-form h2 {
+  margin: 0;
+}
+
+body[data-contractor-page="messages"] .cp-new-message-form p {
+  margin: 6px 0 0;
+}
+
+body[data-contractor-page="messages"] .cp-new-message-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
 body[data-contractor-page="messages"] #cpConversation.cp-conversation {
   display: grid !important;
   grid-template-rows: auto minmax(0, 1fr) auto;
@@ -107,6 +138,11 @@ body[data-contractor-page="messages"] #cpMessageReplyForm .cp-reply-send {
   body[data-contractor-page="messages"] .cp-chat-list {
     max-height: calc(34dvh - 104px);
     overflow-y: auto;
+  }
+
+  body[data-contractor-page="messages"] .cp-new-message-actions .cp-action,
+  body[data-contractor-page="messages"] .cp-new-message-actions .cp-ghost-action {
+    flex: 1 1 140px;
   }
 
   body[data-contractor-page="messages"] .cp-message-panel {

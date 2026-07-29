@@ -103,6 +103,7 @@ const state = {
   messageMessages: [],
   messageReadAt: new Map(),
   selectedThreadId: "",
+  messageComposerOpen: false,
   messageStatus: "",
   messageStatusError: false,
   messageSending: false,
@@ -1440,17 +1441,21 @@ function renderResources() {
 }
 
 function renderMessages() {
+  const messageTitle = state.messageComposerOpen ? "New Message" : "Message";
   return `
     <section class="cp-messages-layout">
       ${panel("Conversations", `
-        <div class="cp-filter-row">
+        <div class="cp-filter-row cp-message-toolbar">
+          <button class="cp-action" type="button" data-cp-new-message>New Message</button>
           <button class="cp-ghost-action" type="button" data-cp-refresh-messages>Refresh</button>
         </div>
         <p id="cpMessageStatus" class="cp-status-message ${state.messageStatusError ? "error" : ""}" aria-live="polite">${esc(state.messageStatus)}</p>
         <div id="cpThreadList" class="cp-chat-list">${renderCpThreadList()}</div>
       `)}
-      ${panel("Message", `
-        <div id="cpConversation" class="cp-conversation">${renderCpConversation()}</div>
+      ${panel(messageTitle, `
+        ${state.messageComposerOpen
+          ? renderCpNewMessageComposer()
+          : `<div id="cpConversation" class="cp-conversation">${renderCpConversation()}</div>`}
       `, { className: "cp-message-panel" })}
     </section>
   `;
@@ -1475,7 +1480,7 @@ function renderCpThreadList() {
 function renderCpConversation() {
   const thread = selectedCpThread();
   if (!thread) {
-    return `<div class="cp-conversation-box">${emptyState("Select a conversation to view messages.")}</div>`;
+    return `<div class="cp-conversation-box">${emptyState("Start a new message or select a conversation.")}</div>`;
   }
   return `
     <div class="cp-conversation-head">
@@ -1494,6 +1499,30 @@ function renderCpConversation() {
         <textarea name="body" rows="2" placeholder="Type your reply..." required></textarea>
       </label>
       <button class="cp-action cp-reply-send" type="submit" ${state.messageSending ? "disabled" : ""}>Send</button>
+    </form>
+  `;
+}
+
+function renderCpNewMessageComposer() {
+  return `
+    <form id="cpNewThreadForm" class="cp-new-message-form">
+      <div>
+        <p class="cp-panel-kicker">Message Turnly</p>
+        <h2>Start a conversation</h2>
+        <p class="cp-muted">This will send directly to the Turnly admin team.</p>
+      </div>
+      <label class="cp-field">
+        <span>Subject</span>
+        <input name="subject" type="text" maxlength="120" placeholder="What is this about?" required />
+      </label>
+      <label class="cp-field">
+        <span>Message</span>
+        <textarea name="body" rows="6" placeholder="Type your message..." required></textarea>
+      </label>
+      <div class="cp-new-message-actions">
+        <button class="cp-ghost-action" type="button" data-cp-cancel-new-message>Cancel</button>
+        <button class="cp-action" type="submit" ${state.messageSending ? "disabled" : ""}>Send Message</button>
+      </div>
     </form>
   `;
 }
@@ -1940,7 +1969,10 @@ async function createCpMessageThread(form) {
   }
 
   state.selectedThreadId = data || state.selectedThreadId;
+  state.messageComposerOpen = false;
   await loadMessageThreads();
+  state.messageStatus = "Message sent.";
+  state.messageStatusError = false;
   renderShell();
 }
 
@@ -2261,8 +2293,25 @@ function attachEvents() {
       return;
     }
 
+    const newMessageButton = event.target.closest("[data-cp-new-message]");
+    if (newMessageButton) {
+      state.messageComposerOpen = true;
+      state.messageStatus = "";
+      state.messageStatusError = false;
+      renderShell();
+      return;
+    }
+
+    const cancelNewMessageButton = event.target.closest("[data-cp-cancel-new-message]");
+    if (cancelNewMessageButton) {
+      state.messageComposerOpen = false;
+      renderShell();
+      return;
+    }
+
     const threadButton = event.target.closest("[data-cp-thread-id]");
     if (threadButton) {
+      state.messageComposerOpen = false;
       state.selectedThreadId = threadButton.dataset.cpThreadId || "";
       await markCpMessageThreadRead(state.selectedThreadId);
       await loadMessageThreadMessages(state.selectedThreadId);
