@@ -657,7 +657,16 @@ a {
   width: 36px;
 }
 
-.top-icon span {
+.top-icon .suite-icon {
+  display: inline-flex;
+  position: static;
+}
+
+.top-icon .suite-icon svg {
+  display: block;
+}
+
+.top-icon #topNotificationsBadge {
   align-items: center;
   background: var(--suite-green);
   border-radius: 999px;
@@ -675,7 +684,7 @@ a {
   width: auto;
 }
 
-.top-icon span[hidden] {
+.top-icon #topNotificationsBadge[hidden] {
   display: none;
 }
 
