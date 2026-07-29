@@ -16,6 +16,9 @@ let activeChecklistItems = [];
 let activeChecklistModules = [];
 let activeChecklistIndex = 0;
 let activeChecklistDrafts = [];
+let checklistAutosaveTimer = null;
+let checklistAutosaveInFlight = false;
+let checklistAutosavePending = false;
 let activeQaJobId = null;
 let activeDirectoryDetails = null;
 let activeIssueDraft = "";
@@ -211,6 +214,119 @@ function ensureChecklistDrafts(items = []) {
   });
 }
 
+function checklistDraftStorageKey(assignment = activeAssignment, user = activeUser) {
+  if (!assignment?.id || !user?.id) return "";
+  return `turnly:checklist-draft:${assignment.id}:${user.id}`;
+}
+
+function parseChecklistDate(value) {
+  if (!value) return 0;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+function savedChecklistResponses(assignment = activeAssignment) {
+  return Array.isArray(assignment?.checklist_responses) ? assignment.checklist_responses : [];
+}
+
+function localChecklistDraft() {
+  const key = checklistDraftStorageKey();
+  if (!key) return null;
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(key) || "null");
+    return Array.isArray(parsed?.responses) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveLocalChecklistDraft(responses, savedAt = new Date().toISOString()) {
+  const key = checklistDraftStorageKey();
+  if (!key || !Array.isArray(responses)) return;
+  try {
+    window.localStorage.setItem(key, JSON.stringify({ responses, saved_at: savedAt }));
+  } catch {
+    // Local storage is best-effort. Supabase remains the durable save target.
+  }
+}
+
+function clearLocalChecklistDraft() {
+  const key = checklistDraftStorageKey();
+  if (!key) return;
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    // Ignore storage cleanup failures.
+  }
+}
+
+function checklistResponseItemKey(response = {}) {
+  return String(response.source_item_id || response.item_id || response.id || "").trim();
+}
+
+function checklistItemKey(item = {}) {
+  return String(item.source_item_id || item.id || "").trim();
+}
+
+function checklistResponseModuleKey(response = {}) {
+  return [
+    response.module_id || response.module_name || "",
+    response.module_instance || "",
+    response.task || response.label || ""
+  ].map((value) => String(value || "").trim().toLowerCase()).join("::");
+}
+
+function checklistItemResponseKey(item = {}, index = 0) {
+  return [
+    item.module_id || item.module_name || checklistModuleTitle(item, index),
+    item.module_instance || "",
+    item.task || item.label || ""
+  ].map((value) => String(value || "").trim().toLowerCase()).join("::");
+}
+
+function findSavedChecklistResponse(item = {}, index = 0, responses = []) {
+  const itemKey = checklistItemKey(item);
+  if (itemKey) {
+    const byItemId = responses.find((response) => checklistResponseItemKey(response) === itemKey);
+    if (byItemId) return byItemId;
+  }
+
+  const byModuleTask = responses.find((response) => checklistResponseModuleKey(response) === checklistItemResponseKey(item, index));
+  if (byModuleTask) return byModuleTask;
+
+  return responses[index] || null;
+}
+
+function bestSavedChecklistResponses() {
+  const serverResponses = savedChecklistResponses();
+  const localDraft = localChecklistDraft();
+  if (!localDraft?.responses?.length) return serverResponses;
+
+  const serverSavedAt = parseChecklistDate(
+    activeAssignment?.metadata?.checklist_autosaved_at ||
+    activeAssignment?.checklist_completed_at ||
+    activeAssignment?.updated_at
+  );
+  const localSavedAt = parseChecklistDate(localDraft.saved_at);
+  return localSavedAt >= serverSavedAt ? localDraft.responses : serverResponses;
+}
+
+function hydrateChecklistDraftsFromSavedResponses() {
+  const responses = bestSavedChecklistResponses();
+  if (!responses.length) return;
+
+  activeChecklistDrafts = activeChecklistDrafts.map((draft, index) => {
+    const response = findSavedChecklistResponse(draft.item, index, responses);
+    if (!response) return draft;
+    return {
+      ...draft,
+      checked: Boolean(response.completed ?? response.checked),
+      note: response.note || "",
+      completed_at: response.completed_at || null
+    };
+  });
+}
+
 function checklistDraft(index) {
   if (!activeChecklistDrafts[index]) {
     const item = activeChecklistItems[index] || {};
@@ -224,6 +340,27 @@ function checklistDraft(index) {
     };
   }
   return activeChecklistDrafts[index];
+}
+
+function checklistResponseFromDraft(item, index) {
+  const draft = checklistDraft(index);
+  return {
+    category: item.category || "General",
+    task: item.task || "Untitled task",
+    module_id: item.module_id || "",
+    module_name: item.module_name || checklistModuleTitle(item, index),
+    module_instance: item.module_instance || null,
+    source_item_id: item.source_item_id || item.id || "",
+    required: item.required !== false,
+    media_required: item.media_required || "none",
+    completed: Boolean(draft.checked),
+    note: draft.note || "",
+    completed_at: draft.checked ? (draft.completed_at || new Date().toISOString()) : null
+  };
+}
+
+function checklistDraftResponses() {
+  return activeChecklistItems.map((item, index) => checklistResponseFromDraft(item, index));
 }
 
 function moduleProgress(module) {
@@ -263,6 +400,68 @@ function captureChecklistInputs() {
     const note = document.querySelector(`[data-tc-note="${draft.index}"]`);
     if (note) draft.note = note.value.trim();
   });
+}
+
+function scheduleChecklistAutosave(delay = 500) {
+  window.clearTimeout(checklistAutosaveTimer);
+  checklistAutosaveTimer = window.setTimeout(() => {
+    checklistAutosaveTimer = null;
+    void saveChecklistProgress();
+  }, delay);
+}
+
+async function saveChecklistProgress({ showSaved = false } = {}) {
+  if (!activeChecklistItems.length || !activeAssignment?.id || !activeUser?.id) return;
+
+  captureChecklistInputs();
+  const savedAt = new Date().toISOString();
+  const responses = checklistDraftResponses();
+  const metadata = activeAssignment.metadata && typeof activeAssignment.metadata === "object"
+    ? { ...activeAssignment.metadata }
+    : {};
+  metadata.checklist_autosaved_at = savedAt;
+  metadata.checklist_autosaved_by = activeUser.id;
+  metadata.checklist_autosave_source = "contractor_pwa";
+
+  saveLocalChecklistDraft(responses, savedAt);
+  activeAssignment = {
+    ...activeAssignment,
+    checklist_responses: responses,
+    metadata
+  };
+
+  if (!supabase) return;
+  if (checklistAutosaveInFlight) {
+    checklistAutosavePending = true;
+    return;
+  }
+
+  checklistAutosaveInFlight = true;
+  const { data, error } = await supabase
+    .from("assignment_blocks")
+    .update({
+      checklist_responses: responses,
+      metadata
+    })
+    .eq("id", activeAssignment.id)
+    .or(`claimed_by.eq.${activeUser.id},assigned_to.eq.${activeUser.id}`)
+    .in("status", ["in_progress", "claimed", "scheduled", "open"])
+    .select("id,checklist_responses,metadata,updated_at")
+    .maybeSingle();
+
+  checklistAutosaveInFlight = false;
+  if (error) {
+    console.warn("[contractor-job-flow] Unable to autosave checklist progress", error);
+    setChecklistMessage("Progress saved on this device. Supabase autosave failed: " + error.message, "error");
+  } else if (data) {
+    activeAssignment = { ...activeAssignment, ...data };
+    if (showSaved) setChecklistMessage("Progress saved.");
+  }
+
+  if (checklistAutosavePending) {
+    checklistAutosavePending = false;
+    await saveChecklistProgress();
+  }
 }
 
 function validateChecklistModule(module = currentChecklistModule(), showMessage = true) {
@@ -420,12 +619,16 @@ function scrollChecklistStepToTop() {
 
 async function moveChecklistStep(direction) {
   if (!activeChecklistModules.length) return;
-  if (direction > 0 && !validateChecklistModule()) return;
+  if (direction > 0 && !validateChecklistModule()) {
+    await saveChecklistProgress();
+    return;
+  }
   captureChecklistInputs();
   if (direction > 0 && activeChecklistIndex === activeChecklistModules.length - 1) {
     await completeJob();
     return;
   }
+  await saveChecklistProgress();
   activeChecklistIndex = Math.max(0, Math.min(activeChecklistModules.length - 1, activeChecklistIndex + direction));
   renderChecklistStep();
   scrollChecklistStepToTop();
@@ -2167,6 +2370,7 @@ function ensureChecklistModal() {
   modal.addEventListener("click", async (event) => {
     const closeButton = event.target.closest("[data-tc-close]");
     if (closeButton && modal.contains(closeButton)) {
+      void saveChecklistProgress();
       modal.hidden = true;
       return;
     }
@@ -2187,6 +2391,7 @@ function ensureChecklistModal() {
     const moduleButton = event.target.closest("[data-tc-module-index]");
     if (moduleButton && modal.contains(moduleButton)) {
       captureChecklistInputs();
+      await saveChecklistProgress();
       activeChecklistIndex = Number(moduleButton.dataset.tcModuleIndex) || 0;
       toggleChecklistOverview(false);
       renderChecklistStep();
@@ -2208,6 +2413,7 @@ function ensureChecklistModal() {
       draft.checked = Boolean(check.checked);
       draft.completed_at = draft.checked ? (draft.completed_at || new Date().toISOString()) : null;
       renderChecklistStep();
+      scheduleChecklistAutosave(0);
       return;
     }
     const input = event.target?.matches("[data-tc-media]") ? event.target : null;
@@ -2217,11 +2423,13 @@ function ensureChecklistModal() {
     const name = input.closest(".tc-upload-card")?.querySelector("[data-tc-media-name]");
     if (name) name.textContent = input.files?.[0]?.name || "No file selected";
     input.closest(".tc-upload-card")?.classList.toggle("has-file", Boolean(draft.file));
+    scheduleChecklistAutosave(0);
   });
   modal.addEventListener("input", (event) => {
     const note = event.target?.matches("[data-tc-note]") ? event.target : null;
     if (!note) return;
     checklistDraft(Number(note.dataset.tcNote)).note = note.value.trim();
+    scheduleChecklistAutosave(700);
   });
   return modal;
 }
@@ -2238,6 +2446,7 @@ async function openChecklistModal(assignmentOrId) {
   activeChecklistIndex = 0;
   activeChecklistDrafts = [];
   ensureChecklistDrafts(activeChecklistItems);
+  hydrateChecklistDraftsFromSavedResponses();
   const modal = ensureChecklistModal();
   modal.hidden = false;
   toggleChecklistOverview(false);
@@ -2263,19 +2472,7 @@ async function completeJob() {
       index,
       mediaKind,
       mediaFile: draft.file || null,
-      response: {
-        category: item.category || "General",
-        task: item.task || "Untitled task",
-        module_id: item.module_id || "",
-        module_name: item.module_name || checklistModuleTitle(item, index),
-        module_instance: item.module_instance || null,
-        source_item_id: item.source_item_id || item.id || "",
-        required: item.required !== false,
-        media_required: item.media_required || "none",
-        completed: Boolean(draft.checked),
-        note: draft.note || "",
-        completed_at: draft.checked ? (draft.completed_at || new Date().toISOString()) : null
-      }
+      response: checklistResponseFromDraft(item, index)
     };
   });
 
@@ -2325,6 +2522,7 @@ async function completeJob() {
   }
 
   showPageMessage("Job submitted to QA for review.");
+  clearLocalChecklistDraft();
   window.location.reload();
 }
 
@@ -2356,6 +2554,18 @@ async function renderActiveChecklistPanel() {
   `;
   document.getElementById("myAssignments").before(panel);
 }
+
+function saveChecklistProgressToDevice() {
+  const modal = document.getElementById("turnlyMobileChecklistModal");
+  if (!activeChecklistItems.length || !activeAssignment?.id || !activeUser?.id || modal?.hidden) return;
+  captureChecklistInputs();
+  saveLocalChecklistDraft(checklistDraftResponses());
+}
+
+window.addEventListener("beforeunload", saveChecklistProgressToDevice);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") saveChecklistProgressToDevice();
+});
 
 document.addEventListener("click", async (event) => {
   const startButton = event.target.closest("[data-start-assignment-id]");
