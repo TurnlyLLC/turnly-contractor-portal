@@ -11525,6 +11525,50 @@ function assignmentAssignedContractorPayload(contractor, options = {}) {
   return payload;
 }
 
+function assignmentStatusRequiresContractor(status) {
+  return ["claimed", "in_progress", "completed", "qa_pending"].includes(assignmentStatusFormValue(status));
+}
+
+function assignmentHasContractorActivity(row = {}) {
+  return Boolean(
+    row?.assigned_to
+    || row?.claimed_by
+    || row?.claimed_at
+    || row?.accepted_at
+    || row?.started_by
+    || row?.started_at
+  );
+}
+
+function assignmentContractorRemovalPayload(status = "open") {
+  const nextStatus = assignmentStatusFormValue(status);
+  const visibility = nextStatus === "preferred_pending"
+    ? "preferred"
+    : nextStatus === "pending"
+      ? "pending"
+      : ["cancelled", "declined", "qa_pending"].includes(nextStatus)
+        ? "closed"
+        : "open";
+  return {
+    status: nextStatus,
+    visibility,
+    assigned_to: null,
+    assigned_to_name: null,
+    assigned_to_email: null,
+    claimed_by: null,
+    claimed_by_name: null,
+    claimed_by_email: null,
+    claimed_at: null,
+    accepted_at: null,
+    started_by: null,
+    started_at: null,
+    completed_by: null,
+    completed_at: null,
+    checklist_completed_at: null,
+    completion_notes: null
+  };
+}
+
 function assignmentRowWithAssignedContractor(row = {}, contractor = null) {
   if (!contractor?.id) return row;
   return {
@@ -12078,8 +12122,12 @@ function collectAssignmentUpdatePayload(currentRow = {}) {
   const preferredFirst = !assignedContractor?.id && document.getElementById("preferred_first")?.checked && selectedContractors.length > 0;
   const payAmount = Number(assignmentValue("pay_amount"));
   const weekdays = selectedAssignmentWeekdays(start);
-  const selectedStatus = assignmentValue("assignment_status");
-  const statusRow = assignmentRowWithAssignedContractor(assignmentRowWithSelectedClaim(currentRow, selectedContractors), assignedContractor);
+  const requestedStatus = assignmentStatusFormValue(assignmentValue("assignment_status"));
+  const removingContractor = Boolean(!assignedContractor?.id && assignmentHasContractorActivity(currentRow));
+  const selectedStatus = removingContractor && assignmentStatusRequiresContractor(requestedStatus) ? "open" : requestedStatus;
+  const statusRow = removingContractor
+    ? currentRow
+    : assignmentRowWithAssignedContractor(assignmentRowWithSelectedClaim(currentRow, selectedContractors), assignedContractor);
   const statusError = assignmentStatusChangeError(selectedStatus, statusRow);
   if (statusError) throw new Error(statusError);
   const payload = {
@@ -12113,6 +12161,9 @@ function collectAssignmentUpdatePayload(currentRow = {}) {
     acceptedAt: currentRow.accepted_at || start.toISOString(),
     startedAt: currentRow.started_at || start.toISOString()
   }));
+  if (removingContractor) {
+    Object.assign(payload, assignmentContractorRemovalPayload(selectedStatus));
+  }
   if (assignmentStatusFormValue(selectedStatus) === "completed") {
     payload.completed_at = currentRow.completed_at || end.toISOString();
     payload.completed_by = assignedContractor?.id || payload.completed_by || assignmentCompletionUserId(statusRow);

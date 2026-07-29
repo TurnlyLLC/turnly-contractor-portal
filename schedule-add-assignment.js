@@ -357,9 +357,11 @@ function payloadFromForm(options = {}) {
   const property = state.properties.find((row) => row.id === propertyId);
   const existingPropertyId = state.editingId ? state.editingRow?.property_id || null : null;
   const pay = Number(value("scheduleAssignmentPay"));
-  const status = normalizeStatusValue(value("scheduleAssignmentStatus") || "open");
+  const requestedStatus = normalizeStatusValue(value("scheduleAssignmentStatus") || "open");
   const unitNumber = value("scheduleAssignmentUnitNumber");
   const assignedContractor = selectedContractor();
+  const removingContractor = Boolean(state.editingId && !assignedContractor?.id && assignmentHasContractorActivity(state.editingRow));
+  const status = removingContractor && assignmentStatusRequiresContractor(requestedStatus) ? "open" : requestedStatus;
   if (status === "completed" && !completionUserId(state.editingRow, assignedContractor)) {
     throw new Error("Completed assignments need an assigned contractor or signed-in admin.");
   }
@@ -392,7 +394,12 @@ function payloadFromForm(options = {}) {
     end_window: end.toISOString(),
     metadata
   };
-  Object.assign(payload, statusPayload(status, assignedContractor, start, end, state.editingRow));
+  Object.assign(
+    payload,
+    removingContractor
+      ? assignmentContractorRemovalPayload(status)
+      : statusPayload(status, assignedContractor, start, end, state.editingRow)
+  );
   if (options.includeDefaults) {
     Object.assign(payload, {
       supplies_notes: "",
@@ -464,6 +471,50 @@ function statusPayload(status, assignedContractor, start, end, row = {}) {
   }
 
   return next;
+}
+
+function assignmentStatusRequiresContractor(status) {
+  return ["claimed", "in_progress", "completed", "qa_pending"].includes(normalizeStatusValue(status));
+}
+
+function assignmentHasContractorActivity(row = {}) {
+  return Boolean(
+    row?.assigned_to
+    || row?.claimed_by
+    || row?.claimed_at
+    || row?.accepted_at
+    || row?.started_by
+    || row?.started_at
+  );
+}
+
+function assignmentContractorRemovalPayload(status = "open") {
+  const nextStatus = normalizeStatusValue(status);
+  const visibility = nextStatus === "preferred_pending"
+    ? "preferred"
+    : nextStatus === "pending"
+      ? "pending"
+      : ["cancelled", "declined", "qa_pending"].includes(nextStatus)
+        ? "closed"
+        : "open";
+  return {
+    status: nextStatus,
+    visibility,
+    assigned_to: null,
+    assigned_to_name: null,
+    assigned_to_email: null,
+    claimed_by: null,
+    claimed_by_name: null,
+    claimed_by_email: null,
+    claimed_at: null,
+    accepted_at: null,
+    started_by: null,
+    started_at: null,
+    completed_by: null,
+    completed_at: null,
+    checklist_completed_at: null,
+    completion_notes: null
+  };
 }
 
 async function insertWithFallback(payload) {
