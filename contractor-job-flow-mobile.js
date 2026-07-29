@@ -406,6 +406,18 @@ function toggleChecklistOverview(open) {
   toggle.setAttribute("aria-expanded", String(shouldOpen));
 }
 
+function scrollChecklistStepToTop() {
+  requestAnimationFrame(() => {
+    [
+      document.querySelector("#turnlyMobileChecklistModal .tc-shell"),
+      document.querySelector("#turnlyMobileChecklistModal .tc-panel"),
+      document.getElementById("tcStepContent")
+    ].filter(Boolean).forEach((node) => {
+      node.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    });
+  });
+}
+
 async function moveChecklistStep(direction) {
   if (!activeChecklistModules.length) return;
   if (direction > 0 && !validateChecklistModule()) return;
@@ -416,6 +428,7 @@ async function moveChecklistStep(direction) {
   }
   activeChecklistIndex = Math.max(0, Math.min(activeChecklistModules.length - 1, activeChecklistIndex + direction));
   renderChecklistStep();
+  scrollChecklistStepToTop();
 }
 
 function fileDuration(file) {
@@ -2177,6 +2190,7 @@ function ensureChecklistModal() {
       activeChecklistIndex = Number(moduleButton.dataset.tcModuleIndex) || 0;
       toggleChecklistOverview(false);
       renderChecklistStep();
+      scrollChecklistStepToTop();
       return;
     }
     if (event.target.closest("#tcBack")) {
@@ -2228,6 +2242,7 @@ async function openChecklistModal(assignmentOrId) {
   modal.hidden = false;
   toggleChecklistOverview(false);
   renderChecklistStep();
+  scrollChecklistStepToTop();
 }
 
 async function completeJob() {
