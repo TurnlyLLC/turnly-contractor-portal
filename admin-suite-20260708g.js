@@ -12310,11 +12310,24 @@ async function deleteAssignmentFromEditModal(id = assignmentState.editingId) {
 
   assignmentState.isDeleting = true;
   setAssignmentDeleting(true);
-  showAssignmentMessage(`Deleting ${label}...`);
-  const { error } = await suiteSupabase
-    .from(assignmentTable)
-    .delete()
-    .eq("id", row.id);
+  showAssignmentMessage(`Deleting attached QA media for ${label}...`);
+  let removedMediaCount = 0;
+  try {
+    removedMediaCount = await removeAssignmentStorageObjects(suiteSupabase, [row.id]);
+  } catch (error) {
+    assignmentState.isDeleting = false;
+    setAssignmentDeleting(false);
+    showAssignmentMessage("Unable to delete attached media: " + error.message, true);
+    return;
+  }
+
+  showAssignmentMessage(removedMediaCount
+    ? `Deleted ${removedMediaCount.toLocaleString()} attached media file${removedMediaCount === 1 ? "" : "s"}. Deleting ${label}...`
+    : `Deleting ${label}...`);
+  const { error } = await suiteSupabase.rpc("delete_schedule_assignment_blocks", {
+    target_assignment_ids: [row.id],
+    confirmation_text: "DELETE"
+  });
   assignmentState.isDeleting = false;
   setAssignmentDeleting(false);
 
@@ -12360,7 +12373,18 @@ async function deleteCompletedAssignments(rows = []) {
 
   assignmentState.isBulkSaving = true;
   renderAssignmentBulkControls(getCurrentAssignmentPageRows());
-  showAssignmentMessage(`Deleting ${ids.length} completed contractor job${ids.length === 1 ? "" : "s"}...`);
+  showAssignmentMessage(`Deleting attached QA media for ${ids.length} completed contractor job${ids.length === 1 ? "" : "s"}...`);
+  try {
+    const removedMediaCount = await removeAssignmentStorageObjects(suiteSupabase, ids);
+    showAssignmentMessage(removedMediaCount
+      ? `Deleted ${removedMediaCount.toLocaleString()} attached media file${removedMediaCount === 1 ? "" : "s"}. Deleting completed job records...`
+      : `Deleting ${ids.length} completed contractor job${ids.length === 1 ? "" : "s"}...`);
+  } catch (error) {
+    assignmentState.isBulkSaving = false;
+    renderAssignmentBulkControls(getCurrentAssignmentPageRows());
+    showAssignmentMessage("Unable to delete attached media: " + error.message, true);
+    return false;
+  }
   const { data, error } = await suiteSupabase.rpc("delete_completed_assignment_blocks", {
     target_assignment_ids: ids,
     confirmation_text: "DELETE"
@@ -12380,6 +12404,106 @@ async function deleteCompletedAssignments(rows = []) {
   const deletedCount = Number(data) || ids.length;
   showAssignmentMessage(`${deletedCount} completed contractor job${deletedCount === 1 ? "" : "s"} deleted from Supabase.`);
   return true;
+}
+
+async function removeAssignmentStorageObjects(client, assignmentIds = []) {
+  const objects = await loadAssignmentStorageObjects(client, assignmentIds);
+  if (!objects.length) return 0;
+
+  const byBucket = new Map();
+  objects.forEach((item) => {
+    if (!byBucket.has(item.bucket)) byBucket.set(item.bucket, new Set());
+    byBucket.get(item.bucket).add(item.path);
+  });
+
+  let removedCount = 0;
+  for (const [bucket, paths] of byBucket.entries()) {
+    const cleanPaths = Array.from(paths).filter(Boolean);
+    if (!cleanPaths.length) continue;
+    const { error } = await client.storage.from(bucket).remove(cleanPaths);
+    if (error) throw new Error(error.message || `Unable to remove files from ${bucket}.`);
+    removedCount += cleanPaths.length;
+  }
+  return removedCount;
+}
+
+async function loadAssignmentStorageObjects(client, assignmentIds = []) {
+  const ids = uniqueDeleteIds(assignmentIds);
+  if (!client || !ids.length) return [];
+
+  const qaJobIds = new Set();
+  const objects = new Map();
+  const addQaJobId = (value) => {
+    const id = String(value || "").trim();
+    if (id) qaJobIds.add(id);
+  };
+  const addObject = (row, fallbackBucket) => {
+    const bucket = String(row?.storage_bucket || fallbackBucket || "").trim();
+    const path = String(row?.storage_path || "").trim();
+    if (!bucket || !path) return;
+    objects.set(`${bucket}/${path}`, { bucket, path });
+  };
+
+  const assignments = await fetchDeleteRows(
+    client.from(assignmentTable).select("id, metadata").in("id", ids),
+    "assignment metadata"
+  );
+  assignments.forEach((row) => addQaJobId(row?.metadata?.qa_job_id));
+
+  const qaJobs = await fetchDeleteRows(
+    client.from("qa_jobs").select("id").in("assignment_id", ids),
+    "QA jobs"
+  );
+  qaJobs.forEach((row) => addQaJobId(row?.id));
+
+  const videosByAssignment = await fetchDeleteRows(
+    client.from("qa_videos").select("storage_bucket, storage_path, qa_job_id").in("assignment_id", ids),
+    "QA videos"
+  );
+  videosByAssignment.forEach((row) => {
+    addObject(row, "qa-videos");
+    addQaJobId(row?.qa_job_id);
+  });
+
+  const qaJobIdList = Array.from(qaJobIds);
+  if (qaJobIdList.length) {
+    const videosByJob = await fetchDeleteRows(
+      client.from("qa_videos").select("storage_bucket, storage_path").in("qa_job_id", qaJobIdList),
+      "QA job videos"
+    );
+    videosByJob.forEach((row) => addObject(row, "qa-videos"));
+  }
+
+  const photos = await fetchDeleteRows(
+    client.from("qa_photos").select("storage_bucket, storage_path").in("assignment_id", ids),
+    "QA photos"
+  );
+  photos.forEach((row) => addObject(row, "qa-photos"));
+
+  return Array.from(objects.values());
+}
+
+async function fetchDeleteRows(query, label) {
+  const { data, error } = await query;
+  if (!error) return data || [];
+  if (isMissingDeleteRelation(error)) {
+    console.warn(`[admin-suite] Skipping ${label}; table or column is not available.`, error);
+    return [];
+  }
+  throw new Error(error.message || `Unable to load ${label}.`);
+}
+
+function isMissingDeleteRelation(error) {
+  const code = String(error?.code || "");
+  const text = String(error?.message || "").toLowerCase();
+  return ["42p01", "42703", "pgrst200", "pgrst204"].includes(code.toLowerCase())
+    || text.includes("does not exist")
+    || text.includes("could not find")
+    || text.includes("schema cache");
+}
+
+function uniqueDeleteIds(values = []) {
+  return Array.from(new Set(values.map((value) => String(value || "").trim()).filter(Boolean)));
 }
 
 async function saveAssignmentForm(event) {
