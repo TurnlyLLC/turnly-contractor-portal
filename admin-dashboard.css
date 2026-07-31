@@ -3736,6 +3736,29 @@ body.admin-command-body[data-portal-role="property-manager"] .pm-assignment-deta
   padding: 12px;
 }
 
+.pm-month-view-heading {
+  align-items: end;
+  border-bottom: 1px solid rgba(126, 158, 188, 0.14);
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+}
+
+.pm-month-view-heading span {
+  color: var(--pm-faint);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pm-month-view-heading strong {
+  color: var(--pm-text);
+  font-size: 18px;
+}
+
 .pm-month-calendar {
   display: grid;
   gap: 8px;
@@ -3752,15 +3775,23 @@ body.admin-command-body[data-portal-role="property-manager"] .pm-assignment-deta
   background: rgba(4, 14, 25, 0.58);
   border: 1px solid rgba(126, 158, 188, 0.14);
   border-radius: 7px;
+  cursor: pointer;
   display: grid;
   gap: 8px;
   grid-template-rows: auto minmax(0, 1fr);
   min-height: 174px;
   padding: 8px;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
 }
 
 .pm-month-day.is-muted {
   opacity: 0.45;
+}
+
+.pm-month-day:hover,
+.pm-month-day:focus-within {
+  border-color: rgba(0, 214, 163, 0.36);
+  box-shadow: inset 0 0 0 1px rgba(0, 214, 163, 0.14);
 }
 
 .pm-month-day.is-today {

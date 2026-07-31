@@ -2001,18 +2001,24 @@ function renderScheduleMonthView(rows) {
   const gridStart = startOfWeek(monthStart, true);
   const days = Array.from({ length: 42 }, (_, index) => addDays(gridStart, index));
   const month = selectedDate.getMonth();
+  const monthLabel = selectedDate.toLocaleDateString([], { month: "long", year: "numeric" });
   return `
+    <div class="pm-month-view-heading">
+      <span>Monthly Schedule</span>
+      <strong>${esc(monthLabel)}</strong>
+    </div>
     <div class="pm-month-calendar">
       ${["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => `<strong>${esc(day)}</strong>`).join("")}
       ${days.map((day) => {
+        const dayValue = dateInputValue(day);
         const allDayRows = rows.filter((row) => sameDay(row.start_window || row.recurring_due_at, day));
         const visibleRows = allDayRows.slice(0, 3);
         return `
-          <article class="pm-month-day ${day.getMonth() === month ? "" : "is-muted"} ${sameDay(day, new Date()) ? "is-today" : ""}">
-            <button class="pm-month-day-number" type="button" data-pm-schedule-select-date="${esc(dateInputValue(day))}">${esc(day.getDate())}</button>
+          <article class="pm-month-day ${day.getMonth() === month ? "" : "is-muted"} ${sameDay(day, new Date()) ? "is-today" : ""}" data-pm-schedule-select-date="${esc(dayValue)}" aria-label="View ${esc(day.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric", year: "numeric" }))}">
+            <button class="pm-month-day-number" type="button" data-pm-schedule-select-date="${esc(dayValue)}">${esc(day.getDate())}</button>
             <div class="pm-month-day-events">
               ${visibleRows.map(renderScheduleEvent).join("")}
-              ${allDayRows.length > visibleRows.length ? `<button class="pm-month-more" type="button" data-pm-schedule-select-date="${esc(dateInputValue(day))}">+${esc(allDayRows.length - visibleRows.length)} more</button>` : ""}
+              ${allDayRows.length > visibleRows.length ? `<button class="pm-month-more" type="button" data-pm-schedule-select-date="${esc(dayValue)}">+${esc(allDayRows.length - visibleRows.length)} more</button>` : ""}
             </div>
           </article>
         `;
@@ -3043,7 +3049,7 @@ document.addEventListener("click", async (event) => {
   }
 
   const scheduleDay = event.target.closest("[data-pm-schedule-select-date]");
-  if (scheduleDay) {
+  if (scheduleDay && !event.target.closest("[data-manager-view-assignment]")) {
     setScheduleDate(scheduleDay.dataset.pmScheduleSelectDate);
     if (state.view === "schedule" && state.scheduleView === "month") state.scheduleView = "day";
     renderManagerPortal();
