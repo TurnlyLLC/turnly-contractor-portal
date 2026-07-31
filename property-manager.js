@@ -19,6 +19,7 @@ const SIGNED_URL_SECONDS = 60 * 60 * 4;
 const TURN_REQUEST_SERVICE = "Unit Cleaning";
 const MOVE_IN_TIME_LABEL = "2:00 PM";
 const MOVE_IN_HOUR = 14;
+const SCHEDULE_GUIDE_STORAGE_PREFIX = "turnlyPropertyManagerScheduleGuide:v1";
 
 const env = window.__ENV || {};
 const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
@@ -61,6 +62,8 @@ const state = {
   feedbackError: false,
   accountMenuOpen: false,
   adminPreviewMenuOpen: false,
+  scheduleGuideOpen: false,
+  scheduleGuideStep: 0,
   filters: {
     query: "",
     requestStatus: "open",
@@ -114,6 +117,19 @@ const searchlessViews = new Set(["turn-requests", "schedule", "messages"]);
 const closedStatuses = new Set(["completed", "complete", "cancelled", "canceled", "declined", "deleted", "archived"]);
 const issueStatuses = new Set(["overdue", "qa_pending", "qa_rejected", "rejected", "needs_rework"]);
 const inProgressStatuses = new Set(["in_progress", "claimed", "started", "active", "qa_pending"]);
+const scheduleGuideSteps = [
+  {
+    key: "selector",
+    title: "Change your schedule view",
+    body: "Use Day, Week, and Month to change how assignments are displayed on the schedule."
+  },
+  {
+    key: "assignment",
+    title: "Open assignment details",
+    body: "Click an assignment card to view the full details, see before and after videos, and leave feedback for that specific clean.",
+    emptyBody: "When assignments appear on the schedule, click a card to view the full details, see before and after videos, and leave feedback for that specific clean."
+  }
+];
 const pendingStatuses = new Set(["pending", "pending_approval"]);
 const readyStatuses = new Set(["ready", "open", "scheduled", "not_started"]);
 
@@ -1352,6 +1368,7 @@ async function loadManagerVideos() {
 function renderManagerPortal(loading = false) {
   if (!managerMain) return;
   state.view = currentView();
+  maybeStartScheduleGuide();
   setActiveNav();
   const [title, subtitle] = viewLabels[state.view] || viewLabels.overview;
   const headingTitle = state.view === "overview" ? propertyTitle() : title;
@@ -1372,7 +1389,75 @@ function renderManagerPortal(loading = false) {
     ${renderRequestForm()}
     ${renderCurrentView()}
     ${renderAssignmentDetailsModal()}
+    ${renderScheduleGuideOverlay()}
   `;
+}
+
+function scheduleGuideStorageKey() {
+  return `${SCHEDULE_GUIDE_STORAGE_PREFIX}:${state.user?.id || "browser"}`;
+}
+
+function hasSeenScheduleGuide() {
+  try {
+    return window.localStorage?.getItem(scheduleGuideStorageKey()) === "seen";
+  } catch {
+    return false;
+  }
+}
+
+function markScheduleGuideSeen() {
+  try {
+    window.localStorage?.setItem(scheduleGuideStorageKey(), "seen");
+  } catch {
+    // localStorage can be unavailable in private or restricted browsing.
+  }
+}
+
+function maybeStartScheduleGuide() {
+  if (state.view !== "schedule" || state.assignmentDetailsOpen || state.scheduleGuideOpen || hasSeenScheduleGuide()) return;
+  state.scheduleGuideOpen = true;
+  state.scheduleGuideStep = 0;
+}
+
+function currentScheduleGuideStep() {
+  return scheduleGuideSteps[Math.min(Math.max(state.scheduleGuideStep, 0), scheduleGuideSteps.length - 1)] || scheduleGuideSteps[0];
+}
+
+function scheduleGuideTargetClass(key, row = null) {
+  if (!state.scheduleGuideOpen || state.view !== "schedule" || currentScheduleGuideStep().key !== key) return "";
+  if (key === "assignment") {
+    const target = scheduledRows()[0];
+    if (!target || String(target.id || "") !== String(row?.id || "")) return "";
+  }
+  return "pm-guide-target";
+}
+
+function renderScheduleGuideOverlay() {
+  if (!state.scheduleGuideOpen || state.view !== "schedule") return "";
+  const step = currentScheduleGuideStep();
+  const isLast = state.scheduleGuideStep >= scheduleGuideSteps.length - 1;
+  const hasAssignmentTarget = Boolean(scheduledRows()[0]);
+  const body = step.key === "assignment" && !hasAssignmentTarget ? step.emptyBody : step.body;
+  return `
+    <div class="pm-guide-layer" aria-live="polite">
+      <button class="pm-guide-backdrop" type="button" data-pm-guide-skip aria-label="Dismiss schedule guide"></button>
+      <section class="pm-guide-card pm-guide-card-${esc(step.key)}" role="dialog" aria-modal="false" aria-labelledby="pmGuideTitle">
+        <p class="pm-eyebrow">Schedule Guide ${esc(state.scheduleGuideStep + 1)} of ${esc(scheduleGuideSteps.length)}</p>
+        <h2 id="pmGuideTitle">${esc(step.title)}</h2>
+        <p>${esc(body)}</p>
+        <div class="pm-guide-actions">
+          <button class="pm-link-button" type="button" data-pm-guide-skip>Skip</button>
+          <button class="new-btn pm-compact-btn" type="button" data-pm-guide-next>${esc(isLast ? "Done" : "Next")}</button>
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function closeScheduleGuide(markSeen = true) {
+  if (markSeen) markScheduleGuideSeen();
+  state.scheduleGuideOpen = false;
+  state.scheduleGuideStep = 0;
 }
 
 function renderManagerAdminPreviewSwitcher() {
@@ -1942,7 +2027,7 @@ function renderScheduleView() {
         ${renderScheduleSnapshotControls()}
         <strong class="pm-week-range">${esc(scheduleRangeLabel())}</strong>
       </div>
-      <div class="pm-schedule-view-tabs" role="group" aria-label="Schedule view">
+      <div class="pm-schedule-view-tabs ${scheduleGuideTargetClass("selector")}" role="group" aria-label="Schedule view">
         ${["day", "week", "month"].map((view) => `<button type="button" class="${state.scheduleView === view ? "active" : ""}" data-pm-schedule-view="${esc(view)}">${esc(titleCase(view))}</button>`).join("")}
       </div>
       ${renderNewTurnRequestButton("Request Turn")}
@@ -2079,7 +2164,7 @@ function renderScheduleEvent(row) {
   const unit = assignmentUnit(row);
   const subtitle = [unit ? `Unit ${unit}` : "", row.service_type].filter(Boolean).join(" - ");
   return `
-    <article class="schedule-event-card pm-schedule-event-card ${esc(requestGroup(row))}" data-manager-view-assignment="${esc(row.id || "")}" role="button" tabindex="0" aria-label="View details for ${esc(title)}.">
+    <article class="schedule-event-card pm-schedule-event-card ${esc(requestGroup(row))} ${scheduleGuideTargetClass("assignment", row)}" data-manager-view-assignment="${esc(row.id || "")}" role="button" tabindex="0" aria-label="View details for ${esc(title)}.">
       <div class="schedule-event-time">${esc(scheduleEventTime(row))}</div>
       <strong>${esc(title)}</strong>
       <p>${esc(subtitle || row.title || "Assignment")}</p>
@@ -2988,6 +3073,22 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
+  if (event.target.closest("[data-pm-guide-skip]")) {
+    closeScheduleGuide(true);
+    renderManagerPortal();
+    return;
+  }
+
+  if (event.target.closest("[data-pm-guide-next]")) {
+    if (state.scheduleGuideStep >= scheduleGuideSteps.length - 1) {
+      closeScheduleGuide(true);
+    } else {
+      state.scheduleGuideStep += 1;
+    }
+    renderManagerPortal();
+    return;
+  }
+
   const accountWasOpen = state.accountMenuOpen;
   const accountWrap = event.target.closest(".pm-account-menu-wrap");
   if (!accountWrap && accountWasOpen) state.accountMenuOpen = false;
@@ -3119,6 +3220,7 @@ document.addEventListener("click", async (event) => {
 
   const assignmentDetailButton = event.target.closest("[data-manager-view-assignment]");
   if (assignmentDetailButton) {
+    if (state.scheduleGuideOpen) closeScheduleGuide(true);
     state.selectedAssignmentId = assignmentDetailButton.dataset.managerViewAssignment || "";
     state.assignmentDetailsOpen = true;
     state.feedbackMessage = "";

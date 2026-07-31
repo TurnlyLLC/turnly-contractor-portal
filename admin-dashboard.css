@@ -3668,6 +3668,86 @@ body.admin-command-body[data-portal-role="property-manager"] .pm-assignment-deta
   padding: 16px;
 }
 
+.pm-guide-layer {
+  inset: 0;
+  pointer-events: none;
+  position: fixed;
+  z-index: 1290;
+}
+
+.pm-guide-backdrop {
+  background: rgba(2, 8, 14, 0.62);
+  border: 0;
+  cursor: pointer;
+  inset: 0;
+  padding: 0;
+  pointer-events: auto;
+  position: absolute;
+}
+
+.pm-guide-card {
+  background: #071524;
+  border: 1px solid rgba(0, 214, 163, 0.32);
+  border-radius: 10px;
+  box-shadow: 0 24px 72px rgba(0, 0, 0, 0.42);
+  color: var(--pm-text);
+  display: grid;
+  gap: 10px;
+  max-width: calc(100vw - 32px);
+  padding: 16px;
+  pointer-events: auto;
+  position: fixed;
+  right: 24px;
+  top: 150px;
+  width: 360px;
+  z-index: 1310;
+}
+
+.pm-guide-card-assignment {
+  bottom: 32px;
+  top: auto;
+}
+
+.pm-guide-card h2,
+.pm-guide-card p {
+  margin: 0;
+}
+
+.pm-guide-card h2 {
+  color: var(--pm-text);
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.pm-guide-card p:not(.pm-eyebrow) {
+  color: var(--pm-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.pm-guide-actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.pm-guide-target {
+  outline: 2px solid rgba(0, 214, 163, 0.82);
+  outline-offset: 4px;
+  position: relative;
+  z-index: 1305;
+}
+
+.pm-guide-target::after {
+  border-radius: inherit;
+  box-shadow: 0 0 0 8px rgba(0, 214, 163, 0.14), 0 16px 42px rgba(0, 0, 0, 0.32);
+  content: "";
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
 .pm-modal-close {
   align-items: center;
   background: rgba(7, 21, 36, 0.92);
@@ -4291,6 +4371,14 @@ body.admin-command-body[data-portal-role="property-manager"] .pm-assignment-deta
 
   .pm-day-schedule-grid {
     grid-template-columns: 1fr;
+  }
+
+  .pm-guide-card {
+    bottom: 16px;
+    left: 16px;
+    right: 16px;
+    top: auto;
+    width: auto;
   }
 
   .pm-table {
