@@ -53,11 +53,14 @@ const state = {
   scheduleWeekStart: "",
   view: "overview",
   requestOpen: false,
+  assignmentDetailsOpen: false,
+  requestPage: 1,
+  requestPageSize: 10,
   accountMenuOpen: false,
   adminPreviewMenuOpen: false,
   filters: {
     query: "",
-    requestStatus: "all",
+    requestStatus: "open",
     scheduleStatus: "all",
     videoPhase: "all",
     messageView: "all"
@@ -1637,10 +1640,10 @@ function renderTurnRequestsView() {
       ${statCard("In Progress", integer(metrics.inProgress), "being handled now", "blue")}
       ${statCard("Completed This Week", integer(metrics.completedThisWeek), "closed out", "green")}
     </section>
-    <section class="pm-workspace-grid">
+    <section class="pm-turn-request-workspace">
       ${panel("Turn Requests", rows.length ? renderRequestTable(rows) : emptyBlock("No matching requests", "Try changing the status filter."), { className: "pm-table-panel" })}
-      ${panel("Request Details", renderRequestDetails(selectedAssignment(rows)), { className: "pm-detail-panel" })}
     </section>
+    ${renderAssignmentDetailsModal()}
     <section class="pm-two-column-grid">
       ${panel("Recent Activity", renderRecentActivity(), { className: "pm-activity-panel" })}
       ${renderUpdatesPanel("Messages / Updates")}
@@ -1700,7 +1703,12 @@ function filteredRequests() {
 }
 
 function renderRequestTable(rows, compactMode = false) {
-  const visible = compactMode ? rows : rows.slice(0, 10);
+  const pageSize = [10, 25].includes(Number(state.requestPageSize)) ? Number(state.requestPageSize) : 10;
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const page = Math.min(Math.max(1, Number(state.requestPage) || 1), totalPages);
+  if (!compactMode && page !== state.requestPage) state.requestPage = page;
+  const start = compactMode ? 0 : (page - 1) * pageSize;
+  const visible = compactMode ? rows : rows.slice(start, start + pageSize);
   return `
     <div class="pm-table-wrap">
       <table class="pm-table">
@@ -1716,24 +1724,63 @@ function renderRequestTable(rows, compactMode = false) {
         </thead>
         <tbody>
           ${visible.map((row) => `
-            <tr class="${row.id === state.selectedAssignmentId ? "active" : ""}" data-manager-select-assignment="${esc(row.id || "")}">
+            <tr class="${row.id === state.selectedAssignmentId ? "active" : ""}">
               <td>${esc(assignmentUnit(row) || "Unit")}</td>
               <td>${esc(unitBedBath(row))}</td>
               ${compactMode ? "" : `<td>${esc(row.service_type || row.assignment_type || "Turn Service")}</td><td>${esc(formatDate(row.created_at || row.start_window, "Not dated"))}</td>`}
               <td>${statusBadge(requestGroup(row))}</td>
               <td>${esc(formatWindow(row))}</td>
-              <td><button class="pm-row-action" type="button" data-manager-select-assignment="${esc(row.id || "")}">View Details</button></td>
+              <td><button class="pm-row-action" type="button" ${compactMode ? `data-manager-select-assignment="${esc(row.id || "")}"` : `data-manager-view-assignment="${esc(row.id || "")}"`}>View Details</button></td>
             </tr>
           `).join("")}
         </tbody>
       </table>
     </div>
-    ${compactMode ? "" : `<div class="pm-pagination"><span>1-${Math.min(visible.length, rows.length)} of ${rows.length}</span><button disabled>&lt;</button><button disabled>&gt;</button><select><option>10 / page</option><option>25 / page</option></select></div>`}
+    ${compactMode ? "" : renderRequestPagination(rows.length, page, pageSize, totalPages, visible.length)}
+  `;
+}
+
+function renderRequestPagination(totalRows, page, pageSize, totalPages, visibleCount) {
+  const first = totalRows ? ((page - 1) * pageSize) + 1 : 0;
+  const last = totalRows ? first + visibleCount - 1 : 0;
+  return `
+    <div class="pm-pagination">
+      <span>${esc(first)}-${esc(last)} of ${esc(totalRows)}</span>
+      <button type="button" data-pm-request-page="${esc(page - 1)}" ${page <= 1 ? "disabled" : ""} aria-label="Previous turn request page">&lt;</button>
+      <button type="button" data-pm-request-page="${esc(page + 1)}" ${page >= totalPages ? "disabled" : ""} aria-label="Next turn request page">&gt;</button>
+      <select data-pm-request-page-size aria-label="Turn requests per page">
+        <option value="10" ${pageSize === 10 ? "selected" : ""}>10 / page</option>
+        <option value="25" ${pageSize === 25 ? "selected" : ""}>25 / page</option>
+      </select>
+    </div>
   `;
 }
 
 function selectedAssignment(rows = state.assignments) {
   return rows.find((row) => row.id === state.selectedAssignmentId) || rows[0] || state.assignments[0] || null;
+}
+
+function renderAssignmentDetailsModal() {
+  if (!state.assignmentDetailsOpen) return "";
+  const row = selectedAssignment(state.assignments);
+  if (!row) return "";
+  return `
+    <div class="pm-assignment-detail-modal" role="dialog" aria-modal="true" aria-labelledby="pmAssignmentDetailTitle">
+      <button class="pm-assignment-detail-backdrop" type="button" aria-label="Close request details" data-manager-close-assignment-details></button>
+      <section class="pm-assignment-detail-panel">
+        <header class="pm-assignment-detail-header">
+          <div>
+            <p class="pm-eyebrow">Request Details</p>
+            <h2 id="pmAssignmentDetailTitle">${esc(assignmentTitle(row))}</h2>
+          </div>
+          <button class="pm-modal-close" type="button" aria-label="Close request details" data-manager-close-assignment-details>${pmIcon("x")}</button>
+        </header>
+        <div class="pm-assignment-detail-body">
+          ${renderAssignmentDetailsCard(row)}
+        </div>
+      </section>
+    </div>
+  `;
 }
 
 function scheduleStatusKey(value) {
@@ -3014,6 +3061,7 @@ document.addEventListener("click", async (event) => {
     const view = navLink.dataset.pmView || "overview";
     if (window.location.hash !== `#${view}`) window.location.hash = view;
     state.view = view;
+    state.assignmentDetailsOpen = false;
     renderManagerPortal();
     return;
   }
@@ -3034,6 +3082,7 @@ document.addEventListener("click", async (event) => {
     const view = viewButton.dataset.pmViewButton;
     window.location.hash = view;
     state.view = view;
+    state.assignmentDetailsOpen = false;
     renderManagerPortal();
     return;
   }
@@ -3088,9 +3137,26 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
+  if (event.target.closest("[data-manager-close-assignment-details]")) {
+    state.assignmentDetailsOpen = false;
+    renderManagerPortal();
+    return;
+  }
+
   const statusButton = event.target.closest("[data-pm-request-status]");
   if (statusButton) {
-    state.filters.requestStatus = statusButton.dataset.pmRequestStatus || "all";
+    state.filters.requestStatus = statusButton.dataset.pmRequestStatus || "open";
+    state.requestPage = 1;
+    state.assignmentDetailsOpen = false;
+    renderManagerPortal();
+    return;
+  }
+
+  const requestPageButton = event.target.closest("[data-pm-request-page]");
+  if (requestPageButton) {
+    const pageSize = [10, 25].includes(Number(state.requestPageSize)) ? Number(state.requestPageSize) : 10;
+    const totalPages = Math.max(1, Math.ceil(filteredRequests().length / pageSize));
+    state.requestPage = Math.min(Math.max(1, Number(requestPageButton.dataset.pmRequestPage) || 1), totalPages);
     renderManagerPortal();
     return;
   }
@@ -3105,6 +3171,14 @@ document.addEventListener("click", async (event) => {
   const assignmentButton = event.target.closest("[data-manager-select-assignment]");
   if (assignmentButton) {
     state.selectedAssignmentId = assignmentButton.dataset.managerSelectAssignment || "";
+    renderManagerPortal();
+    return;
+  }
+
+  const assignmentDetailButton = event.target.closest("[data-manager-view-assignment]");
+  if (assignmentDetailButton) {
+    state.selectedAssignmentId = assignmentDetailButton.dataset.managerViewAssignment || "";
+    state.assignmentDetailsOpen = true;
     renderManagerPortal();
     return;
   }
@@ -3141,6 +3215,12 @@ document.addEventListener("input", (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && state.assignmentDetailsOpen) {
+    state.assignmentDetailsOpen = false;
+    renderManagerPortal();
+    return;
+  }
+
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
     if (!viewSupportsSearch()) return;
     event.preventDefault();
@@ -3167,6 +3247,14 @@ document.addEventListener("change", (event) => {
   const scheduleDate = event.target.closest("[data-pm-schedule-date]");
   if (scheduleDate) {
     setScheduleDate(scheduleDate.value);
+    renderManagerPortal();
+    return;
+  }
+
+  const requestPageSize = event.target.closest("[data-pm-request-page-size]");
+  if (requestPageSize) {
+    state.requestPageSize = [10, 25].includes(Number(requestPageSize.value)) ? Number(requestPageSize.value) : 10;
+    state.requestPage = 1;
     renderManagerPortal();
     return;
   }
