@@ -1351,6 +1351,7 @@ function renderManagerPortal(loading = false) {
     ${renderPropertyLinkNotice()}
     ${renderRequestForm()}
     ${renderCurrentView()}
+    ${renderAssignmentDetailsModal()}
   `;
 }
 
@@ -1643,11 +1644,6 @@ function renderTurnRequestsView() {
     <section class="pm-turn-request-workspace">
       ${panel("Turn Requests", rows.length ? renderRequestTable(rows) : emptyBlock("No matching requests", "Try changing the status filter."), { className: "pm-table-panel" })}
     </section>
-    ${renderAssignmentDetailsModal()}
-    <section class="pm-two-column-grid">
-      ${panel("Recent Activity", renderRecentActivity(), { className: "pm-activity-panel" })}
-      ${renderUpdatesPanel("Messages / Updates")}
-    </section>
   `;
 }
 
@@ -1716,7 +1712,7 @@ function renderRequestTable(rows, compactMode = false) {
           <tr>
             <th>Unit</th>
             <th>Bed / Bath</th>
-            ${compactMode ? "" : "<th>Request Type</th><th>Requested Date</th>"}
+            ${compactMode ? "" : "<th>Request Type</th>"}
             <th>Status</th>
             <th>Scheduled</th>
             <th>Actions</th>
@@ -1727,10 +1723,10 @@ function renderRequestTable(rows, compactMode = false) {
             <tr class="${row.id === state.selectedAssignmentId ? "active" : ""}">
               <td>${esc(assignmentUnit(row) || "Unit")}</td>
               <td>${esc(unitBedBath(row))}</td>
-              ${compactMode ? "" : `<td>${esc(row.service_type || row.assignment_type || "Turn Service")}</td><td>${esc(formatDate(row.created_at || row.start_window, "Not dated"))}</td>`}
+              ${compactMode ? "" : `<td>${esc(row.service_type || row.assignment_type || "Turn Service")}</td>`}
               <td>${statusBadge(requestGroup(row))}</td>
               <td>${esc(formatWindow(row))}</td>
-              <td><button class="pm-row-action" type="button" ${compactMode ? `data-manager-select-assignment="${esc(row.id || "")}"` : `data-manager-view-assignment="${esc(row.id || "")}"`}>View Details</button></td>
+              <td><button class="pm-row-action" type="button" data-manager-view-assignment="${esc(row.id || "")}">View Details</button></td>
             </tr>
           `).join("")}
         </tbody>
