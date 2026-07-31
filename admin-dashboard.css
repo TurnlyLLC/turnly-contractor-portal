@@ -3565,7 +3565,7 @@ body.admin-command-body[data-portal-role="property-manager"] .pm-assignment-deta
 }
 
 .pm-assignment-detail-panel {
-  background: var(--pm-surface);
+  background: #071524;
   border: 1px solid var(--pm-border);
   border-radius: 10px;
   box-shadow: 0 28px 80px rgba(0, 0, 0, 0.38);
