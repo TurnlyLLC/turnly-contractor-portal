@@ -1942,7 +1942,7 @@ function renderScheduleView() {
         ${renderScheduleSnapshotControls()}
         <strong class="pm-week-range">${esc(scheduleRangeLabel())}</strong>
       </div>
-      <div class="pm-schedule-view-tabs" aria-label="Schedule view">
+      <div class="pm-schedule-view-tabs" role="group" aria-label="Schedule view">
         ${["day", "week", "month"].map((view) => `<button type="button" class="${state.scheduleView === view ? "active" : ""}" data-pm-schedule-view="${esc(view)}">${esc(titleCase(view))}</button>`).join("")}
       </div>
       ${renderNewTurnRequestButton("Request Turn")}
@@ -1989,15 +1989,8 @@ function renderScheduleSurface(rows) {
 function renderScheduleDayView(rows) {
   if (!rows.length) return emptyBlock("No turns scheduled", "Select another date or request a new turn.");
   return `
-    <div class="pm-day-schedule-list">
-      ${rows.map((row) => `
-        <button class="pm-day-schedule-card" type="button" data-manager-view-assignment="${esc(row.id || "")}">
-          <span>${esc(scheduleEventTime(row))}</span>
-          <strong>${esc(assignmentUnit(row) ? `Unit ${assignmentUnit(row)}` : assignmentTitle(row))}</strong>
-          <small>${esc([assignmentTitle(row), assignmentContractorText(row)].filter(Boolean).join(" - "))}</small>
-          ${statusBadge(requestGroup(row))}
-        </button>
-      `).join("")}
+    <div class="pm-day-schedule-grid">
+      ${rows.map(renderScheduleEvent).join("")}
     </div>
   `;
 }
@@ -2012,17 +2005,14 @@ function renderScheduleMonthView(rows) {
     <div class="pm-month-calendar">
       ${["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => `<strong>${esc(day)}</strong>`).join("")}
       ${days.map((day) => {
-        const dayRows = rows.filter((row) => sameDay(row.start_window || row.recurring_due_at, day)).slice(0, 3);
+        const allDayRows = rows.filter((row) => sameDay(row.start_window || row.recurring_due_at, day));
+        const visibleRows = allDayRows.slice(0, 3);
         return `
           <article class="pm-month-day ${day.getMonth() === month ? "" : "is-muted"} ${sameDay(day, new Date()) ? "is-today" : ""}">
-            <button type="button" data-pm-schedule-select-date="${esc(dateInputValue(day))}">${esc(day.getDate())}</button>
-            <div>
-              ${dayRows.map((row) => `
-                <button type="button" data-manager-view-assignment="${esc(row.id || "")}">
-                  <span>${esc(formatShortTime(row.start_window || row.recurring_due_at))}</span>
-                  <strong>${esc(assignmentUnit(row) || assignmentTitle(row))}</strong>
-                </button>
-              `).join("")}
+            <button class="pm-month-day-number" type="button" data-pm-schedule-select-date="${esc(dateInputValue(day))}">${esc(day.getDate())}</button>
+            <div class="pm-month-day-events">
+              ${visibleRows.map(renderScheduleEvent).join("")}
+              ${allDayRows.length > visibleRows.length ? `<button class="pm-month-more" type="button" data-pm-schedule-select-date="${esc(dateInputValue(day))}">+${esc(allDayRows.length - visibleRows.length)} more</button>` : ""}
             </div>
           </article>
         `;
