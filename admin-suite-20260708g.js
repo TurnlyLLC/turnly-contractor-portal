@@ -99,11 +99,12 @@ const pipelineStages = [
   ["active", "Active", "green"]
 ];
 
-const commandCenterDefaultWidgetIds = ["action-items", "property-manager-requests", "coverage-requests", "qa-alerts", "schedule"];
+const commandCenterDefaultWidgetIds = ["action-items", "property-manager-requests", "pending-turn-requests", "coverage-requests", "qa-alerts", "schedule"];
 const commandCenterStorageKey = "turnlyAdminCommandCenterWidgets:20260721";
 const commandCenterWidgetCatalog = [
   { id: "action-items", title: "Action Items", icon: "clipboard-list", href: "assignments.html" },
   { id: "property-manager-requests", title: "Property Manager Requests", icon: "building", href: "contracts.html" },
+  { id: "pending-turn-requests", title: "Pending Turn Requests", icon: "calendar", href: "assignments.html" },
   { id: "coverage-requests", title: "Coverage Requests", icon: "shield", href: "coverage-center.html" },
   { id: "qa-alerts", title: "QA Alerts", icon: "alert", href: "qa-queue.html" },
   { id: "schedule", title: "Today's Schedule", icon: "calendar", href: "schedule.html" }
@@ -119,6 +120,7 @@ const commandCenterState = {
   scheduleView: "day",
   actionItems: [],
   propertyManagerRequests: [],
+  pendingTurnRequests: [],
   propertyManagerContracts: [],
   portalProperties: [],
   coverageRequests: [],
@@ -1094,6 +1096,7 @@ function renderCommandWidgetCatalog(activeIds) {
 function renderCommandWidget(widgetId) {
   if (widgetId === "action-items") return renderActionItemsWidget();
   if (widgetId === "property-manager-requests") return renderPropertyManagerRequestsWidget();
+  if (widgetId === "pending-turn-requests") return renderPendingTurnRequestsWidget();
   if (widgetId === "coverage-requests") return renderCoverageRequestsWidget();
   if (widgetId === "qa-alerts") return renderQaAlertsWidget();
   if (widgetId === "schedule") return renderScheduleWidget();
@@ -1121,6 +1124,14 @@ function renderPropertyManagerRequestsWidget() {
     <div id="commandPropertyManagerRequestsList" class="dashboard-list manager-request-list">${skeletonRows(3)}</div>
     <a class="panel-bottom-link" href="contracts.html">View Open Contracts ${icon("chevron-right")}</a>
   `, { menu: true, key: "property-manager-requests", href: "contracts.html" });
+}
+
+function renderPendingTurnRequestsWidget() {
+  return panel("Pending Turn Requests", `
+    <div id="commandPendingTurnRequestsMessage" class="request-message" aria-live="polite"></div>
+    <div id="commandPendingTurnRequestsList" class="dashboard-list">${skeletonRows(3)}</div>
+    <a class="panel-bottom-link" href="assignments.html">View All Assignments ${icon("chevron-right")}</a>
+  `, { menu: true, key: "pending-turn-requests", href: "assignments.html" });
 }
 
 function renderCoverageRequestsWidget() {
@@ -1179,6 +1190,13 @@ function handleCommandCenterClick(event) {
   if (linkManagerButton) {
     event.preventDefault();
     void linkDashboardPropertyManager(linkManagerButton);
+    return;
+  }
+
+  const approveTurnRequestButton = event.target.closest("[data-dashboard-approve-turn-request]");
+  if (approveTurnRequestButton) {
+    event.preventDefault();
+    void approveDashboardTurnRequest(approveTurnRequestButton);
     return;
   }
 
@@ -1323,6 +1341,7 @@ async function loadCommandCenterData() {
   await Promise.all([
     loadCommandActionItems(),
     loadCommandPropertyManagerRequests(),
+    loadCommandPendingTurnRequests(),
     loadCommandCoverageRequests(),
     loadCommandQaAlerts(),
     loadCommandSchedule()
@@ -1333,6 +1352,7 @@ async function refreshCommandWidget(widgetId) {
   setCommandWidgetLoading(widgetId);
   if (widgetId === "action-items") await loadCommandActionItems();
   if (widgetId === "property-manager-requests") await loadCommandPropertyManagerRequests();
+  if (widgetId === "pending-turn-requests") await loadCommandPendingTurnRequests();
   if (widgetId === "coverage-requests") await loadCommandCoverageRequests();
   if (widgetId === "qa-alerts") await loadCommandQaAlerts();
   if (widgetId === "schedule") await loadCommandSchedule();
@@ -1342,6 +1362,7 @@ function setCommandWidgetLoading(widgetId) {
   const listIds = {
     "action-items": "commandActionItemsList",
     "property-manager-requests": "commandPropertyManagerRequestsList",
+    "pending-turn-requests": "commandPendingTurnRequestsList",
     "coverage-requests": "commandCoverageRequestsList",
     "qa-alerts": "commandQaAlertsList",
     schedule: "commandScheduleList"
@@ -1432,6 +1453,20 @@ async function loadCommandPropertyManagerRequests() {
   renderCommandPropertyManagerRequests();
 }
 
+async function loadCommandPendingTurnRequests() {
+  setCommandMessage("pending-turn-requests", "Syncing...");
+  const result = await fetchCommandRows("assignment_blocks", "id,title,property_name,address,service_type,status,start_window,end_window,unit_number,unit_name,priority,created_at,metadata,visibility", { order: "created_at", ascending: false, limit: 120 });
+  commandCenterState.pendingTurnRequests = result.error ? [] : result.data
+    .filter(isPendingPropertyManagerTurnRequest)
+    .map(mapPendingTurnRequest);
+  setCommandMessage("pending-turn-requests", result.error
+    ? "Unable to load pending property manager turn requests."
+    : commandCenterState.pendingTurnRequests.length
+      ? `${commandCenterState.pendingTurnRequests.length} pending turn request${commandCenterState.pendingTurnRequests.length === 1 ? "" : "s"} needs approval.`
+      : "Synced with Supabase. No pending property manager turn requests.");
+  renderCommandPendingTurnRequests();
+}
+
 async function loadCommandCoverageRequests() {
   setCommandMessage("coverage-requests", "Syncing...");
   const result = await fetchCommandRows("coverage_requests", "*", { order: "requested_start_at", ascending: true, limit: 40 });
@@ -1478,6 +1513,7 @@ async function loadCommandSchedule() {
 function renderCommandCenterLists() {
   renderCommandActionItems();
   renderCommandPropertyManagerRequests();
+  renderCommandPendingTurnRequests();
   renderCommandCoverageRequests();
   renderCommandQaAlerts();
   renderCommandSchedule();
@@ -1513,6 +1549,15 @@ function renderCommandPropertyManagerRequests() {
     : emptyState("user-plus", "No pending property managers");
 }
 
+function renderCommandPendingTurnRequests() {
+  const list = document.getElementById("commandPendingTurnRequestsList");
+  if (!list) return;
+  const rows = commandCenterState.pendingTurnRequests.slice(0, 6);
+  list.innerHTML = rows.length
+    ? rows.map(renderDashboardItem).join("")
+    : emptyState("calendar", "No pending turn requests");
+}
+
 function renderCommandCoverageRequests() {
   const list = document.getElementById("commandCoverageRequestsList");
   if (!list) return;
@@ -1544,6 +1589,7 @@ function setCommandMessage(widgetId, text, isError = false) {
   const messageIds = {
     "action-items": "commandActionItemsMessage",
     "property-manager-requests": "commandPropertyManagerRequestsMessage",
+    "pending-turn-requests": "commandPendingTurnRequestsMessage",
     "coverage-requests": "commandCoverageRequestsMessage",
     "qa-alerts": "commandQaAlertsMessage",
     schedule: "commandScheduleMessage"
@@ -1599,6 +1645,35 @@ function mapPropertyManagerRequest(profile) {
     status: profile.status || "pending",
     requestedPropertyName: profile.requested_property_name || "",
     createdAt: profile.created_at || null
+  };
+}
+
+function isPendingPropertyManagerTurnRequest(item) {
+  const meta = assignmentMetadata(item);
+  const status = normalizeToken(item.status);
+  const approval = normalizeToken(meta.admin_approval_status || "");
+  return normalizeToken(meta.source) === "property-manager-turn-request"
+    && !["approved", "complete", "completed", "cancelled", "canceled", "declined"].includes(approval)
+    && ["pending", "pending-approval", "preferred-pending"].includes(status);
+}
+
+function mapPendingTurnRequest(item) {
+  const meta = assignmentMetadata(item);
+  const unit = item.unit_number || item.unit_name || meta.unit_number || meta.unit_name || "";
+  return {
+    id: `pm-turn-${item.id}`,
+    title: unit ? `Approve Unit ${unit}` : (item.title || "Approve turn request"),
+    body: [item.property_name || meta.property_name, item.service_type || "Unit Cleaning"].filter(Boolean).join(" - "),
+    status: item.status || "pending",
+    priority: item.priority || "high",
+    dueAt: item.start_window || item.created_at || null,
+    meta: formatDateWindow(item.start_window, item.end_window),
+    href: "assignments.html",
+    icon: "calendar",
+    action: "approve-turn-request",
+    assignmentId: item.id,
+    assignmentTitle: unit ? `Unit ${unit}` : (item.title || "turn request"),
+    row: item
   };
 }
 
@@ -1730,6 +1805,14 @@ function renderDashboardItemAction(item) {
       </button>
     `;
   }
+  if (item.action === "approve-turn-request") {
+    const label = `Approve ${item.assignmentTitle || "turn request"}`;
+    return `
+      <button class="dashboard-item-action dashboard-approve-action" type="button" data-dashboard-approve-turn-request="${esc(item.assignmentId)}" data-assignment-name="${esc(item.assignmentTitle || "turn request")}" aria-label="${esc(label)}">
+        ${icon("check")}
+      </button>
+    `;
+  }
   return `<a class="dashboard-item-action" href="${esc(item.href || "#")}" aria-label="Open ${esc(item.title)}">${icon("chevron-right")}</a>`;
 }
 
@@ -1826,6 +1909,61 @@ async function linkDashboardPropertyManager(button) {
   renderCommandPropertyManagerRequests();
   setCommandMessage("property-manager-requests", `${data.full_name || data.email || managerName} linked to ${portalProperty.name || contractOption.title}.`);
   void loadCommandActionItems();
+}
+
+async function approveDashboardTurnRequest(button) {
+  if (!suiteSupabase) {
+    setCommandMessage("pending-turn-requests", "Supabase is not configured, so this turn request could not be approved.", true);
+    return;
+  }
+  const assignmentId = button.dataset.dashboardApproveTurnRequest;
+  const assignmentName = button.dataset.assignmentName || "this turn request";
+  if (!assignmentId) return;
+  if (!window.confirm(`Approve ${assignmentName} and move it to Open?`)) return;
+
+  button.disabled = true;
+  button.classList.add("is-loading");
+  setCommandMessage("pending-turn-requests", `Approving ${assignmentName}...`);
+
+  const currentItem = commandCenterState.pendingTurnRequests.find((item) => String(item.assignmentId || "") === String(assignmentId));
+  const currentRow = currentItem?.row || {};
+  const now = new Date().toISOString();
+  const user = topbarState.user || (await suiteSupabase.auth.getUser()).data?.user || null;
+  const payload = {
+    status: "open",
+    visibility: "open",
+    metadata: {
+      ...assignmentMetadata(currentRow),
+      admin_approval_status: "approved",
+      approved_at: now,
+      approved_by: user?.id || null,
+      approved_by_name: topbarState.profile?.full_name || user?.email || "Admin"
+    }
+  };
+
+  const result = await saveAssignmentPatchWithSchemaFallback(assignmentId, payload);
+  if (result.error) {
+    button.disabled = false;
+    button.classList.remove("is-loading");
+    setCommandMessage("pending-turn-requests", `Unable to approve ${assignmentName}: ${result.error.message}`, true);
+    return;
+  }
+
+  await suiteSupabase
+    .from("property_assignment_links")
+    .update({
+      metadata: {
+        assignment_status: "open",
+        admin_approval_status: "approved",
+        approved_at: now
+      }
+    })
+    .eq("assignment_id", assignmentId);
+
+  commandCenterState.pendingTurnRequests = commandCenterState.pendingTurnRequests.filter((item) => String(item.assignmentId || "") !== String(assignmentId));
+  renderCommandPendingTurnRequests();
+  setCommandMessage("pending-turn-requests", `${assignmentName} approved and moved to Open.`);
+  void loadCommandSchedule();
 }
 
 function renderScheduleDashboardItem(item) {

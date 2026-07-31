@@ -48,14 +48,17 @@ const state = {
   messages: [],
   selectedThreadId: "",
   selectedAssignmentId: "",
-  selectedVideoKey: "",
   selectedScheduleDate: "",
   scheduleWeekStart: "",
+  scheduleView: "week",
   view: "overview",
   requestOpen: false,
   assignmentDetailsOpen: false,
   requestPage: 1,
   requestPageSize: 10,
+  feedbackSaving: false,
+  feedbackMessage: "",
+  feedbackError: false,
   accountMenuOpen: false,
   adminPreviewMenuOpen: false,
   filters: {
@@ -100,7 +103,6 @@ const viewLabels = {
   overview: ["Overview", "Your assigned property overview."],
   "turn-requests": ["Turn Requests", "Manage unit turn requests and track progress."],
   schedule: ["Schedule", "View upcoming unit turns and scheduling windows."],
-  "unit-videos": ["Unit Videos", "View before and after videos for completed and in-progress unit turns."],
   messages: ["Messages", "View conversations and communication updates."],
   invoices: ["Invoices", "Track completed services and invoice activity."],
   settings: ["Settings", "Property manager account and portal preferences."],
@@ -108,7 +110,7 @@ const viewLabels = {
 };
 
 const navViews = new Set(Object.keys(viewLabels));
-const searchlessViews = new Set(["turn-requests", "schedule", "unit-videos", "messages"]);
+const searchlessViews = new Set(["turn-requests", "schedule", "messages"]);
 const closedStatuses = new Set(["completed", "complete", "cancelled", "canceled", "declined", "deleted", "archived"]);
 const issueStatuses = new Set(["overdue", "qa_pending", "qa_rejected", "rejected", "needs_rework"]);
 const inProgressStatuses = new Set(["in_progress", "claimed", "started", "active", "qa_pending"]);
@@ -812,11 +814,17 @@ function setScheduleDate(value) {
   state.scheduleWeekStart = dateInputValue(startOfWeek(date, true));
 }
 
-function moveScheduleWeek(days) {
+function moveScheduleWindow(direction) {
   ensureScheduleState();
-  const nextStart = addDays(state.scheduleWeekStart, days);
-  state.scheduleWeekStart = dateInputValue(nextStart);
-  state.selectedScheduleDate = dateInputValue(nextStart);
+  const selected = localDate(state.selectedScheduleDate);
+  const amount = Number(direction) || 0;
+  if (state.scheduleView === "month") {
+    selected.setMonth(selected.getMonth() + amount);
+    setScheduleDate(selected);
+    return;
+  }
+  selected.setDate(selected.getDate() + (state.scheduleView === "day" ? amount : amount * 7));
+  setScheduleDate(selected);
 }
 
 function formatWeekRange(startValue) {
@@ -825,6 +833,18 @@ function formatWeekRange(startValue) {
   const startLabel = start.toLocaleDateString([], { month: "short", day: "numeric" });
   const endLabel = end.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
   return `${startLabel} - ${endLabel}`;
+}
+
+function scheduleRangeLabel() {
+  ensureScheduleState();
+  const selected = localDate(state.selectedScheduleDate);
+  if (state.scheduleView === "day") {
+    return selected.toLocaleDateString([], { weekday: "long", month: "short", day: "numeric", year: "numeric" });
+  }
+  if (state.scheduleView === "month") {
+    return selected.toLocaleDateString([], { month: "long", year: "numeric" });
+  }
+  return formatWeekRange(state.scheduleWeekStart);
 }
 
 function isDateBetween(value, start, end) {
@@ -1498,7 +1518,6 @@ function renderDataStatus(loading) {
 function renderCurrentView() {
   if (state.view === "turn-requests") return renderTurnRequestsView();
   if (state.view === "schedule") return renderScheduleView();
-  if (state.view === "unit-videos") return renderUnitVideosView();
   if (state.view === "messages") return renderMessagesView();
   if (state.view === "invoices") return renderInvoicesView();
   if (state.view === "settings") return renderSettingsView();
@@ -1550,7 +1569,7 @@ function renderOverviewView() {
     <section class="pm-stat-grid pm-stat-grid-four" aria-label="Property manager overview">
       ${statCard("Units Ready", integer(metrics.ready), "completed last 30 days", "green", "turn-requests")}
       ${statCard("In Progress", integer(metrics.inProgress), "Currently Being Cleaned", "violet", "turn-requests")}
-      ${statCard("Before & After Videos", integer(metrics.beforeAfter), "Ready to Watch", "blue", "unit-videos")}
+      ${statCard("Upcoming", integer(metrics.upcoming), "future scheduled turns", "blue", "schedule")}
       ${statCard("Completed This Week", integer(metrics.completedThisWeek), `${delta >= 0 ? "+" : ""}${delta}% vs last week`, "cyan", "schedule")}
     </section>
 
@@ -1565,55 +1584,7 @@ function renderOverviewView() {
         })}
         ${renderUpdatesPanel("Messages / Updates")}
       </aside>
-      ${panel("Before & After Videos", renderVideoRail(), {
-        className: "pm-video-overview",
-        copy: "Watch recent unit turn videos",
-        action: `<button class="pm-link-button" type="button" data-pm-view-button="unit-videos">View all videos</button>`
-      })}
-      ${panel("Property Details", renderPropertyDataPreview(), {
-        className: "pm-property-data-panel",
-        action: `<button class="pm-link-button" type="button" data-pm-view-button="settings">View settings</button>`
-      })}
     </section>
-  `;
-}
-
-function renderPropertyDataPreview() {
-  const next = upcomingAssignments(1)[0];
-  const units = state.units.slice(0, 6);
-  const accessNotes = state.property?.access_notes
-    || state.contract?.access_notes
-    || state.client?.access_notes
-    || state.property?.notes
-    || state.contract?.notes
-    || "No access notes on file";
-  return `
-    <div class="pm-detail-list">
-      <dl>
-        <div><dt>Property</dt><dd>${esc(propertyTitle())}</dd></div>
-        <div><dt>Address</dt><dd>${esc(propertyAddress())}</dd></div>
-        <div><dt>Client</dt><dd>${esc(managerClientName())}</dd></div>
-        <div><dt>Next Job</dt><dd>${esc(next ? formatWindow(next) : "No upcoming jobs")}</dd></div>
-        <div><dt>Total Units</dt><dd>${esc(integer(state.units.length))}</dd></div>
-        <div><dt>Total Jobs</dt><dd>${esc(integer(state.assignments.length))}</dd></div>
-      </dl>
-      <h3>Access / Property Notes</h3>
-      <p>${esc(accessNotes)}</p>
-      <h3>Unit Information</h3>
-      ${units.length ? `
-        <div class="pm-unit-table">
-          <div class="pm-unit-head"><span>Unit</span><span>Bed / Bath</span><span>Sq Ft</span><span>Status</span></div>
-          ${units.map((unit) => `
-            <article class="pm-unit-row">
-              <div><strong>${esc(unit.unit_name || unit.name || "Unit")}</strong><span>${esc(unit.notes || unit.unit_instructions || "No unit notes")}</span></div>
-              <span>${esc(unitBedBath(unit))}</span>
-              <span>${esc(integer(unit.square_feet || unit.sq_ft || 0))}</span>
-              ${statusBadge(unit.status || "active")}
-            </article>
-          `).join("")}
-        </div>
-      ` : emptyBlock("No units found", "Unit records will appear here once the linked property data is available.")}
-    </div>
   `;
 }
 
@@ -1918,6 +1889,7 @@ function renderAssignmentDetailsCard(row, emptyTitle = "No request selected") {
         ${renderVideoSlot(before, "Before Video")}
         ${renderVideoSlot(after, "After Video")}
       </div>
+      ${renderCleanFeedbackForm(row)}
     </section>
   `;
 }
@@ -1926,38 +1898,79 @@ function renderRequestDetails(row) {
   return renderAssignmentDetailsCard(row);
 }
 
+function renderCleanFeedbackForm(row) {
+  if (!row?.id) return "";
+  const statusClass = state.feedbackMessage ? (state.feedbackError ? "error" : "success") : "";
+  return `
+    <section class="pm-clean-feedback-panel">
+      <div>
+        <p class="pm-eyebrow">Clean Feedback / Complaints</p>
+        <h3>Tell Turnly what needs attention</h3>
+        <p>Use this for missed areas, quality issues, access problems, or anything that should be corrected on this clean.</p>
+      </div>
+      <form id="managerCleanFeedbackForm" class="manager-message-form pm-clean-feedback-form" data-feedback-assignment-id="${esc(row.id)}">
+        <label>
+          <span>Feedback Type</span>
+          <select name="feedback_type">
+            <option value="complaint">Complaint / Needs Attention</option>
+            <option value="quality_issue">Quality Issue</option>
+            <option value="access_issue">Access Issue</option>
+            <option value="compliment">Compliment</option>
+            <option value="general">General Feedback</option>
+          </select>
+        </label>
+        <label>
+          <span>Feedback</span>
+          <textarea name="body" rows="4" placeholder="Describe exactly what happened, where the issue is, and what you want Turnly to review..." required></textarea>
+        </label>
+        <div class="pm-form-actions">
+          <button class="new-btn pm-compact-btn" type="submit" ${state.feedbackSaving ? "disabled" : ""}>Send Feedback</button>
+          <small class="${esc(statusClass)}">${esc(state.feedbackMessage)}</small>
+        </div>
+      </form>
+    </section>
+  `;
+}
+
 function renderScheduleView() {
   ensureScheduleState();
   const metrics = managerMetrics();
   const rows = scheduledRows();
-  const weekStart = localDate(state.scheduleWeekStart);
   return `
     <section class="panel-card pm-toolbar pm-schedule-toolbar">
       <div class="pm-schedule-toolbar-controls">
         ${renderScheduleSnapshotControls()}
-        <strong class="pm-week-range">${esc(formatWeekRange(weekStart))}</strong>
+        <strong class="pm-week-range">${esc(scheduleRangeLabel())}</strong>
+      </div>
+      <div class="pm-schedule-view-tabs" aria-label="Schedule view">
+        ${["day", "week", "month"].map((view) => `<button type="button" class="${state.scheduleView === view ? "active" : ""}" data-pm-schedule-view="${esc(view)}">${esc(titleCase(view))}</button>`).join("")}
       </div>
       ${renderNewTurnRequestButton("Request Turn")}
     </section>
     <section class="pm-stat-grid pm-stat-grid-four" aria-label="Schedule metrics">
       ${statCard("Today", integer(todayAssignments().length), "turns today", "green")}
-      ${statCard("This Week", integer(rows.length), "scheduled turns", "yellow")}
+      ${statCard("This View", integer(rows.length), "scheduled turns", "yellow")}
       ${statCard("Upcoming", integer(metrics.upcoming), "future windows", "blue")}
       ${statCard("In Progress", integer(metrics.inProgress), "currently active", "violet")}
     </section>
-    <section class="pm-workspace-grid">
-      ${panel("Schedule", renderScheduleGrid(rows), { className: "pm-schedule-panel" })}
-      <aside class="pm-side-stack">
-        ${panel("Schedule Details", renderScheduleDetails(selectedAssignment(rows)), { className: "pm-detail-panel" })}
-        ${panel("Upcoming Turns", renderUpcomingTurns(), { className: "pm-compact-panel" })}
-        ${renderUpdatesPanel("Requests / Updates")}
-      </aside>
+    <section class="pm-turn-request-workspace">
+      ${panel("Schedule", renderScheduleSurface(rows), { className: "pm-schedule-panel" })}
     </section>
   `;
 }
 
 function scheduledRows() {
   ensureScheduleState();
+  const selectedDate = localDate(state.selectedScheduleDate);
+  if (state.scheduleView === "day") {
+    const nextDay = addDays(selectedDate, 1);
+    return sortedAssignments(state.assignments.filter((row) => isDateBetween(row.start_window || row.recurring_due_at, selectedDate, nextDay)));
+  }
+  if (state.scheduleView === "month") {
+    const monthStart = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
+    const monthEnd = new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 1);
+    return sortedAssignments(state.assignments.filter((row) => isDateBetween(row.start_window || row.recurring_due_at, monthStart, monthEnd)));
+  }
   const weekStart = localDate(state.scheduleWeekStart);
   const weekEnd = addDays(weekStart, 7);
   return sortedAssignments(state.assignments.filter((row) => {
@@ -1965,6 +1978,57 @@ function scheduledRows() {
     const matchesWeek = isDateBetween(rowDate, weekStart, weekEnd);
     return matchesWeek;
   }));
+}
+
+function renderScheduleSurface(rows) {
+  if (state.scheduleView === "day") return renderScheduleDayView(rows);
+  if (state.scheduleView === "month") return renderScheduleMonthView(rows);
+  return renderScheduleGrid(rows);
+}
+
+function renderScheduleDayView(rows) {
+  if (!rows.length) return emptyBlock("No turns scheduled", "Select another date or request a new turn.");
+  return `
+    <div class="pm-day-schedule-list">
+      ${rows.map((row) => `
+        <button class="pm-day-schedule-card" type="button" data-manager-view-assignment="${esc(row.id || "")}">
+          <span>${esc(scheduleEventTime(row))}</span>
+          <strong>${esc(assignmentUnit(row) ? `Unit ${assignmentUnit(row)}` : assignmentTitle(row))}</strong>
+          <small>${esc([assignmentTitle(row), assignmentContractorText(row)].filter(Boolean).join(" - "))}</small>
+          ${statusBadge(requestGroup(row))}
+        </button>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderScheduleMonthView(rows) {
+  const selectedDate = localDate(state.selectedScheduleDate);
+  const monthStart = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
+  const gridStart = startOfWeek(monthStart, true);
+  const days = Array.from({ length: 42 }, (_, index) => addDays(gridStart, index));
+  const month = selectedDate.getMonth();
+  return `
+    <div class="pm-month-calendar">
+      ${["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => `<strong>${esc(day)}</strong>`).join("")}
+      ${days.map((day) => {
+        const dayRows = rows.filter((row) => sameDay(row.start_window || row.recurring_due_at, day)).slice(0, 3);
+        return `
+          <article class="pm-month-day ${day.getMonth() === month ? "" : "is-muted"} ${sameDay(day, new Date()) ? "is-today" : ""}">
+            <button type="button" data-pm-schedule-select-date="${esc(dateInputValue(day))}">${esc(day.getDate())}</button>
+            <div>
+              ${dayRows.map((row) => `
+                <button type="button" data-manager-view-assignment="${esc(row.id || "")}">
+                  <span>${esc(formatShortTime(row.start_window || row.recurring_due_at))}</span>
+                  <strong>${esc(assignmentUnit(row) || assignmentTitle(row))}</strong>
+                </button>
+              `).join("")}
+            </div>
+          </article>
+        `;
+      }).join("")}
+    </div>
+  `;
 }
 
 function todayAssignments() {
@@ -2019,7 +2083,7 @@ function renderScheduleEvent(row) {
   const unit = assignmentUnit(row);
   const subtitle = [unit ? `Unit ${unit}` : "", row.service_type].filter(Boolean).join(" - ");
   return `
-    <article class="schedule-event-card pm-schedule-event-card ${esc(requestGroup(row))}" data-manager-select-assignment="${esc(row.id || "")}" role="button" tabindex="0" aria-label="View details for ${esc(title)}.">
+    <article class="schedule-event-card pm-schedule-event-card ${esc(requestGroup(row))}" data-manager-view-assignment="${esc(row.id || "")}" role="button" tabindex="0" aria-label="View details for ${esc(title)}.">
       <div class="schedule-event-time">${esc(scheduleEventTime(row))}</div>
       <strong>${esc(title)}</strong>
       <p>${esc(subtitle || row.title || "Assignment")}</p>
@@ -2066,7 +2130,7 @@ function renderScheduleSnapshot() {
     <p class="pm-snapshot-label">${esc(selectedDate.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }))}<span>${selectedRows.length} scheduled</span></p>
     <div class="pm-snapshot-list">
       ${selectedRows.length ? selectedRows.map((row) => `
-        <button type="button" data-manager-select-assignment="${esc(row.id || "")}">
+        <button type="button" data-manager-view-assignment="${esc(row.id || "")}">
           <time>${esc(formatShortTime(row.start_window || row.recurring_due_at))}</time>
           <span>${esc(assignmentUnit(row) ? `Unit ${assignmentUnit(row)}` : assignmentTitle(row))}</span>
           ${statusBadge(requestGroup(row))}
@@ -2081,43 +2145,11 @@ function renderScheduleSnapshotControls() {
   ensureScheduleState();
   return `
     <div class="pm-schedule-controls" aria-label="Schedule date controls">
-      <button type="button" aria-label="Previous week" data-pm-schedule-shift="-7"></button>
+      <button type="button" aria-label="Previous schedule window" data-pm-schedule-shift="-1"></button>
       <input type="date" value="${esc(state.selectedScheduleDate)}" aria-label="Select schedule date" data-pm-schedule-date />
-      <button type="button" aria-label="Next week" data-pm-schedule-shift="7"></button>
+      <button type="button" aria-label="Next schedule window" data-pm-schedule-shift="1"></button>
     </div>
   `;
-}
-
-function renderUpcomingTurns() {
-  const rows = upcomingAssignments(5);
-  if (!rows.length) return emptyBlock("No upcoming turns", "New schedule windows will appear here.");
-  return `<div class="pm-mini-list">${rows.map((row) => `<button type="button" data-manager-select-assignment="${esc(row.id || "")}"><strong>${esc(assignmentUnit(row) || assignmentTitle(row))}</strong><span>${esc(formatWindow(row))}</span>${statusBadge(requestGroup(row))}</button>`).join("")}</div>`;
-}
-
-function renderUnitVideosView() {
-  const metrics = managerMetrics();
-  const groups = filteredVideoGroups();
-  return `
-    <section class="pm-stat-grid pm-stat-grid-four" aria-label="Video metrics">
-      ${statCard("Total Videos", integer(state.videos.length), "available clips", "green")}
-      ${statCard("Before Videos", integer(metrics.beforeVideos), "before work proof", "yellow")}
-      ${statCard("After Videos", integer(metrics.afterVideos), "after work proof", "blue")}
-      ${statCard("Recently Uploaded", integer(recentVideos().length), "last 7 days", "violet")}
-    </section>
-    <section class="pm-workspace-grid">
-      ${panel("Video Library", groups.length ? renderVideoTable(groups) : emptyBlock("No videos found", "Before and after videos will appear here when contractors upload them."), { className: "pm-table-panel" })}
-      <aside class="pm-side-stack">
-        ${panel("Video Details", renderVideoDetails(selectedVideoGroup(groups)), { className: "pm-detail-panel" })}
-        ${panel("Messages / Updates", renderThreadSummary(3), { className: "pm-compact-panel" })}
-      </aside>
-    </section>
-    ${panel("Recent Upload Activity", renderVideoActivity(), { className: "pm-activity-panel" })}
-  `;
-}
-
-function recentVideos() {
-  const sevenDaysAgo = Date.now() - 7 * 86400000;
-  return state.videos.filter((video) => dateValue(video.created_at || video.recorded_at, 0) >= sevenDaysAgo);
 }
 
 function videosForAssignment(row) {
@@ -2138,122 +2170,6 @@ function videosForAssignment(row) {
   });
 }
 
-function qaJobForVideo(video) {
-  const meta = rowMeta(video);
-  const ids = new Set(compact([video?.qa_job_id, video?.job_id, meta.qa_job_id, meta.job_id]).map(String));
-  if (!ids.size) return null;
-  return state.qaJobs.find((job) => ids.has(String(job.id || ""))) || null;
-}
-
-function assignmentForVideo(video) {
-  const meta = rowMeta(video);
-  const qaJob = qaJobForVideo(video);
-  const ids = new Set(compact([
-    video?.assignment_id,
-    video?.assignment_block_id,
-    meta.assignment_id,
-    meta.assignment_block_id,
-    qaJob?.assignment_id
-  ]).map(String));
-  const direct = state.assignments.find((row) => ids.has(String(row.id || "")));
-  if (direct) return direct;
-  const unit = matchingUnit(video);
-  if (!unit) return null;
-  const unitValues = new Set(unitLookupValues(unit));
-  return state.assignments.find((row) => unitLookupValues(row).some((value) => unitValues.has(value))) || null;
-}
-
-function videoGroups() {
-  const map = new Map();
-  state.videos.forEach((video) => {
-    const assignment = assignmentForVideo(video);
-    const key = String(assignment?.id || video.assignment_id || video.pair_id || video.qa_job_id || video.id);
-    const existing = map.get(key) || {
-      key,
-      assignment: assignment || null,
-      videos: []
-    };
-    if (!existing.assignment && assignment) existing.assignment = assignment;
-    existing.videos.push(video);
-    map.set(key, existing);
-  });
-
-  if (!map.size) {
-    recentCompletedAssignments().slice(0, 6).forEach((row) => {
-      map.set(row.id, { key: row.id, assignment: row, videos: [] });
-    });
-  }
-
-  return Array.from(map.values()).map((group) => ({
-    ...group,
-    videos: group.videos.sort((a, b) => dateValue(b.created_at || b.recorded_at, 0) - dateValue(a.created_at || a.recorded_at, 0))
-  }));
-}
-
-function filteredVideoGroups() {
-  return videoGroups().filter((group) => {
-    const assignment = assignmentForVideoGroup(group);
-    const matchesQuery = queryMatches([
-      assignment ? assignmentTitle(assignment) : "",
-      assignment ? assignmentUnit(assignment) : "",
-      ...group.videos.flatMap((video) => [video.title, video.label, video.unit_name, video.contractor_name, video.notes])
-    ]);
-    return matchesQuery;
-  });
-}
-
-function selectedVideoGroup(groups = videoGroups()) {
-  return groups.find((group) => String(group.key) === String(state.selectedVideoKey)) || groups[0] || null;
-}
-
-function assignmentForVideoGroup(group) {
-  return group?.assignment || (group?.videos || []).map(assignmentForVideo).find(Boolean) || null;
-}
-
-function renderVideoTable(groups) {
-  return `
-    <div class="pm-table-wrap">
-      <table class="pm-table">
-        <thead>
-          <tr>
-            <th>Unit</th>
-            <th>Bed / Bath</th>
-            <th>Turn Date</th>
-            <th>Before Video</th>
-            <th>After Video</th>
-            <th>Status</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${groups.slice(0, 10).map((group) => {
-            const assignment = assignmentForVideoGroup(group);
-            const before = group.videos.find((video) => normalizeToken(video.video_phase) === "before");
-            const after = group.videos.find((video) => ["after", "final"].includes(normalizeToken(video.video_phase)));
-            const status = group.videos[0]?.review_status || (assignment ? requestGroup(assignment) : "pending_review");
-            return `
-              <tr class="${group.key === state.selectedVideoKey ? "active" : ""}" data-manager-select-video="${esc(group.key)}">
-                <td>${esc(assignment ? assignmentUnit(assignment) || "Unit" : group.videos[0]?.unit_name || "Unit")}</td>
-                <td>${esc(assignment ? unitBedBath(assignment) : unitBedBath(group.videos[0]?.unit_name || ""))}</td>
-                <td>${esc(formatDate(assignment?.completed_at || assignment?.start_window || group.videos[0]?.recorded_at || group.videos[0]?.created_at, "Not dated"))}</td>
-                <td>${renderVideoPill(before, "Before", group.key)}</td>
-                <td>${renderVideoPill(after, "After", group.key)}</td>
-                <td>${statusBadge(status)}</td>
-                <td><button class="pm-row-action" type="button" data-manager-select-video="${esc(group.key)}">Details</button></td>
-              </tr>
-            `;
-          }).join("")}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-function renderVideoPill(video, label, groupKey = "") {
-  if (!video) return `<span class="pm-video-pill muted">${esc(label)} Pending</span>`;
-  return `<button class="pm-video-pill" type="button" data-manager-select-video="${esc(groupKey || video.assignment_id || video.pair_id || video.qa_job_id || video.id)}">${esc(label)} Ready</button>`;
-}
-
 function renderVideoSlot(video, label) {
   if (!video) {
     return `<div class="pm-video-slot"><span>${esc(label)}</span><strong>Not uploaded yet</strong></div>`;
@@ -2265,68 +2181,6 @@ function renderVideoSlot(video, label) {
       ${video.signedUrl ? `<a href="${esc(video.signedUrl)}" target="_blank" rel="noreferrer">Open Video</a>` : `<small>Preview unavailable</small>`}
     </div>
   `;
-}
-
-function renderVideoDetails(group) {
-  if (!group) return emptyBlock("No video selected", "Choose a video row to view before and after clips.");
-  const assignment = assignmentForVideoGroup(group);
-  if (assignment) return renderAssignmentDetailsCard(assignment, "No assignment selected");
-  const before = group.videos.find((video) => normalizeToken(video.video_phase) === "before");
-  const after = group.videos.find((video) => ["after", "final"].includes(normalizeToken(video.video_phase)));
-  return `
-    <div class="pm-detail-list">
-      <h3>Unit Information</h3>
-      <dl>
-        <div><dt>Unit</dt><dd>${esc(assignment ? assignmentUnit(assignment) || "Unit" : group.videos[0]?.unit_name || "Unit")}</dd></div>
-        <div><dt>Turn Date</dt><dd>${esc(formatDate(assignment?.completed_at || assignment?.start_window || group.videos[0]?.recorded_at || group.videos[0]?.created_at, "Not dated"))}</dd></div>
-        <div><dt>Contractor</dt><dd>${esc(group.videos[0]?.contractor_name || (assignment ? assignmentCleaner(assignment) : "Turnly crew"))}</dd></div>
-      </dl>
-      <h3>Before Video</h3>
-      ${renderVideoSlot(before, "Before Video")}
-      <h3>After Video</h3>
-      ${renderVideoSlot(after, "After Video")}
-      <h3>Notes / Comments</h3>
-      <p>${esc(group.videos.map((video) => video.notes || video.reviewer_notes).filter(Boolean).join(" ") || "No notes have been added for this video set.")}</p>
-    </div>
-  `;
-}
-
-function renderVideoRail() {
-  const groups = videoGroups().slice(0, 4);
-  if (!groups.length) return emptyBlock("No videos yet", "Before and after clips will show here after uploads.");
-  return `
-    <div class="pm-video-rail">
-      ${groups.map((group) => {
-        const assignment = assignmentForVideoGroup(group);
-        const before = group.videos.find((video) => normalizeToken(video.video_phase) === "before");
-        const after = group.videos.find((video) => ["after", "final"].includes(normalizeToken(video.video_phase)));
-        return `
-          <article class="pm-video-card">
-            <strong>${esc(assignment ? `Unit ${assignmentUnit(assignment) || ""}` : group.videos[0]?.unit_name || "Unit Video")}</strong>
-            <small>${esc(assignment ? unitBedBath(assignment) : formatDate(group.videos[0]?.created_at, "Recently uploaded"))}</small>
-            <div class="pm-video-thumb-row">
-              ${renderSmallVideoThumb(before)}
-              ${renderSmallVideoThumb(after)}
-            </div>
-            <div class="pm-video-actions">
-              <button type="button" data-manager-select-video="${esc(group.key)}" data-pm-view-button="unit-videos">View Before</button>
-              <button type="button" data-manager-select-video="${esc(group.key)}" data-pm-view-button="unit-videos">View After</button>
-            </div>
-          </article>
-        `;
-      }).join("")}
-    </div>
-  `;
-}
-
-function renderSmallVideoThumb(video) {
-  return `<div class="pm-video-thumb ${video ? "ready" : ""}"><span>${video ? "Play" : "Pending"}</span></div>`;
-}
-
-function renderVideoActivity() {
-  const rows = state.videos.slice(0, 5);
-  if (!rows.length) return emptyBlock("No recent uploads", "Uploaded clips will appear here.");
-  return `<div class="pm-activity-list">${rows.map((video) => `<div><span></span><p><strong>${esc(video.label || video.title || "Video uploaded")}</strong><small>${esc(compact([video.unit_name ? `Unit ${video.unit_name}` : "", titleCase(video.video_phase), formatManagerMessageTime(video.created_at)]).join(" - "))}</small></p></div>`).join("")}</div>`;
 }
 
 function renderMessagesView() {
@@ -2805,6 +2659,102 @@ async function createTurnRequest(form) {
   }
 }
 
+async function submitCleanFeedback(form) {
+  if (!supabase || state.feedbackSaving) return;
+  const assignmentId = form.dataset.feedbackAssignmentId || state.selectedAssignmentId || "";
+  const row = state.assignments.find((assignment) => String(assignment.id || "") === String(assignmentId)) || null;
+  const feedbackType = form.elements.feedback_type?.value || "complaint";
+  const body = form.elements.body?.value?.trim() || "";
+  if (!assignmentId || !row) {
+    state.feedbackMessage = "Select an assignment before sending feedback.";
+    state.feedbackError = true;
+    renderManagerPortal();
+    return;
+  }
+  if (!body) {
+    state.feedbackMessage = "Add the feedback details before sending.";
+    state.feedbackError = true;
+    renderManagerPortal();
+    return;
+  }
+
+  state.feedbackSaving = true;
+  state.feedbackMessage = "Sending feedback to Turnly...";
+  state.feedbackError = false;
+  renderManagerPortal();
+
+  const feedbackPayload = {
+    assignment_id: assignmentId,
+    portal_property_id: state.property?.id || row.portal_property_id || rowMeta(row).portal_property_id || null,
+    property_name: assignmentTitle(row) || propertyTitle(),
+    unit_number: assignmentUnit(row) || "",
+    feedback_type: feedbackType,
+    message: body
+  };
+
+  let result = await supabase.rpc("create_property_manager_clean_feedback", {
+    feedback_payload: feedbackPayload
+  });
+
+  if (result.error && /function|schema cache|create_property_manager_clean_feedback/i.test(result.error.message || "")) {
+    result = await supabase
+      .from("property_manager_clean_feedback")
+      .insert({
+        assignment_id: feedbackPayload.assignment_id,
+        portal_property_id: feedbackPayload.portal_property_id,
+        property_name: feedbackPayload.property_name,
+        unit_number: feedbackPayload.unit_number,
+        feedback_type: feedbackPayload.feedback_type,
+        message: feedbackPayload.message,
+        status: "open",
+        created_by: state.user?.id || null
+      })
+      .select("id")
+      .maybeSingle();
+  }
+
+  let sentThroughMessages = false;
+  if (result.error) {
+    const messageBody = [
+      `Feedback type: ${titleCase(feedbackType)}`,
+      `Property: ${feedbackPayload.property_name}`,
+      feedbackPayload.unit_number ? `Unit: ${feedbackPayload.unit_number}` : "",
+      `Assignment ID: ${feedbackPayload.assignment_id}`,
+      "",
+      feedbackPayload.message
+    ].filter((line) => line !== "").join("\n");
+
+    const fallback = await supabase.rpc("create_message_thread_v2", {
+      message_payload: {
+        recipient_ids: [],
+        subject: `Clean feedback - ${feedbackPayload.unit_number || feedbackPayload.property_name}`,
+        body: `[Clean Feedback / Complaints]\n\n${messageBody}`,
+        related_type: "assignment",
+        related_id: feedbackPayload.assignment_id,
+        related_title: `Clean feedback - ${feedbackPayload.unit_number || feedbackPayload.property_name}`
+      }
+    });
+
+    result = fallback;
+    sentThroughMessages = !fallback.error;
+  }
+
+  state.feedbackSaving = false;
+  if (result.error) {
+    state.feedbackMessage = `Unable to send feedback: ${result.error.message}`;
+    state.feedbackError = true;
+    renderManagerPortal();
+    return;
+  }
+
+  state.feedbackMessage = sentThroughMessages
+    ? "Feedback sent to Turnly as a message. Thank you."
+    : "Feedback sent to Turnly. Thank you.";
+  state.feedbackError = false;
+  if (sentThroughMessages) await loadManagerMessages();
+  renderManagerPortal();
+}
+
 async function createAdminPreviewTurnRequest({ unit, service, priority, moveInDateValue, moveInDate, notes }) {
   const unitRecord = unit ? matchingUnit({ unit_name: unit, unit_number: unit }) : null;
   const start = moveInDate || scheduledMoveInDate(moveInDateValue);
@@ -3071,8 +3021,6 @@ document.addEventListener("click", async (event) => {
 
   const viewButton = event.target.closest("[data-pm-view-button]");
   if (viewButton) {
-    const videoKey = event.target.closest("[data-manager-select-video]")?.dataset.managerSelectVideo;
-    if (videoKey) state.selectedVideoKey = videoKey;
     const threadId = event.target.closest("[data-manager-thread-id]")?.dataset.managerThreadId;
     if (threadId) state.selectedThreadId = threadId;
     const view = viewButton.dataset.pmViewButton;
@@ -3091,7 +3039,15 @@ document.addEventListener("click", async (event) => {
 
   const scheduleShift = event.target.closest("[data-pm-schedule-shift]");
   if (scheduleShift) {
-    moveScheduleWeek(Number(scheduleShift.dataset.pmScheduleShift || 0));
+    moveScheduleWindow(Number(scheduleShift.dataset.pmScheduleShift || 0));
+    renderManagerPortal();
+    return;
+  }
+
+  const scheduleView = event.target.closest("[data-pm-schedule-view]");
+  if (scheduleView) {
+    state.scheduleView = scheduleView.dataset.pmScheduleView || "week";
+    setScheduleDate(state.selectedScheduleDate || dateInputValue(new Date()));
     renderManagerPortal();
     return;
   }
@@ -3099,6 +3055,7 @@ document.addEventListener("click", async (event) => {
   const scheduleDay = event.target.closest("[data-pm-schedule-select-date]");
   if (scheduleDay) {
     setScheduleDate(scheduleDay.dataset.pmScheduleSelectDate);
+    if (state.view === "schedule" && state.scheduleView === "month") state.scheduleView = "day";
     renderManagerPortal();
     return;
   }
@@ -3164,24 +3121,12 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
-  const assignmentButton = event.target.closest("[data-manager-select-assignment]");
-  if (assignmentButton) {
-    state.selectedAssignmentId = assignmentButton.dataset.managerSelectAssignment || "";
-    renderManagerPortal();
-    return;
-  }
-
   const assignmentDetailButton = event.target.closest("[data-manager-view-assignment]");
   if (assignmentDetailButton) {
     state.selectedAssignmentId = assignmentDetailButton.dataset.managerViewAssignment || "";
     state.assignmentDetailsOpen = true;
-    renderManagerPortal();
-    return;
-  }
-
-  const videoButton = event.target.closest("[data-manager-select-video]");
-  if (videoButton) {
-    state.selectedVideoKey = videoButton.dataset.managerSelectVideo || "";
+    state.feedbackMessage = "";
+    state.feedbackError = false;
     renderManagerPortal();
     return;
   }
@@ -3225,10 +3170,13 @@ document.addEventListener("keydown", (event) => {
   }
 
   if (!["Enter", " "].includes(event.key)) return;
-  const assignmentCard = event.target.closest("[data-manager-select-assignment][role='button']");
+  const assignmentCard = event.target.closest("[data-manager-view-assignment][role='button']");
   if (assignmentCard) {
     event.preventDefault();
-    state.selectedAssignmentId = assignmentCard.dataset.managerSelectAssignment || "";
+    state.selectedAssignmentId = assignmentCard.dataset.managerViewAssignment || "";
+    state.assignmentDetailsOpen = true;
+    state.feedbackMessage = "";
+    state.feedbackError = false;
     renderManagerPortal();
   }
 });
@@ -3277,6 +3225,10 @@ document.addEventListener("submit", async (event) => {
   if (event.target.matches("#managerTurnRequestForm")) {
     event.preventDefault();
     await createTurnRequest(event.target);
+  }
+  if (event.target.matches("#managerCleanFeedbackForm")) {
+    event.preventDefault();
+    await submitCleanFeedback(event.target);
   }
   if (event.target.matches("#managerReplyForm")) {
     event.preventDefault();

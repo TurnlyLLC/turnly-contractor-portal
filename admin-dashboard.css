@@ -2939,6 +2939,29 @@ body.admin-command-body[data-portal-role="property-manager"] .topbar-profile-mes
   opacity: 0.45;
 }
 
+.pm-schedule-view-tabs {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.pm-schedule-view-tabs button {
+  background: rgba(7, 21, 36, 0.92);
+  border: 1px solid var(--pm-border);
+  border-radius: 7px;
+  color: var(--pm-muted);
+  font-size: 12px;
+  font-weight: 900;
+  min-height: 34px;
+  padding: 0 12px;
+}
+
+.pm-schedule-view-tabs button.active {
+  background: rgba(0, 214, 163, 0.16);
+  border-color: rgba(0, 214, 163, 0.42);
+  color: var(--pm-green);
+}
+
 .pm-status-badge {
   align-items: center;
   background: rgba(37, 168, 255, 0.14);
@@ -3545,6 +3568,44 @@ body.admin-command-body[data-portal-role="property-manager"] .pm-assignment-deta
   margin: 2px 0 0;
 }
 
+.pm-clean-feedback-panel {
+  background: rgba(255, 173, 56, 0.1);
+  border: 1px solid rgba(255, 173, 56, 0.42);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.pm-clean-feedback-panel h3,
+.pm-clean-feedback-panel p {
+  margin: 0;
+}
+
+.pm-clean-feedback-panel h3 {
+  color: var(--pm-text);
+  font-size: 16px;
+}
+
+.pm-clean-feedback-panel p {
+  color: var(--pm-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.pm-clean-feedback-form {
+  display: grid;
+  gap: 10px;
+}
+
+.pm-form-actions small.success {
+  color: var(--pm-green);
+}
+
+.pm-form-actions small.error {
+  color: var(--pm-red);
+}
+
 .pm-assignment-detail-modal {
   align-items: center;
   display: grid;
@@ -3655,6 +3716,122 @@ body.admin-command-body[data-portal-role="property-manager"] .pm-assignment-deta
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.pm-day-schedule-list {
+  display: grid;
+  gap: 8px;
+}
+
+.pm-day-schedule-card {
+  align-items: center;
+  background: rgba(4, 14, 25, 0.78);
+  border: 1px solid rgba(124, 151, 176, 0.16);
+  border-left: 3px solid var(--pm-green);
+  border-radius: 7px;
+  color: var(--pm-text);
+  display: grid;
+  gap: 4px;
+  grid-template-columns: 120px minmax(0, 1fr) minmax(0, 1.2fr) auto;
+  min-height: 58px;
+  padding: 10px;
+  text-align: left;
+}
+
+.pm-day-schedule-card span {
+  color: var(--pm-green);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.pm-day-schedule-card strong,
+.pm-day-schedule-card small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pm-day-schedule-card strong {
+  color: var(--pm-text);
+}
+
+.pm-day-schedule-card small {
+  color: var(--pm-muted);
+}
+
+.pm-month-calendar {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.pm-month-calendar > strong {
+  color: var(--pm-muted);
+  font-size: 11px;
+  padding: 0 4px;
+}
+
+.pm-month-day {
+  background: rgba(4, 14, 25, 0.58);
+  border: 1px solid rgba(126, 158, 188, 0.14);
+  border-radius: 7px;
+  display: grid;
+  gap: 6px;
+  min-height: 112px;
+  padding: 8px;
+}
+
+.pm-month-day.is-muted {
+  opacity: 0.45;
+}
+
+.pm-month-day.is-today {
+  border-color: rgba(0, 214, 163, 0.52);
+}
+
+.pm-month-day > button {
+  background: transparent;
+  border: 0;
+  color: var(--pm-text);
+  font-weight: 900;
+  justify-self: start;
+  padding: 0;
+}
+
+.pm-month-day div {
+  display: grid;
+  gap: 4px;
+}
+
+.pm-month-day div button {
+  background: rgba(0, 214, 163, 0.1);
+  border: 1px solid rgba(0, 214, 163, 0.18);
+  border-radius: 5px;
+  color: var(--pm-text);
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 5px;
+  text-align: left;
+}
+
+.pm-month-day div button span,
+.pm-month-day div button strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pm-month-day div button span {
+  color: var(--pm-green);
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.pm-month-day div button strong {
+  color: var(--pm-text);
+  font-size: 10px;
 }
 
 .pm-form-actions small {
