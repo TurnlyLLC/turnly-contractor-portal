@@ -9361,7 +9361,7 @@ function renderSidebar(activeKey) {
     <aside class="suite-sidebar">
       <a class="suite-brand" href="admin.html" aria-label="Turnly admin">
         <span class="brand-mark">T</span>
-        <strong>TURNLY</strong>
+        <strong>URNLY</strong>
       </a>
       <nav class="suite-nav" aria-label="Admin navigation">
         ${navSections.map((section) => {

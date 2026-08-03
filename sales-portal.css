@@ -46,7 +46,7 @@
 
 .sales-brand {
   display: flex;
-  gap: 12px;
+  gap: 3px;
   align-items: center;
   padding: 4px 8px 22px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.12);

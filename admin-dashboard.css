@@ -38,7 +38,7 @@
 .command-brand {
   align-items: center;
   display: flex;
-  gap: 12px;
+  gap: 2px;
   font-size: 24px;
   font-weight: 800;
   letter-spacing: 4px;
@@ -1613,7 +1613,7 @@ body.admin-command-body[data-portal-role="property-manager"] .command-sidebar {
 
 body.admin-command-body[data-portal-role="property-manager"] .command-brand {
   font-size: 18px;
-  gap: 8px;
+  gap: 1px;
   letter-spacing: 5px;
   padding: 0 8px 10px;
 }

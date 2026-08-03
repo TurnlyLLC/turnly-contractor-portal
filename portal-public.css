@@ -46,6 +46,7 @@
 
 .public-brand {
   color: var(--public-text);
+  gap: 3px;
   text-decoration: none;
 }
 
