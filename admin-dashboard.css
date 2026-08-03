@@ -46,14 +46,16 @@
 
 .brand-mark {
   align-items: center;
-  background: linear-gradient(135deg, var(--admin-green), #0bbdff);
+  background: transparent url("/favicon-32x32.png?v=20260624t") center / contain no-repeat;
   border-radius: 7px;
-  color: #052019;
+  color: transparent;
   display: flex;
   font-weight: 900;
+  font-size: 0;
   height: 30px;
   justify-content: center;
   letter-spacing: 0;
+  overflow: hidden;
   width: 30px;
 }
 

@@ -58,10 +58,11 @@
   width: 34px;
   height: 34px;
   border-radius: 8px;
-  background: linear-gradient(135deg, #16e089, #11c7d8);
-  color: #021018;
-  font-size: 24px;
+  background: transparent url("/favicon-32x32.png?v=20260624t") center / contain no-repeat;
+  color: transparent;
+  font-size: 0;
   font-weight: 900;
+  overflow: hidden;
 }
 
 .sales-brand strong {

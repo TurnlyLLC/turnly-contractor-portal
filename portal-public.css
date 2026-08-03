@@ -55,10 +55,11 @@
   width: 35px;
   height: 35px;
   border-radius: 8px;
-  background: linear-gradient(135deg, var(--public-green), #13c9d6);
-  color: #021018;
-  font-size: 23px;
+  background: transparent url("/favicon-32x32.png?v=20260624t") center / contain no-repeat;
+  color: transparent;
+  font-size: 0;
   font-weight: 900;
+  overflow: hidden;
 }
 
 .public-brand strong,
