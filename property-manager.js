@@ -20,6 +20,8 @@ const TURN_REQUEST_SERVICE = "Unit Cleaning";
 const MOVE_IN_TIME_LABEL = "2:00 PM";
 const MOVE_IN_HOUR = 14;
 const SCHEDULE_GUIDE_STORAGE_PREFIX = "turnlyPropertyManagerScheduleGuide:v1";
+const PROPERTY_MANAGER_THEME_STORAGE_KEY = "turnlyPropertyManagerDashboardTheme";
+const PROPERTY_MANAGER_NOTIFICATION_CLEAR_PREFIX = "turnlyPropertyManagerNotificationsClearedAt:v1";
 
 const env = window.__ENV || {};
 const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
@@ -64,6 +66,7 @@ const state = {
   adminPreviewMenuOpen: false,
   scheduleGuideOpen: false,
   scheduleGuideStep: 0,
+  notificationClearedAt: 0,
   filters: {
     query: "",
     requestStatus: "open",
@@ -93,6 +96,8 @@ const pmIconPaths = {
   plus: '<path d="M12 5v14"/><path d="M5 12h14"/>',
   search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
   shield: '<path d="M20 13c0 5-3.5 7.5-8 9-4.5-1.5-8-4-8-9V5l8-3 8 3v8Z"/><path d="m9 12 2 2 4-4"/>',
+  moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
   users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
   x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'
 };
@@ -102,12 +107,60 @@ function pmIcon(name, className = "") {
   return `<span class="suite-icon ${esc(className)}" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path}</svg></span>`;
 }
 
+function readDashboardTheme() {
+  try {
+    return window.localStorage?.getItem(PROPERTY_MANAGER_THEME_STORAGE_KEY) === "light" ? "light" : "dark";
+  } catch {
+    return "dark";
+  }
+}
+
+function writeDashboardTheme(theme) {
+  try {
+    window.localStorage?.setItem(PROPERTY_MANAGER_THEME_STORAGE_KEY, theme === "light" ? "light" : "dark");
+  } catch {
+    // Theme still applies for the current page when storage is blocked.
+  }
+}
+
+function applyDashboardTheme() {
+  if (!document.body) return;
+  document.body.dataset.dashboardTheme = readDashboardTheme();
+}
+
+function dashboardThemeToggleContent(theme) {
+  const isLight = theme === "light";
+  return `
+    <span class="theme-toggle-track"><span class="theme-toggle-thumb">${pmIcon(isLight ? "sun" : "moon")}</span></span>
+    <span class="theme-toggle-label">${esc(isLight ? "Light" : "Dark")}</span>
+  `;
+}
+
+function dashboardThemeToggleMarkup() {
+  const theme = readDashboardTheme();
+  const nextLabel = theme === "light" ? "dark" : "light";
+  return `
+    <button class="pm-theme-toggle" type="button" data-pm-theme-toggle role="switch" aria-checked="${theme === "light" ? "true" : "false"}" aria-label="Switch to ${esc(nextLabel)} mode">
+      ${dashboardThemeToggleContent(theme)}
+    </button>
+  `;
+}
+
+function updateDashboardThemeToggle() {
+  const button = document.querySelector("[data-pm-theme-toggle]");
+  if (!button) return;
+  const theme = readDashboardTheme();
+  const nextLabel = theme === "light" ? "dark" : "light";
+  button.setAttribute("aria-checked", theme === "light" ? "true" : "false");
+  button.setAttribute("aria-label", `Switch to ${nextLabel} mode`);
+  button.innerHTML = dashboardThemeToggleContent(theme);
+}
+
 const viewLabels = {
   overview: ["Overview", "Your assigned property overview."],
   "turn-requests": ["Turn Requests", "Manage unit turn requests and track progress."],
   schedule: ["Schedule", "View upcoming unit turns and scheduling windows."],
   messages: ["Messages", "View conversations and communication updates."],
-  invoices: ["Invoices", "Track completed services and invoice activity."],
   settings: ["Settings", "Property manager account and portal preferences."],
   support: ["Help & Support", "Send questions, changes, or service feedback to Turnly."]
 };
@@ -714,20 +767,6 @@ function assignmentContractorText(row) {
     || "Unassigned";
 }
 
-function assignmentCustomerAmount(row) {
-  const meta = rowMeta(row);
-  return asNumber(
-    row?.customer_amount ||
-    row?.customer_charge ||
-    row?.customer_price ||
-    row?.invoice_amount ||
-    row?.total_amount ||
-    meta.unit_customer_price ||
-    meta.customer_price ||
-    meta.customer_charge
-  );
-}
-
 function assignmentStatus(row) {
   return normalizeStatus(row?.status || "scheduled");
 }
@@ -903,11 +942,6 @@ function managerMetrics() {
   const afterVideos = state.videos.filter((video) => ["after", "final"].includes(normalizeToken(video.video_phase))).length;
   const videoSets = new Set(state.videos.map((video) => video.assignment_id || video.pair_id || video.id).filter(Boolean)).size;
   const unread = state.threads.filter(managerThreadUnread).length;
-  const invoiceTotal = completed.reduce((sum, row) => sum + assignmentCustomerAmount(row), 0);
-  const approvedTotal = completed
-    .filter((row) => ["approved_for_pay", "paid", "paid_out", "settled"].includes(paymentStatus(row)) || row.qa_approved_at)
-    .reduce((sum, row) => sum + assignmentCustomerAmount(row), 0);
-
   return {
     ready,
     inProgress,
@@ -924,9 +958,7 @@ function managerMetrics() {
     unread,
     inbox: state.threads.length,
     beforeVideos,
-    afterVideos,
-    invoiceTotal,
-    approvedTotal
+    afterVideos
   };
 }
 
@@ -1547,7 +1579,7 @@ function renderPropertyLinkNotice() {
 
 function renderTopBar() {
   const profile = managerProfileDefaults();
-  const unread = managerMetrics().unread;
+  const unread = managerNotificationUnreadCount();
   return `
     <div class="pm-topbar topbar-tools">
       ${renderManagerAdminPreviewSwitcher()}
@@ -1556,8 +1588,9 @@ function renderTopBar() {
         <input data-manager-global-search data-pm-filter="query" type="search" value="${esc(state.filters.query)}" placeholder="Search anything..." autocomplete="off" />
         <kbd>K</kbd>
       </div>` : ""}
+      ${dashboardThemeToggleMarkup()}
       <div class="topbar-popover-wrap">
-        <button class="top-icon" type="button" aria-label="${unread} unread messages" data-pm-view-button="messages">
+        <button class="top-icon" type="button" aria-label="${unread} unread messages" data-pm-notifications>
           ${pmIcon("bell")}
           <span ${unread ? "" : "hidden"}>${esc(unread > 99 ? "99+" : String(unread))}</span>
         </button>
@@ -1604,7 +1637,6 @@ function renderCurrentView() {
   if (state.view === "turn-requests") return renderTurnRequestsView();
   if (state.view === "schedule") return renderScheduleView();
   if (state.view === "messages") return renderMessagesView();
-  if (state.view === "invoices") return renderInvoicesView();
   if (state.view === "settings") return renderSettingsView();
   if (state.view === "support") return renderSupportView();
   return renderOverviewView();
@@ -2297,7 +2329,7 @@ function renderNewMessageForm() {
       </div>
       <div id="managerMessageStatus" class="manager-message-status ${state.error ? "error" : ""}" aria-live="polite">${esc(state.message || "")}</div>
       <form id="managerNewThreadForm" class="manager-message-form pm-inline-form">
-        <label><span>Subject</span><input name="subject" placeholder="Question about service, invoices, or property notes" /></label>
+        <label><span>Subject</span><input name="subject" placeholder="Question about service or property notes" /></label>
         <label><span>Message</span><textarea name="body" rows="4" placeholder="Type your message..." required></textarea></label>
         <button class="new-btn pm-compact-btn" type="submit" ${state.sending ? "disabled" : ""}>Send Message</button>
       </form>
@@ -2329,51 +2361,6 @@ function renderThreadActivity(thread) {
   const messages = state.messages.filter((message) => message.thread_id === thread.id).slice(-5);
   if (!messages.length) return `<div class="pm-activity-list"><div><span></span><p><strong>Thread opened</strong><small>${esc(formatManagerMessageTime(thread.created_at))}</small></p></div></div>`;
   return `<div class="pm-activity-list">${messages.map((message) => `<div><span></span><p><strong>${esc(message.sender_name || "User")}</strong><small>${esc(formatManagerMessageTime(message.created_at))}</small></p></div>`).join("")}</div>`;
-}
-
-function renderInvoicesView() {
-  const metrics = managerMetrics();
-  return `
-    <section class="pm-stat-grid pm-stat-grid-four" aria-label="Invoice metrics">
-      ${statCard("Completed Services", integer(completedAssignments().length), "ready for billing", "green")}
-      ${statCard("Invoice Total", money(metrics.invoiceTotal), "customer charges", "blue")}
-      ${statCard("Approved", money(metrics.approvedTotal), "approved services", "violet")}
-      ${statCard("Open Requests", integer(metrics.open), "not completed", "yellow")}
-    </section>
-    ${panel("Invoice Activity", renderInvoicesSection(), { copy: "Completed services grouped by month." })}
-  `;
-}
-
-function renderInvoicesSection() {
-  const completed = completedAssignments();
-  if (!completed.length) return emptyBlock("No invoice activity", "Completed services will populate this summary.");
-  const groups = new Map();
-  completed.forEach((row) => {
-    const key = monthKey(completionDateValue(row));
-    const group = groups.get(key) || { count: 0, total: 0, approved: 0, paid: 0 };
-    group.count += 1;
-    group.total += assignmentCustomerAmount(row);
-    if (["approved_for_pay", "paid", "paid_out", "settled"].includes(paymentStatus(row)) || row.qa_approved_at) group.approved += assignmentCustomerAmount(row);
-    if (["paid", "paid_out", "settled"].includes(paymentStatus(row)) || row.paid_at || row.paid_out) group.paid += assignmentCustomerAmount(row);
-    groups.set(key, group);
-  });
-  return `
-    <div class="pm-invoice-list">
-      ${Array.from(groups.entries()).slice(0, 8).map(([key, group]) => `
-        <article class="pm-invoice-row">
-          <div>
-            <strong>${esc(key)}</strong>
-            <small>${group.count} completed service${group.count === 1 ? "" : "s"}</small>
-          </div>
-          <dl>
-            <div><dt>Total</dt><dd>${esc(money(group.total))}</dd></div>
-            <div><dt>Approved</dt><dd>${esc(money(group.approved))}</dd></div>
-            <div><dt>Paid</dt><dd>${esc(money(group.paid))}</dd></div>
-          </dl>
-        </article>
-      `).join("")}
-    </div>
-  `;
 }
 
 function renderSettingsView() {
@@ -3021,6 +3008,37 @@ function managerThreadUnread(thread) {
   return new Date(thread.last_message_at).getTime() > new Date(own.last_read_at).getTime();
 }
 
+function notificationClearStorageKey() {
+  return `${PROPERTY_MANAGER_NOTIFICATION_CLEAR_PREFIX}:${state.user?.id || "browser"}`;
+}
+
+function readNotificationClearedAt() {
+  try {
+    const value = Number(window.localStorage?.getItem(notificationClearStorageKey()) || 0);
+    return Number.isFinite(value) ? value : 0;
+  } catch {
+    return state.notificationClearedAt || 0;
+  }
+}
+
+function writeNotificationClearedAt(value = Date.now()) {
+  state.notificationClearedAt = Number(value) || Date.now();
+  try {
+    window.localStorage?.setItem(notificationClearStorageKey(), String(state.notificationClearedAt));
+  } catch {
+    // The current-page badge can still be cleared when storage is unavailable.
+  }
+}
+
+function managerNotificationUnreadCount() {
+  const clearedAt = Math.max(Number(state.notificationClearedAt) || 0, readNotificationClearedAt());
+  state.notificationClearedAt = clearedAt;
+  return state.threads.filter((thread) => {
+    if (!managerThreadUnread(thread)) return false;
+    return dateValue(thread.last_message_at || thread.created_at, 0) > clearedAt;
+  }).length;
+}
+
 function formatManagerMessageTime(value) {
   if (!value) return "No date";
   const date = new Date(value);
@@ -3094,6 +3112,23 @@ document.addEventListener("click", async (event) => {
   if (!accountWrap && accountWasOpen) state.accountMenuOpen = false;
   if (state.adminPreviewMenuOpen && !event.target.closest(".admin-preview-wrap")) {
     state.adminPreviewMenuOpen = false;
+    renderManagerPortal();
+    return;
+  }
+
+  if (event.target.closest("[data-pm-theme-toggle]")) {
+    const nextTheme = readDashboardTheme() === "light" ? "dark" : "light";
+    writeDashboardTheme(nextTheme);
+    applyDashboardTheme();
+    updateDashboardThemeToggle();
+    return;
+  }
+
+  if (event.target.closest("[data-pm-notifications]")) {
+    writeNotificationClearedAt();
+    window.location.hash = "messages";
+    state.view = "messages";
+    state.assignmentDetailsOpen = false;
     renderManagerPortal();
     return;
   }
@@ -3340,6 +3375,7 @@ window.addEventListener("hashchange", () => {
 });
 
 try {
+  applyDashboardTheme();
   await requireManagerAccess();
 } catch (error) {
   console.error("[property-manager] Portal startup failed", error);

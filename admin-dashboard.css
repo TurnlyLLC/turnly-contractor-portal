@@ -1581,6 +1581,7 @@ body.admin-command-body[data-portal-role="property-manager"] {
   --suite-border: var(--pm-border);
   --suite-border-soft: rgba(126, 158, 188, 0.12);
   --suite-green: var(--pm-green);
+  --suite-blue: var(--pm-blue);
   --suite-muted: var(--pm-muted);
   --suite-red: var(--pm-red);
   --suite-soft: var(--pm-muted);
@@ -4229,6 +4230,206 @@ body.admin-command-body[data-portal-role="property-manager"] .pm-assignment-deta
   color: var(--pm-text);
   font-weight: 900;
   margin: 4px 0 0;
+}
+
+body.admin-command-body[data-portal-role="property-manager"] .pm-theme-toggle {
+  align-items: center;
+  background: rgba(17, 32, 50, 0.92);
+  border: 1px solid var(--suite-border);
+  border-radius: 999px;
+  color: var(--suite-text);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 900;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 10px 0 6px;
+  white-space: nowrap;
+}
+
+body.admin-command-body[data-portal-role="property-manager"] .pm-theme-toggle:focus-visible {
+  outline: 2px solid rgba(0, 214, 163, 0.5);
+  outline-offset: 3px;
+}
+
+body.admin-command-body[data-portal-role="property-manager"] .theme-toggle-track {
+  align-items: center;
+  background: rgba(0, 214, 163, 0.12);
+  border: 1px solid rgba(0, 214, 163, 0.26);
+  border-radius: 999px;
+  display: inline-flex;
+  height: 24px;
+  justify-content: flex-start;
+  padding: 2px;
+  transition: background 160ms ease, border-color 160ms ease;
+  width: 44px;
+}
+
+body.admin-command-body[data-portal-role="property-manager"] .pm-theme-toggle[aria-checked="true"] .theme-toggle-track {
+  background: rgba(57, 169, 255, 0.14);
+  border-color: rgba(57, 169, 255, 0.28);
+  justify-content: flex-end;
+}
+
+body.admin-command-body[data-portal-role="property-manager"] .theme-toggle-thumb {
+  align-items: center;
+  background: var(--suite-green);
+  border-radius: 999px;
+  color: #041d15;
+  display: inline-flex;
+  height: 18px;
+  justify-content: center;
+  width: 18px;
+}
+
+body.admin-command-body[data-portal-role="property-manager"] .pm-theme-toggle[aria-checked="true"] .theme-toggle-thumb {
+  background: var(--suite-blue);
+  color: #04111d;
+}
+
+body.admin-command-body[data-portal-role="property-manager"] .theme-toggle-thumb .suite-icon {
+  height: 12px;
+  width: 12px;
+}
+
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] {
+  --pm-bg: #f7fafc;
+  --pm-panel: rgba(255, 255, 255, 0.96);
+  --pm-panel-strong: #ffffff;
+  --pm-panel-soft: rgba(244, 248, 251, 0.94);
+  --pm-border: rgba(43, 68, 91, 0.16);
+  --pm-border-strong: rgba(0, 178, 135, 0.42);
+  --pm-text: #061526;
+  --pm-muted: #4d6277;
+  --pm-faint: #75869a;
+  --suite-border: var(--pm-border);
+  --suite-border-soft: rgba(43, 68, 91, 0.11);
+  --suite-muted: var(--pm-muted);
+  --suite-soft: var(--pm-muted);
+  --suite-text: var(--pm-text);
+  background: #f7fafc;
+  color: var(--pm-text);
+  color-scheme: light;
+}
+
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .command-sidebar {
+  background: #f8fbfe;
+  border-color: var(--pm-border);
+}
+
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .nav-link {
+  color: #173049;
+}
+
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .nav-link span {
+  border-color: rgba(23, 48, 73, 0.26);
+}
+
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .panel-card,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .metric-card {
+  background: linear-gradient(145deg, #ffffff, #f7fafc);
+  border-color: var(--pm-border);
+  box-shadow: 0 18px 42px rgba(22, 38, 56, 0.08);
+}
+
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .global-search,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .admin-preview-trigger,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .top-icon,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-theme-toggle,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-search,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-notification,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-modal-close,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-month-day,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-message-display .manager-message-form.compact {
+  background: #ffffff;
+  border-color: var(--pm-border);
+  color: var(--pm-text);
+}
+
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .topbar-dropdown,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .admin-preview-menu,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-guide-card {
+  background: #ffffff;
+  border-color: var(--pm-border);
+  box-shadow: 0 18px 46px rgba(22, 38, 56, 0.14);
+  color: var(--pm-text);
+}
+
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .topbar-dropdown a:hover,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .topbar-dropdown button:hover {
+  background: rgba(0, 178, 135, 0.08);
+}
+
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .global-search kbd,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-search kbd,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-month-more {
+  background: #eef4f8;
+  border-color: rgba(43, 68, 91, 0.12);
+  color: var(--pm-muted);
+}
+
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .global-search input::placeholder,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-search input::placeholder,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-request-form input::placeholder,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-request-form textarea::placeholder,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-inline-form input::placeholder,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-inline-form textarea::placeholder,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .manager-message-form input::placeholder,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .manager-message-form textarea::placeholder {
+  color: #7d8da0;
+}
+
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-toolbar select,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-mini-select,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-request-form select,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-inline-form select,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-request-form input,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-request-form textarea,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-inline-form input,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-inline-form textarea,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .manager-message-form input,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .manager-message-form textarea,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-pagination select,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-calendar-controls select {
+  background: #ffffff;
+  border-color: rgba(43, 68, 91, 0.18);
+  color: var(--pm-text);
+  color-scheme: light;
+}
+
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-calendar-corner,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-calendar-day,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-calendar-time,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-calendar-cell {
+  border-color: rgba(43, 68, 91, 0.14);
+}
+
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-month-day {
+  background: #fbfdff;
+}
+
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .schedule-event-card {
+  background: #f7fafc;
+  border-color: rgba(43, 68, 91, 0.15);
+  box-shadow: none;
+}
+
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .schedule-assignment-hero,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .schedule-assignment-detail-grid > div,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .schedule-assignment-notes > div,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .manager-message-bubble {
+  background: #f8fbfe;
+  border-color: var(--pm-border);
+}
+
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .manager-message-bubble.mine {
+  background: rgba(0, 214, 163, 0.12);
+  border-color: rgba(0, 178, 135, 0.28);
+}
+
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-clean-feedback-panel {
+  background: rgba(255, 173, 56, 0.12);
 }
 
 @media (max-width: 1180px) {
