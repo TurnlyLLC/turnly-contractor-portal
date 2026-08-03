@@ -160,9 +160,7 @@ const viewLabels = {
   overview: ["Overview", "Your assigned property overview."],
   "turn-requests": ["Turn Requests", "Manage unit turn requests and track progress."],
   schedule: ["Schedule", "View upcoming unit turns and scheduling windows."],
-  messages: ["Messages", "View conversations and communication updates."],
-  settings: ["Settings", "Property manager account and portal preferences."],
-  support: ["Help & Support", "Send questions, changes, or service feedback to Turnly."]
+  messages: ["Messages", "View conversations and communication updates."]
 };
 
 const navViews = new Set(Object.keys(viewLabels));
@@ -1637,8 +1635,6 @@ function renderCurrentView() {
   if (state.view === "turn-requests") return renderTurnRequestsView();
   if (state.view === "schedule") return renderScheduleView();
   if (state.view === "messages") return renderMessagesView();
-  if (state.view === "settings") return renderSettingsView();
-  if (state.view === "support") return renderSupportView();
   return renderOverviewView();
 }
 
@@ -2361,58 +2357,6 @@ function renderThreadActivity(thread) {
   const messages = state.messages.filter((message) => message.thread_id === thread.id).slice(-5);
   if (!messages.length) return `<div class="pm-activity-list"><div><span></span><p><strong>Thread opened</strong><small>${esc(formatManagerMessageTime(thread.created_at))}</small></p></div></div>`;
   return `<div class="pm-activity-list">${messages.map((message) => `<div><span></span><p><strong>${esc(message.sender_name || "User")}</strong><small>${esc(formatManagerMessageTime(message.created_at))}</small></p></div>`).join("")}</div>`;
-}
-
-function renderSettingsView() {
-  return `
-    <section class="pm-two-column-grid">
-      ${panel("Assigned Property", `
-        <div class="pm-detail-list">
-          <dl>
-            <div><dt>Property</dt><dd>${esc(propertyTitle())}</dd></div>
-            <div><dt>Address</dt><dd>${esc(propertyAddress())}</dd></div>
-            <div><dt>Client</dt><dd>${esc(managerClientName())}</dd></div>
-            <div><dt>Units</dt><dd>${esc(integer(state.units.length))}</dd></div>
-            <div><dt>Jobs</dt><dd>${esc(integer(state.assignments.length))}</dd></div>
-          </dl>
-        </div>
-      `)}
-      ${panel("Account", `
-        <div class="pm-detail-list">
-          <dl>
-            <div><dt>Name</dt><dd>${esc(getName(state.user, state.profile))}</dd></div>
-            <div><dt>Email</dt><dd>${esc(state.profile?.email || state.user?.email || "No email")}</dd></div>
-            <div><dt>Status</dt><dd>${esc(titleCase(state.profile?.status || "active"))}</dd></div>
-          </dl>
-          <button class="secondary-command-btn pm-compact-btn" type="button" data-manager-logout>Sign Out</button>
-        </div>
-      `)}
-    </section>
-  `;
-}
-
-function renderSupportView() {
-  return `
-    ${panel("Send Feedback", `
-      <p class="pm-section-copy">Send service notes, issue follow-up, or billing questions directly to Turnly operations.</p>
-      <form id="managerFeedbackForm" class="manager-message-form pm-inline-form">
-        <label>
-          <span>Topic</span>
-          <select name="topic">
-            <option>Service feedback</option>
-            <option>Schedule request</option>
-            <option>Invoice question</option>
-            <option>Property access note</option>
-          </select>
-        </label>
-        <label>
-          <span>Details</span>
-          <textarea name="body" rows="5" placeholder="Tell the Turnly team what changed or what needs attention..." required></textarea>
-        </label>
-        <button class="new-btn pm-compact-btn" type="submit" ${state.sending ? "disabled" : ""}>Send Feedback</button>
-      </form>
-    `)}
-  `;
 }
 
 function renderRequestForm() {
@@ -3350,10 +3294,6 @@ document.addEventListener("submit", async (event) => {
       state.requestOpen = false;
       renderManagerPortal();
     }
-  }
-  if (event.target.matches("#managerFeedbackForm")) {
-    event.preventDefault();
-    await createManagerMessageThread(event.target, { subject: `Property feedback - ${propertyTitle()}` });
   }
   if (event.target.matches("#managerTurnRequestForm")) {
     event.preventDefault();
