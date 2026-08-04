@@ -13,6 +13,8 @@ const state = {
   profile: null,
   contractor: null,
   invite: null,
+  accessProperties: [],
+  accessRegions: [],
   assignments: [],
   documents: [],
   media: [],
@@ -30,6 +32,7 @@ const tabs = [
   ["onboarding", "Onboarding"],
   ["documents", "Documents"],
   ["availability", "Availability"],
+  ["access", "Job Access"],
   ["performance", "Performance"],
   ["jobs", "Jobs"],
   ["schedule", "Schedule"],
@@ -59,10 +62,53 @@ function title(value) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+function normalizeLookup(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/['`]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function uniqueList(values = []) {
+  const seen = new Set();
+  return values
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .filter((value) => {
+      const key = normalizeLookup(value);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function listFrom(value) {
+  if (Array.isArray(value)) return uniqueList(value);
+  if (value && typeof value === "object") return uniqueList(Object.values(value));
+  const text = String(value || "").trim();
+  if (!text) return [];
+  if ((text.startsWith("[") && text.endsWith("]")) || (text.startsWith("{") && text.endsWith("}"))) {
+    try {
+      return listFrom(JSON.parse(text));
+    } catch {
+      // Fall through to comma parsing.
+    }
+  }
+  return uniqueList(text.split(","));
+}
+
+function firstValue(...values) {
+  return values.find((value) => String(value || "").trim()) || "";
+}
+
 function money(value) {
   const number = Number(value);
   if (!Number.isFinite(number) || number <= 0) return "$0";
-  return number.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+  return number.toLocaleString(undefined, { style: "currency", currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
 function dateValue(value, fallback = 0) {
@@ -146,6 +192,68 @@ function isPaid(row = {}) {
   );
 }
 
+function positiveNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : 0;
+}
+
+function firstMoneyValue(values, allowZero = false) {
+  const found = values.find((value) => {
+    if (value === null || value === undefined || value === "") return false;
+    const number = Number(value);
+    return Number.isFinite(number) && (allowZero ? number >= 0 : number > 0);
+  });
+  return found === undefined ? 0 : Number(found);
+}
+
+function paymentPaidAmount(row = {}) {
+  const payment = assignmentPayment(row);
+  const stored = firstMoneyValue([
+    row.paid_amount,
+    row.payout_amount,
+    row.amount_paid,
+    payment.paid_amount,
+    payment.payout_amount,
+    payment.amount_paid
+  ]);
+  return stored || (isPaid(row) ? paymentNetAmount(row) : 0);
+}
+
+function paymentAddedFeeAmount(row = {}) {
+  const payment = assignmentPayment(row);
+  return firstMoneyValue([
+    row.added_fee_amount,
+    row.fees_added,
+    row.income_fee_amount,
+    row.heavy_soil_fee_amount,
+    payment.added_fee_amount,
+    payment.fees_added,
+    payment.income_fee_amount,
+    payment.heavy_soil_fee_amount
+  ], true);
+}
+
+function paymentFeeAmount(row = {}) {
+  const payment = assignmentPayment(row);
+  return firstMoneyValue([
+    row.cleaner_fee_amount,
+    row.fees_taken,
+    row.fee_amount,
+    payment.cleaner_fee_amount,
+    payment.fees_taken,
+    payment.fee_amount
+  ], true);
+}
+
+function paymentNetAmount(row = {}) {
+  return Math.max(0, positiveNumber(row.pay_amount) + paymentAddedFeeAmount(row) - paymentFeeAmount(row));
+}
+
+function paymentNotes(row = {}) {
+  const payment = assignmentPayment(row);
+  return String(row.payment_notes || row.paid_notes || row.fee_notes || payment.notes || payment.payment_notes || payment.fee_notes || "").trim();
+}
+
 function isCompleted(row = {}) {
   return ["completed", "complete", "done"].includes(token(row.status)) || Boolean(row.completed_at || row.completed_by || row.checklist_completed_at);
 }
@@ -205,6 +313,104 @@ function contractorLocation() {
 
 function contractorPhone() {
   return state.profile?.phone || state.contractor?.phone || state.contractor?.contact_phone || "";
+}
+
+function accessFromRow(row = {}) {
+  const meta = metadata(row);
+  return {
+    allowedRegions: uniqueList([
+      ...listFrom(row.allowed_regions),
+      ...listFrom(row.allowedRegions),
+      ...listFrom(meta.allowed_regions),
+      ...listFrom(meta.allowedRegions)
+    ]),
+    allowedPropertyIds: uniqueList([
+      ...listFrom(row.allowed_property_ids),
+      ...listFrom(row.allowedPropertyIds),
+      ...listFrom(meta.allowed_property_ids),
+      ...listFrom(meta.allowedPropertyIds)
+    ]),
+    allowedPropertyNames: uniqueList([
+      ...listFrom(row.allowed_property_names),
+      ...listFrom(row.allowedPropertyNames),
+      ...listFrom(meta.allowed_property_names),
+      ...listFrom(meta.allowedPropertyNames)
+    ])
+  };
+}
+
+function contractorAccess() {
+  const sources = [state.profile, state.contractor, state.invite];
+  return sources.reduce((merged, row) => {
+    const access = accessFromRow(row || {});
+    return {
+      allowedRegions: uniqueList([...merged.allowedRegions, ...access.allowedRegions]),
+      allowedPropertyIds: uniqueList([...merged.allowedPropertyIds, ...access.allowedPropertyIds]),
+      allowedPropertyNames: uniqueList([...merged.allowedPropertyNames, ...access.allowedPropertyNames])
+    };
+  }, { allowedRegions: [], allowedPropertyIds: [], allowedPropertyNames: [] });
+}
+
+function contractorAccessSummary() {
+  const access = contractorAccess();
+  const propertyCount = uniqueList([...access.allowedPropertyIds, ...access.allowedPropertyNames]).length;
+  const regionCount = access.allowedRegions.length;
+  if (!propertyCount && !regionCount) return "All open job-board jobs";
+  return [
+    propertyCount ? `${propertyCount} ${propertyCount === 1 ? "property/contract" : "properties/contracts"}` : "",
+    regionCount ? `${regionCount} ${regionCount === 1 ? "region" : "regions"}` : ""
+  ].filter(Boolean).join(", ");
+}
+
+function contractorAccessDetails() {
+  const access = contractorAccess();
+  return uniqueList([
+    ...access.allowedPropertyNames,
+    ...access.allowedRegions.map((region) => `Region: ${region}`)
+  ]).slice(0, 6);
+}
+
+function isInactiveProperty(row = {}) {
+  return ["inactive", "disabled", "archived", "suspended", "rejected", "declined", "deleted", "lost", "cancelled", "canceled"]
+    .includes(token(row?.status || row?.contract_status || row?.stage || row?.pipeline_stage));
+}
+
+function accessPropertyTitle(row = {}) {
+  const meta = metadata(row);
+  return firstValue(row.property_name, row.name, row.company_name, row.client_name, row.title, meta.property_name, meta.name, meta.company_name);
+}
+
+function accessPropertyRegion(row = {}) {
+  const meta = metadata(row);
+  return firstValue(row.region, row.market, row.location, row.city, meta.region, meta.market, meta.location, meta.city);
+}
+
+function normalizeAccessProperty(row = {}, source = {}) {
+  if (isInactiveProperty(row)) return null;
+  const meta = metadata(row);
+  const name = accessPropertyTitle(row);
+  if (!name) return null;
+  const address = firstValue(row.address, row.billing_address, row.property_address, row.service_address, meta.address, meta.billing_address, meta.property_address);
+  const region = accessPropertyRegion(row);
+  const id = firstValue(row.id, row.property_id, row.portal_property_id, row.client_id, meta.id, meta.property_id, meta.portal_property_id, meta.client_id);
+  return {
+    id: String(id || ""),
+    name: String(name || ""),
+    address: String(address || ""),
+    region: String(region || ""),
+    source: source.table || "",
+    sourceLabel: source.label || title(source.table || "Property")
+  };
+}
+
+function propertyMatchesSaved(option = {}, allowedIds = [], allowedNames = []) {
+  const optionId = String(option.id || "").toLowerCase();
+  const optionNames = [option.name, option.address].map(normalizeLookup).filter(Boolean);
+  return allowedIds.some((id) => String(id || "").toLowerCase() === optionId)
+    || allowedNames.some((name) => {
+      const saved = normalizeLookup(name);
+      return optionNames.some((candidate) => candidate === saved || candidate.includes(saved) || saved.includes(candidate));
+    });
 }
 
 function isUuid(value) {
@@ -384,6 +590,22 @@ function totalPay(rows) {
   return rows.reduce((sum, row) => sum + (Number(row.pay_amount) || 0), 0);
 }
 
+function totalPaidOut(rows) {
+  return rows.reduce((sum, row) => sum + paymentPaidAmount(row), 0);
+}
+
+function totalAddedFees(rows) {
+  return rows.reduce((sum, row) => sum + paymentAddedFeeAmount(row), 0);
+}
+
+function totalFees(rows) {
+  return rows.reduce((sum, row) => sum + paymentFeeAmount(row), 0);
+}
+
+function totalNetPaid(rows) {
+  return rows.reduce((sum, row) => sum + paymentNetAmount(row), 0);
+}
+
 function render() {
   const root = document.querySelector("[data-contractor-file-page]");
   if (!root) return;
@@ -414,7 +636,7 @@ function render() {
       ${metric("Active Jobs", active.length.toLocaleString(), "accepted or scheduled", "blue")}
       ${metric("Completed", completed.length.toLocaleString(), "all time", "green")}
       ${metric("Completed Owed", money(totalPay(owed)), `${owed.length} unpaid job(s)`, "yellow")}
-      ${metric("Paid Out", money(totalPay(paid)), `${paid.length} paid job(s)`, "green")}
+      ${metric("Paid Out", money(totalPaidOut(paid)), `${paid.length} paid job(s)`, "green")}
       ${metric("Documents", state.documents.length.toLocaleString(), "records found", "purple")}
       ${metric("Media", state.media.length.toLocaleString(), "photos and videos", "blue")}
     </section>
@@ -429,6 +651,7 @@ function renderActiveTab() {
   if (state.activeTab === "onboarding") return renderOnboarding();
   if (state.activeTab === "documents") return renderDocuments();
   if (state.activeTab === "availability") return renderAvailability();
+  if (state.activeTab === "access") return renderJobAccess();
   if (state.activeTab === "performance") return renderPerformance();
   if (state.activeTab === "jobs") return renderJobs();
   if (state.activeTab === "schedule") return renderSchedule();
@@ -481,6 +704,50 @@ function availabilityForm() {
       </div>
       <div class="contractor-file-form-actions">
         <button class="primary-action" type="submit" ${state.savingId === "availability" ? "disabled" : ""}><span>${state.savingId === "availability" ? "Saving..." : "Save Availability"}</span></button>
+      </div>
+    </form>
+  `;
+}
+
+function jobAccessForm() {
+  const access = contractorAccess();
+  const properties = [...state.accessProperties];
+  access.allowedPropertyIds.forEach((id) => {
+    if (!properties.some((option) => String(option.id || "").toLowerCase() === String(id).toLowerCase())) {
+      properties.push({ id, name: `Saved property ${id}`, address: "", region: "", sourceLabel: "Saved" });
+    }
+  });
+  access.allowedPropertyNames.forEach((name) => {
+    if (!properties.some((option) => propertyMatchesSaved(option, [], [name]))) {
+      properties.push({ id: "", name, address: "", region: "", sourceLabel: "Saved" });
+    }
+  });
+  const regions = uniqueList([...state.accessRegions, ...access.allowedRegions]);
+  const regionChecks = regions.length
+    ? regions.map((region) => {
+      const checked = access.allowedRegions.some((saved) => normalizeLookup(saved) === normalizeLookup(region));
+      return `<label class="contractor-file-access-check"><input type="checkbox" data-job-access-region value="${esc(region)}" ${checked ? "checked" : ""} /><span>${esc(region)}</span></label>`;
+    }).join("")
+    : `<div class="contractor-file-empty">No active contract regions found yet.</div>`;
+  const propertyChecks = properties.length
+    ? properties.map((option) => {
+      const checked = propertyMatchesSaved(option, access.allowedPropertyIds, access.allowedPropertyNames);
+      const meta = [option.region, option.address, option.sourceLabel].filter(Boolean).join(" - ");
+      return `<label class="contractor-file-access-check"><input type="checkbox" data-job-access-property data-property-id="${esc(option.id)}" data-property-name="${esc(option.name)}" value="${esc(option.id || option.name)}" ${checked ? "checked" : ""} /><span><strong>${esc(option.name)}</strong><small>${esc(meta)}</small></span></label>`;
+    }).join("")
+    : `<div class="contractor-file-empty">No active properties or contracts found yet.</div>`;
+  return `
+    <form class="contractor-file-form" data-job-access-form>
+      <div class="contractor-file-access-note">
+        <strong>Current visibility: ${esc(contractorAccessSummary())}</strong>
+        <span>Leave both lists blank to let this contractor see every open job-board job. Select regions or properties/contracts to restrict what they can see and claim.</span>
+      </div>
+      <div class="contractor-file-access-grid">
+        <section class="contractor-file-access-list"><h3>Allowed Regions</h3>${regionChecks}</section>
+        <section class="contractor-file-access-list"><h3>Allowed Properties / Contracts</h3>${propertyChecks}</section>
+      </div>
+      <div class="contractor-file-form-actions">
+        <button class="primary-action" type="submit" ${state.savingId === "job-access" ? "disabled" : ""}><span>${state.savingId === "job-access" ? "Saving..." : "Save Job Access"}</span></button>
       </div>
     </form>
   `;
@@ -579,6 +846,7 @@ function renderOverview() {
   return `
     <section class="contractor-file-grid">
       ${panel("Profile", state.editingProfile ? profileForm() : profileDetails, profileAction)}
+      ${panel("Job Access", jobAccessSummary(), `<button class="secondary-action contractor-file-inline-action" type="button" data-open-job-access><span>Edit Job Access</span></button>`)}
       ${panel("Current Work", assignmentList(activeJobs().slice(0, 6), "No active jobs assigned."))}
       ${panel("Recent Completed Jobs", assignmentList(completedJobs().slice(0, 6), "No completed jobs yet."))}
       ${panel("Pay Snapshot", renderPaySummary())}
@@ -699,15 +967,35 @@ function renderSchedule() {
 }
 
 function renderPay() {
+  const rows = payRows();
+  const paid = rows.filter(isPaid);
+  const owed = completedJobs().filter((row) => Number(row.pay_amount) > 0 && !isPaid(row));
   return `
     <section class="metric-strip four">
       ${metric("Accepted Pay", money(totalPay(activeJobs())), `${activeJobs().length} active job(s)`, "blue")}
-      ${metric("Completed Owed", money(totalPay(completedJobs().filter((row) => !isPaid(row)))), "not paid yet", "yellow")}
-      ${metric("Paid Out", money(totalPay(payRows().filter(isPaid))), "marked paid", "green")}
-      ${metric("YTD Completed", money(totalPay(completedJobs().filter((row) => new Date(row.completed_at || row.updated_at).getFullYear() === new Date().getFullYear()))), "this year", "purple")}
+      ${metric("Completed Owed", money(totalNetPaid(owed)), "not paid yet", "yellow")}
+      ${metric("Fees Added", money(totalAddedFees(rows)), "cleaner income adds", "green")}
+      ${metric("Fees Taken", money(totalFees(rows)), "cleaner deductions", "purple")}
     </section>
     ${panel("Admin Pay Controls", payTable())}
   `;
+}
+
+function jobAccessSummary() {
+  const details = contractorAccessDetails();
+  return `
+    ${detailGrid([
+      ["Visibility", contractorAccessSummary()],
+      ["Selected Regions", contractorAccess().allowedRegions.length ? contractorAccess().allowedRegions.join(", ") : "All regions"],
+      ["Selected Properties", contractorAccess().allowedPropertyNames.length ? contractorAccess().allowedPropertyNames.join(", ") : "All properties"],
+      ["Scope Rule", "Controls open job-board visibility and claiming"]
+    ])}
+    ${details.length ? `<div class="contractor-file-access-pills">${details.map((item) => `<span>${esc(item)}</span>`).join("")}</div>` : ""}
+  `;
+}
+
+function renderJobAccess() {
+  return panel("Contractor Job Access", jobAccessForm());
 }
 
 function renderPaySummary() {
@@ -716,14 +1004,59 @@ function renderPaySummary() {
   const owed = completedJobs().filter((row) => Number(row.pay_amount) > 0 && !isPaid(row));
   return detailGrid([
     ["Accepted Job Pay", money(totalPay(activeJobs()))],
-    ["Completed Owed", money(totalPay(owed))],
-    ["Paid Out", money(totalPay(paid))],
+    ["Completed Owed", money(totalNetPaid(owed))],
+    ["Fees Added", money(totalAddedFees(rows))],
+    ["Fees Taken", money(totalFees(rows))],
+    ["Net Paid To Cleaners", money(totalNetPaid(paid))],
     ["Paid Jobs", paid.length.toLocaleString()]
   ]);
 }
 
 function assignmentTitle(row) {
   return row.property_name || row.title || "Assignment";
+}
+
+function firstTextValue(values) {
+  const found = values.find((value) => String(value ?? "").trim());
+  return String(found ?? "").trim();
+}
+
+function assignmentUnitLabel(row = {}) {
+  const meta = metadata(row);
+  const unit = firstTextValue([
+    row.unit_number,
+    row.property_unit_number,
+    row.assignment_unit_number,
+    row.unit_name,
+    row.property_unit_name,
+    row.unit_label,
+    row.unit,
+    meta.unit_number,
+    meta.property_unit_number,
+    meta.assignment_unit_number,
+    meta.unit_name,
+    meta.property_unit_name,
+    meta.unit_label,
+    meta.unit
+  ]);
+  const scope = firstTextValue([row.scope_of_work, row.scope, row.work_scope, meta.scope_of_work, meta.scope]);
+  const scopedUnit = scope.match(/\bunit:\s*([^\n,]+)/i)?.[1]?.trim() || "";
+  const label = unit || scopedUnit;
+  const sqft = firstTextValue([
+    row.square_feet,
+    row.sq_ft,
+    row.unit_square_feet,
+    row.square_footage,
+    meta.square_feet,
+    meta.sq_ft,
+    meta.unit_square_feet,
+    meta.square_footage
+  ]);
+  return [label ? `Unit: ${label}` : "Unit: Not selected", sqft ? `${sqft} sq ft` : ""].filter(Boolean).join(" - ");
+}
+
+function assignmentSubtitle(row) {
+  return `<small>${esc(formatWindow(row))}</small><small>${esc(assignmentUnitLabel(row))}</small>`;
 }
 
 function assignmentList(rows, emptyText) {
@@ -742,7 +1075,7 @@ function assignmentList(rows, emptyText) {
 
 function assignmentTable(rows, emptyText) {
   return tableRows(rows, [
-    ["Assignment", (row) => `<strong>${esc(assignmentTitle(row))}</strong><small>${esc([row.address, row.service_type].filter(Boolean).join(" - "))}</small>`],
+    ["Assignment", (row) => `<strong>${esc(assignmentTitle(row))}</strong><small>${esc([row.address, row.service_type].filter(Boolean).join(" - "))}</small><small>${esc(assignmentUnitLabel(row))}</small>`],
     ["Schedule", (row) => esc(formatWindow(row))],
     ["Status", (row) => esc(title(row.status || "open"))],
     ["Pay", (row) => esc(money(row.pay_amount))],
@@ -752,13 +1085,31 @@ function assignmentTable(rows, emptyText) {
 
 function payTable() {
   const rows = payRows();
-  return tableRows(rows, [
-    ["Assignment", (row) => `<strong>${esc(assignmentTitle(row))}</strong><small>${esc(formatWindow(row))}</small>`],
+  const body = tableRows(rows, [
+    ["", (row) => isPaid(row) ? "" : `<input class="contractor-file-pay-check" type="checkbox" data-pay-select="${esc(row.id)}" aria-label="Select ${esc(assignmentTitle(row))} for bulk paid">`],
+    ["Assignment", (row) => `<strong>${esc(assignmentTitle(row))}</strong>${assignmentSubtitle(row)}`],
     ["Status", (row) => esc(title(row.status || "open"))],
-    ["Amount", (row) => esc(money(row.pay_amount))],
+    ["Job Pay", (row) => esc(money(row.pay_amount))],
+    ["Fees Added", (row) => `<input class="contractor-file-pay-input" type="number" min="0" step="0.01" inputmode="decimal" data-pay-field="addedFeeAmount" data-pay-row="${esc(row.id)}" value="${esc(paymentAddedFeeAmount(row) || "")}" aria-label="Fees added for ${esc(assignmentTitle(row))}">`],
+    ["Fees Taken", (row) => `<input class="contractor-file-pay-input" type="number" min="0" step="0.01" inputmode="decimal" data-pay-field="feeAmount" data-pay-row="${esc(row.id)}" value="${esc(paymentFeeAmount(row) || "")}" aria-label="Fees taken from cleaner for ${esc(assignmentTitle(row))}">`],
+    ["Net", (row) => `<strong data-pay-net="${esc(row.id)}">${esc(money(paymentNetAmount(row)))}</strong><small>job pay + added - taken</small>`],
+    ["Notes", (row) => `<textarea class="contractor-file-pay-notes" rows="2" data-pay-field="notes" data-pay-row="${esc(row.id)}" aria-label="Payment notes for ${esc(assignmentTitle(row))}">${esc(paymentNotes(row))}</textarea>`],
     ["Payment", (row) => esc(isPaid(row) ? `Paid ${formatDate(assignmentPaidDate(row), "")}` : "Unpaid")],
-    ["Action", (row) => `<button class="${isPaid(row) ? "secondary-action" : "primary-action"}" type="button" data-pay-toggle="${esc(row.id)}" ${state.savingId === row.id ? "disabled" : ""}><span>${esc(isPaid(row) ? "Mark Unpaid" : "Mark Paid")}</span></button>`]
+    ["Action", (row) => {
+      const saving = state.savingId === "bulk-pay" || state.savingId === row.id || state.savingId === `pay:${row.id}`;
+      return `<div class="contractor-file-pay-actions"><button class="secondary-action" type="button" data-pay-save="${esc(row.id)}" ${saving ? "disabled" : ""}><span>Save Pay</span></button><button class="${isPaid(row) ? "secondary-action" : "primary-action"}" type="button" data-pay-toggle="${esc(row.id)}" ${saving ? "disabled" : ""}><span>${esc(isPaid(row) ? "Mark Unpaid" : "Mark Paid")}</span></button></div>`;
+    }]
   ], "No payable assignments found for this contractor.");
+  if (!rows.length) return body;
+  const unpaidCount = rows.filter((row) => !isPaid(row)).length;
+  return `
+    <div class="contractor-file-pay-bulk">
+      <label><input type="checkbox" data-pay-select-all ${state.savingId === "bulk-pay" || !unpaidCount ? "disabled" : ""}> <span>Select all unpaid</span></label>
+      <button class="primary-action" type="button" data-pay-bulk-paid disabled><span>${state.savingId === "bulk-pay" ? "Marking Paid..." : "Mark Selected Paid"}</span></button>
+      <small data-pay-selected-count>0 selected</small>
+    </div>
+    ${body}
+  `;
 }
 
 function assignmentMatchesContractor(row) {
@@ -831,6 +1182,31 @@ async function fetchInvite() {
   return error ? null : data;
 }
 
+async function loadAccessOptions() {
+  const sources = [
+    { table: "portal_properties", label: "Property" },
+    { table: "client_contracts", label: "Contract" }
+  ];
+  const results = await Promise.all(sources.map(async (source) => {
+    const { data, error } = await supabase.from(source.table).select("*").limit(1000);
+    if (error) {
+      state.optionalErrors.push(`${source.table}: ${error.message}`);
+      return [];
+    }
+    return (data || []).map((row) => normalizeAccessProperty(row, source)).filter(Boolean);
+  }));
+  const unique = new Map();
+  results.flat().forEach((option) => {
+    const key = normalizeLookup([option.name, option.address].filter(Boolean).join(" ")) || option.id;
+    const existing = unique.get(key);
+    if (!existing || option.source === "portal_properties") unique.set(key, option);
+  });
+  state.accessProperties = Array.from(unique.values())
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+  state.accessRegions = uniqueList(state.accessProperties.map((option) => option.region))
+    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+}
+
 async function loadData() {
   if (!supabase) {
     message("Supabase config is missing. Add env.js values before using contractor files.", true);
@@ -842,6 +1218,7 @@ async function loadData() {
   const contractorRows = await fetchAll("contractors");
   state.contractor = contractorRows.find(personMatches) || null;
   state.invite = await fetchInvite();
+  await loadAccessOptions();
   const assignments = await fetchAll("assignment_blocks", "*", "start_window");
   state.assignments = assignments.filter(assignmentMatchesContractor);
   const docRows = (await Promise.all([
@@ -1033,6 +1410,43 @@ async function saveAvailability(form) {
   render();
 }
 
+function selectedAccessPayload(form = document) {
+  const root = form || document;
+  const propertyInputs = Array.from(root.querySelectorAll("[data-job-access-property]")).filter((input) => input.checked);
+  return {
+    allowed_regions: uniqueList(Array.from(root.querySelectorAll("[data-job-access-region]:checked")).map((input) => input.value)),
+    allowed_property_ids: uniqueList(propertyInputs.map((input) => input.dataset.propertyId).filter(Boolean)),
+    allowed_property_names: uniqueList(propertyInputs.map((input) => input.dataset.propertyName).filter(Boolean))
+  };
+}
+
+async function saveJobAccess(form) {
+  if (state.savingId) return;
+  const payload = selectedAccessPayload(form);
+  state.savingId = "job-access";
+  render();
+  const results = [];
+  if (state.profile?.id) results.push(["profiles", await updateRowWithFallback("profiles", state.profile.id, payload)]);
+  if (state.contractor?.id) results.push(["contractors", await updateRowWithFallback("contractors", state.contractor.id, payload)]);
+  if (state.invite?.id) results.push(["contractor_invites", await updateRowWithFallback("contractor_invites", state.invite.id, payload)]);
+  state.savingId = "";
+  const successful = results.filter(([, result]) => !result.error);
+  if (!successful.length) {
+    const firstError = results[0]?.[1]?.error?.message || "No editable contractor record was found.";
+    message(`Unable to save job access: ${firstError}`, true);
+    render();
+    return;
+  }
+  for (const [table, result] of successful) {
+    const next = result.data || payload;
+    if (table === "profiles") state.profile = { ...state.profile, ...next };
+    if (table === "contractors") state.contractor = { ...state.contractor, ...next };
+    if (table === "contractor_invites") state.invite = { ...state.invite, ...next };
+  }
+  message("Contractor job access updated.");
+  render();
+}
+
 async function saveBackgroundCheck(form) {
   if (state.savingId) return;
   state.savingId = "background";
@@ -1149,7 +1563,7 @@ async function savePerformanceMetric(form) {
 
 async function updateAssignmentWithFallback(id, payload) {
   const next = { ...payload };
-  for (let index = 0; index < 14; index += 1) {
+  for (let index = 0; index < 30; index += 1) {
     const { data, error } = await supabase
       .from("assignment_blocks")
       .update(next)
@@ -1167,43 +1581,226 @@ async function updateAssignmentWithFallback(id, payload) {
   return { data: null, error: new Error("Unable to update assignment payment fields.") };
 }
 
+function payField(id, field) {
+  return Array.from(document.querySelectorAll(`[data-pay-field="${field}"]`))
+    .find((node) => String(node.dataset.payRow || "") === String(id)) || null;
+}
+
+function readPayNumber(id, field, fallback = 0) {
+  const node = payField(id, field);
+  if (!node) return fallback;
+  const number = Number(node.value);
+  return Number.isFinite(number) && number >= 0 ? number : fallback;
+}
+
+function readPayText(id, field, fallback = "") {
+  const node = payField(id, field);
+  return node ? String(node.value || "").trim() : fallback;
+}
+
+function paymentUpdatePayload(row, options) {
+  const paid = Boolean(options.paid);
+  const addedFeeAmount = positiveNumber(options.addedFeeAmount);
+  const feeAmount = positiveNumber(options.feeAmount);
+  const projectedNet = Math.max(0, positiveNumber(row.pay_amount) + addedFeeAmount - feeAmount);
+  const paidAmount = paid ? projectedNet : 0;
+  const now = options.now || new Date().toISOString();
+  const paidAt = paid ? (assignmentPaidDate(row) || now) : null;
+  const notes = String(options.notes || "").trim();
+  const userId = options.userId || null;
+  const currentMetadata = metadata(row);
+  const payment = {
+    ...assignmentPayment(row),
+    status: paid ? "paid" : "unpaid",
+    paid,
+    paid_at: paidAt,
+    paid_by: paid ? userId : null,
+    paid_amount: paidAmount,
+    payout_amount: paidAmount,
+    amount_paid: paidAmount,
+    fees_added: addedFeeAmount,
+    added_fee_amount: addedFeeAmount,
+    income_fee_amount: addedFeeAmount,
+    fees_taken: feeAmount,
+    cleaner_fee_amount: feeAmount,
+    fee_amount: feeAmount,
+    projected_net_amount: projectedNet,
+    net_paid_amount: paid ? paidAmount : null,
+    notes,
+    payment_notes: notes,
+    fee_notes: notes,
+    updated_at: now,
+    updated_by: userId
+  };
+  return {
+    metadata: { ...currentMetadata, payment },
+    payment_status: paid ? "paid" : "unpaid",
+    pay_status: paid ? "paid" : "unpaid",
+    payout_status: paid ? "paid" : "unpaid",
+    paid_at: paidAt,
+    paid_by: paid ? userId : null,
+    paid_amount: paid ? paidAmount : null,
+    payout_amount: paid ? paidAmount : null,
+    amount_paid: paid ? paidAmount : null,
+    added_fee_amount: addedFeeAmount,
+    fees_added: addedFeeAmount,
+    income_fee_amount: addedFeeAmount,
+    cleaner_fee_amount: feeAmount,
+    fees_taken: feeAmount,
+    fee_amount: feeAmount,
+    projected_net_amount: projectedNet,
+    net_paid_amount: paid ? paidAmount : null,
+    paid_out: paid,
+    paid_notes: notes || (paid ? "Payment details saved from admin contractor file." : "Marked unpaid from admin contractor file."),
+    payment_notes: notes,
+    fee_notes: notes
+  };
+}
+
+function updatePayNetPreview(id) {
+  const node = Array.from(document.querySelectorAll("[data-pay-net]"))
+    .find((item) => String(item.dataset.payNet || "") === String(id));
+  if (!node) return;
+  const row = state.assignments.find((item) => String(item.id) === String(id)) || {};
+  const addedFeeAmount = readPayNumber(id, "addedFeeAmount", paymentAddedFeeAmount(row));
+  const feeAmount = readPayNumber(id, "feeAmount", 0);
+  node.textContent = money(Math.max(0, positiveNumber(row.pay_amount) + addedFeeAmount - feeAmount));
+}
+
+async function savePayDetails(id) {
+  const row = state.assignments.find((item) => String(item.id) === String(id));
+  if (!row || state.savingId) return;
+  const addedFeeAmount = readPayNumber(id, "addedFeeAmount", paymentAddedFeeAmount(row));
+  const feeAmount = readPayNumber(id, "feeAmount", paymentFeeAmount(row));
+  const notes = readPayText(id, "notes", paymentNotes(row));
+  state.savingId = `pay:${id}`;
+  render();
+  try {
+    const { data: userData } = await supabase.auth.getUser();
+    const payload = paymentUpdatePayload(row, {
+      paid: isPaid(row),
+      addedFeeAmount,
+      feeAmount,
+      notes,
+      userId: userData?.user?.id || null,
+      now: new Date().toISOString()
+    });
+    const result = await updateAssignmentWithFallback(id, payload);
+    state.savingId = "";
+    if (result.error) {
+      message(`Unable to save payment details: ${result.error.message}`, true);
+      render();
+      return;
+    }
+    state.assignments = state.assignments.map((item) => String(item.id) === String(id) ? { ...item, ...(result.data || payload) } : item);
+    message("Payment details saved.");
+    render();
+  } catch (error) {
+    state.savingId = "";
+    message(`Unable to save payment details: ${error.message}`, true);
+    render();
+  }
+}
+
+function selectedPayIds() {
+  return Array.from(document.querySelectorAll("[data-pay-select]:checked"))
+    .map((node) => String(node.dataset.paySelect || ""))
+    .filter(Boolean);
+}
+
+function updatePayBulkState() {
+  const boxes = Array.from(document.querySelectorAll("[data-pay-select]"));
+  const selected = selectedPayIds();
+  const selectAll = document.querySelector("[data-pay-select-all]");
+  if (selectAll) {
+    selectAll.checked = Boolean(boxes.length && selected.length === boxes.length);
+    selectAll.indeterminate = Boolean(selected.length && selected.length < boxes.length);
+  }
+  const count = document.querySelector("[data-pay-selected-count]");
+  if (count) count.textContent = `${selected.length} selected`;
+  const button = document.querySelector("[data-pay-bulk-paid]");
+  if (button) button.disabled = state.savingId === "bulk-pay" || !selected.length;
+}
+
+async function bulkMarkSelectedPaid() {
+  if (state.savingId) return;
+  const entries = selectedPayIds()
+    .map((id) => {
+      const row = state.assignments.find((item) => String(item.id) === String(id));
+      return row ? {
+        id,
+        row,
+        addedFeeAmount: readPayNumber(id, "addedFeeAmount", paymentAddedFeeAmount(row)),
+        feeAmount: readPayNumber(id, "feeAmount", paymentFeeAmount(row)),
+        notes: readPayText(id, "notes", paymentNotes(row))
+      } : null;
+    })
+    .filter(Boolean);
+  if (!entries.length) {
+    message("Select at least one unpaid assignment to mark paid.", true);
+    return;
+  }
+  if (!window.confirm(`Mark ${entries.length} selected assignment(s) paid?`)) return;
+  state.savingId = "bulk-pay";
+  render();
+  try {
+    const { data: userData } = await supabase.auth.getUser();
+    const updates = [];
+    const failures = [];
+    for (const entry of entries) {
+      const payload = paymentUpdatePayload(entry.row, {
+        paid: true,
+        addedFeeAmount: entry.addedFeeAmount,
+        feeAmount: entry.feeAmount,
+        notes: entry.notes,
+        userId: userData?.user?.id || null,
+        now: new Date().toISOString()
+      });
+      payload.paid_notes = entry.notes || "Bulk marked paid from admin contractor file.";
+      const result = await updateAssignmentWithFallback(entry.id, payload);
+      if (result.error) {
+        failures.push(`${assignmentTitle(entry.row)}: ${result.error.message}`);
+      } else {
+        updates.push({ id: entry.id, data: result.data || payload });
+      }
+    }
+    const updateMap = new Map(updates.map((item) => [String(item.id), item.data]));
+    state.assignments = state.assignments.map((item) => updateMap.has(String(item.id)) ? { ...item, ...updateMap.get(String(item.id)) } : item);
+    state.savingId = "";
+    if (failures.length) {
+      message(`${updates.length} assignment(s) marked paid. ${failures.length} failed: ${failures[0]}`, true);
+    } else {
+      message(`${updates.length} assignment(s) marked paid.`);
+    }
+    render();
+  } catch (error) {
+    state.savingId = "";
+    message(`Unable to bulk mark assignments paid: ${error.message}`, true);
+    render();
+  }
+}
+
 async function togglePaid(id) {
   const row = state.assignments.find((item) => String(item.id) === String(id));
   if (!row || state.savingId) return;
   const nextPaid = !isPaid(row);
   const label = nextPaid ? "mark this assignment paid" : "mark this assignment unpaid";
   if (!window.confirm(`Are you sure you want to ${label}?`)) return;
+  const addedFeeAmount = nextPaid ? readPayNumber(id, "addedFeeAmount", paymentAddedFeeAmount(row)) : paymentAddedFeeAmount(row);
+  const feeAmount = nextPaid ? readPayNumber(id, "feeAmount", paymentFeeAmount(row)) : 0;
+  const notes = nextPaid ? readPayText(id, "notes", paymentNotes(row)) : "";
   state.savingId = id;
   render();
   const { data: userData } = await supabase.auth.getUser();
-  const now = new Date().toISOString();
-  const currentMetadata = metadata(row);
-  const payment = nextPaid
-    ? {
-      status: "paid",
-      paid: true,
-      paid_at: now,
-      paid_by: userData?.user?.id || null,
-      paid_amount: Number(row.pay_amount) || 0
-    }
-    : {
-      status: "unpaid",
-      paid: false,
-      paid_at: null,
-      paid_by: null,
-      paid_amount: 0
-    };
-  const payload = {
-    metadata: { ...currentMetadata, payment },
-    payment_status: nextPaid ? "paid" : "unpaid",
-    pay_status: nextPaid ? "paid" : "unpaid",
-    payout_status: nextPaid ? "paid" : "unpaid",
-    paid_at: nextPaid ? now : null,
-    paid_by: nextPaid ? userData?.user?.id || null : null,
-    paid_amount: nextPaid ? Number(row.pay_amount) || 0 : null,
-    paid_out: nextPaid,
-    paid_notes: nextPaid ? "Marked paid from admin contractor file." : "Marked unpaid from admin contractor file."
-  };
+  const payload = paymentUpdatePayload(row, {
+    paid: nextPaid,
+    addedFeeAmount,
+    feeAmount,
+    notes,
+    userId: userData?.user?.id || null,
+    now: new Date().toISOString()
+  });
+  payload.paid_notes = notes || (nextPaid ? "Marked paid from admin contractor file." : "Marked unpaid from admin contractor file.");
   const result = await updateAssignmentWithFallback(id, payload);
   state.savingId = "";
   if (result.error) {
@@ -1211,7 +1808,7 @@ async function togglePaid(id) {
     render();
     return;
   }
-  state.assignments = state.assignments.map((item) => item.id === id ? { ...item, ...(result.data || payload) } : item);
+  state.assignments = state.assignments.map((item) => String(item.id) === String(id) ? { ...item, ...(result.data || payload) } : item);
   message(nextPaid ? "Assignment marked paid." : "Assignment marked unpaid.");
   render();
 }
@@ -1234,7 +1831,13 @@ function injectStyles() {
     .contractor-file-workspace{display:grid;gap:14px}.contractor-file-hero{align-items:end;background:rgba(17,32,50,.92);border:1px solid var(--suite-border);border-radius:8px;display:flex;gap:16px;justify-content:space-between;padding:18px}.contractor-file-hero h1{font-size:26px;margin:12px 0 6px}.contractor-file-hero p{color:var(--suite-soft);margin:0}.contractor-file-badges{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}.contractor-file-back{display:inline-flex;width:auto}.contractor-file-quick{background:rgba(0,214,166,.1);border:1px solid rgba(0,214,166,.3);border-radius:8px;padding:14px 18px;text-align:right}.contractor-file-quick strong{color:var(--suite-green);display:block;font-size:24px}.contractor-file-quick small{color:var(--suite-soft);font-weight:800;text-transform:uppercase}.contractor-file-tabs{margin-top:2px}.contractor-file-grid{display:grid;gap:14px;grid-template-columns:repeat(2,minmax(0,1fr))}.contractor-file-panel .panel-head{padding-bottom:10px}.contractor-file-detail-grid{display:grid;gap:10px;grid-template-columns:repeat(2,minmax(0,1fr))}.contractor-file-detail-grid div{background:rgba(7,18,32,.55);border:1px solid var(--suite-border-soft);border-radius:8px;padding:10px}.contractor-file-detail-grid span{color:var(--suite-soft);display:block;font-size:11px;font-weight:900;text-transform:uppercase}.contractor-file-detail-grid strong{display:block;margin-top:4px}.contractor-file-list{display:grid;gap:8px}.contractor-file-list article{align-items:center;background:rgba(7,18,32,.55);border:1px solid var(--suite-border-soft);border-radius:8px;display:flex;justify-content:space-between;padding:10px}.contractor-file-list small,.contractor-file-table small{color:var(--suite-soft);display:block;font-size:11px;margin-top:3px}.contractor-file-empty{border:1px dashed var(--suite-border-soft);border-radius:8px;color:var(--suite-soft);padding:18px;text-align:center}.contractor-file-step-list{display:grid;gap:10px;margin-bottom:14px}.contractor-file-step{align-items:center;background:rgba(7,18,32,.55);border:1px solid var(--suite-border-soft);border-radius:8px;display:flex;gap:10px;padding:10px}.contractor-file-step>span{align-items:center;border:1px solid var(--suite-border);border-radius:999px;display:inline-flex;height:28px;justify-content:center;width:28px}.contractor-file-step.is-complete>span{background:var(--suite-green);border-color:var(--suite-green);color:#041d15}.contractor-file-step small{color:var(--suite-soft);display:block}.contractor-file-table-wrap{max-height:520px}.contractor-file-tab-body{display:grid;gap:14px}.contractor-file-form{display:grid;gap:12px}.contractor-file-form-grid{display:grid;gap:12px;grid-template-columns:repeat(2,minmax(0,1fr))}.contractor-file-form label{display:grid;gap:6px}.contractor-file-form label span{color:var(--suite-soft);font-size:11px;font-weight:900;text-transform:uppercase}.contractor-file-form input,.contractor-file-form select,.contractor-file-form textarea{background:rgba(7,18,32,.8);border:1px solid var(--suite-border-soft);border-radius:7px;color:var(--suite-text);font:inherit;min-height:38px;padding:9px 10px;width:100%}.contractor-file-form input[type=file]{padding:8px}.contractor-file-form textarea{min-height:88px;resize:vertical}.contractor-file-field-full{grid-column:1/-1}.contractor-file-form-actions{display:flex;gap:10px;justify-content:flex-end}.contractor-file-nested-form{border-top:1px solid var(--suite-border-soft);margin-top:14px;padding-top:14px}@media(max-width:1050px){.contractor-file-grid{grid-template-columns:1fr}.contractor-file-hero{align-items:start;display:grid}.contractor-file-quick{text-align:left}.contractor-file-detail-grid,.contractor-file-form-grid{grid-template-columns:1fr}.contractor-file-form-actions{justify-content:stretch}.contractor-file-form-actions .primary-action{width:100%}}
   `;
   style.textContent += `
-    body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-hero{background:linear-gradient(145deg,#ffffff,#f8fbfd);border-color:var(--suite-border);box-shadow:var(--suite-shadow);color:var(--suite-text)}body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-hero p,body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-quick small,body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-detail-grid span,body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-list small,body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-table small,body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-step small,body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-form label span,body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-pay-bulk small{color:var(--suite-soft)}body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-quick{background:rgba(0,214,163,.08);border-color:rgba(0,168,128,.24)}body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-detail-grid div,body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-list article,body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-step,body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-pay-bulk,body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-empty{background:#f8fbfd;border-color:var(--suite-border-soft);color:var(--suite-text)}body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-step>span{background:#ffffff;border-color:var(--suite-border);color:var(--suite-text)}body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-step.is-complete>span{background:var(--suite-green);border-color:var(--suite-green);color:#041d15}body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-form input,body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-form select,body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-form textarea,body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-table input,body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-table textarea{background:#ffffff;border-color:var(--suite-border);color:var(--suite-text)}body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-form input::placeholder,body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-form textarea::placeholder,body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-table input::placeholder,body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-table textarea::placeholder{color:#7f92a7}body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-nested-form{border-top-color:var(--suite-border-soft)}
+    .contractor-file-table input,.contractor-file-table textarea{background:rgba(7,18,32,.82);border:1px solid var(--suite-border-soft);border-radius:7px;color:var(--suite-text);font:inherit;min-height:36px;padding:8px 9px;width:100%}.contractor-file-table textarea{min-height:54px;min-width:180px;resize:vertical}.contractor-file-pay-input{min-width:105px}.contractor-file-pay-check,.contractor-file-pay-bulk input{accent-color:var(--suite-green);min-height:auto!important;width:auto!important}.contractor-file-pay-bulk{align-items:center;background:rgba(7,18,32,.55);border:1px solid var(--suite-border-soft);border-radius:8px;display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-start;margin-bottom:12px;padding:10px}.contractor-file-pay-bulk label{align-items:center;color:var(--suite-text);display:inline-flex;font-weight:900;gap:8px}.contractor-file-pay-bulk small{color:var(--suite-soft);font-weight:800}.contractor-file-pay-actions{display:flex;flex-wrap:wrap;gap:6px;min-width:190px}.contractor-file-pay-actions .primary-action,.contractor-file-pay-actions .secondary-action{min-height:34px;padding:8px 10px}.contractor-file-table [data-pay-net]{color:var(--suite-green);display:block;min-width:82px}
+  `;
+  style.textContent += `
+    .contractor-file-access-note{background:rgba(0,214,166,.1);border:1px solid rgba(0,214,166,.28);border-radius:8px;display:grid;gap:4px;line-height:1.45;padding:12px}.contractor-file-access-note strong{color:var(--suite-text)}.contractor-file-access-note span{color:var(--suite-soft);font-size:12px}.contractor-file-access-grid{display:grid;gap:12px;grid-template-columns:repeat(2,minmax(0,1fr))}.contractor-file-access-list{background:rgba(7,18,32,.55);border:1px solid var(--suite-border-soft);border-radius:8px;display:grid;gap:8px;max-height:360px;overflow:auto;padding:12px}.contractor-file-access-list h3{font-size:13px;margin:0}.contractor-file-access-check{align-items:flex-start;display:flex!important;gap:8px}.contractor-file-access-check input{accent-color:var(--suite-green);flex:0 0 auto;margin-top:3px;min-height:auto!important;width:auto!important}.contractor-file-access-check span{color:var(--suite-text)!important;display:grid!important;font-size:13px;font-weight:800;text-transform:none!important}.contractor-file-access-check small{color:var(--suite-soft);font-size:11px;font-weight:700}.contractor-file-access-pills{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.contractor-file-access-pills span{background:rgba(0,214,166,.12);border:1px solid rgba(0,214,166,.24);border-radius:999px;color:var(--suite-text);font-size:11px;font-weight:900;padding:5px 8px}@media(max-width:1050px){.contractor-file-access-grid{grid-template-columns:1fr}}
+  `;
+  style.textContent += `
+    body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-hero{background:linear-gradient(145deg,#ffffff,#f8fbfd);border-color:var(--suite-border);box-shadow:var(--suite-shadow);color:var(--suite-text)}body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-hero p,body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-quick small,body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-detail-grid span,body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-list small,body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-table small,body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-step small,body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-form label span,body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-pay-bulk small,body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-access-note span,body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-access-check small{color:var(--suite-soft)}body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-quick{background:rgba(0,214,163,.08);border-color:rgba(0,168,128,.24)}body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-detail-grid div,body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-list article,body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-step,body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-pay-bulk,body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-empty,body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-access-list{background:#f8fbfd;border-color:var(--suite-border-soft);color:var(--suite-text)}body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-access-note{background:rgba(0,214,163,.08);border-color:rgba(0,168,128,.24)}body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-step>span{background:#ffffff;border-color:var(--suite-border);color:var(--suite-text)}body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-step.is-complete>span{background:var(--suite-green);border-color:var(--suite-green);color:#041d15}body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-form input,body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-form select,body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-form textarea,body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-table input,body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-table textarea{background:#ffffff;border-color:var(--suite-border);color:var(--suite-text)}body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-form input::placeholder,body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-form textarea::placeholder,body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-table input::placeholder,body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-table textarea::placeholder{color:#7f92a7}body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-file-nested-form{border-top-color:var(--suite-border-soft)}
   `;
   document.head.appendChild(style);
 }
@@ -1252,6 +1855,16 @@ function bind() {
       void togglePaid(pay.dataset.payToggle);
       return;
     }
+    const paySave = event.target.closest("[data-pay-save]");
+    if (paySave) {
+      void savePayDetails(paySave.dataset.paySave);
+      return;
+    }
+    const payBulk = event.target.closest("[data-pay-bulk-paid]");
+    if (payBulk) {
+      void bulkMarkSelectedPaid();
+      return;
+    }
     const storage = event.target.closest("[data-open-storage-path]");
     if (storage) {
       void openStorageFile(storage.dataset.openStorageBucket, storage.dataset.openStoragePath);
@@ -1261,7 +1874,28 @@ function bind() {
     if (profileToggle) {
       state.editingProfile = !state.editingProfile;
       render();
+      return;
     }
+    if (event.target.closest("[data-open-job-access]")) {
+      state.activeTab = "access";
+      render();
+    }
+  });
+  document.addEventListener("input", (event) => {
+    const payInput = event.target.closest("[data-pay-field]");
+    if (!payInput) return;
+    updatePayNetPreview(payInput.dataset.payRow);
+  });
+  document.addEventListener("change", (event) => {
+    const selectAll = event.target.closest("[data-pay-select-all]");
+    if (selectAll) {
+      document.querySelectorAll("[data-pay-select]").forEach((box) => {
+        box.checked = Boolean(selectAll.checked);
+      });
+      updatePayBulkState();
+      return;
+    }
+    if (event.target.closest("[data-pay-select]")) updatePayBulkState();
   });
   document.addEventListener("submit", (event) => {
     const form = event.target;
@@ -1274,6 +1908,11 @@ function bind() {
     if (form.matches("[data-availability-form]")) {
       event.preventDefault();
       void saveAvailability(form);
+      return;
+    }
+    if (form.matches("[data-job-access-form]")) {
+      event.preventDefault();
+      void saveJobAccess(form);
       return;
     }
     if (form.matches("[data-background-check-form]")) {

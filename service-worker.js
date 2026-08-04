@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-contractor-pwa-v20260804-contractor-access-scope";
+const CACHE_NAME = "turnly-contractor-pwa-v20260804-contractor-file-job-access";
 
 const PRECACHE_URLS = [
   "/",
