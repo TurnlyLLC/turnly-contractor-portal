@@ -326,6 +326,54 @@ function regionPropertyCount(regionId) {
   return regionPropertyKeys(regionId).size;
 }
 
+function allAssignedPropertyKeys() {
+  const keys = new Set();
+  state.regionLinks.forEach((link) => {
+    if (normalizeToken(link.status || "active") !== "active") return;
+    const option = state.propertyOptions.find((item) => (
+      (link.portal_property_id && item.portalPropertyId && String(item.portalPropertyId) === String(link.portal_property_id))
+      || (link.contract_id && item.contractId && String(item.contractId) === String(link.contract_id))
+      || normalizeLookup(item.name) === normalizeLookup(link.property_name)
+    ));
+    if (option) keys.add(option.key);
+  });
+  return keys;
+}
+
+function unassignedPropertyOptions(limit = 8) {
+  const assigned = allAssignedPropertyKeys();
+  return state.propertyOptions
+    .filter((option) => !assigned.has(option.key))
+    .slice(0, limit);
+}
+
+function visiblePropertyOptions(search) {
+  return state.propertyOptions.filter((option) => propertyMatchesSearch(option, search));
+}
+
+function visibleManagers(search) {
+  return state.managers.filter((manager) => managerMatchesSearch(manager, search));
+}
+
+function managerInitials(manager = {}) {
+  const name = managerName(manager);
+  const parts = name.split(/\s+/).filter(Boolean);
+  return (parts.length > 1 ? `${parts[0][0]}${parts[1][0]}` : name.slice(0, 2)).toUpperCase();
+}
+
+function renderSelectionToolbar(kind, selectedCount, visibleCount, totalCount, noun) {
+  return `
+    <div class="region-selection-toolbar">
+      <span>${esc(selectedCount)} selected</span>
+      <small>${esc(visibleCount)} visible / ${esc(totalCount)} total ${esc(noun)}</small>
+      <div>
+        <button class="secondary-action compact-action" type="button" data-bulk-select="${esc(kind)}" data-bulk-action="select">Select Visible</button>
+        <button class="secondary-action compact-action" type="button" data-bulk-select="${esc(kind)}" data-bulk-action="clear">Clear Visible</button>
+      </div>
+    </div>
+  `;
+}
+
 function setMessage(message, error = false) {
   state.message = message || "";
   state.error = error;
@@ -399,39 +447,59 @@ function renderAccessDenied() {
 
 function renderRegionList() {
   const rows = state.regions;
+  const unassigned = unassignedPropertyOptions();
   return `
-    <section class="region-card region-list-card">
-      <div class="region-card-head">
-        <div>
-          <h2>Regions</h2>
-          <p>Create service regions and select one to manage.</p>
+    <div class="region-sidebar-stack">
+      <section class="region-card region-list-card">
+        <div class="region-card-head">
+          <div>
+            <h2>Regions</h2>
+            <p>Choose a region to manage its properties and managers.</p>
+          </div>
         </div>
-      </div>
-      <form class="region-add-form" data-region-add-form>
-        ${fieldMarkup("Region name", "name", "", "text", 'placeholder="Triangle, Raleigh, Durham..."')}
-        <button class="primary-action" type="submit"><span>Add Region</span></button>
-      </form>
-      <div class="region-list">
-        ${rows.length ? rows.map((region) => `
-          <button class="region-list-item ${String(region.id) === String(state.selectedRegionId) ? "active" : ""}" type="button" data-region-select="${esc(region.id)}">
-            <span>
-              <strong>${esc(region.name)}</strong>
-              <small>${esc(regionPropertyCount(region.id))} properties · ${esc(regionManagerCount(region.id))} managers</small>
-            </span>
-            <em>${esc(displayStatus(region.status))}</em>
-          </button>
-        `).join("") : `<div class="region-mini-empty">No regions yet. Add one above to start grouping properties.</div>`}
-      </div>
-    </section>
+        <form class="region-add-form" data-region-add-form>
+          ${fieldMarkup("Region name", "name", "", "text", 'placeholder="Add a new region..."')}
+          <button class="primary-action" type="submit"><span>Add</span></button>
+        </form>
+        <div class="region-list">
+          ${rows.length ? rows.map((region) => `
+            <button class="region-list-item ${String(region.id) === String(state.selectedRegionId) ? "active" : ""}" type="button" data-region-select="${esc(region.id)}">
+              <span>
+                <strong>${esc(region.name)}</strong>
+                <small>${esc(regionPropertyCount(region.id))} properties - ${esc(regionManagerCount(region.id))} managers</small>
+              </span>
+              <em>${esc(displayStatus(region.status))}</em>
+            </button>
+          `).join("") : `<div class="region-mini-empty">No regions yet. Add one above to start grouping properties.</div>`}
+        </div>
+      </section>
+      <section class="region-card region-unassigned-card">
+        <div class="region-card-head">
+          <div>
+            <h2>Needs Region</h2>
+            <p>Properties not assigned to any service region.</p>
+          </div>
+          <span class="region-pill neutral">${esc(state.propertyOptions.length - allAssignedPropertyKeys().size)}</span>
+        </div>
+        <div class="region-unassigned-list">
+          ${unassigned.length ? unassigned.map((option) => `
+            <div class="region-property-preview">
+              <strong>${esc(option.name)}</strong>
+              <small>${esc(propertyOptionLabel(option))}</small>
+            </div>
+          `).join("") : `<div class="region-mini-empty">Every visible property is assigned to a region.</div>`}
+        </div>
+      </section>
+    </div>
   `;
 }
 
 function propertyOptionLabel(option) {
-  return [option.region, option.address, option.sourceLabel].filter(Boolean).join(" · ");
+  return [option.region, option.address, option.sourceLabel].filter(Boolean).join(" - ");
 }
 
 function renderPropertyChecks(selectedKeys, search, prefix) {
-  const options = state.propertyOptions.filter((option) => propertyMatchesSearch(option, search));
+  const options = visiblePropertyOptions(search);
   if (!options.length) return `<div class="region-mini-empty">No properties or contracts match this filter.</div>`;
   return `
     <div class="region-check-grid">
@@ -455,7 +523,7 @@ function renderPropertyChecks(selectedKeys, search, prefix) {
 }
 
 function renderManagerChecks(selectedIds, search) {
-  const managers = state.managers.filter((manager) => managerMatchesSearch(manager, search));
+  const managers = visibleManagers(search);
   if (!managers.length) return `<div class="region-mini-empty">No property managers match this filter.</div>`;
   return `
     <div class="region-check-grid manager-check-grid">
@@ -464,7 +532,7 @@ function renderManagerChecks(selectedIds, search) {
           <input type="checkbox" data-region-manager value="${esc(manager.id)}" ${selectedIds.has(String(manager.id)) ? "checked" : ""} />
           <span>
             <strong>${esc(managerName(manager))}</strong>
-            <small>${esc([manager.email, managerStatus(manager), manager.requested_property_name ? `Requested: ${manager.requested_property_name}` : ""].filter(Boolean).join(" · "))}</small>
+            <small>${esc([manager.email, managerStatus(manager), manager.requested_property_name ? `Requested: ${manager.requested_property_name}` : ""].filter(Boolean).join(" - "))}</small>
           </span>
         </label>
       `).join("")}
@@ -486,54 +554,81 @@ function renderSelectedRegion() {
   }
   const propertyKeys = currentRegionPropertyKeys(region.id);
   const managerIds = currentRegionManagerIds(region.id);
+  const propertyVisible = visiblePropertyOptions(state.propertySearch).length;
+  const managerVisible = visibleManagers(state.managerSearch).length;
+  const managerNames = Array.from(managerIds).map(managerById).filter(Boolean).map(managerName);
   return `
     <section class="region-card region-detail-card">
       <div class="region-card-head">
         <div>
           <h2>${esc(region.name)}</h2>
-          <p>${esc(regionPropertyCount(region.id))} properties and ${esc(regionManagerCount(region.id))} property managers assigned.</p>
+          <p>Control which properties belong to this region and which managers can access it.</p>
         </div>
         <span class="region-pill">${esc(displayStatus(region.status))}</span>
       </div>
-      <form class="region-form-grid" data-region-detail-form>
-        <input type="hidden" name="id" value="${esc(region.id)}" />
-        ${fieldMarkup("Region name", "name", region.name)}
-        ${selectMarkup("Status", "status", [
-          { value: "active", label: "Active" },
-          { value: "inactive", label: "Inactive" },
-          { value: "archived", label: "Archived" }
-        ], region.status || "active")}
-        ${textareaMarkup("Notes", "notes", region.notes || "", 'placeholder="Optional internal notes for this region."')}
-        <div class="region-form-actions">
-          <button class="secondary-action" type="button" data-region-archive="${esc(region.id)}"><span>Archive</span></button>
-          <button class="primary-action" type="submit"><span>Save Region</span></button>
+      <div class="region-summary-row">
+        <div>
+          <span>Properties</span>
+          <strong>${esc(propertyKeys.size)}</strong>
         </div>
-      </form>
-      <div class="region-subsection">
-        <div class="region-section-head">
-          <div>
-            <h3>Properties and Contracts</h3>
-            <p>Add the active contracts or property records that belong to this region.</p>
-          </div>
-          <input class="region-filter" type="search" data-region-property-search value="${esc(state.propertySearch)}" placeholder="Filter properties..." />
+        <div>
+          <span>Managers</span>
+          <strong>${esc(managerIds.size)}</strong>
         </div>
-        ${renderPropertyChecks(propertyKeys, state.propertySearch, "region")}
-        <div class="region-form-actions">
-          <button class="primary-action" type="button" data-save-region-properties><span>Save Properties</span></button>
+        <div>
+          <span>Manager Access</span>
+          <strong>${esc(managerNames.slice(0, 2).join(", ") || "None")}</strong>
         </div>
       </div>
-      <div class="region-subsection">
-        <div class="region-section-head">
-          <div>
-            <h3>Property Managers</h3>
-            <p>Managers assigned here can access the properties in this region.</p>
+      <details class="region-settings">
+        <summary>
+          <span>Region Settings</span>
+          <small>Rename, archive, or keep internal notes.</small>
+        </summary>
+        <form class="region-form-grid" data-region-detail-form>
+          <input type="hidden" name="id" value="${esc(region.id)}" />
+          ${fieldMarkup("Region name", "name", region.name)}
+          ${selectMarkup("Status", "status", [
+            { value: "active", label: "Active" },
+            { value: "inactive", label: "Inactive" },
+            { value: "archived", label: "Archived" }
+          ], region.status || "active")}
+          ${textareaMarkup("Notes", "notes", region.notes || "", 'placeholder="Optional internal notes for this region."')}
+          <div class="region-form-actions">
+            <button class="secondary-action" type="button" data-region-archive="${esc(region.id)}"><span>Archive</span></button>
+            <button class="primary-action" type="submit"><span>Save Region</span></button>
           </div>
-          <input class="region-filter" type="search" data-region-manager-search value="${esc(state.managerSearch)}" placeholder="Filter managers..." />
-        </div>
-        ${renderManagerChecks(managerIds, state.managerSearch)}
-        <div class="region-form-actions">
-          <button class="primary-action" type="button" data-save-region-managers><span>Save Managers</span></button>
-        </div>
+        </form>
+      </details>
+      <div class="region-assignment-grid">
+        <section class="region-subsection">
+          <div class="region-section-head">
+            <div>
+              <h3>Properties and Contracts</h3>
+              <p>Add active contracts or property records that belong to this region.</p>
+            </div>
+            <input class="region-filter" type="search" data-region-property-search value="${esc(state.propertySearch)}" placeholder="Filter properties..." />
+          </div>
+          ${renderSelectionToolbar("region-properties", propertyKeys.size, propertyVisible, state.propertyOptions.length, "properties")}
+          ${renderPropertyChecks(propertyKeys, state.propertySearch, "region")}
+          <div class="region-form-actions">
+            <button class="primary-action" type="button" data-save-region-properties><span>Save Properties</span></button>
+          </div>
+        </section>
+        <section class="region-subsection">
+          <div class="region-section-head">
+            <div>
+              <h3>Property Managers</h3>
+              <p>Managers assigned here can access every property in this region.</p>
+            </div>
+            <input class="region-filter" type="search" data-region-manager-search value="${esc(state.managerSearch)}" placeholder="Filter managers..." />
+          </div>
+          ${renderSelectionToolbar("region-managers", managerIds.size, managerVisible, state.managers.length, "managers")}
+          ${renderManagerChecks(managerIds, state.managerSearch)}
+          <div class="region-form-actions">
+            <button class="primary-action" type="button" data-save-region-managers><span>Save Managers</span></button>
+          </div>
+        </section>
       </div>
     </section>
   `;
@@ -548,39 +643,52 @@ function renderManagerAccess() {
   const regionNames = Array.from(managerRegionIds(state.selectedManagerId))
     .map((id) => regionById(id)?.name)
     .filter(Boolean);
+  const directVisible = visiblePropertyOptions(state.directPropertySearch).length;
   return `
     <section class="region-card manager-access-card">
       <div class="region-card-head">
         <div>
-          <h2>Manager Property Access</h2>
-          <p>Choose a manager, set a primary property, and give direct property access outside a region.</p>
+          <h2>Direct Manager Access</h2>
+          <p>Give one manager access to a property without changing a whole region.</p>
         </div>
       </div>
       ${state.managers.length ? `
-        <div class="region-manager-toolbar">
-          ${selectMarkup("Property manager", "manager", state.managers.map((manager) => ({
-            value: manager.id,
-            label: `${managerName(manager)}${manager.email ? ` - ${manager.email}` : ""}`
-          })), state.selectedManagerId, "data-manager-selector")}
-          ${selectMarkup("Primary portal property", "primary_property", [
-            { value: "", label: "No change / none" },
-            ...state.propertyOptions
-              .filter((option) => option.portalPropertyId)
-              .map((option) => ({ value: option.key, label: option.name }))
-          ], primaryValue, "data-manager-primary-property")}
-        </div>
-        <div class="region-selected-summary">
-          <strong>${esc(selectedManager ? managerName(selectedManager) : "Property Manager")}</strong>
-          <span>${esc(regionNames.length ? `Regions: ${regionNames.join(", ")}` : "No regions assigned")}</span>
-          <span>${esc(`Visible properties: ${managerPropertySummary(selectedManager || {})}`)}</span>
+        <div class="region-secondary-grid">
+          <div>
+            <div class="region-manager-toolbar">
+              ${selectMarkup("Property manager", "manager", state.managers.map((manager) => ({
+                value: manager.id,
+                label: `${managerName(manager)}${manager.email ? ` - ${manager.email}` : ""}`
+              })), state.selectedManagerId, "data-manager-selector")}
+              ${selectMarkup("Primary portal property", "primary_property", [
+                { value: "", label: "No change / none" },
+                ...state.propertyOptions
+                  .filter((option) => option.portalPropertyId)
+                  .map((option) => ({ value: option.key, label: option.name }))
+              ], primaryValue, "data-manager-primary-property")}
+            </div>
+            <div class="region-selected-summary">
+              <div class="region-manager-avatar">${esc(selectedManager ? managerInitials(selectedManager) : "PM")}</div>
+              <div>
+                <strong>${esc(selectedManager ? managerName(selectedManager) : "Property Manager")}</strong>
+                <span>${esc(selectedManager?.email || "No email saved")}</span>
+                <span>${esc(regionNames.length ? `Regions: ${regionNames.join(", ")}` : "No regions assigned")}</span>
+              </div>
+            </div>
+          </div>
+          <div class="region-access-preview">
+            <span>Current Reach</span>
+            <strong>${esc(managerPropertySummary(selectedManager || {}))}</strong>
+          </div>
         </div>
         <div class="region-section-head">
           <div>
             <h3>Direct Properties</h3>
-            <p>Use this when one manager needs access to a property without assigning the whole region.</p>
+            <p>Select any individual properties this manager should see in addition to regional access.</p>
           </div>
           <input class="region-filter" type="search" data-direct-property-search value="${esc(state.directPropertySearch)}" placeholder="Filter direct properties..." />
         </div>
+        ${renderSelectionToolbar("direct-properties", directKeys.size, directVisible, state.propertyOptions.length, "properties")}
         ${renderPropertyChecks(directKeys, state.directPropertySearch, "direct")}
         <div class="region-form-actions">
           <button class="primary-action" type="button" data-save-manager-access><span>Save Manager Access</span></button>
@@ -592,39 +700,43 @@ function renderManagerAccess() {
 
 function renderManagerMatrix() {
   return `
-    <section class="region-card region-table-card">
+    <section class="region-card region-directory-card">
       <div class="region-card-head">
         <div>
           <h2>Property Manager Directory</h2>
           <p>Quick view of primary properties, region assignments, and direct access.</p>
         </div>
       </div>
-      <div class="region-table-wrap">
-        <table class="region-table">
-          <thead>
-            <tr>
-              <th>Property Manager</th>
-              <th>Primary Property</th>
-              <th>Regions</th>
-              <th>Access</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${state.managers.length ? state.managers.map((manager) => {
-              const regions = Array.from(managerRegionIds(manager.id)).map((id) => regionById(id)?.name).filter(Boolean);
-              return `
-                <tr>
-                  <td><strong>${esc(managerName(manager))}</strong><small>${esc(manager.email || "")}</small></td>
-                  <td>${esc(optionByPortalPropertyId(manager.property_manager_property_id)?.name || manager.requested_property_name || "Not set")}</td>
-                  <td>${esc(regions.join(", ") || "None")}</td>
-                  <td>${esc(managerPropertySummary(manager))}</td>
-                  <td><span class="region-pill">${esc(managerStatus(manager))}</span></td>
-                </tr>
-              `;
-            }).join("") : `<tr><td colspan="5">No property manager profiles found.</td></tr>`}
-          </tbody>
-        </table>
+      <div class="region-manager-card-grid">
+        ${state.managers.length ? state.managers.map((manager) => {
+          const regions = Array.from(managerRegionIds(manager.id)).map((id) => regionById(id)?.name).filter(Boolean);
+          return `
+            <article class="region-manager-card">
+              <div class="region-manager-card-top">
+                <div class="region-manager-avatar">${esc(managerInitials(manager))}</div>
+                <div>
+                  <strong>${esc(managerName(manager))}</strong>
+                  <small>${esc(manager.email || "No email saved")}</small>
+                </div>
+                <span class="region-pill">${esc(managerStatus(manager))}</span>
+              </div>
+              <dl>
+                <div>
+                  <dt>Primary</dt>
+                  <dd>${esc(optionByPortalPropertyId(manager.property_manager_property_id)?.name || manager.requested_property_name || "Not set")}</dd>
+                </div>
+                <div>
+                  <dt>Regions</dt>
+                  <dd>${esc(regions.join(", ") || "None")}</dd>
+                </div>
+                <div>
+                  <dt>Visible Access</dt>
+                  <dd>${esc(managerPropertySummary(manager))}</dd>
+                </div>
+              </dl>
+            </article>
+          `;
+        }).join("") : `<div class="region-mini-empty">No property manager profiles found.</div>`}
       </div>
     </section>
   `;
@@ -644,11 +756,7 @@ function renderApp() {
     root.innerHTML = renderAccessDenied();
     return;
   }
-  const assignedPropertyKeys = new Set();
-  state.regionLinks.forEach((link) => {
-    const option = optionByPortalPropertyId(link.portal_property_id);
-    if (option) assignedPropertyKeys.add(option.key);
-  });
+  const assignedPropertyKeys = allAssignedPropertyKeys();
   const unassignedProperties = state.propertyOptions.filter((option) => !assignedPropertyKeys.has(option.key)).length;
   root.innerHTML = `
     <section class="region-access-root">
@@ -657,6 +765,11 @@ function renderApp() {
           <p class="region-eyebrow">Access Control</p>
           <h2>Regions, Properties, and Property Managers</h2>
           <p>Build service regions, place properties or contracts in those regions, and manage which property managers can access them.</p>
+          <div class="region-workflow">
+            <span class="region-workflow-step">1. Pick a region</span>
+            <span class="region-workflow-step">2. Add properties</span>
+            <span class="region-workflow-step">3. Assign managers</span>
+          </div>
         </div>
         <div class="region-stat-grid">
           ${stat("Regions", state.regions.length, "managed groups")}
@@ -975,6 +1088,39 @@ function updateSearchValue(target) {
   next?.focus();
 }
 
+function applyBulkSelection(kind, action) {
+  const shouldSelect = action === "select";
+  if (kind === "region-properties") {
+    if (!(state.pendingRegionPropertyKeys instanceof Set)) {
+      state.pendingRegionPropertyKeys = currentRegionPropertyKeys();
+    }
+    visiblePropertyOptions(state.propertySearch).forEach((option) => {
+      if (shouldSelect) state.pendingRegionPropertyKeys.add(option.key);
+      else state.pendingRegionPropertyKeys.delete(option.key);
+    });
+  } else if (kind === "region-managers") {
+    if (!(state.pendingRegionManagerIds instanceof Set)) {
+      state.pendingRegionManagerIds = currentRegionManagerIds();
+    }
+    visibleManagers(state.managerSearch).forEach((manager) => {
+      const id = String(manager.id);
+      if (shouldSelect) state.pendingRegionManagerIds.add(id);
+      else state.pendingRegionManagerIds.delete(id);
+    });
+  } else if (kind === "direct-properties") {
+    const managerId = state.selectedManagerId;
+    if (!managerId) return;
+    if (!(state.pendingDirectPropertyKeysByManager[managerId] instanceof Set)) {
+      state.pendingDirectPropertyKeysByManager[managerId] = currentDirectPropertyKeys(managerId);
+    }
+    visiblePropertyOptions(state.directPropertySearch).forEach((option) => {
+      if (shouldSelect) state.pendingDirectPropertyKeysByManager[managerId].add(option.key);
+      else state.pendingDirectPropertyKeysByManager[managerId].delete(option.key);
+    });
+  }
+  renderApp();
+}
+
 function installHandlers() {
   root.addEventListener("submit", async (event) => {
     const form = event.target;
@@ -1000,6 +1146,11 @@ function installHandlers() {
     const archive = event.target.closest("[data-region-archive]");
     if (archive) {
       await archiveRegion(archive.dataset.regionArchive);
+      return;
+    }
+    const bulk = event.target.closest("[data-bulk-select]");
+    if (bulk) {
+      applyBulkSelection(bulk.dataset.bulkSelect, bulk.dataset.bulkAction || "select");
       return;
     }
     if (event.target.closest("[data-save-region-properties]")) {
@@ -1129,11 +1280,35 @@ function injectStyles() {
       font-size: 1.55rem;
     }
 
+    .region-workflow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .region-workflow-step {
+      background: rgba(0, 214, 163, 0.1);
+      border: 1px solid rgba(0, 214, 163, 0.24);
+      border-radius: 999px;
+      color: var(--suite-green);
+      font-size: 0.78rem;
+      font-weight: 800;
+      padding: 7px 10px;
+    }
+
     .region-layout {
       display: grid;
-      grid-template-columns: 315px minmax(0, 1fr);
+      grid-template-columns: 340px minmax(0, 1fr);
       gap: 14px;
       align-items: start;
+    }
+
+    .region-sidebar-stack {
+      display: grid;
+      gap: 14px;
+      position: sticky;
+      top: 76px;
     }
 
     .region-main-stack {
@@ -1157,6 +1332,118 @@ function injectStyles() {
     .region-card-head p,
     .region-section-head p {
       margin: 5px 0 0;
+    }
+
+    .region-summary-row {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      margin-top: 14px;
+    }
+
+    .region-summary-row div,
+    .region-settings,
+    .region-assignment-grid .region-subsection,
+    .region-access-preview,
+    .region-manager-card,
+    .region-property-preview {
+      background: rgba(5, 16, 28, 0.42);
+      border: 1px solid var(--suite-border-soft);
+      border-radius: 10px;
+    }
+
+    .region-summary-row div {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+      padding: 12px;
+    }
+
+    .region-summary-row span,
+    .region-access-preview span,
+    .region-manager-card dt {
+      color: var(--suite-muted);
+      font-size: 0.72rem;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .region-summary-row strong {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .region-settings {
+      margin-top: 14px;
+      padding: 0;
+    }
+
+    .region-settings summary {
+      align-items: center;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      list-style: none;
+      padding: 13px 14px;
+    }
+
+    .region-settings summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .region-settings summary span {
+      font-weight: 800;
+    }
+
+    .region-settings summary small {
+      text-align: right;
+    }
+
+    .region-settings .region-form-grid {
+      border-top: 1px solid var(--suite-border-soft);
+      margin-top: 0;
+      padding: 14px;
+    }
+
+    .region-assignment-grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+      margin-top: 14px;
+    }
+
+    .region-assignment-grid .region-subsection {
+      border-top: 1px solid var(--suite-border-soft);
+      margin-top: 0;
+      padding: 14px;
+    }
+
+    .region-selection-toolbar {
+      align-items: center;
+      background: rgba(0, 214, 163, 0.08);
+      border: 1px solid rgba(0, 214, 163, 0.2);
+      border-radius: 9px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: space-between;
+      padding: 9px 10px;
+    }
+
+    .region-selection-toolbar > span {
+      color: var(--suite-text);
+      font-weight: 800;
+    }
+
+    .region-selection-toolbar > div {
+      display: flex;
+      gap: 6px;
+    }
+
+    .compact-action {
+      min-height: 32px;
+      padding: 7px 10px;
     }
 
     .region-message {
@@ -1224,9 +1511,15 @@ function injectStyles() {
     .region-list {
       display: grid;
       gap: 8px;
-      max-height: 660px;
+      max-height: 430px;
       overflow: auto;
       padding-right: 3px;
+    }
+
+    .region-unassigned-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 12px;
     }
 
     .region-list-item,
@@ -1256,6 +1549,7 @@ function injectStyles() {
 
     .region-list-item span,
     .region-check span,
+    .region-property-preview,
     .region-table td strong,
     .region-table td small {
       display: grid;
@@ -1265,10 +1559,15 @@ function injectStyles() {
 
     .region-list-item small,
     .region-check small,
+    .region-property-preview small,
     .region-table small {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+
+    .region-property-preview {
+      padding: 10px;
     }
 
     .region-list-item em,
@@ -1283,6 +1582,12 @@ function injectStyles() {
       padding: 5px 8px;
       text-transform: uppercase;
       white-space: nowrap;
+    }
+
+    .region-pill.neutral {
+      background: rgba(125, 150, 176, 0.14);
+      border-color: rgba(125, 150, 176, 0.28);
+      color: var(--suite-soft);
     }
 
     .region-subsection {
@@ -1310,6 +1615,11 @@ function injectStyles() {
       padding-right: 3px;
     }
 
+    .region-assignment-grid .region-check-grid {
+      grid-template-columns: 1fr;
+      max-height: 365px;
+    }
+
     .manager-check-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
@@ -1327,14 +1637,107 @@ function injectStyles() {
     }
 
     .region-selected-summary {
-      display: grid;
+      align-items: center;
+      display: flex;
       gap: 5px;
       margin: 12px 0;
       padding: 12px;
     }
 
+    .region-selected-summary > div:last-child {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+
     .region-selected-summary span {
       color: var(--suite-soft);
+    }
+
+    .region-manager-avatar {
+      align-items: center;
+      background: linear-gradient(135deg, rgba(0, 214, 163, 0.95), rgba(44, 166, 255, 0.78));
+      border-radius: 999px;
+      color: #061321;
+      display: inline-flex;
+      flex: 0 0 auto;
+      font-size: 0.78rem;
+      font-weight: 900;
+      height: 38px;
+      justify-content: center;
+      width: 38px;
+    }
+
+    .region-secondary-grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: minmax(0, 1.4fr) minmax(240px, 0.6fr);
+      margin-top: 14px;
+    }
+
+    .region-secondary-grid .region-selected-summary {
+      margin-bottom: 0;
+    }
+
+    .region-access-preview {
+      display: grid;
+      gap: 8px;
+      padding: 13px;
+    }
+
+    .region-access-preview strong {
+      color: var(--suite-text);
+      line-height: 1.45;
+    }
+
+    .region-manager-card-grid {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      margin-top: 12px;
+    }
+
+    .region-manager-card {
+      display: grid;
+      gap: 12px;
+      padding: 13px;
+    }
+
+    .region-manager-card-top {
+      align-items: center;
+      display: grid;
+      gap: 10px;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+    }
+
+    .region-manager-card-top > div:nth-child(2) {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+    }
+
+    .region-manager-card small,
+    .region-manager-card dd {
+      color: var(--suite-soft);
+    }
+
+    .region-manager-card dl {
+      display: grid;
+      gap: 9px;
+      margin: 0;
+    }
+
+    .region-manager-card dl div {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+    }
+
+    .region-manager-card dd {
+      margin: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .region-table-wrap {
@@ -1379,9 +1782,21 @@ function injectStyles() {
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-stat,
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-list-item,
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-check,
-    body.turnly-admin-suite[data-dashboard-theme="light"] .region-selected-summary {
+    body.turnly-admin-suite[data-dashboard-theme="light"] .region-selected-summary,
+    body.turnly-admin-suite[data-dashboard-theme="light"] .region-workflow-step,
+    body.turnly-admin-suite[data-dashboard-theme="light"] .region-summary-row div,
+    body.turnly-admin-suite[data-dashboard-theme="light"] .region-settings,
+    body.turnly-admin-suite[data-dashboard-theme="light"] .region-assignment-grid .region-subsection,
+    body.turnly-admin-suite[data-dashboard-theme="light"] .region-access-preview,
+    body.turnly-admin-suite[data-dashboard-theme="light"] .region-manager-card,
+    body.turnly-admin-suite[data-dashboard-theme="light"] .region-property-preview {
       background: #f7fafc;
       border-color: #d6e0ea;
+    }
+
+    body.turnly-admin-suite[data-dashboard-theme="light"] .region-selection-toolbar {
+      background: #ecfdf7;
+      border-color: #b8f1dd;
     }
 
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-field input,
@@ -1397,27 +1812,46 @@ function injectStyles() {
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-card p,
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-card small,
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-message,
-    body.turnly-admin-suite[data-dashboard-theme="light"] .region-selected-summary span {
+    body.turnly-admin-suite[data-dashboard-theme="light"] .region-selected-summary span,
+    body.turnly-admin-suite[data-dashboard-theme="light"] .region-access-preview span,
+    body.turnly-admin-suite[data-dashboard-theme="light"] .region-manager-card small,
+    body.turnly-admin-suite[data-dashboard-theme="light"] .region-manager-card dd,
+    body.turnly-admin-suite[data-dashboard-theme="light"] .region-manager-card dt,
+    body.turnly-admin-suite[data-dashboard-theme="light"] .region-summary-row span {
       color: #456078;
+    }
+
+    body.turnly-admin-suite[data-dashboard-theme="light"] .region-access-preview strong,
+    body.turnly-admin-suite[data-dashboard-theme="light"] .region-selection-toolbar > span {
+      color: #061321;
     }
 
     @media (max-width: 1180px) {
       .region-hero,
-      .region-layout {
+      .region-layout,
+      .region-assignment-grid,
+      .region-secondary-grid {
         grid-template-columns: 1fr;
       }
 
       .region-stat-grid,
       .region-check-grid,
-      .manager-check-grid {
+      .manager-check-grid,
+      .region-manager-card-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .region-sidebar-stack {
+        position: static;
       }
     }
 
     @media (max-width: 720px) {
       .region-stat-grid,
+      .region-summary-row,
       .region-check-grid,
       .manager-check-grid,
+      .region-manager-card-grid,
       .region-form-grid,
       .region-manager-toolbar,
       .region-add-form {
@@ -1433,6 +1867,13 @@ function injectStyles() {
 
       .region-filter {
         max-width: none;
+      }
+
+      .region-selection-toolbar,
+      .region-settings summary,
+      .region-manager-card-top {
+        align-items: stretch;
+        grid-template-columns: 1fr;
       }
     }
   `;
