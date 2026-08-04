@@ -1692,12 +1692,12 @@ function renderOverviewHero(metrics, delta) {
   return `
     <section class="panel-card pm-experience-hero">
       <div class="pm-experience-copy">
-        <p class="pm-eyebrow">Property Command Center</p>
+        <p class="pm-eyebrow">Property Operations</p>
         <h2>${esc(propertyTitle())}</h2>
-        <p>${esc(managerClientName())} has ${integer(metrics.units)} tracked units, ${integer(metrics.upcoming)} upcoming turns, and ${integer(metrics.ready)} units completed in the last 30 days.</p>
+        <p>${esc(managerClientName())} has ${integer(metrics.units)} tracked units, ${integer(metrics.upcoming)} future turns, and ${integer(metrics.ready)} completed cleans in the last 30 days.</p>
         <dl class="pm-experience-facts">
-          <div><dt>Property</dt><dd>${esc(propertyAddress())}</dd></div>
-          <div><dt>Next Turn</dt><dd>${esc(next ? formatWindow(next) : "No upcoming turn")}</dd></div>
+          <div><dt>Address</dt><dd>${esc(propertyAddress())}</dd></div>
+          <div><dt>Next Turn</dt><dd>${esc(next ? formatShortDate(next.start_window || next.recurring_due_at, "Not scheduled") : "No upcoming turn")}</dd></div>
           <div><dt>Media Sets</dt><dd>${esc(integer(metrics.beforeAfter))}</dd></div>
           <div><dt>Week Trend</dt><dd>${esc(`${delta >= 0 ? "+" : ""}${delta}%`)}</dd></div>
         </dl>
@@ -1707,6 +1707,7 @@ function renderOverviewHero(metrics, delta) {
         </div>
       </div>
       ${renderOverviewHeroMedia(video, heroAssignment)}
+      ${renderOverviewFocusPanel(metrics, next)}
     </section>
   `;
 }
@@ -1733,6 +1734,33 @@ function renderOverviewHeroMedia(video, row = null) {
         ${action}
       </div>
     </div>
+  `;
+}
+
+function renderOverviewFocusPanel(metrics, next) {
+  const pulseRows = [
+    ["Pending review", metrics.pending],
+    ["Open / scheduled", metrics.open + metrics.scheduled],
+    ["In progress", metrics.inProgress],
+    ["Completed this week", metrics.completedThisWeek]
+  ];
+  return `
+    <aside class="pm-overview-focus-card" aria-label="Current property focus">
+      <div class="pm-focus-next">
+        <span>Next Turn</span>
+        <strong>${esc(next ? (assignmentUnit(next) ? `Unit ${assignmentUnit(next)}` : assignmentTitle(next)) : "No upcoming turn")}</strong>
+        <small>${esc(next ? `${formatWindow(next)} - ${assignmentCleaner(next)}` : "Scheduled turns will appear here after Turnly confirms them.")}</small>
+        ${next?.id ? `<button class="pm-row-action" type="button" data-manager-view-assignment="${esc(next.id)}">View details</button>` : ""}
+      </div>
+      <div class="pm-overview-pulse-list">
+        ${pulseRows.map(([label, value]) => `
+          <div>
+            <span>${esc(label)}</span>
+            <strong>${esc(integer(value))}</strong>
+          </div>
+        `).join("")}
+      </div>
+    </aside>
   `;
 }
 
@@ -1851,35 +1879,27 @@ function renderOverviewView() {
   return `
     ${renderOverviewHero(metrics, delta)}
 
-    <section class="pm-stat-grid pm-stat-grid-four" aria-label="Property manager overview">
-      ${statCard("Units Ready", integer(metrics.ready), "completed last 30 days", "green", "turn-requests")}
-      ${statCard("In Progress", integer(metrics.inProgress), "Currently Being Cleaned", "violet", "turn-requests")}
-      ${statCard("Upcoming", integer(metrics.upcoming), "future scheduled turns", "blue", "schedule")}
-      ${statCard("Completed This Week", integer(metrics.completedThisWeek), `${delta >= 0 ? "+" : ""}${delta}% vs last week`, "cyan", "schedule")}
-    </section>
-
-    ${renderOverviewJourney(metrics)}
-
-    <section class="pm-experience-grid">
-      ${panel("This Week's Turn Plan", renderWeeklyPlanPreview(), {
-        className: "pm-weekly-plan-panel",
-        action: `<button class="pm-link-button" type="button" data-pm-view-button="schedule">Open schedule</button>`
-      })}
-      ${panel("Completed Turn Media", renderCompletedMediaStrip(), {
-        className: "pm-completed-media-panel"
-      })}
-    </section>
-
-    <section class="pm-overview-grid">
-      ${panel("Turn Requests", renderOverviewRequests(), {
-        className: "pm-overview-requests",
-        action: renderNewTurnRequestButton()
-      })}
-      <aside class="pm-side-stack">
-        ${panel("Schedule Snapshot", renderScheduleSnapshot(), {
-          action: renderScheduleSnapshotControls()
+    <section class="pm-overview-body">
+      <div class="pm-overview-main-stack">
+        <section class="pm-stat-grid pm-stat-grid-four" aria-label="Property manager overview">
+          ${statCard("Units Ready", integer(metrics.ready), "completed last 30 days", "green", "turn-requests")}
+          ${statCard("In Progress", integer(metrics.inProgress), "currently active", "violet", "turn-requests")}
+          ${statCard("Upcoming", integer(metrics.upcoming), "future scheduled turns", "blue", "schedule")}
+          ${statCard("Completed This Week", integer(metrics.completedThisWeek), `${delta >= 0 ? "+" : ""}${delta}% vs last week`, "cyan", "schedule")}
+        </section>
+        ${panel("Turn Requests", renderOverviewRequests(), {
+          className: "pm-overview-requests",
+          action: renderNewTurnRequestButton()
         })}
-        ${renderUpdatesPanel("Messages / Updates")}
+      </div>
+      <aside class="pm-overview-aside-stack">
+        ${panel("This Week's Turn Plan", renderWeeklyPlanPreview(), {
+          className: "pm-weekly-plan-panel",
+          action: `<button class="pm-link-button" type="button" data-pm-view-button="schedule">Open schedule</button>`
+        })}
+        ${panel("Completed Turn Media", renderCompletedMediaStrip(), {
+          className: "pm-completed-media-panel"
+        })}
       </aside>
     </section>
   `;
