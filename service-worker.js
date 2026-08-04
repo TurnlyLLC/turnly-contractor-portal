@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-contractor-pwa-v20260804-pm-picture-hero";
+const CACHE_NAME = "turnly-contractor-pwa-v20260804-pm-vetra-hero";
 
 const PRECACHE_URLS = [
   "/",
@@ -38,6 +38,7 @@ const PRECACHE_URLS = [
   "/contractor-file.html",
   "/messages.html",
   "/property-manager.html",
+  "/assets/vetra-forest-hills-front-office.jpg",
   "/favicon.ico",
   "/favicon-32x32.png",
   "/favicon-16x16.png",

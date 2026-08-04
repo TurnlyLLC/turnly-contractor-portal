@@ -486,6 +486,16 @@ function propertyTitle(property = state.property) {
   return property?.name || property?.property_name || property?.company_name || "Property Manager Dashboard";
 }
 
+function propertyHeroClass(property = state.property) {
+  const key = lookupKey([
+    propertyTitle(property),
+    property?.address,
+    state.profile?.requested_property_name
+  ].join(" "));
+  if (key.includes("vetra forest hills") || key.includes("501 towns")) return "pm-hero-vetra";
+  return "pm-hero-default";
+}
+
 function propertyAddress(property = state.property) {
   if (!property?.id) return "Waiting for admin property link";
   return property?.address || compact([property?.city, property?.state, property?.postal_code]).join(", ") || "No address on file";
@@ -1687,7 +1697,7 @@ function assignmentForVideo(video) {
 function renderOverviewHero(metrics, delta) {
   const next = upcomingAssignments(1)[0] || null;
   return `
-    <section class="panel-card pm-experience-hero pm-picture-hero">
+    <section class="panel-card pm-experience-hero pm-picture-hero ${propertyHeroClass()}">
       <div class="pm-picture-backdrop pm-picture-backdrop-image" aria-hidden="true"></div>
       <div class="pm-picture-hero-content">
         <div class="pm-experience-copy">
