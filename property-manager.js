@@ -1503,7 +1503,6 @@ function renderManagerPortal(loading = false) {
   const headingSubtitle = state.view === "overview"
     ? ""
     : subtitle;
-  const showDataStatus = !(state.view === "overview" && hasLinkedProperty() && !loading);
 
   managerMain.innerHTML = `
     <header class="command-header pm-page-header">
@@ -1513,7 +1512,6 @@ function renderManagerPortal(loading = false) {
       </div>
       ${renderTopBar()}
     </header>
-    ${showDataStatus ? renderDataStatus(loading) : ""}
     ${renderPropertyLinkNotice()}
     ${renderRequestForm()}
     ${renderCurrentView()}
