@@ -40,6 +40,9 @@ const state = {
   client: null,
   contract: null,
   relatedProperties: [],
+  managedPropertyLinks: [],
+  managedRegionLinks: [],
+  managedRegionPropertyLinks: [],
   units: [],
   assignments: [],
   qaJobs: [],
@@ -738,6 +741,86 @@ async function fetchPropertyScopeLinks(table, propertyIds, idColumn, options = {
   };
 }
 
+async function loadManagedAccessProperties() {
+  const managerId = state.profile?.id || state.user?.id;
+  if (!supabase || !managerId) return { rows: [], error: null };
+
+  const [directResult, regionResult] = await Promise.allSettled([
+    supabase
+      .from("property_manager_property_links")
+      .select("*")
+      .eq("profile_id", managerId)
+      .eq("status", "active")
+      .limit(1000),
+    supabase
+      .from("property_manager_region_links")
+      .select("*")
+      .eq("profile_id", managerId)
+      .eq("status", "active")
+      .limit(1000)
+  ]);
+
+  const directError = directResult.status === "fulfilled" ? directResult.value.error : directResult.reason;
+  const regionError = regionResult.status === "fulfilled" ? regionResult.value.error : regionResult.reason;
+  const directLinks = directResult.status === "fulfilled" && !directResult.value.error ? directResult.value.data || [] : [];
+  const regionLinks = regionResult.status === "fulfilled" && !regionResult.value.error ? regionResult.value.data || [] : [];
+  state.managedPropertyLinks = directLinks;
+  state.managedRegionLinks = regionLinks;
+
+  const regionIds = uniqueValues(regionLinks.map((row) => row.region_id));
+  let regionPropertyLinks = [];
+  let regionPropertyError = null;
+  if (regionIds.length) {
+    const result = await fetchRowsByColumn("property_region_links", "region_id", regionIds, {
+      select: "*",
+      limit: 1000
+    });
+    regionPropertyLinks = result.rows.filter((row) => normalizeStatus(row.status || "active") === "active");
+    regionPropertyError = result.error;
+  }
+  state.managedRegionPropertyLinks = regionPropertyLinks;
+
+  const portalPropertyIds = uniqueValues([
+    ...directLinks.map((row) => row.portal_property_id),
+    ...regionPropertyLinks.map((row) => row.portal_property_id)
+  ]);
+  const contractIds = uniqueValues([
+    ...directLinks.map((row) => row.contract_id),
+    ...regionPropertyLinks.map((row) => row.contract_id)
+  ]);
+
+  const [directProperties, contractClientProperties, contractIdProperties] = await Promise.allSettled([
+    fetchRowsByColumn("portal_properties", "id", portalPropertyIds, { limit: 1000 }),
+    fetchRowsByColumn("portal_properties", "client_id", contractIds, { limit: 1000 }),
+    fetchRowsByColumn("portal_properties", "id", contractIds, { limit: 1000 })
+  ]);
+
+  const rows = [
+    ...(directProperties.status === "fulfilled" ? directProperties.value.rows : []),
+    ...(contractClientProperties.status === "fulfilled" ? contractClientProperties.value.rows : []),
+    ...(contractIdProperties.status === "fulfilled" ? contractIdProperties.value.rows : [])
+  ];
+
+  const firstError = [
+    directError,
+    regionError,
+    regionPropertyError,
+    directProperties.status === "fulfilled" ? directProperties.value.error : directProperties.reason,
+    contractClientProperties.status === "fulfilled" ? contractClientProperties.value.error : contractClientProperties.reason,
+    contractIdProperties.status === "fulfilled" ? contractIdProperties.value.error : contractIdProperties.reason
+  ].find(Boolean) || null;
+
+  return { rows: dedupeRows(rows), error: firstError };
+}
+
+async function resolvePrimaryPropertyFromManagedAccess() {
+  const access = await loadManagedAccessProperties();
+  if (access.error && !missingColumnError(access.error)) {
+    console.warn("[property-manager] Managed access lookup failed", access.error);
+  }
+  return access.rows[0] || null;
+}
+
 function managerClientName() {
   return state.client?.company_name
     || state.client?.client_name
@@ -1132,6 +1215,16 @@ async function requireManagerAccess() {
   state.view = currentView();
 
   if (!profile.property_manager_property_id) {
+    const accessProperty = await resolvePrimaryPropertyFromManagedAccess();
+    if (accessProperty?.id) {
+      state.profile = { ...state.profile, property_manager_property_id: accessProperty.id };
+      state.property = accessProperty;
+      state.propertyLinkPending = false;
+      renderManagerPortal(true);
+      await refreshManagerPortal();
+      return;
+    }
+
     state.property = null;
     state.propertyLinkPending = true;
     state.client = null;
@@ -1208,6 +1301,9 @@ async function loadManagerData() {
   state.client = null;
   state.contract = null;
   state.relatedProperties = [];
+  state.managedPropertyLinks = [];
+  state.managedRegionLinks = [];
+  state.managedRegionPropertyLinks = [];
   state.units = [];
   state.assignments = [];
   state.qaJobs = [];
@@ -1283,6 +1379,10 @@ async function loadRelatedPortalProperties() {
   ]);
   const rows = [state.property];
   let blocked = false;
+
+  const managedAccess = await loadManagedAccessProperties();
+  if (managedAccess.error && !missingColumnError(managedAccess.error)) blocked = true;
+  rows.push(...managedAccess.rows);
 
   const direct = await fetchRowsByColumn("portal_properties", "id", propertyIds, { limit: 100 });
   if (direct.error && !missingColumnError(direct.error)) blocked = true;

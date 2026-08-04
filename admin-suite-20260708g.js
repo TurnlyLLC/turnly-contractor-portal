@@ -42,7 +42,7 @@ const navSections = [
     title: "Operations",
     links: [
       { key: "schedule", label: "Schedule", href: "schedule.html", icon: "calendar" },
-      { key: "coverage-center", label: "Coverage Center", href: "coverage-center.html", icon: "shield" },
+      { key: "coverage-center", label: "Regions & Access", href: "coverage-center.html", icon: "shield" },
       { key: "assignments", label: "Assignments", href: "assignments.html", icon: "clipboard-list" },
       { key: "property-units", label: "Property Units", href: "property-units.html", icon: "building" }
     ]
@@ -554,9 +554,8 @@ const pages = {
     render: renderSchedule
   },
   "coverage-center": {
-    title: "Coverage Center",
-    subtitle: "Manage coverage requests and contractor availability",
-    action: { label: "New Request", icon: "plus" },
+    title: "Regions & Access",
+    subtitle: "Manage service regions, property access, and property manager visibility",
     render: renderCoverageCenter
   },
   "assignments": {
@@ -3850,29 +3849,8 @@ function renderSchedule() {
 
 function renderCoverageCenter() {
   return `
-    <section class="coverage-layout">
-      <div class="suite-stack">
-        <section class="metric-strip five">
-          ${metric("Open Requests", "0", "from last 7 days", "calendar", "green")}
-          ${metric("Filled Requests", "0", "from last 7 days", "check", "green")}
-          ${metric("Pending Response", "0", "from last 7 days", "clock", "blue")}
-          ${metric("Available Contractors", "0", "online now", "users", "green")}
-          ${metric("Coverage Rating", "-", "based on last 30 days", "star", "blue")}
-        </section>
-        ${tableFrame(["", "Request ID", "Service Type", "Property / Location", "Date & Time", "Duration", "Status", "Requested By", "Actions"], emptyState("calendar", "No coverage requests", "Coverage requests will appear here."), {
-          checkbox: true,
-          toolbar: toolbar(tabs([["all", "All Requests"], ["mine", "My Requests"], ["open", "Open"], ["filled", "Filled"], ["cancelled", "Cancelled"], ["past", "Past"]], "all"), `${actionButton("Filters", "filter", "", "secondary")}${searchBox("Search requests...")}`)
-        })}
-        <section class="two-panels">
-          ${panel("Contractor Availability", emptyState("user", "No contractors available", "Available contractors will appear here."), { action: { label: "View All", tone: "secondary" } })}
-          ${panel("Recent Activity", skeletonRows(4), { action: { label: "View All", tone: "secondary" } })}
-        </section>
-      </div>
-      <aside class="suite-stack">
-        ${panel("Coverage Requests", emptyState("document", "No active requests", "Create a new coverage request or view all requests.", actionButton("Create New Request", "plus")), { action: { label: "New Request", icon: "plus" } })}
-        ${panel("Calendar Overview", miniCalendar())}
-        ${filters("Quick Filters", [selectControl("Service Type", ["Select service type..."]), selectControl("Property / Location", ["Select property..."]), inputControl("Date Range", "Select date range...", "date")])}
-      </aside>
+    <section id="regionAccessRoot" class="region-access-shell">
+      ${emptyState("shield", "Loading regions", "Regions, properties, contracts, and property manager access are loading.")}
     </section>
   `;
 }
