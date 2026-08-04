@@ -4,7 +4,7 @@ const CHECKLIST_LINK = {
   href: "checklists.html"
 };
 
-const RETIRED_OPERATION_LINKS = ["coverage-center.html"];
+const RETIRED_OPERATION_LINKS = [];
 const COMMAND_CENTER_STORAGE_KEY = "turnlyAdminCommandCenterWidgets";
 
 function checklistIcon() {

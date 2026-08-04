@@ -26,7 +26,7 @@ const navSections = [
     title: "Operations",
     links: [
       { key: "schedule", label: "Schedule", href: "schedule.html", icon: "calendar" },
-      { key: "coverage-center", label: "Coverage Center", href: "coverage-center.html", icon: "shield" },
+      { key: "coverage-center", label: "Regions & Access", href: "coverage-center.html", icon: "shield" },
       { key: "assignments", label: "Assignments", href: "assignments.html", icon: "clipboard-list" },
       { key: "property-units", label: "Property Units", href: "property-units.html", icon: "building" }
     ]
@@ -459,8 +459,8 @@ const pages = {
     render: renderSchedule
   },
   "coverage-center": {
-    title: "Coverage Center",
-    subtitle: "Manage coverage requests and contractor availability",
+    title: "Regions & Access",
+    subtitle: "Manage service regions, property access, and property manager visibility",
     action: { label: "New Request", icon: "plus" },
     render: renderCoverageCenter
   },

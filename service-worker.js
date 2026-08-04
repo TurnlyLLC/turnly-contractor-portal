@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-contractor-pwa-v20260804-region-access";
+const CACHE_NAME = "turnly-contractor-pwa-v20260804-region-access-tab";
 
 const PRECACHE_URLS = [
   "/",
