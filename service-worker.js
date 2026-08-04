@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-contractor-pwa-v20260803-logo-wordmark";
+const CACHE_NAME = "turnly-contractor-pwa-v20260804-pm-experience-dashboard";
 
 const PRECACHE_URLS = [
   "/",

@@ -1658,6 +1658,176 @@ function renderNewTurnRequestButton(label = "+ New Turn Request") {
   return `<button class="new-btn pm-compact-btn" type="button" data-manager-request-toggle>${esc(label)}</button>`;
 }
 
+function overviewWeekRows(limit = 7) {
+  const weekStart = startOfWeek(new Date());
+  const weekEnd = endOfWeek(new Date());
+  return sortedAssignments(state.assignments.filter((row) => isDateBetween(row.start_window || row.recurring_due_at, weekStart, weekEnd))).slice(0, limit);
+}
+
+function latestMediaAssignment() {
+  const withMedia = completedAssignments()
+    .find((row) => videosForAssignment(row).some((video) => video.signedUrl && ["after", "final", "before"].includes(normalizeToken(video.video_phase))));
+  return withMedia || upcomingAssignments(1)[0] || sortedAssignments(state.assignments, "desc")[0] || null;
+}
+
+function overviewHeroVideo(row = null) {
+  const rowVideos = row ? videosForAssignment(row) : [];
+  return rowVideos.find((video) => video.signedUrl && ["after", "final"].includes(normalizeToken(video.video_phase)))
+    || rowVideos.find((video) => video.signedUrl && normalizeToken(video.video_phase) === "before")
+    || state.videos.find((video) => video.signedUrl && ["after", "final"].includes(normalizeToken(video.video_phase)))
+    || state.videos.find((video) => video.signedUrl)
+    || null;
+}
+
+function assignmentForVideo(video) {
+  if (!video?.assignment_id) return null;
+  return state.assignments.find((row) => String(row.id || "") === String(video.assignment_id)) || null;
+}
+
+function renderOverviewHero(metrics, delta) {
+  const next = upcomingAssignments(1)[0] || null;
+  const mediaAssignment = latestMediaAssignment();
+  const video = overviewHeroVideo(mediaAssignment);
+  const heroAssignment = mediaAssignment || assignmentForVideo(video) || next;
+  return `
+    <section class="panel-card pm-experience-hero">
+      <div class="pm-experience-copy">
+        <p class="pm-eyebrow">Property Command Center</p>
+        <h2>${esc(propertyTitle())}</h2>
+        <p>${esc(managerClientName())} has ${integer(metrics.units)} tracked units, ${integer(metrics.upcoming)} upcoming turns, and ${integer(metrics.ready)} units completed in the last 30 days.</p>
+        <dl class="pm-experience-facts">
+          <div><dt>Property</dt><dd>${esc(propertyAddress())}</dd></div>
+          <div><dt>Next Turn</dt><dd>${esc(next ? formatWindow(next) : "No upcoming turn")}</dd></div>
+          <div><dt>Media Sets</dt><dd>${esc(integer(metrics.beforeAfter))}</dd></div>
+          <div><dt>Week Trend</dt><dd>${esc(`${delta >= 0 ? "+" : ""}${delta}%`)}</dd></div>
+        </dl>
+        <div class="pm-experience-actions">
+          ${renderNewTurnRequestButton("Request Turn")}
+          <button class="secondary-command-btn pm-compact-btn" type="button" data-pm-view-button="schedule">View Schedule</button>
+        </div>
+      </div>
+      ${renderOverviewHeroMedia(video, heroAssignment)}
+    </section>
+  `;
+}
+
+function renderOverviewHeroMedia(video, row = null) {
+  const label = video ? titleCase(video.video_phase || "Video") : "Turnover Readiness";
+  const mediaTitle = row ? (assignmentUnit(row) ? `Unit ${assignmentUnit(row)}` : assignmentTitle(row)) : "Ready for the next move-in";
+  const mediaSubtext = row ? formatWindow(row) : "Cleaning progress, turn requests, and QA media live in one place.";
+  const action = row?.id
+    ? `<button class="pm-hero-media-action" type="button" data-manager-view-assignment="${esc(row.id)}">View Details</button>`
+    : "";
+  return `
+    <div class="pm-hero-media-card">
+      ${video?.signedUrl
+        ? `<video class="pm-hero-video" autoplay muted loop playsinline preload="metadata" src="${esc(video.signedUrl)}"></video>`
+        : `<div class="pm-hero-visual-fallback" aria-hidden="true">
+            <div class="pm-hero-room-card"><span></span><span></span><span></span></div>
+            <div class="pm-hero-room-lines"><i></i><i></i><i></i></div>
+          </div>`}
+      <div class="pm-hero-media-overlay">
+        <span>${esc(label)}</span>
+        <strong>${esc(mediaTitle)}</strong>
+        <small>${esc(mediaSubtext)}</small>
+        ${action}
+      </div>
+    </div>
+  `;
+}
+
+function renderOverviewJourney(metrics) {
+  const steps = [
+    ["Requested", metrics.pending, "Turnly review"],
+    ["Scheduled", metrics.scheduled, "Dates confirmed"],
+    ["Accepted", activeAssignments().filter((row) => scheduleAcceptanceStatus(row).tone === "accepted").length, "Crew locked in"],
+    ["In Progress", metrics.inProgress, "Cleaning active"],
+    ["Completed", metrics.ready, "Last 30 days"],
+    ["Feedback", metrics.issues, "Needs attention"]
+  ];
+  return `
+    <section class="panel-card pm-experience-timeline" aria-label="Turn request progress">
+      ${steps.map(([label, value, caption], index) => `
+        <article class="${value ? "active" : ""}">
+          <span>${esc(index + 1)}</span>
+          <strong>${esc(label)}</strong>
+          <em>${esc(integer(value))}</em>
+          <small>${esc(caption)}</small>
+        </article>
+      `).join("")}
+    </section>
+  `;
+}
+
+function renderWeeklyPlanPreview() {
+  const rows = overviewWeekRows(6);
+  const weekStart = startOfWeek(new Date());
+  const weekEnd = addDays(weekStart, 6);
+  if (!rows.length) return emptyBlock("No turns this week", "New scheduled work will appear here once Turnly confirms it.");
+  return `
+    <div class="pm-weekly-plan-head">
+      <span>${esc(formatShortDate(weekStart))} - ${esc(formatShortDate(weekEnd))}</span>
+      <strong>${esc(rows.length)} scheduled</strong>
+    </div>
+    <div class="pm-weekly-plan-list">
+      ${rows.map((row) => `
+        <button type="button" data-manager-view-assignment="${esc(row.id || "")}">
+          <time>${esc(parseDate(row.start_window || row.recurring_due_at)?.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }) || "No date")}</time>
+          <span>
+            <strong>${esc(assignmentUnit(row) ? `Unit ${assignmentUnit(row)}` : assignmentTitle(row))}</strong>
+            <small>${esc([scheduleEventTime(row), assignmentCleaner(row)].filter(Boolean).join(" - "))}</small>
+          </span>
+          ${statusBadge(requestGroup(row))}
+        </button>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderCompletedMediaStrip() {
+  const mediaRows = completedAssignments()
+    .filter((row) => videosForAssignment(row).some((video) => video.signedUrl))
+    .slice(0, 4);
+  const rows = mediaRows.length ? mediaRows : recentCompletedAssignments(30).slice(0, 4);
+  if (!rows.length) return emptyBlock("No completed media yet", "Before and after clips will appear as completed turns are reviewed.");
+  return `
+    <div class="pm-completed-media-grid">
+      ${rows.map(renderCompletedMediaCard).join("")}
+    </div>
+  `;
+}
+
+function renderCompletedMediaCard(row) {
+  const videos = videosForAssignment(row);
+  const before = videos.find((video) => normalizeToken(video.video_phase) === "before");
+  const after = videos.find((video) => ["after", "final"].includes(normalizeToken(video.video_phase)));
+  return `
+    <article class="pm-completed-media-card">
+      <div class="pm-completed-media-title">
+        <div>
+          <strong>${esc(assignmentUnit(row) ? `Unit ${assignmentUnit(row)}` : assignmentTitle(row))}</strong>
+          <small>${esc([unitBedBath(row), formatShortDate(completionDateValue(row), "Completed")].filter(Boolean).join(" - "))}</small>
+        </div>
+        ${statusBadge("completed")}
+      </div>
+      <div class="pm-completed-thumbs">
+        ${renderOverviewVideoThumb(before, "Before")}
+        ${renderOverviewVideoThumb(after, "After")}
+      </div>
+      <button class="pm-row-action" type="button" data-manager-view-assignment="${esc(row.id || "")}">View Details</button>
+    </article>
+  `;
+}
+
+function renderOverviewVideoThumb(video, label) {
+  return `
+    <div class="pm-overview-video-thumb ${video?.signedUrl ? "ready" : ""}">
+      ${video?.signedUrl ? `<video muted playsinline preload="metadata" src="${esc(video.signedUrl)}"></video>` : `<span>${esc(label)}</span>`}
+      <strong>${esc(label)}</strong>
+    </div>
+  `;
+}
+
 function panel(title, content, options = {}) {
   const className = options.className ? ` ${options.className}` : "";
   const action = options.action || "";
@@ -1679,11 +1849,25 @@ function renderOverviewView() {
     ? Math.round(((metrics.completedThisWeek - metrics.completedLastWeek) / metrics.completedLastWeek) * 100)
     : (metrics.completedThisWeek ? 100 : 0);
   return `
+    ${renderOverviewHero(metrics, delta)}
+
     <section class="pm-stat-grid pm-stat-grid-four" aria-label="Property manager overview">
       ${statCard("Units Ready", integer(metrics.ready), "completed last 30 days", "green", "turn-requests")}
       ${statCard("In Progress", integer(metrics.inProgress), "Currently Being Cleaned", "violet", "turn-requests")}
       ${statCard("Upcoming", integer(metrics.upcoming), "future scheduled turns", "blue", "schedule")}
       ${statCard("Completed This Week", integer(metrics.completedThisWeek), `${delta >= 0 ? "+" : ""}${delta}% vs last week`, "cyan", "schedule")}
+    </section>
+
+    ${renderOverviewJourney(metrics)}
+
+    <section class="pm-experience-grid">
+      ${panel("This Week's Turn Plan", renderWeeklyPlanPreview(), {
+        className: "pm-weekly-plan-panel",
+        action: `<button class="pm-link-button" type="button" data-pm-view-button="schedule">Open schedule</button>`
+      })}
+      ${panel("Completed Turn Media", renderCompletedMediaStrip(), {
+        className: "pm-completed-media-panel"
+      })}
     </section>
 
     <section class="pm-overview-grid">
