@@ -70,6 +70,8 @@ const state = {
   filters: {
     query: "",
     requestStatus: "open",
+    requestSort: "scheduled_date",
+    requestSortDirection: "asc",
     scheduleStatus: "all",
     videoPhase: "all",
     messageView: "all"
@@ -799,6 +801,15 @@ function completionDateValue(row) {
   return row?.completed_at || row?.checklist_completed_at || row?.qa_approved_at || row?.end_window || row?.start_window || row?.updated_at || row?.created_at;
 }
 
+function requestDateValue(row) {
+  const meta = rowMeta(row);
+  return row?.requested_at || meta.requested_at || row?.created_at || row?.updated_at || row?.start_window || row?.recurring_due_at;
+}
+
+function scheduledDateValue(row) {
+  return row?.start_window || row?.recurring_due_at || row?.end_window || row?.created_at;
+}
+
 function isUpcomingAssignment(row) {
   return !isClosedAssignment(row) && dateValue(row?.start_window || row?.recurring_due_at, Infinity) >= Date.now() - 86400000;
 }
@@ -822,6 +833,55 @@ function requestGroup(row) {
 function sortedAssignments(rows = state.assignments, direction = "asc") {
   const factor = direction === "desc" ? -1 : 1;
   return [...rows].sort((a, b) => (dateValue(a.start_window || a.recurring_due_at, 0) - dateValue(b.start_window || b.recurring_due_at, 0)) * factor);
+}
+
+function compareMissing(aMissing, bMissing) {
+  if (aMissing && bMissing) return 0;
+  if (aMissing) return 1;
+  if (bMissing) return -1;
+  return 0;
+}
+
+function compareTextFields(a, b, getter, factor) {
+  const left = String(getter(a) || "").trim();
+  const right = String(getter(b) || "").trim();
+  const missing = compareMissing(!left, !right);
+  if (missing) return missing;
+  return left.localeCompare(right, undefined, { numeric: true, sensitivity: "base" }) * factor;
+}
+
+function compareDateFields(a, b, getter, factor) {
+  const left = dateValue(getter(a), NaN);
+  const right = dateValue(getter(b), NaN);
+  const missing = compareMissing(!Number.isFinite(left), !Number.isFinite(right));
+  if (missing) return missing;
+  return (left - right) * factor;
+}
+
+function bedBathSortValue(row) {
+  const label = unitBedBath(row);
+  const bedrooms = Number((label.match(/([\d.]+)\s*Bed/i) || [])[1] || 0);
+  const bathrooms = Number((label.match(/([\d.]+)\s*Bath/i) || [])[1] || 0);
+  return bedrooms * 100 + bathrooms;
+}
+
+function sortRequests(rows) {
+  const sortKey = state.filters.requestSort || "scheduled_date";
+  const direction = state.filters.requestSortDirection === "desc" ? "desc" : "asc";
+  const factor = direction === "desc" ? -1 : 1;
+  return [...rows].sort((a, b) => {
+    let result = 0;
+    if (sortKey === "status") result = compareTextFields(a, b, (row) => requestGroup(row), factor);
+    else if (sortKey === "date") result = compareDateFields(a, b, requestDateValue, factor);
+    else if (sortKey === "unit") result = compareTextFields(a, b, (row) => assignmentUnit(row), factor);
+    else if (sortKey === "bed_bath") {
+      const left = bedBathSortValue(a);
+      const right = bedBathSortValue(b);
+      result = (left - right) * factor;
+    } else if (sortKey === "completed_date") result = compareDateFields(a, b, completionDateValue, factor);
+    else result = compareDateFields(a, b, scheduledDateValue, factor);
+    return result || compareDateFields(a, b, scheduledDateValue, 1) || compareTextFields(a, b, (row) => assignmentUnit(row), 1);
+  });
 }
 
 function activeAssignments() {
@@ -1982,10 +2042,25 @@ function renderTurnRequestCallout() {
 }
 
 function renderRequestToolbar(placeholder = "Search...", includeNew = false) {
+  const sortDirection = state.filters.requestSortDirection === "desc" ? "desc" : "asc";
   return `
     <section class="panel-card pm-toolbar pm-turn-toolbar">
       <div class="pm-status-segment" aria-label="Request status">
         ${["all", "pending", "open", "in_progress", "ready", "on_hold", "completed"].map((key) => `<button type="button" class="${state.filters.requestStatus === key ? "active" : ""}" data-pm-request-status="${esc(key)}">${esc(key === "all" ? "All" : titleCase(key))}</button>`).join("")}
+      </div>
+      <div class="pm-request-sort" aria-label="Turn request sorting">
+        <label>
+          Sort by
+          <select data-pm-request-sort aria-label="Sort turn requests by">
+            ${selectOption("status", "Status", state.filters.requestSort)}
+            ${selectOption("date", "Request Date", state.filters.requestSort)}
+            ${selectOption("unit", "Unit", state.filters.requestSort)}
+            ${selectOption("bed_bath", "Bed / Bath", state.filters.requestSort)}
+            ${selectOption("scheduled_date", "Scheduled Date", state.filters.requestSort)}
+            ${selectOption("completed_date", "Completed Date", state.filters.requestSort)}
+          </select>
+        </label>
+        <button type="button" data-pm-request-sort-direction="${esc(sortDirection === "asc" ? "desc" : "asc")}" aria-label="Toggle request sort direction">${esc(sortDirection === "asc" ? "Ascending" : "Descending")}</button>
       </div>
       ${includeNew ? renderNewTurnRequestButton("Start Turn Request") : ""}
     </section>
@@ -1998,7 +2073,7 @@ function selectOption(value, label, current) {
 
 function filteredRequests() {
   const status = state.filters.requestStatus;
-  return sortedAssignments(state.assignments, "asc").filter((row) => {
+  const rows = sortedAssignments(state.assignments, "asc").filter((row) => {
     const group = requestGroup(row);
     const matchesStatus = status === "all" || group === status || assignmentStatus(row) === status;
     const matchesQuery = queryMatches([
@@ -2011,9 +2086,11 @@ function filteredRequests() {
     ]);
     return matchesStatus && matchesQuery;
   });
+  return sortRequests(rows);
 }
 
 function renderRequestTable(rows, compactMode = false) {
+  const showCompletedDates = !compactMode && state.filters.requestStatus === "completed";
   const pageSize = [10, 25].includes(Number(state.requestPageSize)) ? Number(state.requestPageSize) : 10;
   const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
   const page = Math.min(Math.max(1, Number(state.requestPage) || 1), totalPages);
@@ -2029,7 +2106,9 @@ function renderRequestTable(rows, compactMode = false) {
             <th>Bed / Bath</th>
             ${compactMode ? "" : "<th>Request Type</th>"}
             <th>Status</th>
+            ${showCompletedDates ? "<th>Request Date</th>" : ""}
             <th>Scheduled</th>
+            ${showCompletedDates ? "<th>Completed Date</th>" : ""}
             <th>Actions</th>
           </tr>
         </thead>
@@ -2040,7 +2119,9 @@ function renderRequestTable(rows, compactMode = false) {
               <td>${esc(unitBedBath(row))}</td>
               ${compactMode ? "" : `<td>${esc(row.service_type || row.assignment_type || "Turn Service")}</td>`}
               <td>${statusBadge(requestGroup(row))}</td>
+              ${showCompletedDates ? `<td>${esc(formatDate(requestDateValue(row), "Not recorded"))}</td>` : ""}
               <td>${esc(formatWindow(row))}</td>
+              ${showCompletedDates ? `<td>${esc(formatDate(completionDateValue(row), "Not recorded"))}</td>` : ""}
               <td><button class="pm-row-action" type="button" data-manager-view-assignment="${esc(row.id || "")}">View Details</button></td>
             </tr>
           `).join("")}
@@ -2199,6 +2280,11 @@ function renderAssignmentDetailsCard(row, emptyTitle = "No request selected") {
     ["Contractor Pay", money(assignmentPayAmount(row)), row.service_type || "No service type"],
     ["Special Notes", notes.special || notes.scope || "No special notes", notes.special ? "Special instructions" : "Scope"]
   ];
+  if (isCompletedAssignment(row)) {
+    const completedValue = completionDateValue(row);
+    const completedTime = formatShortTime(completedValue, "");
+    detailItems.splice(3, 0, ["Completed Date", formatDate(completedValue, "Not recorded"), completedTime ? `Completed at ${completedTime}` : "Completion recorded"]);
+  }
   return `
     <section class="schedule-assignment-detail pm-assignment-detail-card">
       <div class="schedule-assignment-hero">
@@ -3414,6 +3500,14 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
+  const requestSortDirection = event.target.closest("[data-pm-request-sort-direction]");
+  if (requestSortDirection) {
+    state.filters.requestSortDirection = requestSortDirection.dataset.pmRequestSortDirection === "desc" ? "desc" : "asc";
+    state.requestPage = 1;
+    renderManagerPortal();
+    return;
+  }
+
   const requestPageButton = event.target.closest("[data-pm-request-page]");
   if (requestPageButton) {
     const pageSize = [10, 25].includes(Number(state.requestPageSize)) ? Number(state.requestPageSize) : 10;
@@ -3508,6 +3602,14 @@ document.addEventListener("change", (event) => {
   const requestPageSize = event.target.closest("[data-pm-request-page-size]");
   if (requestPageSize) {
     state.requestPageSize = [10, 25].includes(Number(requestPageSize.value)) ? Number(requestPageSize.value) : 10;
+    state.requestPage = 1;
+    renderManagerPortal();
+    return;
+  }
+
+  const requestSort = event.target.closest("[data-pm-request-sort]");
+  if (requestSort) {
+    state.filters.requestSort = requestSort.value || "scheduled_date";
     state.requestPage = 1;
     renderManagerPortal();
     return;

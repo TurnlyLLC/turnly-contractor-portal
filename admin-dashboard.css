@@ -3332,6 +3332,35 @@ body.admin-command-body[data-portal-role="property-manager"] .topbar-profile-mes
   flex: 0 1 320px;
 }
 
+.pm-request-sort {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.pm-request-sort label {
+  align-items: center;
+  color: var(--pm-muted);
+  display: inline-flex;
+  gap: 7px;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.pm-request-sort button {
+  background: rgba(7, 21, 36, 0.92);
+  border: 1px solid var(--pm-border);
+  border-radius: 7px;
+  color: var(--pm-text);
+  font-size: 11px;
+  font-weight: 900;
+  min-height: 38px;
+  padding: 0 12px;
+}
+
 .pm-action-banner {
   align-items: center;
   display: grid;
@@ -5074,7 +5103,8 @@ body.admin-command-body[data-portal-role="property-manager"][data-dashboard-them
 
 body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-pagination button,
 body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-pagination select,
-body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-calendar-controls button {
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-calendar-controls button,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-request-sort button {
   background: #ffffff;
   border-color: rgba(43, 68, 91, 0.18);
   color: var(--pm-text);
