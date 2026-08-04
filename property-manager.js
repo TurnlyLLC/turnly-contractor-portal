@@ -1753,6 +1753,43 @@ function renderOverviewFocusPanel(metrics, next) {
   `;
 }
 
+function renderPageHero(view) {
+  const metrics = managerMetrics();
+  const configs = {
+    "turn-requests": {
+      eyebrow: "Turn Requests",
+      title: "Submit and track unit turns",
+      copy: `Send Turnly the unit, move-in date, and access notes for ${propertyTitle()}. ${integer(metrics.open)} open request${metrics.open === 1 ? "" : "s"} are currently active.`,
+      action: renderNewTurnRequestButton("New Turn Request")
+    },
+    schedule: {
+      eyebrow: "Scheduling",
+      title: "See every confirmed cleaning window",
+      copy: `Move through day, week, and month views for ${propertyTitle()}. ${integer(metrics.upcoming)} future turn${metrics.upcoming === 1 ? "" : "s"} are on the schedule.`,
+      action: renderNewTurnRequestButton("Request Turn")
+    },
+    messages: {
+      eyebrow: "Messages",
+      title: "Keep property updates in one place",
+      copy: `Message Turnly operations about ${propertyTitle()}, open requests, completed cleans, and schedule questions.`,
+      action: `<button class="new-btn pm-compact-btn" type="button" data-manager-message-compose>${pmIcon("plus")} New Message</button>`
+    }
+  };
+  const config = configs[view];
+  if (!config) return "";
+  return `
+    <section class="panel-card pm-page-image-hero pm-page-image-hero-${esc(view)}">
+      <div class="pm-page-image-backdrop" aria-hidden="true"></div>
+      <div class="pm-page-image-content">
+        <p class="pm-eyebrow">${esc(config.eyebrow)}</p>
+        <h2>${esc(config.title)}</h2>
+        <p>${esc(config.copy)}</p>
+        <div class="pm-page-image-actions">${config.action}</div>
+      </div>
+    </section>
+  `;
+}
+
 function renderOverviewJourney(metrics) {
   const steps = [
     ["Requested", metrics.pending, "Turnly review"],
@@ -1909,6 +1946,7 @@ function renderTurnRequestsView() {
   const metrics = managerMetrics();
   const rows = filteredRequests();
   return `
+    ${renderPageHero("turn-requests")}
     ${renderTurnRequestCallout()}
     ${renderRequestToolbar()}
     <section class="pm-stat-grid pm-stat-grid-five" aria-label="Turn request metrics">
@@ -2243,6 +2281,7 @@ function renderScheduleView() {
   const metrics = managerMetrics();
   const rows = scheduledRows();
   return `
+    ${renderPageHero("schedule")}
     <section class="panel-card pm-toolbar pm-schedule-toolbar">
       <div class="pm-schedule-toolbar-controls">
         ${renderScheduleSnapshotControls()}
@@ -2487,6 +2526,7 @@ function renderVideoSlot(video, label) {
 
 function renderMessagesView() {
   return `
+    ${renderPageHero("messages")}
     <section class="panel-card pm-messages-workspace">
       <aside class="pm-message-sidebar" aria-label="Open conversations">
         <div class="pm-message-sidebar-head">
