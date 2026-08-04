@@ -1686,28 +1686,27 @@ function assignmentForVideo(video) {
 
 function renderOverviewHero(metrics, delta) {
   const next = upcomingAssignments(1)[0] || null;
-  const mediaAssignment = latestMediaAssignment();
-  const video = overviewHeroVideo(mediaAssignment);
-  const heroAssignment = mediaAssignment || assignmentForVideo(video) || next;
   return `
-    <section class="panel-card pm-experience-hero">
-      <div class="pm-experience-copy">
-        <p class="pm-eyebrow">Property Operations</p>
-        <h2>${esc(propertyTitle())}</h2>
-        <p>${esc(managerClientName())} has ${integer(metrics.units)} tracked units, ${integer(metrics.upcoming)} future turns, and ${integer(metrics.ready)} completed cleans in the last 30 days.</p>
-        <dl class="pm-experience-facts">
-          <div><dt>Address</dt><dd>${esc(propertyAddress())}</dd></div>
-          <div><dt>Next Turn</dt><dd>${esc(next ? formatShortDate(next.start_window || next.recurring_due_at, "Not scheduled") : "No upcoming turn")}</dd></div>
-          <div><dt>Media Sets</dt><dd>${esc(integer(metrics.beforeAfter))}</dd></div>
-          <div><dt>Week Trend</dt><dd>${esc(`${delta >= 0 ? "+" : ""}${delta}%`)}</dd></div>
-        </dl>
-        <div class="pm-experience-actions">
-          ${renderNewTurnRequestButton("Request Turn")}
-          <button class="secondary-command-btn pm-compact-btn" type="button" data-pm-view-button="schedule">View Schedule</button>
+    <section class="panel-card pm-experience-hero pm-picture-hero">
+      <div class="pm-picture-backdrop pm-picture-backdrop-image" aria-hidden="true"></div>
+      <div class="pm-picture-hero-content">
+        <div class="pm-experience-copy">
+          <p class="pm-eyebrow">Property Operations</p>
+          <h2>${esc(propertyTitle())}</h2>
+          <p>${esc(managerClientName())} has ${integer(metrics.units)} tracked units, ${integer(metrics.upcoming)} future turns, and ${integer(metrics.ready)} completed cleans in the last 30 days.</p>
+          <dl class="pm-experience-facts">
+            <div><dt>Address</dt><dd>${esc(propertyAddress())}</dd></div>
+            <div><dt>Next Turn</dt><dd>${esc(next ? formatShortDate(next.start_window || next.recurring_due_at, "Not scheduled") : "No upcoming turn")}</dd></div>
+            <div><dt>Media Sets</dt><dd>${esc(integer(metrics.beforeAfter))}</dd></div>
+            <div><dt>Week Trend</dt><dd>${esc(`${delta >= 0 ? "+" : ""}${delta}%`)}</dd></div>
+          </dl>
+          <div class="pm-experience-actions">
+            ${renderNewTurnRequestButton("Request Turn")}
+            <button class="secondary-command-btn pm-compact-btn" type="button" data-pm-view-button="schedule">View Schedule</button>
+          </div>
         </div>
+        ${renderOverviewFocusPanel(metrics, next)}
       </div>
-      ${renderOverviewHeroMedia(video, heroAssignment)}
-      ${renderOverviewFocusPanel(metrics, next)}
     </section>
   `;
 }

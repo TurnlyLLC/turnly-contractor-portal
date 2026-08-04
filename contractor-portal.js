@@ -861,7 +861,7 @@ function sidebar() {
     <aside class="cp-sidebar">
       <a class="cp-brand" href="contractor.html" aria-label="Turnly contractor dashboard">
         <span class="cp-brand-mark">T</span>
-        <span>URNLY</span>
+        <span>TURNLY</span>
       </a>
       <nav class="cp-nav" aria-label="Contractor navigation">
         <p class="cp-nav-title">Contractor Portal</p>

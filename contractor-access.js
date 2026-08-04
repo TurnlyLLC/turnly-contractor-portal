@@ -183,7 +183,7 @@ async function renderPasswordChangeRequired(user) {
 }
 
 async function loadContractorPortal() {
-  await import("./contractor-portal.js?v=20260803-logo-wordmark");
+  await import("./contractor-portal.js?v=20260804-picture-wordmark");
   await import("./contractor-job-flow-mobile.js?v=20260729-checklist-remote-media-save");
 }
 
