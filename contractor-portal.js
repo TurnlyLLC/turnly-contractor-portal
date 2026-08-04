@@ -15,7 +15,7 @@ import {
   rowMatchesPreviewUser,
   verifyAdminPreviewSession,
   writeAdminPreviewContext
-} from "./admin-preview-context.js?v=20260724-admin-preview-menu-fix";
+} from "./admin-preview-context.js?v=20260804-contractor-access-scope";
 
 const env = window.__ENV || {};
 const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
@@ -455,6 +455,136 @@ function assignmentMetadata(item = {}) {
     }
   }
   return {};
+}
+
+function uniqueAccessList(values = []) {
+  const seen = new Set();
+  return values
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .filter((value) => {
+      const key = normalizeAccessLookup(value);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function listFromAccess(value) {
+  if (Array.isArray(value)) return uniqueAccessList(value);
+  if (value && typeof value === "object") return uniqueAccessList(Object.values(value));
+  const text = String(value || "").trim();
+  if (!text) return [];
+  if ((text.startsWith("[") && text.endsWith("]")) || (text.startsWith("{") && text.endsWith("}"))) {
+    try {
+      return listFromAccess(JSON.parse(text));
+    } catch {
+      // Fall through to comma parsing.
+    }
+  }
+  return uniqueAccessList(text.split(","));
+}
+
+function normalizeAccessLookup(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/['`]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function contractorAccessScope() {
+  const profile = state.profile || {};
+  const metadata = profile.metadata && typeof profile.metadata === "object" && !Array.isArray(profile.metadata)
+    ? profile.metadata
+    : {};
+  return {
+    regions: uniqueAccessList([
+      ...listFromAccess(profile.allowed_regions),
+      ...listFromAccess(profile.allowedRegions),
+      ...listFromAccess(metadata.allowed_regions),
+      ...listFromAccess(metadata.allowedRegions)
+    ]),
+    propertyIds: uniqueAccessList([
+      ...listFromAccess(profile.allowed_property_ids),
+      ...listFromAccess(profile.allowedPropertyIds),
+      ...listFromAccess(metadata.allowed_property_ids),
+      ...listFromAccess(metadata.allowedPropertyIds)
+    ]),
+    propertyNames: uniqueAccessList([
+      ...listFromAccess(profile.allowed_property_names),
+      ...listFromAccess(profile.allowedPropertyNames),
+      ...listFromAccess(metadata.allowed_property_names),
+      ...listFromAccess(metadata.allowedPropertyNames)
+    ])
+  };
+}
+
+function accessCandidateMatches(allowed = [], candidates = []) {
+  const allowedValues = allowed.map(normalizeAccessLookup).filter(Boolean);
+  const candidateValues = candidates.map(normalizeAccessLookup).filter(Boolean);
+  return allowedValues.some((allowedValue) => candidateValues.some((candidate) => (
+    candidate === allowedValue || candidate.includes(allowedValue) || allowedValue.includes(candidate)
+  )));
+}
+
+function assignmentAccessCandidates(item = {}) {
+  const meta = assignmentMetadata(item);
+  return {
+    propertyIds: [
+      item.property_id,
+      item.portal_property_id,
+      item.recurring_property_id,
+      item.recurring_portal_property_id,
+      meta.property_id,
+      meta.portal_property_id,
+      meta.recurring_property_id,
+      meta.recurring_portal_property_id,
+      meta.client_id,
+      meta.contract_id
+    ],
+    propertyNames: [
+      item.property_name,
+      item.title,
+      item.address,
+      meta.property_name,
+      meta.name,
+      meta.title,
+      meta.company_name,
+      meta.client_name,
+      meta.address,
+      meta.property_address,
+      meta.service_address
+    ],
+    regions: [
+      item.region,
+      item.market,
+      item.location,
+      item.city,
+      item.state,
+      item.address,
+      meta.region,
+      meta.market,
+      meta.location,
+      meta.city,
+      meta.state,
+      meta.address,
+      meta.property_address,
+      meta.service_address
+    ]
+  };
+}
+
+function matchesContractorAccess(item = {}) {
+  const scope = contractorAccessScope();
+  if (!scope.regions.length && !scope.propertyIds.length && !scope.propertyNames.length) return true;
+  const candidates = assignmentAccessCandidates(item);
+  return accessCandidateMatches(scope.propertyIds, candidates.propertyIds)
+    || accessCandidateMatches(scope.propertyNames, candidates.propertyNames)
+    || accessCandidateMatches(scope.regions, candidates.regions);
 }
 
 function assignmentUnitLabel(item = {}) {
@@ -1784,12 +1914,19 @@ async function loadData() {
 }
 
 async function loadProfile() {
-  const { data } = await supabase
+  let result = await supabase
     .from("profiles")
-    .select("full_name,email,role,status")
+    .select("full_name,email,role,status,allowed_regions,allowed_property_ids,allowed_property_names")
     .eq("id", state.user.id)
     .maybeSingle();
-  state.profile = data || null;
+  if (result.error) {
+    result = await supabase
+      .from("profiles")
+      .select("full_name,email,role,status")
+      .eq("id", state.user.id)
+      .maybeSingle();
+  }
+  state.profile = result.data || null;
 }
 
 async function loadAvailability() {
@@ -1826,6 +1963,7 @@ async function loadOpenAssignments() {
 
   state.openAssignments = (data || [])
     .filter(isClaimableBoardAssignment)
+    .filter(matchesContractorAccess)
     .filter(matchesContractorPreviewProperty);
 }
 

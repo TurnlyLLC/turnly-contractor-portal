@@ -88,6 +88,42 @@ function missingColumn(error) {
   return msg.match(/Could not find the '([^']+)' column/)?.[1] || msg.match(/column "([^"]+)"/)?.[1] || "";
 }
 
+function uniqueList(values = []) {
+  const seen = new Set();
+  return values
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .filter((value) => {
+      const key = value.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function listFrom(value) {
+  if (Array.isArray(value)) return uniqueList(value);
+  if (value && typeof value === "object") return uniqueList(Object.values(value));
+  const text = String(value || "").trim();
+  if (!text) return [];
+  if ((text.startsWith("[") && text.endsWith("]")) || (text.startsWith("{") && text.endsWith("}"))) {
+    try {
+      return listFrom(JSON.parse(text));
+    } catch {
+      // Fall through to comma parsing.
+    }
+  }
+  return uniqueList(text.split(","));
+}
+
+function contractorAccessPayload(body = {}) {
+  return {
+    allowed_regions: listFrom(body.allowed_regions || body.allowedRegions),
+    allowed_property_ids: listFrom(body.allowed_property_ids || body.allowedPropertyIds),
+    allowed_property_names: listFrom(body.allowed_property_names || body.allowedPropertyNames)
+  };
+}
+
 async function writeFallback(supabase, table, payload, match = {}) {
   const next = { ...payload };
   for (let i = 0; i < 18; i += 1) {
@@ -136,6 +172,7 @@ async function createOrUpdateAuthUser(supabase, body, adminUserId) {
   const password = String(body.password || "");
   const fullName = String(body.full_name || body.name || "").trim();
   const now = new Date().toISOString();
+  const access = contractorAccessPayload(body);
   const baseAppMetadata = {
     role: "contractor",
     turnly_force_password_change: true,
@@ -149,6 +186,9 @@ async function createOrUpdateAuthUser(supabase, body, adminUserId) {
     service_type: String(body.service_type || "").trim(),
     market: String(body.market || "").trim(),
     role: "contractor",
+    allowed_regions: access.allowed_regions,
+    allowed_property_ids: access.allowed_property_ids,
+    allowed_property_names: access.allowed_property_names,
     turnly_force_password_change: true,
     turnly_temp_password_created_at: now
   };
@@ -199,6 +239,7 @@ async function upsertProfile(supabase, user, body, adminUserId) {
   const approved = body.contractor_approved !== false;
   const status = approved ? "active" : normalizeToken(body.status) || "pending_approval";
   const now = new Date().toISOString();
+  const access = contractorAccessPayload(body);
   const services = Array.isArray(body.service_types)
     ? body.service_types
     : String(body.service_type || "").split(",").map((item) => item.trim()).filter(Boolean);
@@ -220,6 +261,9 @@ async function upsertProfile(supabase, user, body, adminUserId) {
     region: String(body.market || body.region || "").trim(),
     location: String(body.market || body.location || "").trim(),
     notes: String(body.notes || "").trim(),
+    allowed_regions: access.allowed_regions,
+    allowed_property_ids: access.allowed_property_ids,
+    allowed_property_names: access.allowed_property_names,
     invited_by_admin: true,
     invited_by: adminUserId,
     invited_at: now,
@@ -245,6 +289,7 @@ async function syncContractorInvite(supabase, user, body, adminUserId) {
   const email = String(body.email || user.email || "").trim().toLowerCase();
   if (!email) return;
   const now = new Date().toISOString();
+  const access = contractorAccessPayload(body);
   const invite = {
     email,
     role: "contractor",
@@ -253,12 +298,18 @@ async function syncContractorInvite(supabase, user, body, adminUserId) {
     invited_by: adminUserId,
     accepted_by: user.id,
     accepted_at: now,
+    allowed_regions: access.allowed_regions,
+    allowed_property_ids: access.allowed_property_ids,
+    allowed_property_names: access.allowed_property_names,
     metadata: {
       full_name: String(body.full_name || body.name || "").trim(),
       phone: String(body.phone || "").trim(),
       company_name: String(body.company_name || "").trim(),
       service_type: String(body.service_type || "").trim(),
-      market: String(body.market || "").trim()
+      market: String(body.market || "").trim(),
+      allowed_regions: access.allowed_regions,
+      allowed_property_ids: access.allowed_property_ids,
+      allowed_property_names: access.allowed_property_names
     }
   };
 

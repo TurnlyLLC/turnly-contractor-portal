@@ -246,8 +246,15 @@ export async function resolvePreviewProfile(supabase, preview, targetRole = "") 
 
   let result = await supabase
     .from("profiles")
-    .select("id,role,full_name,email,status,contractor_approved,property_manager_property_id,requested_property_name")
+    .select("id,role,full_name,email,status,contractor_approved,property_manager_property_id,requested_property_name,allowed_regions,allowed_property_ids,allowed_property_names")
     .limit(500);
+
+  if (result.error) {
+    result = await supabase
+      .from("profiles")
+      .select("id,role,full_name,email,status,contractor_approved,property_manager_property_id,requested_property_name")
+      .limit(500);
+  }
 
   if (result.error) {
     result = await supabase

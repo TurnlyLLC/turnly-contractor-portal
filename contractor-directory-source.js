@@ -7,6 +7,8 @@ const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
 
 const state = {
   people: [],
+  accessProperties: [],
+  accessRegions: [],
   search: "",
   team: "all",
   status: "active",
@@ -36,6 +38,87 @@ function title(value) {
   return String(value || "")
     .replace(/[_-]+/g, " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function normalizeLookup(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/['`]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function metadataFor(row = {}) {
+  const meta = row?.metadata;
+  if (meta && typeof meta === "object" && !Array.isArray(meta)) return meta;
+  if (typeof meta === "string" && meta.trim()) {
+    try {
+      const parsed = JSON.parse(meta);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+function uniqueList(values = []) {
+  const seen = new Set();
+  return values
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .filter((value) => {
+      const key = normalizeLookup(value);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function listFrom(value) {
+  if (Array.isArray(value)) return uniqueList(value);
+  if (value && typeof value === "object") return uniqueList(Object.values(value));
+  const text = String(value || "").trim();
+  if (!text) return [];
+  if ((text.startsWith("[") && text.endsWith("]")) || (text.startsWith("{") && text.endsWith("}"))) {
+    try {
+      return listFrom(JSON.parse(text));
+    } catch {
+      // Fall through to comma parsing.
+    }
+  }
+  return uniqueList(text.split(","));
+}
+
+function firstValue(...values) {
+  return values.find((value) => String(value || "").trim()) || "";
+}
+
+function accessFromRow(row = {}) {
+  const meta = metadataFor(row);
+  return {
+    allowedRegions: uniqueList([
+      ...listFrom(row.allowed_regions),
+      ...listFrom(row.allowedRegions),
+      ...listFrom(meta.allowed_regions),
+      ...listFrom(meta.allowedRegions)
+    ]),
+    allowedPropertyIds: uniqueList([
+      ...listFrom(row.allowed_property_ids),
+      ...listFrom(row.allowedPropertyIds),
+      ...listFrom(meta.allowed_property_ids),
+      ...listFrom(meta.allowedPropertyIds)
+    ]),
+    allowedPropertyNames: uniqueList([
+      ...listFrom(row.allowed_property_names),
+      ...listFrom(row.allowedPropertyNames),
+      ...listFrom(meta.allowed_property_names),
+      ...listFrom(meta.allowedPropertyNames)
+    ])
+  };
 }
 
 function roleText(row) {
@@ -90,6 +173,7 @@ function visibleStatus(row, team) {
 function normalizePerson(row, source) {
   const team = teamFor(row, source);
   if (!team) return null;
+  const access = accessFromRow(row);
   const email = row?.email || row?.contact_email || row?.primary_email || "";
   const name = row?.full_name || row?.name || row?.display_name || row?.contractor_name || row?.sales_name || email.split("@")[0] || "Unnamed";
   const id = row?.profile_id || row?.user_id || row?.auth_user_id || row?.id || email || name;
@@ -114,10 +198,75 @@ function normalizePerson(row, source) {
     service: String(service || ""),
     location: String(row?.market || row?.region || row?.location || [row?.city, row?.state].filter(Boolean).join(", ") || ""),
     notes: String(row?.notes || row?.bio || ""),
+    allowedRegions: access.allowedRegions,
+    allowedPropertyIds: access.allowedPropertyIds,
+    allowedPropertyNames: access.allowedPropertyNames,
     status,
     approved: team !== "contractor" || isApproved(row),
     raw: row
   };
+}
+
+function isInactiveProperty(row = {}) {
+  return ["inactive", "disabled", "archived", "suspended", "rejected", "declined", "deleted", "lost", "cancelled", "canceled"]
+    .includes(token(row?.status || row?.contract_status || row?.stage || row?.pipeline_stage));
+}
+
+function accessPropertyTitle(row = {}) {
+  const meta = metadataFor(row);
+  return firstValue(row.property_name, row.name, row.company_name, row.client_name, row.title, meta.property_name, meta.name, meta.company_name);
+}
+
+function accessPropertyRegion(row = {}) {
+  const meta = metadataFor(row);
+  return firstValue(row.region, row.market, row.location, row.city, meta.region, meta.market, meta.location, meta.city);
+}
+
+function normalizeAccessProperty(row = {}, source = {}) {
+  if (isInactiveProperty(row)) return null;
+  const meta = metadataFor(row);
+  const name = accessPropertyTitle(row);
+  if (!name) return null;
+  const address = firstValue(row.address, row.billing_address, row.property_address, row.service_address, meta.address, meta.billing_address, meta.property_address);
+  const region = accessPropertyRegion(row);
+  const id = firstValue(row.id, row.property_id, row.portal_property_id, row.client_id, meta.id, meta.property_id, meta.portal_property_id, meta.client_id);
+  return {
+    id: String(id || ""),
+    name: String(name || ""),
+    address: String(address || ""),
+    region: String(region || ""),
+    source: source.table || "",
+    sourceLabel: source.label || title(source.table || "Property")
+  };
+}
+
+function propertyMatchesSaved(option = {}, allowedIds = [], allowedNames = []) {
+  const optionId = String(option.id || "").toLowerCase();
+  const optionNames = [option.name, option.address].map(normalizeLookup).filter(Boolean);
+  return allowedIds.some((id) => String(id || "").toLowerCase() === optionId)
+    || allowedNames.some((name) => {
+      const saved = normalizeLookup(name);
+      return optionNames.some((candidate) => candidate === saved || candidate.includes(saved) || saved.includes(candidate));
+    });
+}
+
+function accessSummary(person = {}) {
+  if (person.team !== "contractor") return "-";
+  const propertyCount = uniqueList([...person.allowedPropertyIds, ...person.allowedPropertyNames]).length;
+  const regionCount = uniqueList(person.allowedRegions).length;
+  if (!propertyCount && !regionCount) return "All job-board jobs";
+  return [
+    propertyCount ? `${propertyCount} ${propertyCount === 1 ? "property" : "properties"}` : "",
+    regionCount ? `${regionCount} ${regionCount === 1 ? "region" : "regions"}` : ""
+  ].filter(Boolean).join(", ");
+}
+
+function accessDetails(person = {}) {
+  const details = [
+    ...person.allowedPropertyNames,
+    ...person.allowedRegions.map((region) => `Region: ${region}`)
+  ];
+  return uniqueList(details).slice(0, 3).join(" | ");
 }
 
 function workspaceMarkup() {
@@ -148,7 +297,7 @@ function workspaceMarkup() {
             <p id="contractorMessage" class="request-message" aria-live="polite"></p>
             <div class="table-scroll">
               <table class="suite-table">
-                <thead><tr><th>Name</th><th>Team</th><th>Company</th><th>Status</th><th>Service / Role</th><th>Location</th><th>Phone</th><th>Source</th><th>Actions</th></tr></thead>
+                <thead><tr><th>Name</th><th>Team</th><th>Company</th><th>Status</th><th>Service / Role</th><th>Location</th><th>Job Access</th><th>Phone</th><th>Source</th><th>Actions</th></tr></thead>
                 <tbody id="contractorRows"></tbody>
               </table>
             </div>
@@ -176,7 +325,7 @@ function injectStyles() {
   const style = document.createElement("style");
   style.id = "contractorDirectorySourceStyles";
   style.textContent = `
-    .contractor-directory-workspace{display:grid;gap:14px}.contractor-directory-card .suite-toolbar{padding:14px 16px 0}.contractor-directory-card .request-message{padding:0 16px 8px}.contractor-directory-card td strong,.contractor-directory-card td small{display:block}.contractor-directory-card td small{color:var(--suite-soft);font-size:11px;margin-top:3px}.contractor-file-name-link{color:var(--suite-text);text-decoration:none}.contractor-file-name-link:hover strong{color:var(--suite-green)}.compact-field{min-width:150px}.compact-field select{min-height:36px}.contractor-actions{align-items:center;display:flex;flex-wrap:wrap;gap:6px}.contractor-actions .secondary-action,.contractor-actions .primary-action{min-height:32px;padding:0 10px;white-space:nowrap}.contractor-form .checkbox-field{align-self:center}.contractor-password-note{background:rgba(6,214,160,.1);border:1px solid rgba(6,214,160,.28);border-radius:8px;color:var(--suite-text);font-size:12px;line-height:1.5;margin:0;padding:12px}.contractor-password-message{font-size:12px;margin:0}.contractor-password-message.error{color:#ff5c7a}.contractor-password-message.success{color:var(--suite-green)}@media(max-width:980px){.contractor-directory-card .suite-toolbar,.contractor-directory-card .toolbar-left,.contractor-directory-card .toolbar-right{align-items:stretch;display:grid;grid-template-columns:1fr}}
+    .contractor-directory-workspace{display:grid;gap:14px}.contractor-directory-card .suite-toolbar{padding:14px 16px 0}.contractor-directory-card .request-message{padding:0 16px 8px}.contractor-directory-card td strong,.contractor-directory-card td small{display:block}.contractor-directory-card td small{color:var(--suite-soft);font-size:11px;margin-top:3px}.contractor-file-name-link{color:var(--suite-text);text-decoration:none}.contractor-file-name-link:hover strong{color:var(--suite-green)}.compact-field{min-width:150px}.compact-field select{min-height:36px}.contractor-actions{align-items:center;display:flex;flex-wrap:wrap;gap:6px}.contractor-actions .secondary-action,.contractor-actions .primary-action{min-height:32px;padding:0 10px;white-space:nowrap}.contractor-form .checkbox-field{align-self:center}.contractor-password-note,.contractor-access-note{background:rgba(6,214,160,.1);border:1px solid rgba(6,214,160,.28);border-radius:8px;color:var(--suite-text);font-size:12px;line-height:1.5;margin:0;padding:12px}.contractor-password-message{font-size:12px;margin:0}.contractor-password-message.error{color:#ff5c7a}.contractor-password-message.success{color:var(--suite-green)}.contractor-access-scope{border:1px solid var(--suite-border);border-radius:12px;display:grid;gap:12px;padding:14px}.contractor-access-scope h3{font-size:14px;margin:0}.contractor-access-scope p{color:var(--suite-soft);font-size:12px;margin:0}.contractor-access-grid{display:grid;gap:12px;grid-template-columns:repeat(2,minmax(0,1fr))}.contractor-access-list{border:1px solid var(--suite-border);border-radius:10px;display:grid;gap:6px;max-height:190px;overflow:auto;padding:10px}.contractor-access-list strong{font-size:12px;margin-bottom:2px}.contractor-access-check{align-items:flex-start;display:flex;gap:8px;font-size:12px;line-height:1.35}.contractor-access-check input{margin-top:2px}.contractor-access-check span{display:grid}.contractor-access-check small{color:var(--suite-soft);font-size:11px}.contractor-access-empty{color:var(--suite-soft);font-size:12px}.contractor-access-summary{min-width:130px}.contractor-access-summary strong,.contractor-access-summary small{display:block}@media(max-width:980px){.contractor-directory-card .suite-toolbar,.contractor-directory-card .toolbar-left,.contractor-directory-card .toolbar-right,.contractor-access-grid{align-items:stretch;display:grid;grid-template-columns:1fr}}
   `;
   document.head.appendChild(style);
 }
@@ -215,12 +364,40 @@ async function loadSource(source) {
   return (result.data || []).map((row) => normalizePerson(row, source.table)).filter(Boolean);
 }
 
+async function loadAccessOptions() {
+  const accessSources = [
+    { table: "portal_properties", select: "*", label: "Property" },
+    { table: "client_contracts", select: "*", label: "Contract" }
+  ];
+  const results = await Promise.all(accessSources.map(async (source) => {
+    const result = await supabase.from(source.table).select(source.select).limit(1000);
+    if (result.error) {
+      console.warn(`[contractor-directory] ${source.table} access load failed`, result.error);
+      return [];
+    }
+    return (result.data || []).map((row) => normalizeAccessProperty(row, source)).filter(Boolean);
+  }));
+  const unique = new Map();
+  results.flat().forEach((option) => {
+    const key = normalizeLookup([option.name, option.address].filter(Boolean).join(" ")) || option.id;
+    const existing = unique.get(key);
+    if (!existing || option.source === "portal_properties") unique.set(key, option);
+  });
+  state.accessProperties = Array.from(unique.values())
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+  state.accessRegions = uniqueList(state.accessProperties.map((option) => option.region))
+    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+}
+
 async function loadPeople() {
   if (!supabase || state.loading) return;
   state.loading = true;
   setMessage("Loading contractor directory...");
   try {
-    const rows = (await Promise.all(sources.map(loadSource))).flat();
+    const [rows] = await Promise.all([
+      Promise.all(sources.map(loadSource)).then((parts) => parts.flat()),
+      loadAccessOptions()
+    ]);
     const unique = new Map();
     rows.forEach((person) => {
       const key = person.email.toLowerCase() || person.key;
@@ -244,7 +421,7 @@ function filteredPeople() {
     if (state.team !== "all" && person.team !== state.team) return false;
     if (state.status !== "all" && person.status !== state.status) return false;
     if (!term) return true;
-    return [person.name, person.email, person.phone, person.company, person.service, person.location, person.teamLabel]
+    return [person.name, person.email, person.phone, person.company, person.service, person.location, person.teamLabel, accessSummary(person), accessDetails(person)]
       .some((value) => String(value || "").toLowerCase().includes(term));
   });
 }
@@ -283,7 +460,7 @@ function renderRows() {
     return `<tr>
       <td>${nameCell}</td>
       <td>${badge(person.teamLabel)}</td><td>${esc(person.company || "-")}</td><td>${badge(person.status)}</td>
-      <td>${esc(person.service || "-")}</td><td>${esc(person.location || "-")}</td><td>${esc(person.phone || "-")}</td><td>${esc(person.sourceLabel)}</td>
+      <td>${esc(person.service || "-")}</td><td>${esc(person.location || "-")}</td><td class="contractor-access-summary"><strong>${esc(accessSummary(person))}</strong><small>${esc(accessDetails(person) || "")}</small></td><td>${esc(person.phone || "-")}</td><td>${esc(person.sourceLabel)}</td>
       <td><div class="contractor-actions">${fileLink}${approve}${resetPassword}<button class="secondary-action" type="button" data-edit="${esc(person.key)}"><span>Edit</span></button></div></td>
     </tr>`;
   }).join("");
@@ -313,6 +490,48 @@ function selectField(id, label, options, value) {
   return `<label class="suite-field"><span>${esc(label)}</span><select id="${esc(id)}">${options.map(([key, text]) => `<option value="${esc(key)}" ${key === value ? "selected" : ""}>${esc(text)}</option>`).join("")}</select></label>`;
 }
 
+function accessScopeMarkup(person = null, team = "contractor") {
+  const allowedRegions = uniqueList(person?.allowedRegions || []);
+  const allowedPropertyIds = uniqueList(person?.allowedPropertyIds || []);
+  const allowedPropertyNames = uniqueList(person?.allowedPropertyNames || []);
+  const properties = [...state.accessProperties];
+  allowedPropertyIds.forEach((id) => {
+    if (!properties.some((option) => String(option.id || "").toLowerCase() === String(id).toLowerCase())) {
+      properties.push({ id, name: `Saved property ${id}`, address: "", region: "", sourceLabel: "Saved" });
+    }
+  });
+  allowedPropertyNames.forEach((name) => {
+    if (!properties.some((option) => propertyMatchesSaved(option, [], [name]))) {
+      properties.push({ id: "", name, address: "", region: "", sourceLabel: "Saved" });
+    }
+  });
+  const regions = uniqueList([...state.accessRegions, ...allowedRegions]);
+  const regionChecks = regions.length
+    ? regions.map((region) => {
+      const checked = allowedRegions.some((saved) => normalizeLookup(saved) === normalizeLookup(region));
+      return `<label class="contractor-access-check"><input type="checkbox" data-access-region-option value="${esc(region)}" ${checked ? "checked" : ""} /><span>${esc(region)}</span></label>`;
+    }).join("")
+    : `<span class="contractor-access-empty">No active contract regions found yet.</span>`;
+  const propertyChecks = properties.length
+    ? properties.map((option) => {
+      const checked = propertyMatchesSaved(option, allowedPropertyIds, allowedPropertyNames);
+      return `<label class="contractor-access-check"><input type="checkbox" data-access-property-option data-property-id="${esc(option.id)}" data-property-name="${esc(option.name)}" value="${esc(option.id || option.name)}" ${checked ? "checked" : ""} /><span><strong>${esc(option.name)}</strong><small>${esc([option.region, option.address, option.sourceLabel].filter(Boolean).join(" - "))}</small></span></label>`;
+    }).join("")
+    : `<span class="contractor-access-empty">No active properties or contracts found yet.</span>`;
+  return `
+    <div id="contractorAccessControls" class="contractor-access-scope wide" ${team === "contractor" ? "" : "hidden"}>
+      <div>
+        <h3>Contractor Job Access</h3>
+        <p>Choose the regions and properties this contractor can see on the job board. Leave both lists blank to allow every open job.</p>
+      </div>
+      <div class="contractor-access-grid">
+        <div class="contractor-access-list"><strong>Allowed Regions</strong>${regionChecks}</div>
+        <div class="contractor-access-list"><strong>Allowed Properties / Contracts</strong>${propertyChecks}</div>
+      </div>
+    </div>
+  `;
+}
+
 function formMarkup(person = null) {
   const team = person?.team || "contractor";
   const status = person?.status || "active";
@@ -330,6 +549,7 @@ function formMarkup(person = null) {
       ${field("contractorLocation", "Location / Market", "text", person?.location || "")}
       <label class="suite-field wide"><span>Notes</span><textarea id="contractorNotes" rows="3">${esc(person?.notes || "")}</textarea></label>
       <label class="checkbox-field wide"><input id="contractorApproved" type="checkbox" ${approved ? "checked" : ""} /> <span>Approved / auto approve on signup</span></label>
+      ${accessScopeMarkup(person, team)}
       ${isNew ? `
         <div id="contractorLiveAccountFields" class="contractor-live-account-fields wide">
           <div class="form-grid">
@@ -400,13 +620,33 @@ function setPasswordFormMessage(text, error = false) {
 function setLiveAccountFieldsVisible() {
   const team = value("contractorTeam") || "contractor";
   const wrap = document.getElementById("contractorLiveAccountFields");
-  if (!wrap) return;
   const isContractor = team === "contractor";
-  wrap.hidden = !isContractor;
-  wrap.querySelectorAll("input").forEach((input) => {
-    input.required = isContractor;
-    if (!isContractor) input.value = "";
-  });
+  if (wrap) {
+    wrap.hidden = !isContractor;
+    wrap.querySelectorAll("input").forEach((input) => {
+      input.required = isContractor;
+      if (!isContractor) input.value = "";
+    });
+  }
+  const accessWrap = document.getElementById("contractorAccessControls");
+  if (accessWrap) accessWrap.hidden = !isContractor;
+}
+
+function checkedValues(selector) {
+  return Array.from(document.querySelectorAll(selector))
+    .filter((input) => input.checked)
+    .map((input) => input.value)
+    .filter(Boolean);
+}
+
+function accessPayload() {
+  const selectedProperties = Array.from(document.querySelectorAll("[data-access-property-option]"))
+    .filter((input) => input.checked);
+  return {
+    allowed_regions: uniqueList(checkedValues("[data-access-region-option]")),
+    allowed_property_ids: uniqueList(selectedProperties.map((input) => input.dataset.propertyId).filter(Boolean)),
+    allowed_property_names: uniqueList(selectedProperties.map((input) => input.dataset.propertyName).filter(Boolean))
+  };
 }
 
 function formPayload(table) {
@@ -414,6 +654,7 @@ function formPayload(table) {
   const approved = team === "contractor" && Boolean(document.getElementById("contractorApproved")?.checked);
   const status = approved && value("contractorStatus") === "pending_approval" ? "active" : value("contractorStatus") || "active";
   const services = value("contractorService");
+  const access = team === "contractor" ? accessPayload() : { allowed_regions: [], allowed_property_ids: [], allowed_property_names: [] };
   const base = {
     full_name: value("contractorName"),
     name: value("contractorName"),
@@ -434,6 +675,9 @@ function formPayload(table) {
     region: value("contractorLocation"),
     location: value("contractorLocation"),
     notes: value("contractorNotes"),
+    allowed_regions: access.allowed_regions,
+    allowed_property_ids: access.allowed_property_ids,
+    allowed_property_names: access.allowed_property_names,
     invited_by_admin: approved,
     invited_at: approved ? new Date().toISOString() : null,
     contractor_approved_at: approved ? new Date().toISOString() : null
@@ -455,6 +699,9 @@ function formPayload(table) {
       region: base.region,
       location: base.location,
       notes: base.notes,
+      allowed_regions: base.allowed_regions,
+      allowed_property_ids: base.allowed_property_ids,
+      allowed_property_names: base.allowed_property_names,
       department: base.department,
       title: base.title,
       invited_by_admin: base.invited_by_admin,
@@ -498,7 +745,19 @@ async function syncInvite(payload, profileId = "") {
     invited_by: userData?.user?.id || null,
     accepted_by: profileId || null,
     accepted_at: profileId ? new Date().toISOString() : null,
-    metadata: { full_name: payload.full_name || payload.name || "", phone: payload.phone || "", company_name: payload.company_name || "", service_type: payload.service_type || "", market: payload.market || "" }
+    allowed_regions: payload.allowed_regions || [],
+    allowed_property_ids: payload.allowed_property_ids || [],
+    allowed_property_names: payload.allowed_property_names || [],
+    metadata: {
+      full_name: payload.full_name || payload.name || "",
+      phone: payload.phone || "",
+      company_name: payload.company_name || "",
+      service_type: payload.service_type || "",
+      market: payload.market || "",
+      allowed_regions: payload.allowed_regions || [],
+      allowed_property_ids: payload.allowed_property_ids || [],
+      allowed_property_names: payload.allowed_property_names || []
+    }
   };
   const existing = await supabase.from("contractor_invites").select("id").ilike("email", email).maybeSingle();
   if (existing.error) return existing;

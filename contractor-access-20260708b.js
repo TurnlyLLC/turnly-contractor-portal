@@ -4,7 +4,7 @@ import {
   resolvePreviewProfile,
   resolvePreviewProperty,
   verifyAdminPreviewSession
-} from "./admin-preview-context.js?v=20260724-admin-preview-menu-fix";
+} from "./admin-preview-context.js?v=20260804-contractor-access-scope";
 
 const env = window.__ENV || {};
 const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
@@ -197,7 +197,7 @@ async function renderPasswordChangeRequired(user) {
 }
 
 async function loadContractorPortal() {
-  await import("./contractor-portal.js?v=20260804-picture-wordmark");
+  await import("./contractor-portal.js?v=20260804-contractor-access-scope");
   await import("./contractor-job-flow-mobile.js?v=20260729-checklist-remote-media-save");
 }
 

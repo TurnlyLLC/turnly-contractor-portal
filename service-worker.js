@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-contractor-pwa-v20260804-pm-no-sync-status";
+const CACHE_NAME = "turnly-contractor-pwa-v20260804-contractor-access-scope";
 
 const PRECACHE_URLS = [
   "/",
@@ -12,6 +12,7 @@ const PRECACHE_URLS = [
   "/portal-auth.js",
   "/reset-password.html",
   "/reset-password.js",
+  "/admin-preview-context.js",
   "/portal-auth-overrides.css",
   "/access-notice.css",
   "/contractor-portal.css",
