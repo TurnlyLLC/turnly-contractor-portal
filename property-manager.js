@@ -470,6 +470,52 @@ function rowMeta(row) {
   return {};
 }
 
+const managerSensitiveAssignmentFields = [
+  "pay_amount",
+  "contractor_pay",
+  "contractor_amount",
+  "assigned_to",
+  "assigned_to_name",
+  "assigned_to_email",
+  "contractor_id",
+  "contractor_name",
+  "contractor_email",
+  "claimed_by",
+  "claimed_by_name",
+  "claimed_by_email",
+  "completed_by",
+  "completed_by_name",
+  "completed_by_email",
+  "preferred_contractor_names",
+  "scope",
+  "supplies_notes",
+  "special_instructions",
+  "special_notes",
+  "notes",
+  "instructions"
+];
+
+const managerSensitiveMetadataFields = new Set([
+  ...managerSensitiveAssignmentFields,
+  "scope_of_work",
+  "unit_notes",
+  "unit_contractor_pay",
+  "property_manager_notes"
+]);
+
+function redactManagerAssignment(row) {
+  if (!row || typeof row !== "object") return row;
+  const redacted = { ...row };
+  managerSensitiveAssignmentFields.forEach((field) => delete redacted[field]);
+  const metadata = rowMeta(redacted);
+  if (Object.keys(metadata).length) {
+    const cleanedMetadata = { ...metadata };
+    managerSensitiveMetadataFields.forEach((field) => delete cleanedMetadata[field]);
+    redacted.metadata = cleanedMetadata;
+  }
+  return redacted;
+}
+
 function hasLinkedProperty() {
   return Boolean(state.property?.id);
 }
@@ -756,25 +802,6 @@ function unitBedBath(rowOrUnit) {
     bedrooms !== undefined && bedrooms !== null && bedrooms !== "" ? `${bedrooms} Bed` : "",
     bathrooms !== undefined && bathrooms !== null && bathrooms !== "" ? `${bathrooms} Bath` : ""
   ]).join(" / ") || "Bed/Bath not set";
-}
-
-function assignmentCleaner(row) {
-  return row?.assigned_to_name || row?.claimed_by_name || row?.completed_by_name || "Turnly crew";
-}
-
-function assignmentContractorText(row) {
-  const meta = rowMeta(row);
-  const names = Array.isArray(row?.preferred_contractor_names)
-    ? row.preferred_contractor_names.filter(Boolean)
-    : (Array.isArray(meta.preferred_contractor_names) ? meta.preferred_contractor_names.filter(Boolean) : []);
-  return row?.assigned_to_name
-    || row?.assigned_to_email
-    || row?.contractor_name
-    || row?.contractor_email
-    || row?.claimed_by_name
-    || row?.claimed_by_email
-    || names.join(", ")
-    || "Unassigned";
 }
 
 function assignmentStatus(row) {
@@ -1339,6 +1366,7 @@ async function loadPropertyAssignments(propertyId) {
 
   state.assignments = dedupeRows(rows)
     .filter((row) => row.__propertyScopeLinked || rowMatchesManagerProperty(row))
+    .map(redactManagerAssignment)
     .sort((a, b) => dateValue(b.start_window || b.recurring_due_at || b.created_at, 0) - dateValue(a.start_window || a.recurring_due_at || a.created_at, 0));
   if (hardErrors.length && !state.assignments.length) return `Assignments unavailable: ${hardErrors[0].message}.`;
   return "";
@@ -1806,7 +1834,7 @@ function renderOverviewFocusPanel(metrics, next) {
       <div class="pm-focus-next">
         <span>Next Turn</span>
         <strong>${esc(next ? (assignmentUnit(next) ? `Unit ${assignmentUnit(next)}` : assignmentTitle(next)) : "No upcoming turn")}</strong>
-        <small>${esc(next ? `${formatWindow(next)} - ${assignmentCleaner(next)}` : "Scheduled turns will appear here after Turnly confirms them.")}</small>
+        <small>${esc(next ? formatWindow(next) : "Scheduled turns will appear here after Turnly confirms them.")}</small>
         ${next?.id ? `<button class="pm-row-action" type="button" data-manager-view-assignment="${esc(next.id)}">View details</button>` : ""}
       </div>
     </aside>
@@ -1854,7 +1882,7 @@ function renderOverviewJourney(metrics) {
   const steps = [
     ["Requested", metrics.pending, "Turnly review"],
     ["Scheduled", metrics.scheduled, "Dates confirmed"],
-    ["Accepted", activeAssignments().filter((row) => scheduleAcceptanceStatus(row).tone === "accepted").length, "Crew locked in"],
+    ["Accepted", activeAssignments().filter((row) => scheduleAcceptanceStatus(row).tone === "accepted").length, "Work confirmed"],
     ["In Progress", metrics.inProgress, "Cleaning active"],
     ["Completed", metrics.ready, "Last 30 days"],
     ["Feedback", metrics.issues, "Needs attention"]
@@ -1889,7 +1917,7 @@ function renderWeeklyPlanPreview() {
           <time>${esc(parseDate(row.start_window || row.recurring_due_at)?.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }) || "No date")}</time>
           <span>
             <strong>${esc(assignmentUnit(row) ? `Unit ${assignmentUnit(row)}` : assignmentTitle(row))}</strong>
-            <small>${esc([scheduleEventTime(row), assignmentCleaner(row)].filter(Boolean).join(" - "))}</small>
+            <small>${esc(scheduleEventTime(row))}</small>
           </span>
           ${statusBadge(requestGroup(row))}
         </button>
@@ -2081,7 +2109,6 @@ function filteredRequests() {
       assignmentUnit(row),
       unitBedBath(row),
       assignmentStatus(row),
-      assignmentCleaner(row),
       row?.service_type
     ]);
     return matchesStatus && matchesQuery;
@@ -2182,14 +2209,14 @@ function scheduleStatusKey(value) {
 function scheduleAcceptanceStatus(row) {
   const status = scheduleStatusKey(row?.status);
   if (["cancelled", "canceled", "declined"].includes(status)) return { label: titleCase(status), tone: status };
-  if (row?.accepted_at || row?.claimed_at || row?.claimed_by || ["claimed", "in-progress", "completed", "qa-pending"].includes(status)) {
-    return { label: "Accepted", tone: "accepted" };
+  if (row?.accepted_at || row?.claimed_at || ["claimed", "in-progress", "completed", "qa-pending"].includes(status)) {
+    return { label: "Confirmed", tone: "accepted" };
   }
-  if (row?.assigned_to || row?.assigned_to_name || row?.assigned_to_email || row?.contractor_id || row?.contractor_name) {
-    return { label: "Assigned", tone: "assigned" };
+  if ((row?.start_window || row?.end_window) && !pendingStatuses.has(assignmentStatus(row))) {
+    return { label: "Confirmed", tone: "assigned" };
   }
-  if (status === "preferred-pending" || pendingStatuses.has(assignmentStatus(row))) return { label: "Awaiting Accept", tone: "pending" };
-  return { label: "Not Accepted", tone: "not-accepted" };
+  if (status === "preferred-pending" || pendingStatuses.has(assignmentStatus(row))) return { label: "Pending Confirmation", tone: "pending" };
+  return { label: "Pending Confirmation", tone: "not-accepted" };
 }
 
 function scheduleEventTime(row) {
@@ -2218,31 +2245,6 @@ function assignmentFrequencyLabel(row) {
   return titleCase(row?.recurrence_frequency || row?.assignment_type || "one_time");
 }
 
-function assignmentRoutingMeta(row) {
-  const meta = rowMeta(row);
-  const names = Array.isArray(row?.preferred_contractor_names)
-    ? row.preferred_contractor_names.filter(Boolean)
-    : (Array.isArray(meta.preferred_contractor_names) ? meta.preferred_contractor_names.filter(Boolean) : []);
-  if (row?.assigned_to || row?.assigned_to_name || row?.assigned_to_email || row?.contractor_id || row?.contractor_name) return "Assigned contractor";
-  if (row?.claimed_by || row?.claimed_by_name || row?.claimed_by_email) return "Claimed contractor";
-  if (names.length) return `${names.length} preferred contractor${names.length === 1 ? "" : "s"}`;
-  return "Open to contractors";
-}
-
-function assignmentPayAmount(row) {
-  const meta = rowMeta(row);
-  return asNumber(row?.pay_amount ?? row?.contractor_pay ?? row?.contractor_amount ?? meta.contractor_pay ?? meta.unit_contractor_pay);
-}
-
-function assignmentNotes(row) {
-  const meta = rowMeta(row);
-  return {
-    scope: row?.scope || meta.scope || meta.scope_of_work || "",
-    supplies: row?.supplies_notes || meta.supplies_notes || "",
-    special: row?.special_instructions || row?.special_notes || row?.notes || meta.unit_notes || meta.special_notes || meta.instructions || ""
-  };
-}
-
 function assignmentUnitMeta(row) {
   const unit = matchingUnit(row);
   const meta = rowMeta(row);
@@ -2268,7 +2270,6 @@ function renderAssignmentDetailsCard(row, emptyTitle = "No request selected") {
   const meta = rowMeta(row);
   const accepted = scheduleAcceptanceStatus(row);
   const title = assignmentTitle(row);
-  const notes = assignmentNotes(row);
   const videos = videosForAssignment(row);
   const before = videos.find((video) => normalizeToken(video.video_phase) === "before");
   const after = videos.find((video) => ["after", "final"].includes(normalizeToken(video.video_phase)));
@@ -2276,9 +2277,8 @@ function renderAssignmentDetailsCard(row, emptyTitle = "No request selected") {
     ["Property Name", title, assignmentAddress(row)],
     ["Unit Number", assignmentUnit(row) || "Unit", assignmentUnitMeta(row)],
     ["Schedule", assignmentDateWindow(row), assignmentFrequencyLabel(row)],
-    ["Contractor Routing", assignmentContractorText(row), assignmentRoutingMeta(row)],
-    ["Contractor Pay", money(assignmentPayAmount(row)), row.service_type || "No service type"],
-    ["Special Notes", notes.special || notes.scope || "No special notes", notes.special ? "Special instructions" : "Scope"]
+    ["Service Type", row.service_type || row.assignment_type || "Turn Service", "Requested service"],
+    ["Status", titleCase(row.status || requestGroup(row) || "scheduled"), accepted.label]
   ];
   if (isCompletedAssignment(row)) {
     const completedValue = completionDateValue(row);
@@ -2307,13 +2307,8 @@ function renderAssignmentDetailsCard(row, emptyTitle = "No request selected") {
           </div>
         `).join("")}
       </div>
-      <div class="schedule-assignment-notes">
-        <div><span>Scope of Work</span><p>${esc(notes.scope || meta.scope || "No scope entered.")}</p></div>
-        <div><span>Supplies Notes</span><p>${esc(notes.supplies || "No supplies notes entered.")}</p></div>
-        <div><span>Special Instructions</span><p>${esc(notes.special || "No special instructions entered.")}</p></div>
-      </div>
       <h3>Requested Services</h3>
-      <div class="pm-chip-row">${compact([row.service_type, meta.scope, meta.checklist_name, assignmentCleaner(row)]).slice(0, 5).map((item) => `<span>${esc(item)}</span>`).join("") || "<span>Standard turn</span>"}</div>
+      <div class="pm-chip-row">${compact([row.service_type, meta.checklist_name]).slice(0, 5).map((item) => `<span>${esc(item)}</span>`).join("") || "<span>Standard turn</span>"}</div>
       <h3>Before & After Videos</h3>
       <div class="pm-video-pair">
         ${renderVideoSlot(before, "Before Video")}
@@ -2514,7 +2509,7 @@ function renderScheduleEvent(row) {
       <div class="schedule-event-time">${esc(scheduleEventTime(row))}</div>
       <strong>${esc(title)}</strong>
       <p>${esc(subtitle || row.title || "Assignment")}</p>
-      <small>${esc(assignmentContractorText(row))}</small>
+      <small>${esc(unitBedBath(row))}</small>
       <div class="schedule-event-badges">
         <span class="status-badge status-${esc(scheduleStatusKey(row.status || requestGroup(row)))}">${esc(titleCase(row.status || requestGroup(row) || "scheduled"))}</span>
         <span class="status-badge schedule-acceptance-badge is-${esc(accepted.tone)}">${esc(accepted.label)}</span>
@@ -2539,7 +2534,7 @@ function renderScheduleSnapshot() {
   const today = new Date();
   const selectedRows = state.assignments
     .filter((row) => sameDay(row.start_window || row.recurring_due_at, selectedDate))
-    .filter((row) => queryMatches([assignmentUnit(row), assignmentTitle(row), assignmentCleaner(row), row.service_type]))
+    .filter((row) => queryMatches([assignmentUnit(row), assignmentTitle(row), row.service_type]))
     .sort((a, b) => dateValue(a.start_window || a.recurring_due_at, 0) - dateValue(b.start_window || b.recurring_due_at, 0))
     .slice(0, 4);
   return `
