@@ -5987,6 +5987,42 @@ body.turnly-admin-suite[data-dashboard-theme="light"] .property-unit-quick-form 
   border-color: rgba(0, 214, 163, 0.22);
 }
 
+body.turnly-admin-suite[data-dashboard-theme="light"][data-admin-page="property-units"] .property-unit-add-dialog,
+body.turnly-admin-suite[data-dashboard-theme="light"][data-admin-page="property-units"] .property-unit-copy-selector {
+  background: #ffffff;
+  border-color: var(--suite-border);
+  color: var(--suite-text);
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"][data-admin-page="property-units"] .property-unit-add-head {
+  border-bottom-color: var(--suite-border-soft);
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"][data-admin-page="property-units"] .property-unit-add-head h2,
+body.turnly-admin-suite[data-dashboard-theme="light"][data-admin-page="property-units"] .property-unit-add-form-slot .suite-field {
+  color: var(--suite-text);
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"][data-admin-page="property-units"] .property-unit-add-head span,
+body.turnly-admin-suite[data-dashboard-theme="light"][data-admin-page="property-units"] .property-unit-copy-selector p {
+  color: var(--suite-soft);
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"][data-admin-page="property-units"] .property-unit-add-form-slot .property-unit-quick-form {
+  background: transparent;
+  border-color: transparent;
+  color: var(--suite-text);
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"][data-admin-page="property-units"] .property-unit-add-form-slot .suite-field input,
+body.turnly-admin-suite[data-dashboard-theme="light"][data-admin-page="property-units"] .property-unit-add-form-slot .suite-field select,
+body.turnly-admin-suite[data-dashboard-theme="light"][data-admin-page="property-units"] .property-unit-add-form-slot .suite-field textarea {
+  background: #ffffff;
+  border-color: var(--suite-border-soft);
+  color: var(--suite-text);
+  color-scheme: light;
+}
+
 body.turnly-admin-suite[data-dashboard-theme="light"] .checklist-module-importer {
   background: rgba(58, 127, 255, 0.08);
   border-color: rgba(58, 127, 255, 0.22);

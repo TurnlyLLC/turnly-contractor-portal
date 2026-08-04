@@ -377,6 +377,45 @@ function installModalStyles() {
       font-size: 12px;
       margin: 0;
     }
+    body.turnly-admin-suite[data-dashboard-theme="light"] .property-unit-add-backdrop {
+      background: rgba(15, 35, 55, 0.28);
+    }
+    body.turnly-admin-suite[data-dashboard-theme="light"] .property-unit-add-dialog {
+      background: #ffffff;
+      border-color: var(--suite-border);
+      box-shadow: 0 24px 80px rgba(15, 35, 55, 0.18);
+      color: var(--suite-text);
+    }
+    body.turnly-admin-suite[data-dashboard-theme="light"] .property-unit-add-head {
+      border-bottom-color: var(--suite-border-soft);
+    }
+    body.turnly-admin-suite[data-dashboard-theme="light"] .property-unit-add-head h2 {
+      color: var(--suite-text);
+    }
+    body.turnly-admin-suite[data-dashboard-theme="light"] .property-unit-add-head span,
+    body.turnly-admin-suite[data-dashboard-theme="light"] .property-unit-copy-selector p {
+      color: var(--suite-soft);
+    }
+    body.turnly-admin-suite[data-dashboard-theme="light"] .property-unit-copy-selector {
+      background: #f8fbfd;
+      border-color: var(--suite-border);
+    }
+    body.turnly-admin-suite[data-dashboard-theme="light"] .property-unit-add-form-slot .property-unit-quick-form {
+      background: transparent;
+      border-color: transparent;
+      color: var(--suite-text);
+    }
+    body.turnly-admin-suite[data-dashboard-theme="light"] .property-unit-add-form-slot .suite-field {
+      color: #253a51;
+    }
+    body.turnly-admin-suite[data-dashboard-theme="light"] .property-unit-add-form-slot .suite-field input,
+    body.turnly-admin-suite[data-dashboard-theme="light"] .property-unit-add-form-slot .suite-field select,
+    body.turnly-admin-suite[data-dashboard-theme="light"] .property-unit-add-form-slot .suite-field textarea {
+      background: #ffffff;
+      border-color: var(--suite-border-soft);
+      color: var(--suite-text);
+      color-scheme: light;
+    }
     @media (max-width: 720px) {
       .property-unit-add-dialog {
         max-height: 92vh;
