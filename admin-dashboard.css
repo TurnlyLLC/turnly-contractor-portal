@@ -2638,7 +2638,9 @@ body.admin-command-body[data-portal-role="property-manager"] .topbar-profile-mes
   border: 1px solid rgba(226, 236, 245, 0.16);
   border-radius: 8px;
   box-shadow: 0 22px 52px rgba(0, 0, 0, 0.24);
-  padding: 12px;
+  max-width: 470px;
+  padding: 14px;
+  width: 100%;
 }
 
 .pm-hero-media-card {
@@ -2733,9 +2735,9 @@ body.admin-command-body[data-portal-role="property-manager"] .topbar-profile-mes
 .pm-focus-next {
   align-content: start;
   display: grid;
-  gap: 8px;
-  min-height: 118px;
-  padding: 12px;
+  gap: 10px;
+  min-height: 150px;
+  padding: 16px;
 }
 
 .pm-focus-next span,
@@ -2746,10 +2748,22 @@ body.admin-command-body[data-portal-role="property-manager"] .topbar-profile-mes
   text-transform: uppercase;
 }
 
+.pm-picture-hero .pm-focus-next span {
+  color: #f7fbff;
+  font-size: 13px;
+  font-weight: 1000;
+  letter-spacing: 0.08em;
+}
+
 .pm-focus-next strong {
   color: var(--pm-text);
   font-size: 18px;
   line-height: 1.2;
+}
+
+.pm-picture-hero .pm-focus-next strong {
+  color: #ffffff;
+  font-size: 20px;
 }
 
 .pm-focus-next small {

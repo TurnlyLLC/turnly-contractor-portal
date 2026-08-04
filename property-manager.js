@@ -1413,8 +1413,9 @@ function renderManagerPortal(loading = false) {
   const [title, subtitle] = viewLabels[state.view] || viewLabels.overview;
   const headingTitle = state.view === "overview" ? propertyTitle() : title;
   const headingSubtitle = state.view === "overview"
-    ? (hasLinkedProperty() ? "Your assigned property overview." : "")
+    ? ""
     : subtitle;
+  const showDataStatus = !(state.view === "overview" && hasLinkedProperty() && !loading);
 
   managerMain.innerHTML = `
     <header class="command-header pm-page-header">
@@ -1424,7 +1425,7 @@ function renderManagerPortal(loading = false) {
       </div>
       ${renderTopBar()}
     </header>
-    ${renderDataStatus(loading)}
+    ${showDataStatus ? renderDataStatus(loading) : ""}
     ${renderPropertyLinkNotice()}
     ${renderRequestForm()}
     ${renderCurrentView()}
@@ -1703,13 +1704,6 @@ function renderOverviewHero(metrics, delta) {
         <div class="pm-experience-copy">
           <p class="pm-eyebrow">Property Operations</p>
           <h2>${esc(propertyTitle())}</h2>
-          <p>${esc(managerClientName())} has ${integer(metrics.units)} tracked units, ${integer(metrics.upcoming)} future turns, and ${integer(metrics.ready)} completed cleans in the last 30 days.</p>
-          <dl class="pm-experience-facts">
-            <div><dt>Address</dt><dd>${esc(propertyAddress())}</dd></div>
-            <div><dt>Next Turn</dt><dd>${esc(next ? formatShortDate(next.start_window || next.recurring_due_at, "Not scheduled") : "No upcoming turn")}</dd></div>
-            <div><dt>Media Sets</dt><dd>${esc(integer(metrics.beforeAfter))}</dd></div>
-            <div><dt>Week Trend</dt><dd>${esc(`${delta >= 0 ? "+" : ""}${delta}%`)}</dd></div>
-          </dl>
           <div class="pm-experience-actions">
             ${renderNewTurnRequestButton("Request Turn")}
             <button class="secondary-command-btn pm-compact-btn" type="button" data-pm-view-button="schedule">View Schedule</button>
@@ -1747,12 +1741,6 @@ function renderOverviewHeroMedia(video, row = null) {
 }
 
 function renderOverviewFocusPanel(metrics, next) {
-  const pulseRows = [
-    ["Pending review", metrics.pending],
-    ["Open / scheduled", metrics.open + metrics.scheduled],
-    ["In progress", metrics.inProgress],
-    ["Completed this week", metrics.completedThisWeek]
-  ];
   return `
     <aside class="pm-overview-focus-card" aria-label="Current property focus">
       <div class="pm-focus-next">
@@ -1760,14 +1748,6 @@ function renderOverviewFocusPanel(metrics, next) {
         <strong>${esc(next ? (assignmentUnit(next) ? `Unit ${assignmentUnit(next)}` : assignmentTitle(next)) : "No upcoming turn")}</strong>
         <small>${esc(next ? `${formatWindow(next)} - ${assignmentCleaner(next)}` : "Scheduled turns will appear here after Turnly confirms them.")}</small>
         ${next?.id ? `<button class="pm-row-action" type="button" data-manager-view-assignment="${esc(next.id)}">View details</button>` : ""}
-      </div>
-      <div class="pm-overview-pulse-list">
-        ${pulseRows.map(([label, value]) => `
-          <div>
-            <span>${esc(label)}</span>
-            <strong>${esc(integer(value))}</strong>
-          </div>
-        `).join("")}
       </div>
     </aside>
   `;
