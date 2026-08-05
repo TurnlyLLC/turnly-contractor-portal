@@ -20,6 +20,9 @@ const state = {
   managerPropertyLinks: [],
   managers: [],
   propertyOptions: [],
+  stateSettingsRecordId: "",
+  cityStateOverrides: {},
+  hiddenStates: [],
   selectedRegionId: "",
   selectedManagerId: "",
   propertySearch: "",
@@ -142,10 +145,27 @@ function propertyRegion(row = {}) {
   );
 }
 
+function propertyCity(row = {}) {
+  const meta = metadata(row);
+  const address = firstValue(row.address, row.property_address, row.service_address, row.billing_address, meta.address);
+  const addressCity = String(address || "").split(",")[0] || "";
+  return firstValue(
+    row.city,
+    row.service_city,
+    row.property_city,
+    meta.city,
+    meta.service_city,
+    meta.property_city,
+    addressCity
+  );
+}
+
 function propertyState(row = {}) {
   const meta = metadata(row);
   const address = firstValue(row.address, row.property_address, row.service_address, row.billing_address, meta.address);
   const addressState = String(address || "").match(/,\s*([A-Z]{2})(?:\s+\d{5})?\s*$/i)?.[1] || "";
+  const cityOverride = cityStateForCity(propertyCity(row));
+  if (cityOverride) return cityOverride;
   return firstValue(
     row.state,
     row.service_state,
@@ -174,6 +194,7 @@ function normalizePropertyOption(row = {}, source = {}) {
     address: String(address || ""),
     region: String(propertyRegion(row) || "Unassigned Region"),
     stateName: String(propertyState(row) || "Unassigned State"),
+    cityName: String(propertyCity(row) || ""),
     sourceLabel: sourceTable === "client_contracts" ? "Contract" : "Property",
     sourceTable,
     active: isActiveish(row),
@@ -442,16 +463,74 @@ function renderSelectionToolbar(kind, selectedCount, visibleCount, totalCount, n
   `;
 }
 
+const US_STATE_OPTIONS = [
+  "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
+  "HI", "IA", "ID", "IL", "IN", "KS", "KY", "LA", "MA", "MD",
+  "ME", "MI", "MN", "MO", "MS", "MT", "NC", "ND", "NE", "NH",
+  "NJ", "NM", "NV", "NY", "OH", "OK", "OR", "PA", "RI", "SC",
+  "SD", "TN", "TX", "UT", "VA", "VT", "WA", "WI", "WV", "WY",
+  "DC"
+];
+
 function cleanStateName(value) {
   const raw = String(value || "").trim();
   if (!raw) return "Unassigned State";
   return raw.length <= 3 ? raw.toUpperCase() : raw.replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+function hiddenStateSet() {
+  return new Set((state.hiddenStates || []).map(cleanStateName));
+}
+
+function isHiddenState(value) {
+  const clean = cleanStateName(value);
+  return clean !== "Unassigned State" && hiddenStateSet().has(clean);
+}
+
+function displayStateName(value) {
+  const clean = cleanStateName(value);
+  return isHiddenState(clean) ? "Unassigned State" : clean;
+}
+
+function cityStateForCity(city) {
+  const key = normalizeLookup(city);
+  return key ? state.cityStateOverrides?.[key] || "" : "";
+}
+
+function detectedCityRows() {
+  const rowsByCity = new Map();
+  state.propertyOptions.forEach((option) => {
+    const city = String(option.cityName || "").trim();
+    if (!city) return;
+    const key = normalizeLookup(city);
+    const existing = rowsByCity.get(key) || { key, city, states: new Set(), count: 0 };
+    existing.states.add(cleanStateName(option.stateName));
+    existing.count += 1;
+    rowsByCity.set(key, existing);
+  });
+  return Array.from(rowsByCity.values())
+    .map((row) => ({
+      ...row,
+      detectedState: Array.from(row.states).filter(Boolean).join(", ") || "Unassigned State",
+      overrideState: state.cityStateOverrides?.[row.key] || ""
+    }))
+    .sort((a, b) => a.city.localeCompare(b.city, undefined, { sensitivity: "base" }));
+}
+
+function stateOptionMarkup(selected = "") {
+  const current = cleanStateName(selected);
+  const options = unique([
+    current,
+    ...US_STATE_OPTIONS,
+    ...stateGroups().map((group) => group.stateName).filter((name) => name !== "Unassigned State")
+  ]).filter(Boolean);
+  return options.map((option) => `<option value="${esc(option)}" ${cleanStateName(option) === current ? "selected" : ""}>${esc(option)}</option>`).join("");
+}
+
 function regionStateName(region = {}) {
   const meta = metadata(region);
   const assigned = regionPropertyLinks(region.id).map(optionForLink).filter(Boolean);
-  return cleanStateName(firstValue(
+  return displayStateName(firstValue(
     region.state,
     region.service_state,
     meta.state,
@@ -520,7 +599,7 @@ function unassignedManagers() {
 
 function stateGroups() {
   const stateNames = new Set();
-  state.propertyOptions.forEach((option) => stateNames.add(cleanStateName(option.stateName)));
+  state.propertyOptions.forEach((option) => stateNames.add(displayStateName(option.stateName)));
   state.regions.forEach((region) => stateNames.add(regionStateName(region)));
   return Array.from(stateNames)
     .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }))
@@ -550,6 +629,19 @@ function managerSelectOptions(selectedId = "") {
   return state.managers
     .map((manager) => `<option value="${esc(manager.id)}" ${String(manager.id) === String(selectedId) ? "selected" : ""}>${esc(managerName(manager))}${manager.email ? ` - ${esc(manager.email)}` : ""}</option>`)
     .join("");
+}
+
+function isStateSettingsRegion(region = {}) {
+  const meta = metadata(region);
+  return Boolean(meta.state_city_settings) || normalizeToken(region.name) === "state_city_settings";
+}
+
+function stateSettingsMetadata(overrides = state.cityStateOverrides, hiddenStates = state.hiddenStates) {
+  return {
+    state_city_settings: true,
+    city_state_overrides: overrides || {},
+    hidden_states: (hiddenStates || []).map(cleanStateName)
+  };
 }
 
 function setMessage(message, error = false) {
@@ -1018,7 +1110,10 @@ function renderAccessTree() {
                   <strong>${esc(group.stateName)}</strong>
                   <small>${esc(group.regions.length)} regions - ${esc(propertyCount)} properties</small>
                 </span>
-                <button class="secondary-action compact-action" type="button" data-add-region data-state-name="${esc(group.stateName)}">+ Region</button>
+                <span class="region-node-actions">
+                  <button class="secondary-action compact-action" type="button" data-add-region data-state-name="${esc(group.stateName)}">+ Region</button>
+                  ${group.stateName !== "Unassigned State" ? `<button class="secondary-action compact-action danger-action" type="button" data-remove-state="${esc(group.stateName)}">Remove State</button>` : ""}
+                </span>
               </summary>
               <div class="region-state-body">
                 ${group.regions.length ? group.regions.map(renderRegionNode).join("") : `<div class="region-mini-empty">No regions yet for this state.</div>`}
@@ -1046,7 +1141,7 @@ function renderUnassignedPropertiesPanel() {
           <div class="region-assignment-row">
             <span>
               <strong>${esc(option.name)}</strong>
-              <small>${esc([option.stateName, option.address].filter(Boolean).join(" - "))}</small>
+              <small>${esc([displayStateName(option.stateName), option.address].filter(Boolean).join(" - "))}</small>
             </span>
             <select data-unassigned-property-region="${esc(option.key)}">
               <option value="">Choose region...</option>
@@ -1084,6 +1179,49 @@ function renderUnassignedManagersPanel() {
             <button class="primary-action" type="button" data-assign-unassigned-manager data-manager-id="${esc(manager.id)}"><span>Assign Property</span></button>
           </div>
         `).join("") : `<div class="region-mini-empty">Every property manager already has property or region access.</div>`}
+      </div>
+    </details>
+  `;
+}
+
+function renderCityStatePanel() {
+  const rows = detectedCityRows();
+  const overrideKeys = Object.keys(state.cityStateOverrides || {}).sort();
+  return `
+    <details class="region-card region-utility-panel" open>
+      <summary>
+        <span>
+          <strong>City To State Mapping</strong>
+          <small>Assign a city to the correct state when the contract data is missing or wrong.</small>
+        </span>
+      </summary>
+      <div class="region-utility-list">
+        ${rows.length ? rows.map((row) => `
+          <div class="region-assignment-row city-state-row">
+            <span>
+              <strong>${esc(row.city)}</strong>
+              <small>Detected: ${esc(row.detectedState)}${row.overrideState ? ` - Override: ${esc(row.overrideState)}` : ""} - ${esc(row.count)} properties</small>
+            </span>
+            <select data-city-state-select="${esc(row.key)}">
+              ${stateOptionMarkup(row.overrideState || row.detectedState.split(",")[0] || "")}
+            </select>
+            <button class="primary-action" type="button" data-save-city-state data-city-key="${esc(row.key)}" data-city-name="${esc(row.city)}"><span>Save State</span></button>
+          </div>
+        `).join("") : `<div class="region-mini-empty">No cities found from active contract properties.</div>`}
+        ${overrideKeys.length ? `
+          <div class="region-overrides-list">
+            <strong>Saved city mappings</strong>
+            ${overrideKeys.map((key) => `
+              <div class="region-saved-mapping">
+                <span>
+                  <strong>${esc(key.replace(/\b\w/g, (letter) => letter.toUpperCase()))}</strong>
+                  <small>${esc(state.cityStateOverrides[key])}</small>
+                </span>
+                <button class="secondary-action compact-action danger-action" type="button" data-remove-city-state="${esc(key)}">Remove</button>
+              </div>
+            `).join("")}
+          </div>
+        ` : ""}
       </div>
     </details>
   `;
@@ -1144,6 +1282,7 @@ function renderApp() {
       ${renderAccessActions()}
       <section class="region-main-stack">
         ${renderAccessTree()}
+        ${renderCityStatePanel()}
         <div class="region-utility-grid">
           ${renderUnassignedPropertiesPanel()}
           ${renderUnassignedManagersPanel()}
@@ -1204,7 +1343,14 @@ async function loadData() {
       loadTable("portal_properties", "*", { order: "property_name", limit: 2000 }),
       loadTable("client_contracts", "*", { order: "property_name", limit: 2000 })
     ]);
-    state.regions = regions;
+    const settingsRegion = regions.find(isStateSettingsRegion) || null;
+    const settingsMeta = metadata(settingsRegion || {});
+    state.stateSettingsRecordId = settingsRegion?.id || "";
+    state.cityStateOverrides = settingsMeta.city_state_overrides || settingsMeta.city_state_map || {};
+    state.hiddenStates = Array.isArray(settingsMeta.hidden_states)
+      ? settingsMeta.hidden_states.map(cleanStateName)
+      : [];
+    state.regions = regions.filter((region) => !isStateSettingsRegion(region));
     state.regionLinks = regionLinks;
     state.managerRegionLinks = managerRegionLinks;
     state.managerPropertyLinks = managerPropertyLinks;
@@ -1266,6 +1412,75 @@ function propertyRowsPayload(options, extra = {}) {
   }));
 }
 
+async function saveStateSettings(overrides = state.cityStateOverrides, hiddenStates = state.hiddenStates) {
+  const payload = {
+    name: "State City Settings",
+    status: "active",
+    metadata: stateSettingsMetadata(overrides, hiddenStates)
+  };
+  let result;
+  if (state.stateSettingsRecordId) {
+    result = await supabase
+      .from("property_regions")
+      .update({ metadata: payload.metadata, status: "active" })
+      .eq("id", state.stateSettingsRecordId);
+  } else {
+    result = await supabase
+      .from("property_regions")
+      .insert(payload)
+      .select("id")
+      .maybeSingle();
+  }
+  if (result.error) {
+    setMessage(`Unable to save state settings: ${result.error.message}`, true);
+    return false;
+  }
+  return true;
+}
+
+async function removeStateFromList(stateName) {
+  const clean = cleanStateName(stateName);
+  if (!clean || clean === "Unassigned State") return;
+  if (!window.confirm(`Remove ${clean} from the state list? Properties currently grouped there will move to Unassigned State until their city is assigned to a state.`)) return;
+  const nextHidden = unique([...(state.hiddenStates || []), clean]).map(cleanStateName);
+  setMessage(`Removing ${clean} from the state list...`);
+  const saved = await saveStateSettings(state.cityStateOverrides, nextHidden);
+  if (!saved) return;
+  await loadData();
+  setMessage(`${clean} was removed from the visible state list.`);
+}
+
+async function saveCityState(city, targetState) {
+  const cityKey = normalizeLookup(city);
+  const cleanTarget = cleanStateName(targetState);
+  if (!cityKey || !cleanTarget || cleanTarget === "Unassigned State") {
+    setMessage("Choose a city and a valid state first.", true);
+    return;
+  }
+  const nextOverrides = {
+    ...(state.cityStateOverrides || {}),
+    [cityKey]: cleanTarget
+  };
+  const nextHidden = (state.hiddenStates || []).map(cleanStateName).filter((item) => item !== cleanTarget);
+  setMessage(`Assigning ${city} to ${cleanTarget}...`);
+  const saved = await saveStateSettings(nextOverrides, nextHidden);
+  if (!saved) return;
+  await loadData();
+  setMessage(`${city} is now assigned to ${cleanTarget}.`);
+}
+
+async function removeCityState(cityKey) {
+  const key = normalizeLookup(cityKey);
+  if (!key) return;
+  const nextOverrides = { ...(state.cityStateOverrides || {}) };
+  delete nextOverrides[key];
+  setMessage("Removing city state mapping...");
+  const saved = await saveStateSettings(nextOverrides, state.hiddenStates);
+  if (!saved) return;
+  await loadData();
+  setMessage("City state mapping removed.");
+}
+
 async function addRegion(form) {
   const name = form.elements.name?.value?.trim() || "";
   if (!name) {
@@ -1307,6 +1522,12 @@ async function createRegion(name, stateName) {
   if (error) {
     setMessage(`Unable to add region: ${error.message}`, true);
     return null;
+  }
+  if (isHiddenState(cleanState)) {
+    await saveStateSettings(
+      state.cityStateOverrides,
+      (state.hiddenStates || []).filter((item) => cleanStateName(item) !== cleanState)
+    );
   }
   state.selectedRegionId = data?.id || state.selectedRegionId;
   await loadData();
@@ -1652,6 +1873,25 @@ function installHandlers() {
     if (addRegion) {
       event.preventDefault();
       await addRegionFromPrompt(addRegion.dataset.stateName || "");
+      return;
+    }
+    const removeState = event.target.closest("[data-remove-state]");
+    if (removeState) {
+      event.preventDefault();
+      await removeStateFromList(removeState.dataset.removeState || "");
+      return;
+    }
+    const saveCity = event.target.closest("[data-save-city-state]");
+    if (saveCity) {
+      const cityKey = saveCity.dataset.cityKey || "";
+      const select = Array.from(root.querySelectorAll("[data-city-state-select]"))
+        .find((node) => node.dataset.cityStateSelect === cityKey);
+      await saveCityState(saveCity.dataset.cityName || cityKey, select?.value || "");
+      return;
+    }
+    const removeCity = event.target.closest("[data-remove-city-state]");
+    if (removeCity) {
+      await removeCityState(removeCity.dataset.removeCityState || "");
       return;
     }
     const assignProperty = event.target.closest("[data-assign-property-region]");
@@ -2002,6 +2242,11 @@ function injectStyles() {
       padding: 7px 10px;
     }
 
+    .danger-action {
+      border-color: rgba(255, 92, 122, 0.38);
+      color: #ff8ba1;
+    }
+
     .region-action-bar {
       align-items: center;
       background: var(--suite-panel);
@@ -2028,6 +2273,18 @@ function injectStyles() {
 
     .region-action-bar span {
       color: var(--suite-soft);
+    }
+
+    .region-node-actions {
+      align-items: center;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .region-state-node > summary > .region-node-actions {
+      display: flex;
     }
 
     .region-state-list,
@@ -2215,6 +2472,35 @@ function injectStyles() {
       border-radius: 9px;
       grid-template-columns: minmax(220px, 1fr) minmax(220px, 0.8fr) auto;
       padding: 10px;
+    }
+
+    .city-state-row {
+      grid-template-columns: minmax(260px, 1.1fr) minmax(140px, 0.35fr) auto;
+    }
+
+    .region-overrides-list {
+      border-top: 1px solid var(--suite-border-soft);
+      display: grid;
+      gap: 8px;
+      margin-top: 4px;
+      padding-top: 12px;
+    }
+
+    .region-saved-mapping {
+      align-items: center;
+      background: rgba(5, 16, 28, 0.42);
+      border: 1px solid var(--suite-border-soft);
+      border-radius: 9px;
+      display: grid;
+      gap: 10px;
+      grid-template-columns: minmax(0, 1fr) auto;
+      padding: 10px;
+    }
+
+    .region-saved-mapping span {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
     }
 
     .region-mini-empty.compact {
@@ -2571,7 +2857,8 @@ function injectStyles() {
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-property-node,
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-manager-chip,
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-assignment-row,
-    body.turnly-admin-suite[data-dashboard-theme="light"] .region-utility-panel {
+    body.turnly-admin-suite[data-dashboard-theme="light"] .region-utility-panel,
+    body.turnly-admin-suite[data-dashboard-theme="light"] .region-saved-mapping {
       background: #f7fafc;
       border-color: #d6e0ea;
     }
@@ -2617,6 +2904,11 @@ function injectStyles() {
       color: #061321;
     }
 
+    body.turnly-admin-suite[data-dashboard-theme="light"] .danger-action {
+      border-color: rgba(220, 38, 38, 0.35);
+      color: #b91c1c;
+    }
+
     @media (max-width: 1180px) {
       .region-hero,
       .region-layout,
@@ -2649,7 +2941,8 @@ function injectStyles() {
       .region-add-form,
       .region-assignment-row,
       .region-inline-editor,
-      .region-manager-chip {
+      .region-manager-chip,
+      .region-saved-mapping {
         grid-template-columns: 1fr;
       }
 
