@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-contractor-pwa-v20260805-property-region-move-fix";
+const CACHE_NAME = "turnly-contractor-pwa-v20260805-unassigned-region-assignment";
 
 const PRECACHE_URLS = [
   "/",

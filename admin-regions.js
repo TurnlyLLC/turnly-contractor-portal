@@ -702,6 +702,12 @@ function propertySelectOptions(selectedKey = "") {
     .join("");
 }
 
+function unassignedPropertySelectOptions(selectedKey = "") {
+  return unassignedProperties()
+    .map((option) => `<option value="${esc(option.key)}" ${option.key === selectedKey ? "selected" : ""}>${esc(option.name)}${option.address ? ` - ${esc(option.address)}` : ""}</option>`)
+    .join("");
+}
+
 function managerSelectOptions(selectedId = "") {
   return state.managers
     .map((manager) => `<option value="${esc(manager.id)}" ${String(manager.id) === String(selectedId) ? "selected" : ""}>${esc(managerName(manager))}${manager.email ? ` - ${esc(manager.email)}` : ""}</option>`)
@@ -1214,59 +1220,31 @@ function renderAccessTree() {
 }
 
 function renderPropertyMovePanel() {
+  const rows = unassignedProperties();
   return `
     <section class="region-card region-move-card">
       <div class="region-card-head">
         <div>
-          <h2>Assign Or Move Existing Property</h2>
-          <p>Select any active contract property and move it into the correct region.</p>
+          <h2>Property Region Assignment</h2>
+          <p>Assign unassigned active contract properties into the correct region.</p>
         </div>
       </div>
       <div class="region-assignment-row property-move-row">
         <span>
-          <strong>Property Region Assignment</strong>
-          <small>This will replace any old region link for the selected property.</small>
+          <strong>Unassigned Properties</strong>
+          <small>${esc(rows.length)} properties are not in a region.</small>
         </span>
-        <select data-existing-property-select>
-          <option value="">Choose property...</option>
-          ${propertySelectOptions()}
+        <select data-existing-property-select ${rows.length ? "" : "disabled"}>
+          <option value="">${rows.length ? "Choose unassigned property..." : "No unassigned properties"}</option>
+          ${unassignedPropertySelectOptions()}
         </select>
-        <select data-existing-property-region>
+        <select data-existing-property-region ${rows.length ? "" : "disabled"}>
           <option value="">Choose region...</option>
           ${regionSelectOptions()}
         </select>
-        <button class="primary-action" type="button" data-move-existing-property><span>Move Property</span></button>
+        <button class="primary-action" type="button" data-move-existing-property ${rows.length ? "" : "disabled"}><span>Add To Region</span></button>
       </div>
     </section>
-  `;
-}
-
-function renderUnassignedPropertiesPanel() {
-  const rows = unassignedProperties();
-  return `
-    <details class="region-card region-utility-panel" open>
-      <summary>
-        <span>
-          <strong>Unassigned Properties</strong>
-          <small>${esc(rows.length)} active contract properties need a region</small>
-        </span>
-      </summary>
-      <div class="region-utility-list">
-        ${rows.length ? rows.map((option) => `
-          <div class="region-assignment-row">
-            <span>
-              <strong>${esc(option.name)}</strong>
-              <small>${esc([displayStateName(option.stateName), option.address].filter(Boolean).join(" - "))}</small>
-            </span>
-            <select data-unassigned-property-region="${esc(option.key)}">
-              <option value="">Choose region...</option>
-              ${regionSelectOptions()}
-            </select>
-            <button class="primary-action" type="button" data-assign-property-region data-option-key="${esc(option.key)}"><span>Add To Region</span></button>
-          </div>
-        `).join("") : `<div class="region-mini-empty">All active contract properties are assigned to a region.</div>`}
-      </div>
-    </details>
   `;
 }
 
@@ -1294,49 +1272,6 @@ function renderUnassignedManagersPanel() {
             <button class="primary-action" type="button" data-assign-unassigned-manager data-manager-id="${esc(manager.id)}"><span>Assign Property</span></button>
           </div>
         `).join("") : `<div class="region-mini-empty">Every property manager already has property or region access.</div>`}
-      </div>
-    </details>
-  `;
-}
-
-function renderCityStatePanel() {
-  const rows = detectedCityRows();
-  const overrideKeys = Object.keys(state.cityStateOverrides || {}).sort();
-  return `
-    <details class="region-card region-utility-panel" open>
-      <summary>
-        <span>
-          <strong>City To State Mapping</strong>
-          <small>Assign a city to the correct state when the contract data is missing or wrong.</small>
-        </span>
-      </summary>
-      <div class="region-utility-list">
-        ${rows.length ? rows.map((row) => `
-          <div class="region-assignment-row city-state-row">
-            <span>
-              <strong>${esc(row.city)}</strong>
-              <small>Detected: ${esc(row.detectedState)}${row.overrideState ? ` - Override: ${esc(row.overrideState)}` : ""} - ${esc(row.count)} properties</small>
-            </span>
-            <select data-city-state-select="${esc(row.key)}">
-              ${stateOptionMarkup(row.overrideState || row.detectedState.split(",")[0] || "")}
-            </select>
-            <button class="primary-action" type="button" data-save-city-state data-city-key="${esc(row.key)}" data-city-name="${esc(row.city)}"><span>Save State</span></button>
-          </div>
-        `).join("") : `<div class="region-mini-empty">No cities found from active contract properties.</div>`}
-        ${overrideKeys.length ? `
-          <div class="region-overrides-list">
-            <strong>Saved city mappings</strong>
-            ${overrideKeys.map((key) => `
-              <div class="region-saved-mapping">
-                <span>
-                  <strong>${esc(key.replace(/\b\w/g, (letter) => letter.toUpperCase()))}</strong>
-                  <small>${esc(state.cityStateOverrides[key])}</small>
-                </span>
-                <button class="secondary-action compact-action danger-action" type="button" data-remove-city-state="${esc(key)}">Remove</button>
-              </div>
-            `).join("")}
-          </div>
-        ` : ""}
       </div>
     </details>
   `;
@@ -1398,11 +1333,7 @@ function renderApp() {
       <section class="region-main-stack">
         ${renderPropertyMovePanel()}
         ${renderAccessTree()}
-        ${renderCityStatePanel()}
-        <div class="region-utility-grid">
-          ${renderUnassignedPropertiesPanel()}
-          ${renderUnassignedManagersPanel()}
-        </div>
+        ${renderUnassignedManagersPanel()}
       </section>
     </section>
   `;
@@ -2093,19 +2024,6 @@ function installHandlers() {
       await removeStateFromList(removeState.dataset.removeState || "");
       return;
     }
-    const saveCity = event.target.closest("[data-save-city-state]");
-    if (saveCity) {
-      const cityKey = saveCity.dataset.cityKey || "";
-      const select = Array.from(root.querySelectorAll("[data-city-state-select]"))
-        .find((node) => node.dataset.cityStateSelect === cityKey);
-      await saveCityState(saveCity.dataset.cityName || cityKey, select?.value || "");
-      return;
-    }
-    const removeCity = event.target.closest("[data-remove-city-state]");
-    if (removeCity) {
-      await removeCityState(removeCity.dataset.removeCityState || "");
-      return;
-    }
     const saveRegionState = event.target.closest("[data-save-region-state]");
     if (saveRegionState) {
       const regionId = saveRegionState.dataset.saveRegionState || "";
@@ -2119,14 +2037,6 @@ function installHandlers() {
       const propertySelect = root.querySelector("[data-existing-property-select]");
       const regionSelect = root.querySelector("[data-existing-property-region]");
       await assignPropertyToRegion(propertySelect?.value || "", regionSelect?.value || "");
-      return;
-    }
-    const assignProperty = event.target.closest("[data-assign-property-region]");
-    if (assignProperty) {
-      const optionKey = assignProperty.dataset.optionKey || "";
-      const select = Array.from(root.querySelectorAll("[data-unassigned-property-region]"))
-        .find((node) => node.dataset.unassignedPropertyRegion === optionKey);
-      await assignPropertyToRegion(optionKey, select?.value || "");
       return;
     }
     const moveProperty = event.target.closest("[data-move-property-region]");
@@ -2672,12 +2582,6 @@ function injectStyles() {
       width: 100%;
     }
 
-    .region-utility-grid {
-      display: grid;
-      gap: 14px;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    }
-
     .region-utility-panel {
       padding: 0;
     }
@@ -2709,35 +2613,6 @@ function injectStyles() {
       border-bottom: 1px solid var(--suite-border-soft);
       margin-bottom: 2px;
       padding-bottom: 12px;
-    }
-
-    .city-state-row {
-      grid-template-columns: minmax(260px, 1.1fr) minmax(140px, 0.35fr) auto;
-    }
-
-    .region-overrides-list {
-      border-top: 1px solid var(--suite-border-soft);
-      display: grid;
-      gap: 8px;
-      margin-top: 4px;
-      padding-top: 12px;
-    }
-
-    .region-saved-mapping {
-      align-items: center;
-      background: rgba(5, 16, 28, 0.42);
-      border: 1px solid var(--suite-border-soft);
-      border-radius: 9px;
-      display: grid;
-      gap: 10px;
-      grid-template-columns: minmax(0, 1fr) auto;
-      padding: 10px;
-    }
-
-    .region-saved-mapping span {
-      display: grid;
-      gap: 4px;
-      min-width: 0;
     }
 
     .region-mini-empty.compact {
@@ -3094,8 +2969,7 @@ function injectStyles() {
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-property-node,
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-manager-chip,
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-assignment-row,
-    body.turnly-admin-suite[data-dashboard-theme="light"] .region-utility-panel,
-    body.turnly-admin-suite[data-dashboard-theme="light"] .region-saved-mapping {
+    body.turnly-admin-suite[data-dashboard-theme="light"] .region-utility-panel {
       background: #f7fafc;
       border-color: #d6e0ea;
     }
@@ -3150,8 +3024,7 @@ function injectStyles() {
       .region-hero,
       .region-layout,
       .region-assignment-grid,
-      .region-secondary-grid,
-      .region-utility-grid {
+      .region-secondary-grid {
         grid-template-columns: 1fr;
       }
 
@@ -3178,8 +3051,7 @@ function injectStyles() {
       .region-add-form,
       .region-assignment-row,
       .region-inline-editor,
-      .region-manager-chip,
-      .region-saved-mapping {
+      .region-manager-chip {
         grid-template-columns: 1fr;
       }
 
