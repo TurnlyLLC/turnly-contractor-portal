@@ -257,12 +257,16 @@ function contractPropertyOptions(properties = [], contracts = []) {
       || byPortalId.get(option.contractId)
       || byLookup.get(option.key)
       || portalOptions.find((portalOption) => normalizeLookup(portalOption.name) === normalizeLookup(option.name));
-    return {
+    const merged = {
       ...option,
       portalPropertyId: option.portalPropertyId || portalMatch?.portalPropertyId || "",
       address: option.address || portalMatch?.address || "",
       stateName: option.stateName && option.stateName !== "UNASSIGNED STATE" ? option.stateName : portalMatch?.stateName || "Unassigned State",
       sourceLabel: activeContracts.length ? "Contract" : "Property"
+    };
+    return {
+      ...merged,
+      key: optionKey(merged)
     };
   }).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
 }
@@ -472,10 +476,79 @@ const US_STATE_OPTIONS = [
   "DC"
 ];
 
+const US_STATE_LABELS = {
+  AL: "Alabama",
+  AK: "Alaska",
+  AZ: "Arizona",
+  AR: "Arkansas",
+  CA: "California",
+  CO: "Colorado",
+  CT: "Connecticut",
+  DE: "Delaware",
+  FL: "Florida",
+  GA: "Georgia",
+  HI: "Hawaii",
+  IA: "Iowa",
+  ID: "Idaho",
+  IL: "Illinois",
+  IN: "Indiana",
+  KS: "Kansas",
+  KY: "Kentucky",
+  LA: "Louisiana",
+  MA: "Massachusetts",
+  MD: "Maryland",
+  ME: "Maine",
+  MI: "Michigan",
+  MN: "Minnesota",
+  MO: "Missouri",
+  MS: "Mississippi",
+  MT: "Montana",
+  NC: "North Carolina",
+  ND: "North Dakota",
+  NE: "Nebraska",
+  NH: "New Hampshire",
+  NJ: "New Jersey",
+  NM: "New Mexico",
+  NV: "Nevada",
+  NY: "New York",
+  OH: "Ohio",
+  OK: "Oklahoma",
+  OR: "Oregon",
+  PA: "Pennsylvania",
+  RI: "Rhode Island",
+  SC: "South Carolina",
+  SD: "South Dakota",
+  TN: "Tennessee",
+  TX: "Texas",
+  UT: "Utah",
+  VA: "Virginia",
+  VT: "Vermont",
+  WA: "Washington",
+  WI: "Wisconsin",
+  WV: "West Virginia",
+  WY: "Wyoming",
+  DC: "District of Columbia"
+};
+
+const US_STATE_CODE_BY_LOOKUP = Object.entries(US_STATE_LABELS).reduce((map, [code, label]) => {
+  map[normalizeLookup(code)] = code;
+  map[normalizeLookup(label)] = code;
+  map[normalizeLookup(label).replace(/\s+/g, "")] = code;
+  return map;
+}, {});
+
 function cleanStateName(value) {
   const raw = String(value || "").trim();
   if (!raw) return "Unassigned State";
+  const lookup = normalizeLookup(raw);
+  const code = US_STATE_CODE_BY_LOOKUP[lookup] || US_STATE_CODE_BY_LOOKUP[lookup.replace(/\s+/g, "")];
+  if (code) return code;
   return raw.length <= 3 ? raw.toUpperCase() : raw.replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function stateDisplayLabel(value) {
+  const clean = cleanStateName(value);
+  return US_STATE_LABELS[clean] || clean;
 }
 
 function hiddenStateSet() {
@@ -524,7 +597,10 @@ function stateOptionMarkup(selected = "") {
     ...US_STATE_OPTIONS,
     ...stateGroups().map((group) => group.stateName).filter((name) => name !== "Unassigned State")
   ]).filter(Boolean);
-  return options.map((option) => `<option value="${esc(option)}" ${cleanStateName(option) === current ? "selected" : ""}>${esc(option)}</option>`).join("");
+  return options.map((option) => {
+    const clean = cleanStateName(option);
+    return `<option value="${esc(clean)}" ${clean === current ? "selected" : ""}>${esc(stateDisplayLabel(clean))}</option>`;
+  }).join("");
 }
 
 function regionStateName(region = {}) {
@@ -542,7 +618,8 @@ function regionStateName(region = {}) {
 }
 
 function propertyRegionLink(option = {}) {
-  return state.regionLinks.find((link) => normalizeToken(link.status || "active") === "active" && linkMatchesOption(link, option)) || null;
+  const matches = state.regionLinks.filter((link) => normalizeToken(link.status || "active") === "active" && linkMatchesOption(link, option));
+  return matches[matches.length - 1] || null;
 }
 
 function propertyRegionId(option = {}) {
@@ -615,7 +692,7 @@ function regionSelectOptions(selectedId = "") {
   return state.regions
     .filter((region) => normalizeToken(region.status || "active") === "active")
     .sort((a, b) => `${regionStateName(a)} ${a.name}`.localeCompare(`${regionStateName(b)} ${b.name}`, undefined, { sensitivity: "base" }))
-    .map((region) => `<option value="${esc(region.id)}" ${String(region.id) === String(selectedId) ? "selected" : ""}>${esc(regionStateName(region))} - ${esc(region.name)}</option>`)
+    .map((region) => `<option value="${esc(region.id)}" ${String(region.id) === String(selectedId) ? "selected" : ""}>${esc(stateDisplayLabel(regionStateName(region)))} - ${esc(region.name)}</option>`)
     .join("");
 }
 
@@ -1072,6 +1149,7 @@ function renderRegionProperty(region, option) {
 function renderRegionNode(region) {
   const properties = propertiesForRegion(region.id);
   const regionManagers = regionManagerCount(region.id);
+  const regionState = regionStateName(region);
   return `
     <details class="region-region-node">
       <summary>
@@ -1082,6 +1160,15 @@ function renderRegionNode(region) {
         <em>${esc(displayStatus(region.status))}</em>
       </summary>
       <div class="region-region-body">
+        <div class="region-inline-editor region-region-state-editor">
+          <label>
+            <span>Region State</span>
+            <select data-region-state-select="${esc(region.id)}">
+              ${stateOptionMarkup(regionState)}
+            </select>
+          </label>
+          <button class="secondary-action" type="button" data-save-region-state="${esc(region.id)}"><span>Save State</span></button>
+        </div>
         ${properties.length ? properties.map((option) => renderRegionProperty(region, option)).join("") : `
           <div class="region-mini-empty">No properties are assigned to this region yet. Use Unassigned Properties below to add one.</div>
         `}
@@ -1107,7 +1194,7 @@ function renderAccessTree() {
             <details class="region-state-node" open>
               <summary>
                 <span>
-                  <strong>${esc(group.stateName)}</strong>
+                  <strong>${esc(stateDisplayLabel(group.stateName))}</strong>
                   <small>${esc(group.regions.length)} regions - ${esc(propertyCount)} properties</small>
                 </span>
                 <span class="region-node-actions">
@@ -1121,6 +1208,34 @@ function renderAccessTree() {
             </details>
           `;
         }).join("") : `<div class="region-mini-empty">No states found from active contracts yet.</div>`}
+      </div>
+    </section>
+  `;
+}
+
+function renderPropertyMovePanel() {
+  return `
+    <section class="region-card region-move-card">
+      <div class="region-card-head">
+        <div>
+          <h2>Assign Or Move Existing Property</h2>
+          <p>Select any active contract property and move it into the correct region.</p>
+        </div>
+      </div>
+      <div class="region-assignment-row property-move-row">
+        <span>
+          <strong>Property Region Assignment</strong>
+          <small>This will replace any old region link for the selected property.</small>
+        </span>
+        <select data-existing-property-select>
+          <option value="">Choose property...</option>
+          ${propertySelectOptions()}
+        </select>
+        <select data-existing-property-region>
+          <option value="">Choose region...</option>
+          ${regionSelectOptions()}
+        </select>
+        <button class="primary-action" type="button" data-move-existing-property><span>Move Property</span></button>
       </div>
     </section>
   `;
@@ -1281,6 +1396,7 @@ function renderApp() {
       ${renderMessage()}
       ${renderAccessActions()}
       <section class="region-main-stack">
+        ${renderPropertyMovePanel()}
         ${renderAccessTree()}
         ${renderCityStatePanel()}
         <div class="region-utility-grid">
@@ -1479,6 +1595,39 @@ async function removeCityState(cityKey) {
   if (!saved) return;
   await loadData();
   setMessage("City state mapping removed.");
+}
+
+async function updateRegionState(regionId, targetState) {
+  const region = regionById(regionId);
+  const cleanTarget = cleanStateName(targetState);
+  if (!region || !cleanTarget || cleanTarget === "Unassigned State") {
+    setMessage("Choose a valid region state first.", true);
+    return;
+  }
+  const nextMetadata = {
+    ...metadata(region),
+    state: cleanTarget
+  };
+  setMessage(`Moving ${region.name} to ${stateDisplayLabel(cleanTarget)}...`);
+  const { error } = await supabase
+    .from("property_regions")
+    .update({
+      status: "active",
+      metadata: nextMetadata
+    })
+    .eq("id", region.id);
+  if (error) {
+    setMessage(`Unable to update region state: ${error.message}`, true);
+    return;
+  }
+  if (isHiddenState(cleanTarget)) {
+    await saveStateSettings(
+      state.cityStateOverrides,
+      (state.hiddenStates || []).filter((item) => cleanStateName(item) !== cleanTarget)
+    );
+  }
+  await loadData();
+  setMessage(`${region.name} is now under ${stateDisplayLabel(cleanTarget)}.`);
 }
 
 function duplicateRegionNameError(error = {}) {
@@ -1730,6 +1879,20 @@ async function saveManagerAccess() {
 
 async function deleteLinksForOption(table, option, extraFilters = {}) {
   if (!option) return { error: null };
+  const knownRows = table === "property_region_links"
+    ? state.regionLinks
+    : table === "property_manager_property_links"
+      ? state.managerPropertyLinks
+      : [];
+  const matchingIds = knownRows
+    .filter((link) => Object.entries(extraFilters).every(([filterColumn, filterValue]) => String(link[filterColumn] || "") === String(filterValue)))
+    .filter((link) => linkMatchesOption(link, option))
+    .map((link) => link.id)
+    .filter(Boolean);
+  if (matchingIds.length) {
+    const { error } = await supabase.from(table).delete().in("id", matchingIds);
+    if (error) return { error };
+  }
   const filters = [
     option.contractId ? ["contract_id", option.contractId] : null,
     option.portalPropertyId ? ["portal_property_id", option.portalPropertyId] : null,
@@ -1941,6 +2104,21 @@ function installHandlers() {
     const removeCity = event.target.closest("[data-remove-city-state]");
     if (removeCity) {
       await removeCityState(removeCity.dataset.removeCityState || "");
+      return;
+    }
+    const saveRegionState = event.target.closest("[data-save-region-state]");
+    if (saveRegionState) {
+      const regionId = saveRegionState.dataset.saveRegionState || "";
+      const select = Array.from(root.querySelectorAll("[data-region-state-select]"))
+        .find((node) => node.dataset.regionStateSelect === regionId);
+      await updateRegionState(regionId, select?.value || "");
+      return;
+    }
+    const moveExistingProperty = event.target.closest("[data-move-existing-property]");
+    if (moveExistingProperty) {
+      const propertySelect = root.querySelector("[data-existing-property-select]");
+      const regionSelect = root.querySelector("[data-existing-property-region]");
+      await assignPropertyToRegion(propertySelect?.value || "", regionSelect?.value || "");
       return;
     }
     const assignProperty = event.target.closest("[data-assign-property-region]");
@@ -2523,6 +2701,16 @@ function injectStyles() {
       padding: 10px;
     }
 
+    .property-move-row {
+      grid-template-columns: minmax(220px, 1fr) minmax(220px, 0.9fr) minmax(220px, 0.9fr) auto;
+    }
+
+    .region-region-state-editor {
+      border-bottom: 1px solid var(--suite-border-soft);
+      margin-bottom: 2px;
+      padding-bottom: 12px;
+    }
+
     .city-state-row {
       grid-template-columns: minmax(260px, 1.1fr) minmax(140px, 0.35fr) auto;
     }
@@ -2992,6 +3180,10 @@ function injectStyles() {
       .region-inline-editor,
       .region-manager-chip,
       .region-saved-mapping {
+        grid-template-columns: 1fr;
+      }
+
+      .property-move-row {
         grid-template-columns: 1fr;
       }
 
