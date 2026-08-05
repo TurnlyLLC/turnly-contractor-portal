@@ -1481,25 +1481,65 @@ async function removeCityState(cityKey) {
   setMessage("City state mapping removed.");
 }
 
+function duplicateRegionNameError(error = {}) {
+  return error.code === "23505" || /duplicate key|property_regions_name_key/i.test(error.message || "");
+}
+
+function existingRegionByName(name) {
+  const target = normalizeLookup(name);
+  return state.regions.find((region) => normalizeLookup(region.name) === target) || null;
+}
+
+async function findRegionByName(name) {
+  const target = normalizeLookup(name);
+  const { data, error } = await supabase
+    .from("property_regions")
+    .select("*")
+    .ilike("name", String(name || "").trim())
+    .limit(10);
+  if (error) return { data: null, error };
+  return {
+    data: (data || []).find((region) => normalizeLookup(region.name) === target && !isStateSettingsRegion(region)) || null,
+    error: null
+  };
+}
+
+async function restoreExistingRegion(region, cleanState) {
+  const nextMetadata = {
+    ...metadata(region),
+    state: cleanState
+  };
+  setMessage(`${region.name} already exists. Updating its state instead...`);
+  const { error } = await supabase
+    .from("property_regions")
+    .update({
+      status: "active",
+      metadata: nextMetadata
+    })
+    .eq("id", region.id);
+  if (error) {
+    setMessage(`Unable to update existing region: ${error.message}`, true);
+    return null;
+  }
+  if (isHiddenState(cleanState)) {
+    await saveStateSettings(
+      state.cityStateOverrides,
+      (state.hiddenStates || []).filter((item) => cleanStateName(item) !== cleanState)
+    );
+  }
+  state.selectedRegionId = region.id;
+  await loadData();
+  setMessage(`${region.name} already existed, so it was restored under ${cleanState}.`);
+  return region;
+}
+
 async function addRegion(form) {
   const name = form.elements.name?.value?.trim() || "";
   if (!name) {
     setMessage("Enter a region name first.", true);
     return;
   }
-  setMessage("Adding region...");
-  const { data, error } = await supabase
-    .from("property_regions")
-    .insert({ name, status: "active" })
-    .select("*")
-    .maybeSingle();
-  if (error) {
-    setMessage(`Unable to add region: ${error.message}`, true);
-    return;
-  }
-  state.selectedRegionId = data?.id || state.selectedRegionId;
-  await loadData();
-  setMessage(`${name} was added.`);
+  await createRegion(name, "Unassigned State");
 }
 
 async function createRegion(name, stateName) {
@@ -1509,6 +1549,9 @@ async function createRegion(name, stateName) {
     setMessage("Enter a region name first.", true);
     return null;
   }
+  const existing = existingRegionByName(cleanName);
+  if (existing) return restoreExistingRegion(existing, cleanState);
+
   setMessage("Adding region...");
   const { data, error } = await supabase
     .from("property_regions")
@@ -1520,6 +1563,12 @@ async function createRegion(name, stateName) {
     .select("*")
     .maybeSingle();
   if (error) {
+    if (duplicateRegionNameError(error)) {
+      const lookup = await findRegionByName(cleanName);
+      if (lookup.data) return restoreExistingRegion(lookup.data, cleanState);
+      setMessage(`A region named "${cleanName}" already exists. Region names must be unique, so use the existing region or choose a different name.`, true);
+      return null;
+    }
     setMessage(`Unable to add region: ${error.message}`, true);
     return null;
   }
