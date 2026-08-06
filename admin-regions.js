@@ -665,6 +665,10 @@ function managersForProperty(option = {}, regionId = "") {
   return rows.sort((a, b) => managerName(a.manager).localeCompare(managerName(b.manager), undefined, { sensitivity: "base" }));
 }
 
+function managerIdsForProperty(option = {}, regionId = "") {
+  return new Set(managersForProperty(option, regionId).map(({ manager }) => String(manager.id)));
+}
+
 function unassignedManagers() {
   return state.managers.filter((manager) => {
     const id = String(manager.id);
@@ -676,8 +680,14 @@ function unassignedManagers() {
 
 function stateGroups() {
   const stateNames = new Set();
-  state.propertyOptions.forEach((option) => stateNames.add(displayStateName(option.stateName)));
-  state.regions.forEach((region) => stateNames.add(regionStateName(region)));
+  state.propertyOptions.forEach((option) => {
+    const stateName = displayStateName(option.stateName);
+    if (stateName !== "Unassigned State") stateNames.add(stateName);
+  });
+  state.regions.forEach((region) => {
+    const stateName = regionStateName(region);
+    if (stateName !== "Unassigned State") stateNames.add(stateName);
+  });
   return Array.from(stateNames)
     .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }))
     .map((stateName) => ({
@@ -690,7 +700,7 @@ function stateGroups() {
 
 function regionSelectOptions(selectedId = "") {
   return state.regions
-    .filter((region) => normalizeToken(region.status || "active") === "active")
+    .filter((region) => normalizeToken(region.status || "active") === "active" && regionStateName(region) !== "Unassigned State")
     .sort((a, b) => `${regionStateName(a)} ${a.name}`.localeCompare(`${regionStateName(b)} ${b.name}`, undefined, { sensitivity: "base" }))
     .map((region) => `<option value="${esc(region.id)}" ${String(region.id) === String(selectedId) ? "selected" : ""}>${esc(stateDisplayLabel(regionStateName(region)))} - ${esc(region.name)}</option>`)
     .join("");
@@ -711,6 +721,22 @@ function unassignedPropertySelectOptions(selectedKey = "") {
 function managerSelectOptions(selectedId = "") {
   return state.managers
     .map((manager) => `<option value="${esc(manager.id)}" ${String(manager.id) === String(selectedId) ? "selected" : ""}>${esc(managerName(manager))}${manager.email ? ` - ${esc(manager.email)}` : ""}</option>`)
+    .join("");
+}
+
+function managerCheckboxOptions(option = {}, regionId = "") {
+  const attachedIds = managerIdsForProperty(option, regionId);
+  return state.managers
+    .filter((manager) => !attachedIds.has(String(manager.id)))
+    .map((manager) => `
+      <label class="region-manager-option">
+        <input type="checkbox" value="${esc(manager.id)}" data-property-manager-pick>
+        <span>
+          <strong>${esc(managerName(manager))}</strong>
+          <small>${esc(manager.email || "No email saved")}</small>
+        </span>
+      </label>
+    `)
     .join("");
 }
 
@@ -1097,6 +1123,7 @@ function renderManagerMatrix() {
 
 function renderPropertyManagerRows(option, region) {
   const rows = managersForProperty(option, region.id);
+  const attachOptions = managerCheckboxOptions(option, region.id);
   return `
     <div class="region-property-manager-block">
       <div class="region-property-manager-list">
@@ -1111,15 +1138,14 @@ function renderPropertyManagerRows(option, region) {
           </div>
         `).join("") : `<div class="region-mini-empty compact">No property managers are directly assigned to this property yet.</div>`}
       </div>
-      <div class="region-inline-editor">
-        <label>
-          <span>Attach property manager</span>
-          <select data-property-manager-select="${esc(option.key)}">
-            <option value="">Select manager...</option>
-            ${managerSelectOptions()}
-          </select>
-        </label>
-        <button class="primary-action" type="button" data-assign-property-manager data-option-key="${esc(option.key)}"><span>Assign</span></button>
+      <div class="region-manager-attach" data-property-manager-picker="${esc(option.key)}">
+        <div class="region-section-head compact">
+          <span>Attach Property Managers</span>
+          <button class="primary-action compact-action" type="button" data-assign-property-manager data-option-key="${esc(option.key)}" ${attachOptions ? "" : "disabled"}><span>Attach Selected</span></button>
+        </div>
+        <div class="region-manager-option-grid">
+          ${attachOptions || `<div class="region-mini-empty compact">Every property manager already has access to this property.</div>`}
+        </div>
       </div>
     </div>
   `;
@@ -1176,7 +1202,7 @@ function renderRegionNode(region) {
           <button class="secondary-action" type="button" data-save-region-state="${esc(region.id)}"><span>Save State</span></button>
         </div>
         ${properties.length ? properties.map((option) => renderRegionProperty(region, option)).join("") : `
-          <div class="region-mini-empty">No properties are assigned to this region yet. Use Unassigned Properties below to add one.</div>
+          <div class="region-mini-empty">No properties are assigned to this region yet. Use Property Region Assignment above to add one.</div>
         `}
       </div>
     </details>
@@ -1205,7 +1231,7 @@ function renderAccessTree() {
                 </span>
                 <span class="region-node-actions">
                   <button class="secondary-action compact-action" type="button" data-add-region data-state-name="${esc(group.stateName)}">+ Region</button>
-                  ${group.stateName !== "Unassigned State" ? `<button class="secondary-action compact-action danger-action" type="button" data-remove-state="${esc(group.stateName)}">Remove State</button>` : ""}
+                  <button class="secondary-action compact-action danger-action" type="button" data-remove-state="${esc(group.stateName)}">Remove State</button>
                 </span>
               </summary>
               <div class="region-state-body">
@@ -1488,13 +1514,13 @@ async function saveStateSettings(overrides = state.cityStateOverrides, hiddenSta
 async function removeStateFromList(stateName) {
   const clean = cleanStateName(stateName);
   if (!clean || clean === "Unassigned State") return;
-  if (!window.confirm(`Remove ${clean} from the state list? Properties currently grouped there will move to Unassigned State until their city is assigned to a state.`)) return;
+  if (!window.confirm(`Remove ${stateDisplayLabel(clean)} from the state list? Properties and regions in that state will be hidden from the state tree until their state is restored.`)) return;
   const nextHidden = unique([...(state.hiddenStates || []), clean]).map(cleanStateName);
-  setMessage(`Removing ${clean} from the state list...`);
+  setMessage(`Removing ${stateDisplayLabel(clean)} from the state list...`);
   const saved = await saveStateSettings(state.cityStateOverrides, nextHidden);
   if (!saved) return;
   await loadData();
-  setMessage(`${clean} was removed from the visible state list.`);
+  setMessage(`${stateDisplayLabel(clean)} was removed from the visible state list.`);
 }
 
 async function saveCityState(city, targetState) {
@@ -1619,7 +1645,9 @@ async function addRegion(form) {
     setMessage("Enter a region name first.", true);
     return;
   }
-  await createRegion(name, "Unassigned State");
+  const stateName = window.prompt("State for this region:", stateGroups()[0]?.stateName || "NC");
+  if (!stateName) return;
+  await createRegion(name, stateName);
 }
 
 async function createRegion(name, stateName) {
@@ -1627,6 +1655,10 @@ async function createRegion(name, stateName) {
   const cleanState = cleanStateName(stateName);
   if (!cleanName) {
     setMessage("Enter a region name first.", true);
+    return null;
+  }
+  if (!cleanState || cleanState === "Unassigned State") {
+    setMessage("Choose a state before adding a region.", true);
     return null;
   }
   const existing = existingRegionByName(cleanName);
@@ -1878,34 +1910,44 @@ async function deleteManagerPropertyLink(managerId, option) {
 }
 
 async function assignManagerToProperty(managerId, optionKey) {
-  const manager = managerById(managerId);
+  return assignManagersToProperty([managerId], optionKey);
+}
+
+async function assignManagersToProperty(managerIds = [], optionKey) {
   const option = optionByKey(optionKey);
-  if (!manager || !option) {
-    setMessage("Choose a property manager and property first.", true);
+  const selectedManagers = unique(managerIds)
+    .map((id) => managerById(id))
+    .filter(Boolean);
+  if (!selectedManagers.length || !option) {
+    setMessage("Choose at least one property manager and a property first.", true);
     return;
   }
-  setMessage(`Assigning ${managerName(manager)} to ${option.name}...`);
-  const deleteResult = await deleteManagerPropertyLink(manager.id, option);
-  if (deleteResult.error) {
-    setMessage(`Unable to clear old property manager access: ${deleteResult.error.message}`, true);
-    return;
+  setMessage(`Assigning ${selectedManagers.length} property manager${selectedManagers.length === 1 ? "" : "s"} to ${option.name}...`);
+  for (const selectedManager of selectedManagers) {
+    const deleteResult = await deleteManagerPropertyLink(selectedManager.id, option);
+    if (deleteResult.error) {
+      setMessage(`Unable to clear old property manager access: ${deleteResult.error.message}`, true);
+      return;
+    }
   }
-  const row = propertyRowsPayload([option], { assigned_from: "admin_regions_tree" })
-    .map((payload) => ({
-      ...payload,
-      profile_id: manager.id,
-      access_level: "manager"
-    }))[0];
-  const { error } = await supabase.from("property_manager_property_links").insert(row);
+  const baseRow = propertyRowsPayload([option], { assigned_from: "admin_regions_tree" })[0];
+  const rows = selectedManagers.map((selectedManager) => ({
+    ...baseRow,
+    profile_id: selectedManager.id,
+    access_level: "manager"
+  }));
+  const { error } = await supabase.from("property_manager_property_links").insert(rows);
   if (error) {
     setMessage(`Unable to assign property manager: ${error.message}`, true);
     return;
   }
   if (option.portalPropertyId) {
-    await updateManagerPrimaryProperty(manager.id, option, false);
+    for (const selectedManager of selectedManagers) {
+      await updateManagerPrimaryProperty(selectedManager.id, option, false);
+    }
   }
   await loadData();
-  setMessage(`${managerName(manager)} can now access ${option.name}.`);
+  setMessage(`${selectedManagers.length} property manager${selectedManagers.length === 1 ? "" : "s"} can now access ${option.name}.`);
 }
 
 async function removeManagerFromProperty(managerId, optionKey) {
@@ -2050,9 +2092,12 @@ function installHandlers() {
     const assignPropertyManager = event.target.closest("[data-assign-property-manager]");
     if (assignPropertyManager) {
       const optionKey = assignPropertyManager.dataset.optionKey || "";
-      const select = Array.from(root.querySelectorAll("[data-property-manager-select]"))
-        .find((node) => node.dataset.propertyManagerSelect === optionKey);
-      await assignManagerToProperty(select?.value || "", optionKey);
+      const picker = Array.from(root.querySelectorAll("[data-property-manager-picker]"))
+        .find((node) => node.dataset.propertyManagerPicker === optionKey);
+      const managerIds = Array.from(picker?.querySelectorAll("[data-property-manager-pick]:checked") || [])
+        .map((node) => node.value)
+        .filter(Boolean);
+      await assignManagersToProperty(managerIds, optionKey);
       return;
     }
     const assignUnassignedManager = event.target.closest("[data-assign-unassigned-manager]");
@@ -2549,6 +2594,61 @@ function injectStyles() {
       width: 30px;
     }
 
+    .region-manager-attach {
+      background: rgba(5, 16, 28, 0.4);
+      border: 1px solid var(--suite-border-soft);
+      border-radius: 9px;
+      display: grid;
+      gap: 10px;
+      padding: 10px;
+    }
+
+    .region-section-head.compact > span {
+      color: var(--suite-soft);
+      font-size: 0.74rem;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .region-manager-option-grid {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      max-height: 240px;
+      overflow: auto;
+    }
+
+    .region-manager-option {
+      align-items: center;
+      background: rgba(5, 16, 28, 0.5);
+      border: 1px solid var(--suite-border-soft);
+      border-radius: 8px;
+      cursor: pointer;
+      display: grid;
+      gap: 9px;
+      grid-template-columns: auto minmax(0, 1fr);
+      padding: 9px 10px;
+    }
+
+    .region-manager-option input {
+      accent-color: var(--suite-green);
+      height: 16px;
+      width: 16px;
+    }
+
+    .region-manager-option span {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .region-manager-option strong,
+    .region-manager-option small {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
     .region-inline-editor,
     .region-assignment-row {
       align-items: end;
@@ -2968,6 +3068,8 @@ function injectStyles() {
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-region-node,
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-property-node,
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-manager-chip,
+    body.turnly-admin-suite[data-dashboard-theme="light"] .region-manager-attach,
+    body.turnly-admin-suite[data-dashboard-theme="light"] .region-manager-option,
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-assignment-row,
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-utility-panel {
       background: #f7fafc;
@@ -3004,9 +3106,11 @@ function injectStyles() {
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-manager-card small,
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-manager-card dd,
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-manager-card dt,
+    body.turnly-admin-suite[data-dashboard-theme="light"] .region-manager-option small,
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-summary-row span,
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-action-bar span,
-    body.turnly-admin-suite[data-dashboard-theme="light"] .region-inline-editor span {
+    body.turnly-admin-suite[data-dashboard-theme="light"] .region-inline-editor span,
+    body.turnly-admin-suite[data-dashboard-theme="light"] .region-section-head.compact > span {
       color: #456078;
     }
 
@@ -3045,6 +3149,7 @@ function injectStyles() {
       .region-summary-row,
       .region-check-grid,
       .manager-check-grid,
+      .region-manager-option-grid,
       .region-manager-card-grid,
       .region-form-grid,
       .region-manager-toolbar,
