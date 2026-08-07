@@ -6123,10 +6123,86 @@ body.turnly-admin-suite[data-dashboard-theme="light"] .sales-trend-tooltip .sale
   fill: var(--suite-soft);
 }
 
+.contractor-feedback-workspace {
+  display: grid;
+  gap: 16px;
+}
+
+.contractor-feedback-card .suite-panel,
+.contractor-feedback-card {
+  min-width: 0;
+}
+
+.contractor-feedback-filters {
+  align-items: end;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(260px, 1fr) minmax(180px, 240px);
+  margin-bottom: 16px;
+}
+
+.contractor-feedback-search input,
+.contractor-feedback-rating-filter select {
+  width: 100%;
+}
+
+.contractor-feedback-table .suite-table td {
+  vertical-align: top;
+}
+
+.contractor-feedback-table .suite-table td strong {
+  display: block;
+}
+
+.contractor-feedback-table .suite-table td small {
+  color: var(--suite-soft);
+  display: block;
+  margin-top: 4px;
+}
+
+.contractor-feedback-rating {
+  display: grid;
+  gap: 4px;
+  min-width: 96px;
+}
+
+.contractor-feedback-stars {
+  color: #facc15;
+  display: inline-flex;
+  font-size: 18px;
+  gap: 1px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.contractor-feedback-comment {
+  max-width: 420px;
+}
+
+.contractor-feedback-comment p,
+.contractor-feedback-comment span {
+  color: var(--suite-text);
+  line-height: 1.45;
+  margin: 0;
+}
+
+.contractor-feedback-comment span {
+  color: var(--suite-soft);
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-feedback-table .table-card,
+body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-feedback-table .suite-table td {
+  background: #ffffff;
+}
+
 @media (max-width: 620px) {
   body.turnly-admin-suite[data-dashboard-theme="light"] .dashboard-theme-toggle {
     justify-content: space-between;
     width: 100%;
+  }
+
+  .contractor-feedback-filters {
+    grid-template-columns: 1fr;
   }
 }
 

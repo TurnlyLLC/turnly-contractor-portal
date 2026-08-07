@@ -74,6 +74,7 @@ const navSections = [
     links: [
       { key: "reports-sales", label: "Sales", href: "reports-sales.html", icon: "wallet" },
       { key: "invoices", label: "Invoices", href: "invoices.html", icon: "document" },
+      { key: "contractor-feedback", label: "Contractor Feedback", href: "contractor-feedback.html", icon: "star" },
       { key: "reports-operations", label: "Operations", href: "reports-operations.html", icon: "settings" },
       { key: "contractor-performance", label: "Contractor Performance", href: "contractor-performance.html", icon: "trophy" },
       { key: "growth", label: "Growth", href: "growth.html", icon: "trending-up" }
@@ -425,6 +426,16 @@ const invoiceReportState = {
   message: "",
   error: false
 };
+const contractorFeedbackReportState = {
+  rows: [],
+  loading: false,
+  message: "",
+  error: false,
+  filters: {
+    rating: "all",
+    search: ""
+  }
+};
 const propertyUnitsTable = "property_units";
 const checklistTemplatesTable = "checklist_templates";
 const checklistModulesTable = "checklist_modules";
@@ -647,6 +658,11 @@ const pages = {
     title: "Invoices",
     subtitle: "Build current-week invoices by property from scheduled assignment jobs.",
     render: renderInvoiceReport
+  },
+  "contractor-feedback": {
+    title: "Contractor Feedback",
+    subtitle: "Review contractor ratings and notes submitted after checklist completion.",
+    render: renderContractorFeedbackReport
   },
   "reports-operations": {
     title: "Operations",
@@ -9516,6 +9532,245 @@ function isWithinPastDays(value, days) {
   return date >= addDays(today, -days) && date <= addDays(today, 1);
 }
 
+function renderContractorFeedbackReport() {
+  return `
+    <section class="contractor-feedback-workspace" data-contractor-feedback-page>
+      ${toolbar(
+        `<p id="contractorFeedbackMessage" class="status-message" aria-live="polite">Loading contractor feedback...</p>`,
+        `<button class="secondary-action" type="button" data-contractor-feedback-refresh>${icon("refresh")}<span>Refresh</span></button>`
+      )}
+      <section class="metric-strip">
+        ${metric("Responses", "0", "all contractor ratings", "message-square", "blue", 'id="contractorFeedbackTotal"')}
+        ${metric("Average Rating", "0.0", "out of 5 stars", "star", "yellow", 'id="contractorFeedbackAverage"')}
+        ${metric("5-Star Jobs", "0", "top-rated responses", "trophy", "green", 'id="contractorFeedbackFiveStar"')}
+        ${metric("Needs Follow-Up", "0", "3 stars or lower", "alert", "red", 'id="contractorFeedbackNeedsFollowUp"')}
+      </section>
+      ${panel("Feedback Responses", `
+        <div class="contractor-feedback-filters">
+          <label class="suite-field contractor-feedback-search">
+            <span>Search</span>
+            <input id="contractorFeedbackSearch" type="search" placeholder="Search contractor, property, unit, or feedback..." />
+          </label>
+          <label class="suite-field contractor-feedback-rating-filter">
+            <span>Rating</span>
+            <select id="contractorFeedbackRatingFilter">
+              <option value="all">All ratings</option>
+              <option value="needs">Needs follow-up</option>
+              <option value="5">5 stars</option>
+              <option value="4">4 stars</option>
+              <option value="3">3 stars</option>
+              <option value="2">2 stars</option>
+              <option value="1">1 star</option>
+            </select>
+          </label>
+        </div>
+        ${tableFrame(["Rating", "Contractor", "Property / Unit", "Assignment", "Feedback", "Submitted", "Status"], "", {
+          rows: contractorFeedbackTableRows(),
+          bodyId: "contractorFeedbackRows",
+          className: "contractor-feedback-table",
+          pagination: false
+        })}
+      `, { className: "span-all contractor-feedback-card" })}
+    </section>
+  `;
+}
+
+function initContractorFeedbackReport() {
+  const root = document.querySelector("[data-contractor-feedback-page]");
+  if (!root) return;
+  const search = root.querySelector("#contractorFeedbackSearch");
+  const rating = root.querySelector("#contractorFeedbackRatingFilter");
+  if (search) {
+    search.value = contractorFeedbackReportState.filters.search;
+    search.addEventListener("input", () => {
+      contractorFeedbackReportState.filters.search = search.value || "";
+      renderContractorFeedbackData();
+    });
+  }
+  if (rating) {
+    rating.value = contractorFeedbackReportState.filters.rating;
+    rating.addEventListener("change", () => {
+      contractorFeedbackReportState.filters.rating = rating.value || "all";
+      renderContractorFeedbackData();
+    });
+  }
+  root.querySelector("[data-contractor-feedback-refresh]")?.addEventListener("click", () => {
+    void loadContractorFeedbackReport();
+  });
+  void loadContractorFeedbackReport();
+}
+
+async function loadContractorFeedbackReport() {
+  if (!suiteSupabase) {
+    contractorFeedbackReportState.rows = [];
+    contractorFeedbackReportState.loading = false;
+    renderContractorFeedbackData();
+    setContractorFeedbackReportMessage("Supabase config is missing. Add env.js values before loading contractor feedback.", true);
+    return;
+  }
+
+  contractorFeedbackReportState.loading = true;
+  renderContractorFeedbackData();
+  setContractorFeedbackReportMessage("Loading contractor feedback...");
+
+  const { data: userData } = await suiteSupabase.auth.getUser();
+  const user = userData?.user || null;
+  if (!user) {
+    contractorFeedbackReportState.rows = [];
+    contractorFeedbackReportState.loading = false;
+    renderContractorFeedbackData();
+    setContractorFeedbackReportMessage("Sign in as an admin to load contractor feedback.", true);
+    return;
+  }
+
+  const { data: profile, error: profileError } = await suiteSupabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (profileError || normalizeToken(profile?.role) !== "admin") {
+    contractorFeedbackReportState.rows = [];
+    contractorFeedbackReportState.loading = false;
+    renderContractorFeedbackData();
+    setContractorFeedbackReportMessage(profileError
+      ? "Unable to verify admin access: " + profileError.message
+      : "Admin access is required to load contractor feedback.", true);
+    return;
+  }
+
+  const { data, error } = await suiteSupabase
+    .from("contractor_assignment_feedback")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(1000);
+
+  contractorFeedbackReportState.rows = data || [];
+  contractorFeedbackReportState.loading = false;
+  renderContractorFeedbackData();
+  setContractorFeedbackReportMessage(error
+    ? "Unable to load contractor feedback: " + error.message
+    : `Loaded ${(data || []).length.toLocaleString()} feedback response${(data || []).length === 1 ? "" : "s"}.`, Boolean(error));
+}
+
+function renderContractorFeedbackData() {
+  const rows = contractorFeedbackFilteredRows();
+  const allRows = contractorFeedbackReportState.rows || [];
+  const ratingSum = allRows.reduce((sum, row) => sum + (Number(row.rating) || 0), 0);
+  const average = allRows.length ? (ratingSum / allRows.length).toFixed(1) : "0.0";
+  const fiveStars = allRows.filter((row) => Number(row.rating) === 5).length;
+  const needsFollowUp = allRows.filter((row) => Number(row.rating) > 0 && Number(row.rating) <= 3).length;
+
+  setText("contractorFeedbackTotal", allRows.length.toLocaleString());
+  setText("contractorFeedbackAverage", average);
+  setText("contractorFeedbackFiveStar", fiveStars.toLocaleString());
+  setText("contractorFeedbackNeedsFollowUp", needsFollowUp.toLocaleString());
+  setContractorFeedbackHtml("contractorFeedbackRows", contractorFeedbackTableRows(rows));
+}
+
+function contractorFeedbackFilteredRows() {
+  const ratingFilter = contractorFeedbackReportState.filters.rating;
+  const search = String(contractorFeedbackReportState.filters.search || "").trim().toLowerCase();
+  return (contractorFeedbackReportState.rows || [])
+    .filter((row) => {
+      const rating = Number(row.rating) || 0;
+      if (ratingFilter === "needs") return rating > 0 && rating <= 3;
+      if (ratingFilter !== "all") return rating === Number(ratingFilter);
+      return true;
+    })
+    .filter((row) => !search || contractorFeedbackSearchText(row).includes(search));
+}
+
+function contractorFeedbackSearchText(row = {}) {
+  const metadata = contractorFeedbackMetadata(row);
+  return [
+    row.contractor_name,
+    row.contractor_email,
+    row.property_name,
+    row.unit_number,
+    row.feedback,
+    row.status,
+    metadata.assignment_title,
+    metadata.service_type
+  ].map((value) => String(value || "").toLowerCase()).join(" ");
+}
+
+function contractorFeedbackMetadata(row = {}) {
+  return row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata) ? row.metadata : {};
+}
+
+function contractorFeedbackTableRows(rows = contractorFeedbackFilteredRows()) {
+  if (contractorFeedbackReportState.loading) {
+    return `<tr><td colspan="7">${skeletonRows(5)}</td></tr>`;
+  }
+  if (!rows.length) {
+    return `
+      <tr>
+        <td colspan="7">
+          ${emptyState("star", "No contractor feedback found", "Completed checklist feedback will appear here once contractors submit ratings.")}
+        </td>
+      </tr>
+    `;
+  }
+  return rows.map((row) => {
+    const metadata = contractorFeedbackMetadata(row);
+    const assignmentTitle = metadata.assignment_title || row.assignment_id || "Completed assignment";
+    const contractorLabel = row.contractor_name || row.contractor_email || "Contractor";
+    const feedback = String(row.feedback || "").trim();
+    return `
+      <tr>
+        <td>
+          <div class="contractor-feedback-rating">
+            ${contractorFeedbackStars(row.rating)}
+            <small>${esc(Number(row.rating) || 0)} / 5</small>
+          </div>
+        </td>
+        <td>
+          <strong>${esc(contractorLabel)}</strong>
+          <small>${esc(row.contractor_email || "")}</small>
+        </td>
+        <td>
+          <strong>${esc(row.property_name || "No property")}</strong>
+          <small>${esc(row.unit_number ? `Unit ${row.unit_number}` : "No unit")}</small>
+        </td>
+        <td>
+          <strong>${esc(assignmentTitle)}</strong>
+          <small>${esc(metadata.service_type ? titleCase(metadata.service_type) : "")}</small>
+        </td>
+        <td>
+          <div class="contractor-feedback-comment">
+            ${feedback ? `<p>${esc(feedback)}</p>` : `<span>No written feedback.</span>`}
+          </div>
+        </td>
+        <td>${esc(formatDashboardDate(row.created_at, "No date"))}</td>
+        <td>${statusBadge(row.status || "new")}</td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function contractorFeedbackStars(rating) {
+  const value = Math.max(0, Math.min(5, Number(rating) || 0));
+  return `
+    <span class="contractor-feedback-stars" aria-label="${esc(`${value} out of 5 stars`)}">
+      ${Array.from({ length: 5 }, (_, index) => index < value ? "&#9733;" : "&#9734;").join("")}
+    </span>
+  `;
+}
+
+function setContractorFeedbackReportMessage(text = "", isError = false) {
+  contractorFeedbackReportState.message = text;
+  contractorFeedbackReportState.error = Boolean(isError);
+  const message = document.getElementById("contractorFeedbackMessage");
+  if (!message) return;
+  message.textContent = text || "";
+  message.classList.toggle("error", Boolean(isError));
+}
+
+function setContractorFeedbackHtml(id, html) {
+  const node = document.getElementById(id);
+  if (node) node.innerHTML = html;
+}
+
 function renderInvoiceReport() {
   const range = invoiceWeekRange();
   return `
@@ -14351,6 +14606,9 @@ function renderApp() {
   }
   if (activeKey === "invoices") {
     initInvoiceReport();
+  }
+  if (activeKey === "contractor-feedback") {
+    initContractorFeedbackReport();
   }
   if (activeKey === "client-directory" || activeKey === "contracts") {
     initClientDirectory();

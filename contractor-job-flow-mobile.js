@@ -35,8 +35,18 @@ function escapeHtml(value) {
     .replace(/'/g, "&#039;");
 }
 
+function setTextContent(id, value) {
+  const node = document.getElementById(id);
+  if (node) node.textContent = value ?? "";
+}
+
 function selectorValue(value) {
   return String(value ?? "").replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
+function uuidOrNull(value) {
+  const text = String(value || "").trim();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(text) ? text : null;
 }
 
 function toNumber(value) {
@@ -865,6 +875,172 @@ async function submitAssignmentForQa(responses, completedAt) {
     .eq("status", "in_progress");
 
   if (fallbackResult.error) throw fallbackResult.error;
+}
+
+function contractorFeedbackPayload(rating, feedback, completedAt) {
+  const assignment = activeAssignment || {};
+  const metadata = assignment.metadata && typeof assignment.metadata === "object" ? assignment.metadata : {};
+  const portalPropertyId = uuidOrNull(
+    assignment.portal_property_id
+    || assignment.recurring_portal_property_id
+    || metadata.portal_property_id
+    || metadata.recurring_portal_property_id
+  );
+  return {
+    assignment_id: uuidOrNull(assignment.id),
+    qa_job_id: uuidOrNull(activeQaJobId || assignmentQaJobId(assignment)),
+    portal_property_id: portalPropertyId,
+    property_id: uuidOrNull(assignment.property_id || metadata.property_id || metadata.contract_id),
+    property_name: resolvedPropertyName(assignment),
+    unit_number: assignmentUnit(assignment),
+    contractor_id: uuidOrNull(activeUser?.id),
+    contractor_name: activeContractorName(),
+    contractor_email: activeUser?.email || "",
+    rating,
+    feedback: String(feedback || "").trim(),
+    metadata: {
+      source: "contractor_checklist_completion",
+      checklist_completed_at: completedAt,
+      assignment_status: assignment.status || "",
+      assignment_title: assignment.title || "",
+      user_agent: navigator.userAgent || ""
+    }
+  };
+}
+
+async function saveContractorFeedback(rating, feedback, completedAt) {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  if (!activeAssignment?.id) throw new Error("Assignment is missing.");
+  const payload = contractorFeedbackPayload(rating, feedback, completedAt);
+
+  const rpcResult = await supabase.rpc("create_contractor_assignment_feedback", {
+    feedback_payload: payload
+  });
+  if (!rpcResult.error) return rpcResult.data;
+
+  const rpcMessage = rpcResult.error?.message || "";
+  if (!/function|schema cache|create_contractor_assignment_feedback/i.test(rpcMessage)) {
+    throw rpcResult.error;
+  }
+
+  const { error } = await supabase
+    .from("contractor_assignment_feedback")
+    .insert(payload);
+  if (error) throw error;
+  return null;
+}
+
+function setContractorFeedbackMessage(text = "", isError = false) {
+  const message = document.getElementById("tcFeedbackMessage");
+  if (!message) return;
+  message.textContent = text;
+  message.dataset.tone = isError ? "error" : "";
+}
+
+function updateContractorFeedbackStars(modal, rating) {
+  modal.dataset.feedbackRating = rating ? String(rating) : "";
+  modal.querySelectorAll("[data-tc-feedback-rating]").forEach((button) => {
+    const value = Number(button.dataset.tcFeedbackRating) || 0;
+    const active = value <= rating;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", value === rating ? "true" : "false");
+  });
+}
+
+function closeContractorFeedbackModal(modal) {
+  if (!modal) return;
+  modal.hidden = true;
+  const resolve = modal.turnlyFeedbackResolve;
+  modal.turnlyFeedbackResolve = null;
+  if (typeof resolve === "function") resolve();
+}
+
+function ensureContractorFeedbackModal() {
+  injectStyles();
+  let modal = document.getElementById("turnlyContractorFeedbackModal");
+  if (modal) return modal;
+
+  document.body.insertAdjacentHTML("beforeend", `
+    <div id="turnlyContractorFeedbackModal" class="tj-modal tc-feedback-modal" role="dialog" aria-modal="true" hidden>
+      <div class="tc-feedback-panel">
+        <button type="button" class="tc-feedback-close" data-tc-feedback-skip aria-label="Close feedback">&times;</button>
+        <span class="tc-feedback-kicker">Job Feedback</span>
+        <h2>How did this job go?</h2>
+        <p>Rate your experience on this assignment. Add any notes that would help Turnly improve future turns.</p>
+        <div class="tc-feedback-job">
+          <strong id="tcFeedbackJobTitle">Completed assignment</strong>
+          <small id="tcFeedbackJobMeta">Checklist submitted to QA</small>
+        </div>
+        <div class="tc-feedback-stars" role="group" aria-label="Choose a star rating">
+          ${[1, 2, 3, 4, 5].map((value) => `<button type="button" data-tc-feedback-rating="${value}" aria-label="${value} star${value === 1 ? "" : "s"}" aria-pressed="false">&#9733;</button>`).join("")}
+        </div>
+        <label class="tc-feedback-field">
+          <span>Feedback</span>
+          <textarea id="tcFeedbackText" rows="5" placeholder="What went well, what got in the way, or what should Turnly know?"></textarea>
+        </label>
+        <p id="tcFeedbackMessage" class="tc-feedback-message" aria-live="polite"></p>
+        <div class="tc-feedback-actions">
+          <button type="button" class="tc-feedback-skip" data-tc-feedback-skip>Skip</button>
+          <button type="button" class="tc-feedback-submit" data-tc-feedback-submit>Submit Feedback</button>
+        </div>
+      </div>
+    </div>
+  `);
+
+  modal = document.getElementById("turnlyContractorFeedbackModal");
+  modal.addEventListener("click", async (event) => {
+    const ratingButton = event.target.closest("[data-tc-feedback-rating]");
+    if (ratingButton && modal.contains(ratingButton)) {
+      updateContractorFeedbackStars(modal, Number(ratingButton.dataset.tcFeedbackRating) || 0);
+      setContractorFeedbackMessage("");
+      return;
+    }
+
+    if (event.target.closest("[data-tc-feedback-skip]") || event.target === modal) {
+      closeContractorFeedbackModal(modal);
+      return;
+    }
+
+    const submitButton = event.target.closest("[data-tc-feedback-submit]");
+    if (!submitButton || !modal.contains(submitButton)) return;
+    const rating = Number(modal.dataset.feedbackRating || 0);
+    const feedback = document.getElementById("tcFeedbackText")?.value || "";
+    if (!rating) {
+      setContractorFeedbackMessage("Choose a star rating before submitting.", true);
+      return;
+    }
+
+    submitButton.disabled = true;
+    setContractorFeedbackMessage("Saving feedback...");
+    try {
+      await saveContractorFeedback(rating, feedback, modal.dataset.completedAt || new Date().toISOString());
+      setContractorFeedbackMessage("Feedback saved.");
+      closeContractorFeedbackModal(modal);
+    } catch (error) {
+      console.warn("[contractor-job-flow] Unable to save contractor feedback", error);
+      setContractorFeedbackMessage("Unable to save feedback: " + (error?.message || "Unknown error"), true);
+    } finally {
+      submitButton.disabled = false;
+    }
+  });
+
+  return modal;
+}
+
+function openContractorFeedbackModal(completedAt) {
+  if (!supabase || !activeAssignment?.id) return Promise.resolve();
+  const modal = ensureContractorFeedbackModal();
+  modal.dataset.completedAt = completedAt || new Date().toISOString();
+  updateContractorFeedbackStars(modal, 0);
+  setContractorFeedbackMessage("");
+  const textarea = document.getElementById("tcFeedbackText");
+  if (textarea) textarea.value = "";
+  setTextContent("tcFeedbackJobTitle", activeAssignment.title || resolvedPropertyName(activeAssignment));
+  setTextContent("tcFeedbackJobMeta", [resolvedPropertyName(activeAssignment), assignmentUnit(activeAssignment)].filter(Boolean).join(" - ") || "Checklist submitted to QA");
+  modal.hidden = false;
+  return new Promise((resolve) => {
+    modal.turnlyFeedbackResolve = resolve;
+  });
 }
 
 function checklistMediaBasePayload(item, file, kind, index, storagePath, completedAt, note) {
@@ -2202,6 +2378,151 @@ function injectStyles() {
       .tc-module-link.complete strong {
         color: var(--cp-green, #12d99b);
       }
+      .tc-feedback-modal {
+        z-index: 340;
+      }
+      .tc-feedback-panel {
+        background: linear-gradient(180deg, rgba(18, 34, 53, .98), rgba(8, 19, 33, .98));
+        border: 1px solid rgba(144, 164, 183, .24);
+        border-radius: 12px;
+        box-shadow: 0 30px 90px rgba(0, 0, 0, .48);
+        color: #eef5fb;
+        display: grid;
+        gap: 18px;
+        max-width: 560px;
+        padding: 28px;
+        position: relative;
+        width: min(100%, 560px);
+      }
+      .tc-feedback-close {
+        align-items: center;
+        background: rgba(5, 14, 24, .78);
+        border: 1px solid rgba(144, 164, 183, .22);
+        border-radius: 8px;
+        color: #d8e2ee;
+        cursor: pointer;
+        display: inline-flex;
+        font: inherit;
+        font-size: 22px;
+        font-weight: 900;
+        height: 42px;
+        justify-content: center;
+        position: absolute;
+        right: 18px;
+        top: 18px;
+        width: 42px;
+      }
+      .tc-feedback-kicker {
+        color: var(--cp-green, #12d99b);
+        font-size: 12px;
+        font-weight: 900;
+        letter-spacing: 0;
+        text-transform: uppercase;
+      }
+      .tc-feedback-panel h2 {
+        color: #fff;
+        font-size: 38px;
+        line-height: 1.05;
+        margin: 0;
+        padding-right: 48px;
+      }
+      .tc-feedback-panel p {
+        color: #9db2c9;
+        line-height: 1.55;
+        margin: 0;
+      }
+      .tc-feedback-job {
+        background: rgba(5, 14, 24, .56);
+        border: 1px solid rgba(144, 164, 183, .16);
+        border-radius: 8px;
+        display: grid;
+        gap: 5px;
+        padding: 14px;
+      }
+      .tc-feedback-job strong {
+        color: #fff;
+      }
+      .tc-feedback-job small,
+      .tc-feedback-field span {
+        color: #9db2c9;
+        font-size: 12px;
+        font-weight: 900;
+        text-transform: uppercase;
+      }
+      .tc-feedback-stars {
+        display: flex;
+        gap: 8px;
+      }
+      .tc-feedback-stars button {
+        align-items: center;
+        background: rgba(5, 14, 24, .78);
+        border: 1px solid rgba(144, 164, 183, .22);
+        border-radius: 8px;
+        color: rgba(157, 178, 201, .62);
+        cursor: pointer;
+        display: inline-flex;
+        font-size: 32px;
+        height: 54px;
+        justify-content: center;
+        transition: border-color .16s ease, color .16s ease, transform .16s ease;
+        width: 54px;
+      }
+      .tc-feedback-stars button.active,
+      .tc-feedback-stars button:hover {
+        border-color: rgba(18, 217, 155, .58);
+        color: #facc15;
+        transform: translateY(-1px);
+      }
+      .tc-feedback-field {
+        display: grid;
+        gap: 8px;
+      }
+      .tc-feedback-field textarea {
+        background: rgba(5, 14, 24, .78);
+        border: 1px solid rgba(144, 164, 183, .22);
+        border-radius: 8px;
+        color: #eef5fb;
+        font: inherit;
+        min-height: 130px;
+        padding: 12px 14px;
+        resize: vertical;
+      }
+      .tc-feedback-message {
+        color: #9db2c9;
+        font-weight: 800;
+        margin: 0;
+        min-height: 20px;
+      }
+      .tc-feedback-message[data-tone="error"] {
+        color: var(--cp-red, #ff6470);
+      }
+      .tc-feedback-actions {
+        display: flex;
+        gap: 12px;
+        justify-content: flex-end;
+      }
+      .tc-feedback-actions button {
+        border-radius: 8px;
+        cursor: pointer;
+        font: inherit;
+        font-weight: 900;
+        min-height: 48px;
+        padding: 0 18px;
+      }
+      .tc-feedback-skip {
+        background: rgba(5, 14, 24, .78);
+        border: 1px solid rgba(144, 164, 183, .22);
+        color: #d8e2ee;
+      }
+      .tc-feedback-submit {
+        background: linear-gradient(135deg, #16ddb0, #05c7a9);
+        border: 0;
+        color: #03151e;
+      }
+      .tc-feedback-submit:disabled {
+        cursor: not-allowed;
+        opacity: .55;
+      }
       .tj-active-panel {
         margin: 10px 0 18px;
       }
@@ -2272,6 +2593,20 @@ function injectStyles() {
         .tj-details,
         .tj-actions {
           padding: 22px 18px;
+        }
+        .tc-feedback-panel {
+          border-radius: 0;
+          max-height: 100dvh;
+          overflow: auto;
+          padding: calc(26px + env(safe-area-inset-top, 0px)) max(18px, env(safe-area-inset-right, 0px)) calc(24px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px));
+          width: 100vw;
+        }
+        .tc-feedback-actions {
+          display: grid;
+          grid-template-columns: 1fr;
+        }
+        .tc-feedback-panel h2 {
+          font-size: 30px;
         }
       }
     </style>
@@ -2782,6 +3117,11 @@ async function completeJob() {
     await clearChecklistMediaDrafts();
   } catch (error) {
     console.warn("[contractor-job-flow] Unable to clear checklist media drafts", error);
+  }
+  try {
+    await openContractorFeedbackModal(completedAt);
+  } catch (error) {
+    console.warn("[contractor-job-flow] Feedback prompt failed", error);
   }
   window.location.reload();
 }
