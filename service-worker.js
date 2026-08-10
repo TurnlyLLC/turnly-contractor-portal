@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-contractor-pwa-v20260810-pm-dropdown-options";
+const CACHE_NAME = "turnly-contractor-pwa-v20260810-pm-account-create";
 
 const PRECACHE_URLS = [
   "/",

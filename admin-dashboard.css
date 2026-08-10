@@ -4473,6 +4473,31 @@ body.admin-command-body[data-portal-role="property-manager"] .pm-assignment-deta
   grid-template-columns: 1fr;
 }
 
+.pm-forced-password-panel {
+  margin: 64px auto;
+  max-width: 560px;
+}
+
+.pm-forced-password-form {
+  margin-top: 16px;
+}
+
+.pm-forced-password-form .new-btn {
+  justify-content: center;
+  width: 100%;
+}
+
+.pm-forced-password-message {
+  color: var(--pm-green);
+  font-size: 12px;
+  margin: 0;
+  min-height: 18px;
+}
+
+.pm-forced-password-message.error {
+  color: var(--pm-red);
+}
+
 .pm-request-form label,
 .pm-inline-form label,
 .manager-message-form label {

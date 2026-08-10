@@ -30,7 +30,11 @@ const state = {
   directPropertySearch: "",
   pendingRegionPropertyKeys: null,
   pendingRegionManagerIds: null,
-  pendingDirectPropertyKeysByManager: {}
+  pendingDirectPropertyKeysByManager: {},
+  createManagerOpen: false,
+  createManagerSaving: false,
+  createManagerMessage: "",
+  createManagerError: false
 };
 
 function esc(value) {
@@ -1311,10 +1315,50 @@ function renderAccessActions() {
         <span>Manage states, regions, contract properties, and property managers from one list.</span>
       </div>
       <div>
+        <button class="secondary-action" type="button" data-open-manager-create><span>+ Property Manager</span></button>
         <button class="secondary-action" type="button" data-add-state><span>+ State</span></button>
         <button class="primary-action" type="button" data-add-region><span>+ Region</span></button>
       </div>
     </section>
+  `;
+}
+
+function renderCreateManagerModal() {
+  if (!state.createManagerOpen) return "";
+  return `
+    <div class="region-modal-shell" role="dialog" aria-modal="true" aria-labelledby="regionCreateManagerTitle">
+      <button class="region-modal-backdrop" type="button" data-close-manager-create aria-label="Close property manager form"></button>
+      <section class="region-modal-panel">
+        <header class="region-modal-head">
+          <div>
+            <p class="region-eyebrow">Property Manager Account</p>
+            <h2 id="regionCreateManagerTitle">Create Property Manager</h2>
+            <p>Add a live property manager login and set a temporary password they must change on first login.</p>
+          </div>
+          <button class="region-modal-close" type="button" data-close-manager-create aria-label="Close property manager form">&times;</button>
+        </header>
+        <form class="region-form-grid region-create-manager-form" data-create-manager-form>
+          ${fieldMarkup("First Name", "first_name", "", "text", 'autocomplete="given-name" required')}
+          ${fieldMarkup("Last Name", "last_name", "", "text", 'autocomplete="family-name" required')}
+          ${fieldMarkup("Email", "email", "", "email", 'autocomplete="email" required')}
+          ${selectMarkup("Primary Property", "primary_property", [
+            { value: "", label: "No property yet" },
+            ...state.propertyOptions.map((option) => ({
+              value: option.key,
+              label: `${option.name}${option.address ? ` - ${option.address}` : ""}`
+            }))
+          ], "")}
+          ${fieldMarkup("Temporary Password", "password", "", "password", 'autocomplete="new-password" minlength="8" required')}
+          ${fieldMarkup("Confirm Temporary Password", "password_confirm", "", "password", 'autocomplete="new-password" minlength="8" required')}
+          <p class="region-password-note region-field-wide">The property manager can sign in with this temporary password, then Turnly will require them to choose a new password before the portal opens.</p>
+          <p class="region-create-manager-message ${state.createManagerError ? "is-error" : ""} region-field-wide" aria-live="polite">${esc(state.createManagerMessage)}</p>
+          <div class="region-form-actions">
+            <button class="secondary-action" type="button" data-close-manager-create><span>Cancel</span></button>
+            <button class="primary-action" type="submit" ${state.createManagerSaving ? "disabled" : ""}><span>${state.createManagerSaving ? "Creating..." : "Create Account"}</span></button>
+          </div>
+        </form>
+      </section>
+    </div>
   `;
 }
 
@@ -1361,6 +1405,7 @@ function renderApp() {
         ${renderAccessTree()}
         ${renderUnassignedManagersPanel()}
       </section>
+      ${renderCreateManagerModal()}
     </section>
   `;
 }
@@ -1483,6 +1528,34 @@ function propertyRowsPayload(options, extra = {}) {
       ...extra
     }
   }));
+}
+
+function propertyManagerAccountPayload(form) {
+  const firstName = form.elements.first_name?.value?.trim() || "";
+  const lastName = form.elements.last_name?.value?.trim() || "";
+  const email = form.elements.email?.value?.trim().toLowerCase() || "";
+  const password = form.elements.password?.value || "";
+  const confirmPassword = form.elements.password_confirm?.value || "";
+  const option = optionByKey(form.elements.primary_property?.value || "");
+
+  if (!firstName) throw new Error("First name is required.");
+  if (!lastName) throw new Error("Last name is required.");
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Enter a valid email address.");
+  if (password.length < 8) throw new Error("Temporary password must be at least 8 characters.");
+  if (password !== confirmPassword) throw new Error("Temporary passwords do not match.");
+
+  return {
+    first_name: firstName,
+    last_name: lastName,
+    full_name: `${firstName} ${lastName}`.trim(),
+    email,
+    password,
+    portal_property_id: option?.portalPropertyId || null,
+    contract_id: option?.contractId || null,
+    property_name: option?.name || "",
+    property_address: option?.address || "",
+    property_source_label: option?.sourceLabel || ""
+  };
 }
 
 async function saveStateSettings(overrides = state.cityStateOverrides, hiddenStates = state.hiddenStates) {
@@ -1988,6 +2061,57 @@ async function syncPrimaryForManagers(managerIds = [], propertyKeys = [], force 
   }
 }
 
+async function createPropertyManagerAccount(form) {
+  let payload;
+  try {
+    payload = propertyManagerAccountPayload(form);
+  } catch (error) {
+    state.createManagerMessage = error.message || "Check the property manager account details.";
+    state.createManagerError = true;
+    renderApp();
+    return;
+  }
+
+  state.createManagerSaving = true;
+  state.createManagerMessage = `Creating ${payload.full_name}'s property manager account...`;
+  state.createManagerError = false;
+  renderApp();
+
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token || "";
+    if (!token) throw new Error("Admin session is missing. Sign in again, then create the account.");
+
+    const response = await fetch("/api/admin-upsert-property-manager-user", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || "Unable to create property manager account.");
+
+    const manager = result.property_manager || {};
+    state.createManagerOpen = false;
+    state.createManagerSaving = false;
+    state.createManagerMessage = "";
+    state.createManagerError = false;
+    state.selectedManagerId = manager.id || state.selectedManagerId;
+    await loadData();
+    state.selectedManagerId = manager.id || state.selectedManagerId;
+    state.message = `${manager.name || payload.full_name} was added as a live property manager. They must change their temporary password on first login.`;
+    state.error = false;
+    renderApp();
+  } catch (error) {
+    state.createManagerSaving = false;
+    state.createManagerMessage = error.message || "Unable to create property manager account.";
+    state.createManagerError = true;
+    renderApp();
+  }
+}
+
 function updateSearchValue(target) {
   if (target.matches("[data-region-property-search]")) {
     state.propertySearch = target.value || "";
@@ -2045,9 +2169,32 @@ function installHandlers() {
       event.preventDefault();
       await saveRegion(form);
     }
+    if (form.matches("[data-create-manager-form]")) {
+      event.preventDefault();
+      await createPropertyManagerAccount(form);
+    }
   });
 
   root.addEventListener("click", async (event) => {
+    const openCreateManager = event.target.closest("[data-open-manager-create]");
+    if (openCreateManager) {
+      event.preventDefault();
+      state.createManagerOpen = true;
+      state.createManagerMessage = "";
+      state.createManagerError = false;
+      renderApp();
+      root.querySelector("[data-create-manager-form] input[name='first_name']")?.focus();
+      return;
+    }
+    if (event.target.closest("[data-close-manager-create]")) {
+      event.preventDefault();
+      if (state.createManagerSaving) return;
+      state.createManagerOpen = false;
+      state.createManagerMessage = "";
+      state.createManagerError = false;
+      renderApp();
+      return;
+    }
     const addState = event.target.closest("[data-add-state]");
     if (addState) {
       event.preventDefault();
@@ -2455,6 +2602,96 @@ function injectStyles() {
 
     .region-action-bar span {
       color: var(--suite-soft);
+    }
+
+    .region-modal-shell {
+      align-items: center;
+      display: flex;
+      inset: 0;
+      justify-content: center;
+      padding: 24px;
+      position: fixed;
+      z-index: 1200;
+    }
+
+    .region-modal-backdrop {
+      background: rgba(3, 10, 18, 0.68);
+      border: 0;
+      cursor: pointer;
+      inset: 0;
+      position: absolute;
+    }
+
+    .region-modal-panel {
+      background: var(--suite-panel);
+      border: 1px solid var(--suite-border);
+      border-radius: var(--suite-radius);
+      box-shadow: 0 28px 84px rgba(0, 0, 0, 0.42);
+      color: var(--suite-text);
+      max-height: min(760px, calc(100vh - 48px));
+      max-width: 720px;
+      overflow: auto;
+      position: relative;
+      width: min(720px, calc(100vw - 48px));
+      z-index: 1;
+    }
+
+    .region-modal-head {
+      align-items: start;
+      border-bottom: 1px solid var(--suite-border-soft);
+      display: flex;
+      gap: 14px;
+      justify-content: space-between;
+      padding: 18px;
+    }
+
+    .region-modal-head p {
+      color: var(--suite-soft);
+      margin: 4px 0 0;
+    }
+
+    .region-modal-close {
+      align-items: center;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--suite-border);
+      border-radius: 8px;
+      color: var(--suite-text);
+      cursor: pointer;
+      display: inline-flex;
+      font-size: 24px;
+      font-weight: 900;
+      height: 36px;
+      justify-content: center;
+      line-height: 1;
+      padding: 0;
+      width: 36px;
+    }
+
+    .region-create-manager-form {
+      margin: 0;
+      padding: 18px;
+    }
+
+    .region-password-note {
+      background: rgba(0, 214, 163, 0.1);
+      border: 1px solid rgba(0, 214, 163, 0.24);
+      border-radius: 9px;
+      color: var(--suite-text);
+      font-size: 0.84rem;
+      line-height: 1.45;
+      margin: 0;
+      padding: 12px;
+    }
+
+    .region-create-manager-message {
+      color: var(--suite-green);
+      font-size: 0.84rem;
+      margin: 0;
+      min-height: 18px;
+    }
+
+    .region-create-manager-message.is-error {
+      color: var(--suite-red);
     }
 
     .region-node-actions {
@@ -3047,7 +3284,8 @@ function injectStyles() {
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-hero,
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-card,
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-empty,
-    body.turnly-admin-suite[data-dashboard-theme="light"] .region-action-bar {
+    body.turnly-admin-suite[data-dashboard-theme="light"] .region-action-bar,
+    body.turnly-admin-suite[data-dashboard-theme="light"] .region-modal-panel {
       background: #ffffff;
       border-color: #d6e0ea;
       color: #061321;
@@ -3071,7 +3309,8 @@ function injectStyles() {
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-manager-attach,
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-manager-option,
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-assignment-row,
-    body.turnly-admin-suite[data-dashboard-theme="light"] .region-utility-panel {
+    body.turnly-admin-suite[data-dashboard-theme="light"] .region-utility-panel,
+    body.turnly-admin-suite[data-dashboard-theme="light"] .region-password-note {
       background: #f7fafc;
       border-color: #d6e0ea;
     }
@@ -3092,6 +3331,12 @@ function injectStyles() {
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-filter,
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-inline-editor select,
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-assignment-row select {
+      background: #ffffff;
+      border-color: #d6e0ea;
+      color: #061321;
+    }
+
+    body.turnly-admin-suite[data-dashboard-theme="light"] .region-modal-close {
       background: #ffffff;
       border-color: #d6e0ea;
       color: #061321;

@@ -232,6 +232,117 @@ function hasPropertyManagerSignal(user, profile) {
     Boolean(user?.user_metadata?.requested_property_name);
 }
 
+function metadataFlag(value) {
+  return value === true || String(value || "").toLowerCase() === "true";
+}
+
+function timeValue(value) {
+  const parsed = Date.parse(value || "");
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function requiresPasswordChange(user) {
+  const appMetadata = user?.app_metadata || {};
+  const userMetadata = user?.user_metadata || {};
+  const resetAt = appMetadata.turnly_password_reset_by_admin_at || userMetadata.turnly_password_reset_by_admin_at || "";
+  const tempAt = appMetadata.turnly_temp_password_created_at || userMetadata.turnly_temp_password_created_at || "";
+  const requestedAt = resetAt || tempAt;
+  const changedAt = userMetadata.turnly_password_changed_at || "";
+  if (requestedAt && changedAt && timeValue(changedAt) >= timeValue(requestedAt)) return false;
+  if (changedAt && String(userMetadata.turnly_force_password_change).toLowerCase() === "false") return false;
+
+  return metadataFlag(appMetadata.turnly_force_password_change) ||
+    metadataFlag(appMetadata.force_password_change) ||
+    metadataFlag(userMetadata.turnly_force_password_change) ||
+    metadataFlag(userMetadata.force_password_change);
+}
+
+function setManagerPasswordMessage(message, error = false) {
+  const node = document.getElementById("managerForcedPasswordMessage");
+  if (!node) return;
+  node.textContent = message || "";
+  node.classList.toggle("error", error);
+}
+
+async function clearManagerForcedPasswordFlag() {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData?.session?.access_token || "";
+  if (!token) return;
+  await fetch("/api/portal-password-change-complete", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({})
+  }).catch(() => null);
+}
+
+async function renderManagerPasswordChangeRequired(user) {
+  if (!managerMain) return;
+  const name = getName(user, state.profile);
+  managerMain.innerHTML = `
+    <header class="command-header pm-page-header">
+      <div class="pm-heading">
+        <h1>Change your password</h1>
+        <p>Choose your own password before opening the property manager portal.</p>
+      </div>
+    </header>
+    <section class="panel-card pm-lock-panel pm-forced-password-panel">
+      <p class="pm-eyebrow">Security Step</p>
+      <h2>Welcome${name ? `, ${esc(name)}` : ""}</h2>
+      <p>A Turnly admin created your account with a temporary password. Create a new password to continue.</p>
+      <form id="managerForcedPasswordForm" class="pm-inline-form pm-forced-password-form">
+        <label><span>New Password</span><input id="managerForcedNewPassword" type="password" autocomplete="new-password" minlength="8" required /></label>
+        <label><span>Confirm Password</span><input id="managerForcedConfirmPassword" type="password" autocomplete="new-password" minlength="8" required /></label>
+        <p id="managerForcedPasswordMessage" class="pm-forced-password-message" aria-live="polite"></p>
+        <button class="new-btn" type="submit">Update Password</button>
+      </form>
+    </section>
+  `;
+
+  const form = document.getElementById("managerForcedPasswordForm");
+  form?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const password = document.getElementById("managerForcedNewPassword")?.value || "";
+    const confirmPassword = document.getElementById("managerForcedConfirmPassword")?.value || "";
+    const button = form.querySelector("button[type='submit']");
+
+    if (password.length < 8) {
+      setManagerPasswordMessage("Password must be at least 8 characters.", true);
+      return;
+    }
+    if (password !== confirmPassword) {
+      setManagerPasswordMessage("Passwords do not match.", true);
+      return;
+    }
+
+    if (button) button.disabled = true;
+    setManagerPasswordMessage("Updating password...");
+
+    const changedAt = new Date().toISOString();
+    const { error } = await supabase.auth.updateUser({
+      password,
+      data: {
+        ...(user?.user_metadata || {}),
+        turnly_force_password_change: false,
+        turnly_password_changed_at: changedAt
+      }
+    });
+
+    if (error) {
+      if (button) button.disabled = false;
+      setManagerPasswordMessage(error.message || "Unable to update password.", true);
+      return;
+    }
+
+    await clearManagerForcedPasswordFlag();
+    await supabase.auth.refreshSession().catch(() => null);
+    setManagerPasswordMessage("Password updated. Loading your portal...");
+    window.location.reload();
+  });
+}
+
 async function applyManagerAdminPreview(authUser) {
   const session = await verifyAdminPreviewSession(supabase, authUser);
   if (session?.preview?.portal !== "property_manager") return false;
@@ -1213,6 +1324,11 @@ async function requireManagerAccess() {
   state.user = user;
   state.profile = profile;
   state.view = currentView();
+
+  if (requiresPasswordChange(user)) {
+    await renderManagerPasswordChangeRequired(user);
+    return;
+  }
 
   if (!profile.property_manager_property_id) {
     const accessProperty = await resolvePrimaryPropertyFromManagedAccess();
