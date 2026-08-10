@@ -2125,9 +2125,32 @@ a {
   border-radius: 7px;
   color: var(--suite-text);
   display: inline-flex;
+  height: 36px;
   justify-content: center;
-  min-height: 36px;
-  padding: 0 12px;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
+  position: relative;
+  text-indent: -999px;
+  width: 36px;
+}
+
+.client-modal-close::before {
+  align-items: center;
+  color: currentColor;
+  content: "\00d7";
+  display: flex;
+  font-size: 24px;
+  font-weight: 900;
+  inset: 0;
+  justify-content: center;
+  line-height: 1;
+  position: absolute;
+  text-indent: 0;
+}
+
+.client-modal-close .suite-icon {
+  display: none;
 }
 
 @keyframes clientSlideDown {
