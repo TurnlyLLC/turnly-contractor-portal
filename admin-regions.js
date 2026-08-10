@@ -320,10 +320,12 @@ function optionByKey(key) {
 }
 
 function clientPropertyName(row = {}) {
+  row = row || {};
   return firstValue(row.property_name, row.name, row.company_name, "Unnamed property");
 }
 
 function clientPropertyAddress(row = {}) {
+  row = row || {};
   const composed = compact([row.address, row.city, row.state, row.postal_code]).join(", ");
   return firstValue(composed, row.billing_address, "No address saved");
 }
@@ -342,6 +344,7 @@ function normalizeClientContact(row = {}) {
 }
 
 function legacyClientContactFromProperty(row = {}) {
+  row = row || {};
   const name = String(row.primary_contact_name || "").trim();
   const email = String(row.primary_contact_email || "").trim().toLowerCase();
   const cell = String(row.primary_contact_phone || "").trim();
