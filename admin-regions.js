@@ -20,6 +20,8 @@ const state = {
   managerPropertyLinks: [],
   managers: [],
   propertyOptions: [],
+  clientProperties: [],
+  clientContacts: [],
   stateSettingsRecordId: "",
   cityStateOverrides: {},
   hiddenStates: [],
@@ -34,7 +36,9 @@ const state = {
   createManagerOpen: false,
   createManagerSaving: false,
   createManagerMessage: "",
-  createManagerError: false
+  createManagerError: false,
+  createManagerPropertyKey: "",
+  createManagerContactId: ""
 };
 
 function esc(value) {
@@ -313,6 +317,97 @@ function managerById(id) {
 
 function optionByKey(key) {
   return state.propertyOptions.find((option) => option.key === key) || null;
+}
+
+function clientPropertyName(row = {}) {
+  return firstValue(row.property_name, row.name, row.company_name, "Unnamed property");
+}
+
+function clientPropertyAddress(row = {}) {
+  const composed = compact([row.address, row.city, row.state, row.postal_code]).join(", ");
+  return firstValue(composed, row.billing_address, "No address saved");
+}
+
+function normalizeClientContact(row = {}) {
+  return {
+    id: String(row.id || ""),
+    client_id: String(row.client_id || ""),
+    name: String(row.name || ""),
+    cell_phone: String(row.cell_phone || row.phone || ""),
+    email: String(row.email || "").trim().toLowerCase(),
+    office_phone: String(row.office_phone || ""),
+    sort_order: Number(row.sort_order) || 0,
+    isLegacy: false
+  };
+}
+
+function legacyClientContactFromProperty(row = {}) {
+  const name = String(row.primary_contact_name || "").trim();
+  const email = String(row.primary_contact_email || "").trim().toLowerCase();
+  const cell = String(row.primary_contact_phone || "").trim();
+  if (!name && !email && !cell) return null;
+  return {
+    id: `primary:${row.id}`,
+    client_id: String(row.id || ""),
+    name,
+    cell_phone: cell,
+    email,
+    office_phone: "",
+    sort_order: 0,
+    isLegacy: true
+  };
+}
+
+function propertyClientIds(option = {}) {
+  const row = option.row || {};
+  return new Set(unique([
+    option.sourceTable === "client_contracts" ? option.contractId : "",
+    option.contractId,
+    row.client_id,
+    option.sourceTable === "client_contracts" ? row.id : "",
+    metadata(row).client_id
+  ]).map(String));
+}
+
+function clientPropertyForOption(option = {}) {
+  const ids = propertyClientIds(option);
+  return state.clientProperties.find((row) => ids.has(String(row.id || ""))) ||
+    state.clientProperties.find((row) => normalizeLookup(clientPropertyName(row)) === normalizeLookup(option.name)) ||
+    state.clientProperties.find((row) => normalizeLookup(clientPropertyAddress(row)) === normalizeLookup(option.address)) ||
+    null;
+}
+
+function contactLabel(contact = {}) {
+  const name = contact.name || contact.email || "Unnamed contact";
+  const details = compact([contact.email, contact.cell_phone]).join(" - ");
+  return details ? `${name} - ${details}` : `${name} - No email saved`;
+}
+
+function contactsForPropertyKey(propertyKey = "") {
+  const option = optionByKey(propertyKey);
+  if (!option) return [];
+  const ids = propertyClientIds(option);
+  const contacts = state.clientContacts.filter((contact) => ids.has(String(contact.client_id || "")));
+  const fallback = contacts.length ? [] : compact([legacyClientContactFromProperty(clientPropertyForOption(option))]);
+  return [...contacts, ...fallback]
+    .sort((a, b) => a.sort_order - b.sort_order || contactLabel(a).localeCompare(contactLabel(b), undefined, { sensitivity: "base" }));
+}
+
+function selectedCreateManagerPropertyKey() {
+  if (state.createManagerPropertyKey && optionByKey(state.createManagerPropertyKey)) {
+    return state.createManagerPropertyKey;
+  }
+  return state.propertyOptions.find((option) => contactsForPropertyKey(option.key).length)?.key ||
+    state.propertyOptions[0]?.key ||
+    "";
+}
+
+function selectedCreateManagerContact(propertyKey = selectedCreateManagerPropertyKey()) {
+  const contacts = contactsForPropertyKey(propertyKey);
+  return contacts.find((contact) => String(contact.id) === String(state.createManagerContactId)) ||
+    contacts.find((contact) => contact.email) ||
+    contacts[0] ||
+    null;
 }
 
 function optionByPortalPropertyId(id) {
@@ -1325,6 +1420,11 @@ function renderAccessActions() {
 
 function renderCreateManagerModal() {
   if (!state.createManagerOpen) return "";
+  const propertyKey = selectedCreateManagerPropertyKey();
+  const selectedOption = optionByKey(propertyKey);
+  const contacts = contactsForPropertyKey(propertyKey);
+  const selectedContact = selectedCreateManagerContact(propertyKey);
+  const contactValue = selectedContact?.id || "";
   return `
     <div class="region-modal-shell" role="dialog" aria-modal="true" aria-labelledby="regionCreateManagerTitle">
       <button class="region-modal-backdrop" type="button" data-close-manager-create aria-label="Close property manager form"></button>
@@ -1338,19 +1438,35 @@ function renderCreateManagerModal() {
           <button class="region-modal-close" type="button" data-close-manager-create aria-label="Close property manager form">&times;</button>
         </header>
         <form class="region-form-grid region-create-manager-form" data-create-manager-form>
-          ${fieldMarkup("First Name", "first_name", "", "text", 'autocomplete="given-name" required')}
-          ${fieldMarkup("Last Name", "last_name", "", "text", 'autocomplete="family-name" required')}
-          ${fieldMarkup("Email", "email", "", "email", 'autocomplete="email" required')}
           ${selectMarkup("Primary Property", "primary_property", [
-            { value: "", label: "No property yet" },
+            { value: "", label: "Select a property" },
             ...state.propertyOptions.map((option) => ({
               value: option.key,
               label: `${option.name}${option.address ? ` - ${option.address}` : ""}`
             }))
-          ], "")}
+          ], propertyKey, 'data-create-manager-property required')}
+          <label class="region-field">
+            <span>Client Directory Contact</span>
+            <select name="client_contact" data-create-manager-contact required ${contacts.length ? "" : "disabled"}>
+              ${contacts.length
+                ? contacts.map((contact) => `<option value="${esc(contact.id)}" ${String(contact.id) === String(contactValue) ? "selected" : ""}>${esc(contactLabel(contact))}</option>`).join("")
+                : `<option value="">No contacts saved for this property</option>`}
+            </select>
+          </label>
+          <div class="region-contact-preview region-field-wide">
+            <span>Selected Account</span>
+            ${selectedContact ? `
+              <strong>${esc(selectedContact.name || "Unnamed contact")}</strong>
+              <small>${esc(selectedContact.email || "No email saved")}${selectedContact.cell_phone ? ` - ${esc(selectedContact.cell_phone)}` : ""}</small>
+              <small>${selectedOption ? esc(`${selectedOption.name}${selectedOption.address ? ` - ${selectedOption.address}` : ""}`) : "Select a property"}</small>
+            ` : `
+              <strong>No contact selected</strong>
+              <small>Select a property with a saved client directory contact.</small>
+            `}
+          </div>
           ${fieldMarkup("Temporary Password", "password", "", "password", 'autocomplete="new-password" minlength="8" required')}
           ${fieldMarkup("Confirm Temporary Password", "password_confirm", "", "password", 'autocomplete="new-password" minlength="8" required')}
-          <p class="region-password-note region-field-wide">The property manager can sign in with this temporary password, then Turnly will require them to choose a new password before the portal opens.</p>
+          <p class="region-password-note region-field-wide">Only contacts with saved email addresses can become portal users. The property manager can sign in with this temporary password, then Turnly will require them to choose a new password before the portal opens.</p>
           <p class="region-create-manager-message ${state.createManagerError ? "is-error" : ""} region-field-wide" aria-live="polite">${esc(state.createManagerMessage)}</p>
           <div class="region-form-actions">
             <button class="secondary-action" type="button" data-close-manager-create><span>Cancel</span></button>
@@ -1433,6 +1549,15 @@ async function loadTable(table, select = "*", options = {}) {
   return data || [];
 }
 
+async function loadTableOptional(table, select = "*", options = {}) {
+  try {
+    return await loadTable(table, select, options);
+  } catch (error) {
+    console.warn(`[admin-regions] optional table load failed: ${table}`, error);
+    return [];
+  }
+}
+
 async function loadData() {
   if (!root || !supabase || state.loading) return;
   state.loading = true;
@@ -1451,7 +1576,9 @@ async function loadData() {
       managerPropertyLinks,
       profiles,
       portalProperties,
-      contracts
+      contracts,
+      clientProperties,
+      clientContacts
     ] = await Promise.all([
       loadTable("property_regions", "*", { order: "name", limit: 1000 }),
       loadTable("property_region_links", "*", { order: "created_at", limit: 5000 }),
@@ -1459,7 +1586,9 @@ async function loadData() {
       loadTable("property_manager_property_links", "*", { order: "created_at", limit: 5000 }),
       loadTable("profiles", "id,full_name,email,role,status,property_manager_property_id,requested_property_name,created_at", { order: "full_name", limit: 2000 }),
       loadTable("portal_properties", "*", { order: "property_name", limit: 2000 }),
-      loadTable("client_contracts", "*", { order: "property_name", limit: 2000 })
+      loadTable("client_contracts", "*", { order: "property_name", limit: 2000 }),
+      loadTable("clients", "id,name,company_name,property_name,billing_address,address,city,state,postal_code,primary_contact_name,primary_contact_email,primary_contact_phone,updated_at", { order: "name", limit: 2000 }),
+      loadTableOptional("client_contacts", "*", { order: "sort_order", limit: 4000 })
     ]);
     const settingsRegion = regions.find(isStateSettingsRegion) || null;
     const settingsMeta = metadata(settingsRegion || {});
@@ -1475,6 +1604,8 @@ async function loadData() {
     state.managers = profiles.filter(isPropertyManager)
       .sort((a, b) => managerName(a).localeCompare(managerName(b), undefined, { sensitivity: "base" }));
     state.propertyOptions = contractPropertyOptions(portalProperties, contracts);
+    state.clientProperties = clientProperties || [];
+    state.clientContacts = (clientContacts || []).map(normalizeClientContact);
     if (!state.selectedRegionId || !regionById(state.selectedRegionId)) {
       state.selectedRegionId = state.regions[0]?.id || "";
     }
@@ -1530,17 +1661,34 @@ function propertyRowsPayload(options, extra = {}) {
   }));
 }
 
+function contactNameParts(contact = {}) {
+  const emailName = String(contact.email || "").split("@")[0] || "";
+  const words = String(contact.name || emailName || "Property Manager")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  const firstName = words.shift() || "Property";
+  const lastName = words.join(" ") || "Manager";
+  return {
+    firstName,
+    lastName,
+    fullName: `${firstName} ${lastName}`.trim()
+  };
+}
+
 function propertyManagerAccountPayload(form) {
-  const firstName = form.elements.first_name?.value?.trim() || "";
-  const lastName = form.elements.last_name?.value?.trim() || "";
-  const email = form.elements.email?.value?.trim().toLowerCase() || "";
+  const propertyKey = form.elements.primary_property?.value || "";
+  const contactId = form.elements.client_contact?.value || "";
+  const option = optionByKey(propertyKey);
+  const contact = contactsForPropertyKey(propertyKey).find((item) => String(item.id) === String(contactId));
+  const { firstName, lastName, fullName } = contactNameParts(contact);
+  const email = contact?.email?.trim().toLowerCase() || "";
   const password = form.elements.password?.value || "";
   const confirmPassword = form.elements.password_confirm?.value || "";
-  const option = optionByKey(form.elements.primary_property?.value || "");
 
-  if (!firstName) throw new Error("First name is required.");
-  if (!lastName) throw new Error("Last name is required.");
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Enter a valid email address.");
+  if (!option) throw new Error("Select the property this manager should access.");
+  if (!contact) throw new Error("Select a client directory contact for that property.");
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("The selected client directory contact needs a valid email address.");
   if (password.length < 8) throw new Error("Temporary password must be at least 8 characters.");
   if (password !== confirmPassword) throw new Error("Temporary passwords do not match.");
 
@@ -1554,7 +1702,10 @@ function propertyManagerAccountPayload(form) {
     contract_id: option?.contractId || null,
     property_name: option?.name || "",
     property_address: option?.address || "",
-    property_source_label: option?.sourceLabel || ""
+    property_source_label: option?.sourceLabel || "",
+    source_contact_id: contact?.isLegacy ? "" : contact?.id || "",
+    source_contact_table: contact?.isLegacy ? "clients" : "client_contacts",
+    source_contact_phone: contact?.cell_phone || contact?.office_phone || ""
   };
 }
 
@@ -2179,11 +2330,15 @@ function installHandlers() {
     const openCreateManager = event.target.closest("[data-open-manager-create]");
     if (openCreateManager) {
       event.preventDefault();
+      const propertyKey = selectedCreateManagerPropertyKey();
+      const contact = selectedCreateManagerContact(propertyKey);
       state.createManagerOpen = true;
+      state.createManagerPropertyKey = propertyKey;
+      state.createManagerContactId = contact?.id || "";
       state.createManagerMessage = "";
       state.createManagerError = false;
       renderApp();
-      root.querySelector("[data-create-manager-form] input[name='first_name']")?.focus();
+      root.querySelector("[data-create-manager-property]")?.focus();
       return;
     }
     if (event.target.closest("[data-close-manager-create]")) {
@@ -2292,6 +2447,23 @@ function installHandlers() {
   });
 
   root.addEventListener("change", (event) => {
+    if (event.target.matches("[data-create-manager-property]")) {
+      state.createManagerPropertyKey = event.target.value || "";
+      state.createManagerContactId = selectedCreateManagerContact(state.createManagerPropertyKey)?.id || "";
+      state.createManagerMessage = "";
+      state.createManagerError = false;
+      renderApp();
+      root.querySelector("[data-create-manager-contact]")?.focus();
+      return;
+    }
+    if (event.target.matches("[data-create-manager-contact]")) {
+      state.createManagerContactId = event.target.value || "";
+      state.createManagerMessage = "";
+      state.createManagerError = false;
+      renderApp();
+      root.querySelector("[data-create-manager-contact]")?.focus();
+      return;
+    }
     if (event.target.matches("[data-manager-selector]")) {
       state.selectedManagerId = event.target.value || "";
       renderApp();
@@ -2670,6 +2842,27 @@ function injectStyles() {
     .region-create-manager-form {
       margin: 0;
       padding: 18px;
+    }
+
+    .region-contact-preview {
+      background: rgba(44, 166, 255, 0.09);
+      border: 1px solid rgba(44, 166, 255, 0.22);
+      border-radius: 9px;
+      display: grid;
+      gap: 5px;
+      padding: 12px;
+    }
+
+    .region-contact-preview > span {
+      color: var(--suite-soft);
+      font-size: 0.74rem;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .region-contact-preview small {
+      color: var(--suite-soft);
     }
 
     .region-password-note {
@@ -3310,6 +3503,7 @@ function injectStyles() {
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-manager-option,
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-assignment-row,
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-utility-panel,
+    body.turnly-admin-suite[data-dashboard-theme="light"] .region-contact-preview,
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-password-note {
       background: #f7fafc;
       border-color: #d6e0ea;
@@ -3352,6 +3546,8 @@ function injectStyles() {
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-manager-card dd,
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-manager-card dt,
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-manager-option small,
+    body.turnly-admin-suite[data-dashboard-theme="light"] .region-contact-preview span,
+    body.turnly-admin-suite[data-dashboard-theme="light"] .region-contact-preview small,
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-summary-row span,
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-action-bar span,
     body.turnly-admin-suite[data-dashboard-theme="light"] .region-inline-editor span,

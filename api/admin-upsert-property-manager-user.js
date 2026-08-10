@@ -145,6 +145,9 @@ function propertyMetadata(body = {}) {
   return {
     address: String(body.property_address || "").trim(),
     source_label: String(body.property_source_label || "").trim(),
+    source_contact_id: String(body.source_contact_id || "").trim(),
+    source_contact_table: String(body.source_contact_table || "").trim(),
+    source_contact_phone: String(body.source_contact_phone || "").trim(),
     assigned_from: "admin_create_property_manager"
   };
 }
