@@ -3475,6 +3475,23 @@ body.admin-command-body[data-portal-role="property-manager"] .topbar-profile-mes
   padding: 0 12px;
 }
 
+body.admin-command-body[data-portal-role="property-manager"] select {
+  background-color: #071524;
+  color: #f5f7fb;
+  color-scheme: dark;
+}
+
+body.admin-command-body[data-portal-role="property-manager"] select option,
+body.admin-command-body[data-portal-role="property-manager"] select optgroup {
+  background-color: #071524;
+  color: #f5f7fb;
+}
+
+body.admin-command-body[data-portal-role="property-manager"] select option:checked {
+  background-color: #0bd3a6;
+  color: #031d15;
+}
+
 .pm-compact-btn {
   border-radius: 7px;
   font-size: 12px;
@@ -5055,6 +5072,8 @@ body.admin-command-body[data-portal-role="property-manager"][data-dashboard-them
 body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-mini-select,
 body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-request-form select,
 body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-inline-form select,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-feedback-form select,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .admin-preview-field select,
 body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .manager-message-form select,
 body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-schedule-controls button,
 body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-schedule-controls input,
@@ -5070,6 +5089,19 @@ body.admin-command-body[data-portal-role="property-manager"][data-dashboard-them
   border-color: rgba(43, 68, 91, 0.18);
   color: var(--pm-text);
   color-scheme: light;
+}
+
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] select,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] select option,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] select optgroup {
+  background-color: #ffffff;
+  color: #071524;
+  color-scheme: light;
+}
+
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] select option:checked {
+  background-color: #d8fbf2;
+  color: #071524;
 }
 
 body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-schedule-controls button::before {
