@@ -4407,6 +4407,7 @@ body.admin-command-body[data-portal-role="property-manager"] .pm-assignment-deta
   border-radius: 8px;
   color: var(--pm-text);
   display: inline-flex;
+  font-size: 0;
   height: 36px;
   justify-content: center;
   padding: 0;

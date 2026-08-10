@@ -2125,13 +2125,13 @@ a {
   border-radius: 7px;
   color: var(--suite-text);
   display: inline-flex;
+  font-size: 0;
   height: 36px;
   justify-content: center;
   min-height: 0;
   overflow: hidden;
   padding: 0;
   position: relative;
-  text-indent: -999px;
   width: 36px;
 }
 
@@ -2146,7 +2146,6 @@ a {
   justify-content: center;
   line-height: 1;
   position: absolute;
-  text-indent: 0;
 }
 
 .client-modal-close .suite-icon {
