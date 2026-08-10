@@ -386,6 +386,12 @@ function contactLabel(contact = {}) {
   return details ? `${name} - ${details}` : `${name} - No email saved`;
 }
 
+function existingPropertyManagerEmails() {
+  return new Set(state.managers
+    .map((manager) => String(manager.email || "").trim().toLowerCase())
+    .filter(Boolean));
+}
+
 function contactsForPropertyKey(propertyKey = "") {
   const option = optionByKey(propertyKey);
   if (!option) return [];
@@ -396,17 +402,27 @@ function contactsForPropertyKey(propertyKey = "") {
     .sort((a, b) => a.sort_order - b.sort_order || contactLabel(a).localeCompare(contactLabel(b), undefined, { sensitivity: "base" }));
 }
 
+function addableContactsForPropertyKey(propertyKey = "") {
+  const blockedEmails = existingPropertyManagerEmails();
+  return contactsForPropertyKey(propertyKey).filter((contact) => {
+    const email = String(contact.email || "").trim().toLowerCase();
+    if (!email || blockedEmails.has(email)) return false;
+    blockedEmails.add(email);
+    return true;
+  });
+}
+
 function selectedCreateManagerPropertyKey() {
   if (state.createManagerPropertyKey && optionByKey(state.createManagerPropertyKey)) {
     return state.createManagerPropertyKey;
   }
-  return state.propertyOptions.find((option) => contactsForPropertyKey(option.key).length)?.key ||
+  return state.propertyOptions.find((option) => addableContactsForPropertyKey(option.key).length)?.key ||
     state.propertyOptions[0]?.key ||
     "";
 }
 
 function selectedCreateManagerContact(propertyKey = selectedCreateManagerPropertyKey()) {
-  const contacts = contactsForPropertyKey(propertyKey);
+  const contacts = addableContactsForPropertyKey(propertyKey);
   return contacts.find((contact) => String(contact.id) === String(state.createManagerContactId)) ||
     contacts.find((contact) => contact.email) ||
     contacts[0] ||
@@ -1425,7 +1441,7 @@ function renderCreateManagerModal() {
   if (!state.createManagerOpen) return "";
   const propertyKey = selectedCreateManagerPropertyKey();
   const selectedOption = optionByKey(propertyKey);
-  const contacts = contactsForPropertyKey(propertyKey);
+  const contacts = addableContactsForPropertyKey(propertyKey);
   const selectedContact = selectedCreateManagerContact(propertyKey);
   const contactValue = selectedContact?.id || "";
   return `
@@ -1453,7 +1469,7 @@ function renderCreateManagerModal() {
             <select name="client_contact" data-create-manager-contact required ${contacts.length ? "" : "disabled"}>
               ${contacts.length
                 ? contacts.map((contact) => `<option value="${esc(contact.id)}" ${String(contact.id) === String(contactValue) ? "selected" : ""}>${esc(contactLabel(contact))}</option>`).join("")
-                : `<option value="">No contacts saved for this property</option>`}
+                : `<option value="">No unused contact emails for this property</option>`}
             </select>
           </label>
           <div class="region-contact-preview region-field-wide">
@@ -1464,7 +1480,7 @@ function renderCreateManagerModal() {
               <small>${selectedOption ? esc(`${selectedOption.name}${selectedOption.address ? ` - ${selectedOption.address}` : ""}`) : "Select a property"}</small>
             ` : `
               <strong>No contact selected</strong>
-              <small>Select a property with a saved client directory contact.</small>
+              <small>Select a property with a Client Directory contact that has not already been added as a property manager.</small>
             `}
           </div>
           ${fieldMarkup("Temporary Password", "password", "", "password", 'autocomplete="new-password" minlength="8" required')}
@@ -1683,14 +1699,14 @@ function propertyManagerAccountPayload(form) {
   const propertyKey = form.elements.primary_property?.value || "";
   const contactId = form.elements.client_contact?.value || "";
   const option = optionByKey(propertyKey);
-  const contact = contactsForPropertyKey(propertyKey).find((item) => String(item.id) === String(contactId));
+  const contact = addableContactsForPropertyKey(propertyKey).find((item) => String(item.id) === String(contactId));
   const { firstName, lastName, fullName } = contactNameParts(contact);
   const email = contact?.email?.trim().toLowerCase() || "";
   const password = form.elements.password?.value || "";
   const confirmPassword = form.elements.password_confirm?.value || "";
 
   if (!option) throw new Error("Select the property this manager should access.");
-  if (!contact) throw new Error("Select a client directory contact for that property.");
+  if (!contact) throw new Error("Select a Client Directory contact that does not already have a property manager account.");
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("The selected client directory contact needs a valid email address.");
   if (password.length < 8) throw new Error("Temporary password must be at least 8 characters.");
   if (password !== confirmPassword) throw new Error("Temporary passwords do not match.");
