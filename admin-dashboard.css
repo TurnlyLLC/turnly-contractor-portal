@@ -4377,6 +4377,29 @@ body.admin-command-body[data-portal-role="property-manager"] .pm-assignment-deta
   top: auto;
 }
 
+.pm-guide-card-overview-requests,
+.pm-guide-card-request-table,
+.pm-guide-card-request-details,
+.pm-guide-card-message-display,
+.pm-guide-card-message-reply {
+  bottom: 32px;
+  top: auto;
+}
+
+.pm-guide-card-overview-metrics,
+.pm-guide-card-date-controls,
+.pm-guide-card-request-filters,
+.pm-guide-card-message-threads {
+  left: 260px;
+  right: auto;
+  top: 142px;
+}
+
+.pm-guide-card-overview-next,
+.pm-guide-card-message-compose {
+  top: 210px;
+}
+
 .pm-guide-card h2,
 .pm-guide-card p {
   margin: 0;

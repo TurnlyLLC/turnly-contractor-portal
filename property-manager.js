@@ -19,7 +19,7 @@ const SIGNED_URL_SECONDS = 60 * 60 * 4;
 const TURN_REQUEST_SERVICE = "Unit Cleaning";
 const MOVE_IN_TIME_LABEL = "2:00 PM";
 const MOVE_IN_HOUR = 14;
-const SCHEDULE_GUIDE_STORAGE_PREFIX = "turnlyPropertyManagerScheduleGuide:v1";
+const PROPERTY_MANAGER_GUIDE_STORAGE_PREFIX = "turnlyPropertyManagerWelcomeGuide:v2";
 const PROPERTY_MANAGER_THEME_STORAGE_KEY = "turnlyPropertyManagerDashboardTheme";
 const PROPERTY_MANAGER_NOTIFICATION_CLEAR_PREFIX = "turnlyPropertyManagerNotificationsClearedAt:v1";
 
@@ -67,8 +67,8 @@ const state = {
   feedbackError: false,
   accountMenuOpen: false,
   adminPreviewMenuOpen: false,
-  scheduleGuideOpen: false,
-  scheduleGuideStep: 0,
+  guideOpen: false,
+  guideStep: 0,
   notificationClearedAt: 0,
   filters: {
     query: "",
@@ -173,19 +173,94 @@ const searchlessViews = new Set(["turn-requests", "schedule", "messages"]);
 const closedStatuses = new Set(["completed", "complete", "cancelled", "canceled", "declined", "deleted", "archived"]);
 const issueStatuses = new Set(["overdue", "qa_pending", "qa_rejected", "rejected", "needs_rework"]);
 const inProgressStatuses = new Set(["in_progress", "claimed", "started", "active", "qa_pending"]);
-const scheduleGuideSteps = [
-  {
-    key: "selector",
-    title: "Change your schedule view",
-    body: "Use Day, Week, and Month to change how assignments are displayed on the schedule."
-  },
-  {
-    key: "assignment",
-    title: "Open assignment details",
-    body: "Click an assignment card to view the full details, see before and after videos, and leave feedback for that specific clean.",
-    emptyBody: "When assignments appear on the schedule, click a card to view the full details, see before and after videos, and leave feedback for that specific clean."
-  }
-];
+const managerGuideSteps = {
+  overview: [
+    {
+      key: "overview-hero",
+      title: "Welcome to your property overview",
+      body: "This page gives you the fastest read on your property, the next turn, and the actions Turnly expects you to use most."
+    },
+    {
+      key: "overview-metrics",
+      title: "Scan the status cards",
+      body: "These cards summarize ready units, in-progress turns, upcoming work, and recently completed cleans for your assigned property."
+    },
+    {
+      key: "overview-next",
+      title: "Watch the next turn",
+      body: "The Next Turn card keeps the next scheduled unit front and center so you can open details without hunting through the schedule."
+    },
+    {
+      key: "overview-requests",
+      title: "Review turn requests",
+      body: "Use this section to track open requests and start a new unit cleaning request when another turn is ready to send to Turnly."
+    }
+  ],
+  "turn-requests": [
+    {
+      key: "request-new",
+      title: "Start a turn request",
+      body: "Use this area to submit a unit cleaning request with the unit and scheduled move-in date. Requests stay property-specific."
+    },
+    {
+      key: "request-filters",
+      title: "Filter and sort requests",
+      body: "Use the status buttons and sort controls to move between open, pending, completed, and other request groups."
+    },
+    {
+      key: "request-table",
+      title: "Read the request list",
+      body: "The table shows unit, bed and bath count, current status, scheduled window, and completed date when you are viewing completed work."
+    },
+    {
+      key: "request-details",
+      title: "Open details and leave feedback",
+      body: "Click View Details to open the full request window, see related media, and send feedback about that clean.",
+      emptyBody: "When requests appear here, click View Details to open the full request window, see related media, and send feedback about that clean."
+    }
+  ],
+  schedule: [
+    {
+      key: "date-controls",
+      title: "Move through the schedule",
+      body: "Use the arrows or date picker to jump to the day, week, or month you want to inspect."
+    },
+    {
+      key: "selector",
+      title: "Change your schedule view",
+      body: "Use Day, Week, and Month to change how assignments are displayed on the schedule."
+    },
+    {
+      key: "assignment",
+      title: "Open assignment details",
+      body: "Click an assignment card to view the full details, see before and after videos, and leave feedback for that specific clean.",
+      emptyBody: "When assignments appear on the schedule, click a card to view the full details, see before and after videos, and leave feedback for that specific clean."
+    }
+  ],
+  messages: [
+    {
+      key: "message-compose",
+      title: "Start a conversation",
+      body: "Use New Message to contact Turnly operations about property questions, schedule changes, service updates, or feedback."
+    },
+    {
+      key: "message-threads",
+      title: "Choose an open conversation",
+      body: "Open conversations stay in this left rail with recipients, last sent date, and a one-line preview so you can move between threads quickly."
+    },
+    {
+      key: "message-display",
+      title: "Read the full thread",
+      body: "The main message area shows the selected conversation and keeps the full exchange in one focused workspace."
+    },
+    {
+      key: "message-reply",
+      title: "Send a reply",
+      body: "Use the reply box to keep updates tied to the same thread so Turnly can track the whole conversation.",
+      emptyBody: "Once a conversation is selected, use the reply box to keep updates tied to the same thread so Turnly can track the whole conversation."
+    }
+  ]
+};
 const pendingStatuses = new Set(["pending", "pending_approval"]);
 const readyStatuses = new Set(["ready", "open", "scheduled", "not_started"]);
 
@@ -1732,42 +1807,49 @@ function renderManagerPortal(loading = false) {
     ${renderRequestForm()}
     ${renderCurrentView()}
     ${renderAssignmentDetailsModal()}
-    ${renderScheduleGuideOverlay()}
+    ${renderManagerGuideOverlay()}
   `;
 }
 
-function scheduleGuideStorageKey() {
-  return `${SCHEDULE_GUIDE_STORAGE_PREFIX}:${state.user?.id || "browser"}`;
+function currentGuideSteps() {
+  return managerGuideSteps[state.view] || [];
 }
 
-function hasSeenScheduleGuide() {
+function guideStorageKey(view = state.view) {
+  return `${PROPERTY_MANAGER_GUIDE_STORAGE_PREFIX}:${state.user?.id || "browser"}:${view}`;
+}
+
+function hasSeenManagerGuide(view = state.view) {
   try {
-    return window.localStorage?.getItem(scheduleGuideStorageKey()) === "seen";
+    return window.localStorage?.getItem(guideStorageKey(view)) === "seen";
   } catch {
     return false;
   }
 }
 
-function markScheduleGuideSeen() {
+function markManagerGuideSeen(view = state.view) {
   try {
-    window.localStorage?.setItem(scheduleGuideStorageKey(), "seen");
+    window.localStorage?.setItem(guideStorageKey(view), "seen");
   } catch {
     // localStorage can be unavailable in private or restricted browsing.
   }
 }
 
 function maybeStartScheduleGuide() {
-  if (state.view !== "schedule" || state.assignmentDetailsOpen || state.scheduleGuideOpen || hasSeenScheduleGuide()) return;
-  state.scheduleGuideOpen = true;
-  state.scheduleGuideStep = 0;
+  const steps = currentGuideSteps();
+  if (!steps.length || state.assignmentDetailsOpen || state.requestOpen || state.guideOpen || hasSeenManagerGuide()) return;
+  state.guideOpen = true;
+  state.guideStep = 0;
 }
 
 function currentScheduleGuideStep() {
-  return scheduleGuideSteps[Math.min(Math.max(state.scheduleGuideStep, 0), scheduleGuideSteps.length - 1)] || scheduleGuideSteps[0];
+  const steps = currentGuideSteps();
+  return steps[Math.min(Math.max(state.guideStep, 0), steps.length - 1)] || steps[0] || null;
 }
 
 function scheduleGuideTargetClass(key, row = null) {
-  if (!state.scheduleGuideOpen || state.view !== "schedule" || currentScheduleGuideStep().key !== key) return "";
+  const step = currentScheduleGuideStep();
+  if (!state.guideOpen || !step || step.key !== key) return "";
   if (key === "assignment") {
     const target = scheduledRows()[0];
     if (!target || String(target.id || "") !== String(row?.id || "")) return "";
@@ -1775,17 +1857,26 @@ function scheduleGuideTargetClass(key, row = null) {
   return "pm-guide-target";
 }
 
-function renderScheduleGuideOverlay() {
-  if (!state.scheduleGuideOpen || state.view !== "schedule") return "";
+function renderManagerGuideOverlay() {
+  if (!state.guideOpen) return "";
+  const steps = currentGuideSteps();
+  if (!steps.length) return "";
   const step = currentScheduleGuideStep();
-  const isLast = state.scheduleGuideStep >= scheduleGuideSteps.length - 1;
+  if (!step) return "";
+  const isLast = state.guideStep >= steps.length - 1;
   const hasAssignmentTarget = Boolean(scheduledRows()[0]);
-  const body = step.key === "assignment" && !hasAssignmentTarget ? step.emptyBody : step.body;
+  const hasRequestTarget = Boolean(filteredRequests()[0]);
+  const body = (
+    (step.key === "assignment" && !hasAssignmentTarget) ||
+    (step.key === "request-details" && !hasRequestTarget) ||
+    (step.key === "message-reply" && !selectedManagerThread())
+  ) ? step.emptyBody : step.body;
+  const pageTitle = viewLabels[state.view]?.[0] || "Portal";
   return `
     <div class="pm-guide-layer" aria-live="polite">
-      <button class="pm-guide-backdrop" type="button" data-pm-guide-skip aria-label="Dismiss schedule guide"></button>
+      <button class="pm-guide-backdrop" type="button" data-pm-guide-skip aria-label="Dismiss page guide"></button>
       <section class="pm-guide-card pm-guide-card-${esc(step.key)}" role="dialog" aria-modal="false" aria-labelledby="pmGuideTitle">
-        <p class="pm-eyebrow">Schedule Guide ${esc(state.scheduleGuideStep + 1)} of ${esc(scheduleGuideSteps.length)}</p>
+        <p class="pm-eyebrow">${esc(pageTitle)} Guide ${esc(state.guideStep + 1)} of ${esc(steps.length)}</p>
         <h2 id="pmGuideTitle">${esc(step.title)}</h2>
         <p>${esc(body)}</p>
         <div class="pm-guide-actions">
@@ -1798,9 +1889,9 @@ function renderScheduleGuideOverlay() {
 }
 
 function closeScheduleGuide(markSeen = true) {
-  if (markSeen) markScheduleGuideSeen();
-  state.scheduleGuideOpen = false;
-  state.scheduleGuideStep = 0;
+  if (markSeen) markManagerGuideSeen();
+  state.guideOpen = false;
+  state.guideStep = 0;
 }
 
 function renderManagerAdminPreviewSwitcher() {
@@ -2000,7 +2091,7 @@ function assignmentForVideo(video) {
 function renderOverviewHero(metrics, delta) {
   const next = upcomingAssignments(1)[0] || null;
   return `
-    <section class="panel-card pm-experience-hero pm-picture-hero ${propertyHeroClass()}">
+    <section class="panel-card pm-experience-hero pm-picture-hero ${propertyHeroClass()} ${scheduleGuideTargetClass("overview-hero")}">
       <div class="pm-picture-backdrop pm-picture-backdrop-image" aria-hidden="true"></div>
       <div class="pm-picture-hero-content">
         <div class="pm-experience-copy">
@@ -2044,7 +2135,7 @@ function renderOverviewHeroMedia(video, row = null) {
 
 function renderOverviewFocusPanel(metrics, next) {
   return `
-    <aside class="pm-overview-focus-card" aria-label="Current property focus">
+    <aside class="pm-overview-focus-card ${scheduleGuideTargetClass("overview-next")}" aria-label="Current property focus">
       <div class="pm-focus-next">
         <span>Next Turn</span>
         <strong>${esc(next ? (assignmentUnit(next) ? `Unit ${assignmentUnit(next)}` : assignmentTitle(next)) : "No upcoming turn")}</strong>
@@ -2209,14 +2300,14 @@ function renderOverviewView() {
 
     <section class="pm-overview-body">
       <div class="pm-overview-main-stack">
-        <section class="pm-stat-grid pm-stat-grid-four" aria-label="Property manager overview">
+        <section class="pm-stat-grid pm-stat-grid-four ${scheduleGuideTargetClass("overview-metrics")}" aria-label="Property manager overview">
           ${statCard("Units Ready", integer(metrics.ready), "completed last 30 days", "green", "turn-requests")}
           ${statCard("In Progress", integer(metrics.inProgress), "currently active", "violet", "turn-requests")}
           ${statCard("Upcoming", integer(metrics.upcoming), "future scheduled turns", "blue", "schedule")}
           ${statCard("Completed This Week", integer(metrics.completedThisWeek), `${delta >= 0 ? "+" : ""}${delta}% vs last week`, "cyan", "schedule")}
         </section>
         ${panel("Turn Requests", renderOverviewRequests(), {
-          className: "pm-overview-requests",
+          className: `pm-overview-requests ${scheduleGuideTargetClass("overview-requests")}`,
           action: renderNewTurnRequestButton()
         })}
       </div>
@@ -2259,7 +2350,7 @@ function renderTurnRequestsView() {
       ${statCard("Completed This Week", integer(metrics.completedThisWeek), "closed out", "green")}
     </section>
     <section class="pm-turn-request-workspace">
-      ${panel("Turn Requests", rows.length ? renderRequestTable(rows) : emptyBlock("No matching requests", "Try changing the status filter."), { className: "pm-table-panel" })}
+      ${panel("Turn Requests", rows.length ? renderRequestTable(rows) : emptyBlock("No matching requests", "Try changing the status filter."), { className: `pm-table-panel ${scheduleGuideTargetClass("request-table")}` })}
     </section>
   `;
 }
@@ -2267,7 +2358,7 @@ function renderTurnRequestsView() {
 function renderTurnRequestCallout() {
   const linked = hasLinkedProperty();
   return `
-    <section class="panel-card pm-action-banner ${linked ? "" : "is-disabled"}">
+    <section class="panel-card pm-action-banner ${linked ? "" : "is-disabled"} ${scheduleGuideTargetClass("request-new")}">
       <div>
         <p class="pm-eyebrow">${linked ? "Submit a Turn" : "Property Link Required"}</p>
         <h2>${linked ? "Request a unit turn" : "Turn requests unlock after your property is linked"}</h2>
@@ -2286,7 +2377,7 @@ function renderTurnRequestCallout() {
 function renderRequestToolbar(placeholder = "Search...", includeNew = false) {
   const sortDirection = state.filters.requestSortDirection === "desc" ? "desc" : "asc";
   return `
-    <section class="panel-card pm-toolbar pm-turn-toolbar">
+    <section class="panel-card pm-toolbar pm-turn-toolbar ${scheduleGuideTargetClass("request-filters")}">
       <div class="pm-status-segment" aria-label="Request status">
         ${["all", "pending", "open", "in_progress", "ready", "on_hold", "completed"].map((key) => `<button type="button" class="${state.filters.requestStatus === key ? "active" : ""}" data-pm-request-status="${esc(key)}">${esc(key === "all" ? "All" : titleCase(key))}</button>`).join("")}
       </div>
@@ -2338,6 +2429,7 @@ function renderRequestTable(rows, compactMode = false) {
   if (!compactMode && page !== state.requestPage) state.requestPage = page;
   const start = compactMode ? 0 : (page - 1) * pageSize;
   const visible = compactMode ? rows : rows.slice(start, start + pageSize);
+  const detailGuideTargetId = scheduleGuideTargetClass("request-details") ? visible[0]?.id || "" : "";
   return `
     <div class="pm-table-wrap">
       <table class="pm-table">
@@ -2363,7 +2455,7 @@ function renderRequestTable(rows, compactMode = false) {
               ${showCompletedDates ? `<td>${esc(formatDate(requestDateValue(row), "Not recorded"))}</td>` : ""}
               <td>${esc(formatWindow(row))}</td>
               ${showCompletedDates ? `<td>${esc(formatDate(completionDateValue(row), "Not recorded"))}</td>` : ""}
-              <td><button class="pm-row-action" type="button" data-manager-view-assignment="${esc(row.id || "")}">View Details</button></td>
+              <td><button class="pm-row-action ${String(row.id || "") === String(detailGuideTargetId) ? "pm-guide-target" : ""}" type="button" data-manager-view-assignment="${esc(row.id || "")}">View Details</button></td>
             </tr>
           `).join("")}
         </tbody>
@@ -2780,7 +2872,7 @@ function renderScheduleSnapshot() {
 function renderScheduleSnapshotControls() {
   ensureScheduleState();
   return `
-    <div class="pm-schedule-controls" aria-label="Schedule date controls">
+    <div class="pm-schedule-controls ${scheduleGuideTargetClass("date-controls")}" aria-label="Schedule date controls">
       <button type="button" aria-label="Previous schedule window" data-pm-schedule-shift="-1"></button>
       <input type="date" value="${esc(state.selectedScheduleDate)}" aria-label="Select schedule date" data-pm-schedule-date />
       <button type="button" aria-label="Next schedule window" data-pm-schedule-shift="1"></button>
@@ -2823,17 +2915,17 @@ function renderMessagesView() {
   return `
     ${renderPageHero("messages")}
     <section class="panel-card pm-messages-workspace">
-      <aside class="pm-message-sidebar" aria-label="Open conversations">
+      <aside class="pm-message-sidebar ${scheduleGuideTargetClass("message-threads")}" aria-label="Open conversations">
         <div class="pm-message-sidebar-head">
           <div>
             <h2>Open Conversations</h2>
             <p>${esc(integer(state.threads.length))} active</p>
           </div>
-          <button class="new-btn pm-message-compose-icon" type="button" data-manager-message-compose aria-label="New message">${pmIcon("plus")}</button>
+          <button class="new-btn pm-message-compose-icon ${scheduleGuideTargetClass("message-compose")}" type="button" data-manager-message-compose aria-label="New message">${pmIcon("plus")}</button>
         </div>
         ${renderManagerThreadList()}
       </aside>
-      <section class="pm-message-display" aria-label="Message display">
+      <section class="pm-message-display ${scheduleGuideTargetClass("message-display")}" aria-label="Message display">
         ${state.requestOpen ? renderNewMessageForm() : renderManagerConversation()}
       </section>
     </section>
@@ -3085,7 +3177,7 @@ function renderManagerConversation() {
     <div class="manager-message-bubbles">
       ${state.messages.length ? state.messages.map(renderManagerBubble).join("") : `<div class="manager-message-empty">No replies yet.</div>`}
     </div>
-    <form id="managerReplyForm" class="manager-message-form compact">
+    <form id="managerReplyForm" class="manager-message-form compact ${scheduleGuideTargetClass("message-reply")}">
       <label>
         <span>Reply</span>
         <textarea name="body" rows="3" placeholder="Type your reply..." required></textarea>
@@ -3570,10 +3662,11 @@ document.addEventListener("click", async (event) => {
   }
 
   if (event.target.closest("[data-pm-guide-next]")) {
-    if (state.scheduleGuideStep >= scheduleGuideSteps.length - 1) {
+    const steps = currentGuideSteps();
+    if (state.guideStep >= steps.length - 1) {
       closeScheduleGuide(true);
     } else {
-      state.scheduleGuideStep += 1;
+      state.guideStep += 1;
     }
     renderManagerPortal();
     return;
@@ -3610,6 +3703,8 @@ document.addEventListener("click", async (event) => {
     event.preventDefault();
     const view = navLink.dataset.pmView || "overview";
     if (window.location.hash !== `#${view}`) window.location.hash = view;
+    state.guideOpen = false;
+    state.guideStep = 0;
     state.view = view;
     state.assignmentDetailsOpen = false;
     renderManagerPortal();
@@ -3629,6 +3724,8 @@ document.addEventListener("click", async (event) => {
     if (threadId) state.selectedThreadId = threadId;
     const view = viewButton.dataset.pmViewButton;
     window.location.hash = view;
+    state.guideOpen = false;
+    state.guideStep = 0;
     state.view = view;
     state.assignmentDetailsOpen = false;
     renderManagerPortal();
@@ -3735,7 +3832,7 @@ document.addEventListener("click", async (event) => {
 
   const assignmentDetailButton = event.target.closest("[data-manager-view-assignment]");
   if (assignmentDetailButton) {
-    if (state.scheduleGuideOpen) closeScheduleGuide(true);
+    if (state.guideOpen) closeScheduleGuide(true);
     state.selectedAssignmentId = assignmentDetailButton.dataset.managerViewAssignment || "";
     state.assignmentDetailsOpen = true;
     state.feedbackMessage = "";
