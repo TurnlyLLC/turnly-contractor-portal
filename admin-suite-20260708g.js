@@ -422,6 +422,7 @@ const invoiceReportState = {
   rows: [],
   units: [],
   properties: [],
+  weekStart: "",
   loading: false,
   message: "",
   error: false
@@ -656,7 +657,7 @@ const pages = {
   },
   "invoices": {
     title: "Invoices",
-    subtitle: "Build current-week invoices by property from scheduled assignment jobs.",
+    subtitle: "Build weekly invoices by property from scheduled assignment jobs.",
     render: renderInvoiceReport
   },
   "contractor-feedback": {
@@ -9772,13 +9773,14 @@ function setContractorFeedbackHtml(id, html) {
 }
 
 function renderInvoiceReport() {
-  const range = invoiceWeekRange();
+  const range = invoiceSelectedWeekRange();
   return `
     <section class="invoice-report-workspace" data-invoice-report-page>
       ${toolbar(
-        `<p id="invoiceReportMessage" class="status-message" aria-live="polite">Loading current-week invoices...</p>`,
+        `<p id="invoiceReportMessage" class="status-message" aria-live="polite">Loading weekly invoices...</p>`,
         `<button class="secondary-action" type="button" data-invoice-print>${icon("download")}<span>Print</span></button><button class="secondary-action" type="button" data-invoice-refresh>${icon("refresh")}<span>Refresh</span></button>`
       )}
+      ${renderInvoiceWeekControls(range)}
       <section class="metric-strip invoice-metric-strip">
         ${metric("Week", invoiceWeekLabel(range.start, range.end), "Sunday through Saturday", "calendar", "blue", 'id="invoiceWeekRange"')}
         ${metric("Properties", "0", "with scheduled jobs", "building", "green", 'id="invoicePropertyCount"')}
@@ -9795,6 +9797,21 @@ function renderInvoiceReport() {
 function initInvoiceReport() {
   const root = document.querySelector("[data-invoice-report-page]");
   if (!root) return;
+  root.querySelector("[data-invoice-week-date]")?.addEventListener("change", (event) => {
+    updateInvoiceSelectedWeek(event.target.value || new Date());
+  });
+  root.querySelector("[data-invoice-week-shift='-1']")?.addEventListener("click", () => {
+    updateInvoiceSelectedWeek(addDays(invoiceSelectedWeekRange().start, -7));
+  });
+  root.querySelector("[data-invoice-week-shift='1']")?.addEventListener("click", () => {
+    updateInvoiceSelectedWeek(addDays(invoiceSelectedWeekRange().start, 7));
+  });
+  root.querySelector("[data-invoice-this-week]")?.addEventListener("click", () => {
+    updateInvoiceSelectedWeek(new Date());
+  });
+  root.querySelector("[data-invoice-last-week]")?.addEventListener("click", () => {
+    updateInvoiceSelectedWeek(addDays(new Date(), -7));
+  });
   root.querySelector("[data-invoice-refresh]")?.addEventListener("click", () => {
     void loadInvoiceReport();
   });
@@ -9815,7 +9832,7 @@ async function loadInvoiceReport() {
   }
 
   invoiceReportState.loading = true;
-  setInvoiceReportMessage("Loading current-week invoices...");
+  setInvoiceReportMessage("Loading weekly invoices...");
   const { data: userData } = await suiteSupabase.auth.getUser();
   const user = userData?.user || null;
   if (!user) {
@@ -9856,15 +9873,13 @@ async function loadInvoiceReport() {
   invoiceReportState.loading = false;
   renderInvoiceReportData();
 
-  const weekRows = invoiceWeekAssignments(invoiceReportState.rows);
-  const invoiceGroups = invoiceGroupsForRows(weekRows);
   setInvoiceReportMessage(assignmentsResult.error
-    ? `Loaded ${weekRows.length.toLocaleString()} current-week job${weekRows.length === 1 ? "" : "s"} before Supabase returned an error.`
-    : `Loaded one weekly invoice with ${invoiceGroups.length.toLocaleString()} propert${invoiceGroups.length === 1 ? "y" : "ies"} and ${weekRows.length.toLocaleString()} job${weekRows.length === 1 ? "" : "s"}.`);
+    ? invoiceReportSummaryMessage(`Supabase returned an error after loading assignment data.`)
+    : invoiceReportSummaryMessage());
 }
 
 function renderInvoiceReportData() {
-  const range = invoiceWeekRange();
+  const range = invoiceSelectedWeekRange();
   const weekRows = invoiceWeekAssignments(invoiceReportState.rows, range);
   const invoiceGroups = invoiceGroupsForRows(weekRows);
   const total = invoiceGroups.reduce((sum, group) => sum + group.total, 0);
@@ -9872,9 +9887,25 @@ function renderInvoiceReportData() {
   setText("invoicePropertyCount", invoiceGroups.length.toLocaleString());
   setText("invoiceJobCount", weekRows.length.toLocaleString());
   setText("invoiceWeekTotal", salesMoney(total));
+  setText("invoiceWeekControlLabel", invoiceWeekTitle(range));
+  setText("invoiceWeekControlRange", invoiceWeekLabel(range.start, range.end));
+  const weekInput = document.getElementById("invoiceWeekDateInput");
+  if (weekInput) weekInput.value = invoiceDateInputValue(range.start);
+  document.querySelectorAll("[data-invoice-quick-week]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.invoiceQuickWeek === invoiceQuickWeekKey(range));
+  });
   setInvoiceHtml("invoiceReportInvoices", invoiceGroups.length
     ? renderInvoiceDocument(invoiceGroups, total, range, weekRows)
-    : emptyState("document", "No current-week invoices", "Scheduled jobs from this Sunday through Saturday will appear here."));
+    : emptyState("document", `No ${invoiceWeekTitle(range).toLowerCase()}s`, "Scheduled jobs from the selected Sunday through Saturday will appear here."));
+}
+
+function invoiceReportSummaryMessage(prefix = "") {
+  const range = invoiceSelectedWeekRange();
+  const weekRows = invoiceWeekAssignments(invoiceReportState.rows, range);
+  const invoiceGroups = invoiceGroupsForRows(weekRows);
+  const title = invoiceWeekTitle(range).toLowerCase();
+  const summary = `Showing ${title} with ${invoiceGroups.length.toLocaleString()} propert${invoiceGroups.length === 1 ? "y" : "ies"} and ${weekRows.length.toLocaleString()} job${weekRows.length === 1 ? "" : "s"}.`;
+  return prefix ? `${prefix} ${summary}` : summary;
 }
 
 function setInvoiceReportMessage(text = "", isError = false) {
@@ -9892,7 +9923,7 @@ function setInvoiceHtml(id, html) {
 }
 
 function invoiceReportPlaceholder() {
-  return panel("Weekly Invoice", emptyState("document", "Loading invoice", "Current-week scheduled jobs are syncing from Supabase."), { className: "span-all invoice-file-card" });
+  return panel("Weekly Invoice", emptyState("document", "Loading invoice", "Scheduled jobs are syncing from Supabase."), { className: "span-all invoice-file-card" });
 }
 
 function printInvoiceReport(root = document.querySelector("[data-invoice-report-page]")) {
@@ -9910,11 +9941,79 @@ function printInvoiceReport(root = document.querySelector("[data-invoice-report-
   window.print();
 }
 
+function invoiceDateInputValue(value) {
+  const date = value instanceof Date ? value : parseDate(value);
+  if (!date) return "";
+  const pad = (part) => String(part).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function invoiceDateInputToDate(value) {
+  const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return parseDate(value) || new Date();
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+}
+
 function invoiceWeekRange(reference = new Date()) {
-  const start = new Date(reference);
+  const start = typeof reference === "string"
+    ? invoiceDateInputToDate(reference)
+    : new Date(reference);
   start.setHours(0, 0, 0, 0);
   start.setDate(start.getDate() - start.getDay());
   return { start, end: addDays(start, 7) };
+}
+
+function invoiceSelectedWeekRange() {
+  return invoiceReportState.weekStart
+    ? invoiceWeekRange(invoiceReportState.weekStart)
+    : invoiceWeekRange(new Date());
+}
+
+function invoiceSameWeek(range, reference) {
+  return invoiceDateInputValue(range.start) === invoiceDateInputValue(invoiceWeekRange(reference).start);
+}
+
+function invoiceQuickWeekKey(range = invoiceSelectedWeekRange()) {
+  if (invoiceSameWeek(range, new Date())) return "current";
+  if (invoiceSameWeek(range, addDays(new Date(), -7))) return "last";
+  return "selected";
+}
+
+function invoiceWeekTitle(range = invoiceSelectedWeekRange()) {
+  const key = invoiceQuickWeekKey(range);
+  if (key === "current") return "Current Week Invoice";
+  if (key === "last") return "Last Week Invoice";
+  return "Selected Week Invoice";
+}
+
+function renderInvoiceWeekControls(range = invoiceSelectedWeekRange()) {
+  const quickKey = invoiceQuickWeekKey(range);
+  return `
+    <section class="invoice-week-controls" aria-label="Invoice week selector">
+      <div class="invoice-week-label">
+        <span>Invoice Week</span>
+        <strong id="invoiceWeekControlLabel">${esc(invoiceWeekTitle(range))}</strong>
+        <small id="invoiceWeekControlRange">${esc(invoiceWeekLabel(range.start, range.end))}</small>
+      </div>
+      <div class="invoice-week-actions">
+        <button class="secondary-action icon-only" type="button" data-invoice-week-shift="-1" aria-label="Previous invoice week">${icon("chevron-right", "flip")}</button>
+        <label class="invoice-week-date">
+          <span>Week starting</span>
+          <input id="invoiceWeekDateInput" type="date" value="${esc(invoiceDateInputValue(range.start))}" data-invoice-week-date />
+        </label>
+        <button class="secondary-action icon-only" type="button" data-invoice-week-shift="1" aria-label="Next invoice week">${icon("chevron-right")}</button>
+        <button class="secondary-action ${quickKey === "last" ? "active" : ""}" type="button" data-invoice-last-week data-invoice-quick-week="last"><span>Last Week</span></button>
+        <button class="secondary-action ${quickKey === "current" ? "active" : ""}" type="button" data-invoice-this-week data-invoice-quick-week="current"><span>This Week</span></button>
+      </div>
+    </section>
+  `;
+}
+
+function updateInvoiceSelectedWeek(reference) {
+  const range = invoiceWeekRange(reference || new Date());
+  invoiceReportState.weekStart = invoiceDateInputValue(range.start);
+  renderInvoiceReportData();
+  setInvoiceReportMessage(invoiceReportSummaryMessage());
 }
 
 function invoiceWeekLabel(start, end) {
@@ -10032,7 +10131,7 @@ function renderInvoiceDocument(groups, total, range, rows = []) {
       <div class="invoice-file-head">
         <div>
           <p>Weekly Invoice File</p>
-          <h2>Current Week Invoice</h2>
+          <h2>${esc(invoiceWeekTitle(range))}</h2>
           <span>${esc(invoiceWeekLabel(range.start, range.end))}</span>
         </div>
         <div class="invoice-file-total">

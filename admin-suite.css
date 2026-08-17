@@ -4439,6 +4439,69 @@ a {
   margin: 0;
 }
 
+.invoice-week-controls {
+  align-items: center;
+  background: var(--suite-panel);
+  border: 1px solid var(--suite-border);
+  border-radius: var(--suite-radius);
+  box-shadow: var(--suite-shadow);
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  padding: 14px 16px;
+}
+
+.invoice-week-label {
+  display: grid;
+  gap: 3px;
+}
+
+.invoice-week-label span,
+.invoice-week-date span {
+  color: var(--suite-soft);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.invoice-week-label strong {
+  color: var(--suite-text);
+  font-size: 18px;
+}
+
+.invoice-week-label small {
+  color: var(--suite-muted);
+  font-size: 12px;
+}
+
+.invoice-week-actions {
+  align-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.invoice-week-date {
+  display: grid;
+  gap: 5px;
+}
+
+.invoice-week-date input {
+  background: var(--suite-panel-soft);
+  border: 1px solid var(--suite-border);
+  border-radius: 8px;
+  color: var(--suite-text);
+  min-height: 38px;
+  padding: 8px 10px;
+}
+
+.invoice-week-actions .secondary-action.active {
+  border-color: rgba(0, 214, 163, 0.56);
+  color: var(--suite-green);
+}
+
 .invoice-metric-strip {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
@@ -5503,6 +5566,15 @@ a {
 
   .invoice-file-head {
     display: grid;
+  }
+
+  .invoice-week-controls {
+    align-items: stretch;
+    display: grid;
+  }
+
+  .invoice-week-actions {
+    justify-content: start;
   }
 
   .invoice-file-total {
