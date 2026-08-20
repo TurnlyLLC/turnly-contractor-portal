@@ -413,6 +413,8 @@ const assignmentState = {
 };
 const salesReportState = {
   rows: [],
+  units: [],
+  properties: [],
   loading: false,
   selectedMonthKey: "",
   message: "",
@@ -10212,6 +10214,10 @@ function renderSalesReport() {
         ${metric("Total Contractor Pay Outlook", "$0", "actual paid plus projected pay", "users", "blue", 'id="salesTotalContractorPay"')}
         ${metric("Total Profit Outlook", "$0", "completed plus projected profit", "target", "purple", 'id="salesTotalProfit"')}
       </section>
+      <section class="metric-strip sales-cleaning-strip">
+        ${metric("Cleaned Sq Ft (YTD)", "0 sq ft", "completed unit cleans this year", "layout-grid", "green", 'id="salesYtdCleanedSqft"')}
+        ${metric("Projected Sq Ft", "0 sq ft", "upcoming scheduled unit cleans", "calendar", "blue", 'id="salesProjectedSqft"')}
+      </section>
       <section class="report-grid">
         ${panel("Completed Financials", `<div id="salesCompletedSummary" class="property-unit-summary">${salesSummaryPlaceholder("Completed assignment totals")}</div>`, { className: "span-half", subtitle: "All assignments marked complete or carrying a completion timestamp." })}
         ${panel("Upcoming Projection", `<div id="salesUpcomingSummary" class="property-unit-summary">${salesSummaryPlaceholder("Upcoming assignment projection")}</div>`, { className: "span-half", subtitle: "Future assignments that are not completed, cancelled, or declined." })}
@@ -10241,6 +10247,8 @@ function initSalesReport() {
 async function loadSalesReport() {
   if (!suiteSupabase) {
     salesReportState.rows = [];
+    salesReportState.units = [];
+    salesReportState.properties = [];
     renderSalesReportData();
     setSalesReportMessage("Supabase config is missing. Add env.js values before using the sales report.", true);
     return;
@@ -10252,6 +10260,8 @@ async function loadSalesReport() {
   const user = userData?.user || null;
   if (!user) {
     salesReportState.rows = [];
+    salesReportState.units = [];
+    salesReportState.properties = [];
     salesReportState.loading = false;
     renderSalesReportData();
     setSalesReportMessage("Sign in as an admin to load completed and upcoming assignment financials.", true);
@@ -10265,6 +10275,8 @@ async function loadSalesReport() {
     .maybeSingle();
   if (profileError || normalizeToken(profile?.role) !== "admin") {
     salesReportState.rows = [];
+    salesReportState.units = [];
+    salesReportState.properties = [];
     salesReportState.loading = false;
     renderSalesReportData();
     setSalesReportMessage(profileError
@@ -10273,10 +10285,13 @@ async function loadSalesReport() {
     return;
   }
 
-  const [properties, assignmentsResult] = await Promise.all([
+  const [properties, units, assignmentsResult] = await Promise.all([
     loadAssignmentProperties(),
+    loadAssignmentUnits(),
     loadAssignmentRows()
   ]);
+  salesReportState.properties = properties || [];
+  salesReportState.units = units || [];
   salesReportState.rows = enrichAssignmentRowsWithContractAccess(assignmentsResult.rows, properties);
   salesReportState.loading = false;
   renderSalesReportData();
@@ -10292,9 +10307,12 @@ function renderSalesReportData() {
   const rows = salesReportState.rows || [];
   const completed = salesCompletedAssignments(rows);
   const upcoming = salesUpcomingAssignments(rows);
+  const ytdCompleted = salesYtdCompletedAssignments(completed);
   const completedTotals = salesPeriodTotals(completed, "actual");
   const upcomingTotals = salesPeriodTotals(upcoming, "projected");
   const totalTotals = salesCombineTotals(completedTotals, upcomingTotals);
+  const ytdCleanedSqft = salesAssignmentSquareFeetTotal(ytdCompleted);
+  const projectedSqft = salesAssignmentSquareFeetTotal(upcoming);
 
   setText("salesCompletedRevenue", salesMoney(completedTotals.revenue));
   setText("salesCompletedContractorPay", salesMoney(completedTotals.contractorPay));
@@ -10305,6 +10323,8 @@ function renderSalesReportData() {
   setText("salesTotalRevenue", salesMoney(totalTotals.revenue));
   setText("salesTotalContractorPay", salesMoney(totalTotals.contractorPay));
   setText("salesTotalProfit", salesMoney(totalTotals.profit));
+  setText("salesYtdCleanedSqft", salesSquareFeet(ytdCleanedSqft));
+  setText("salesProjectedSqft", salesSquareFeet(projectedSqft));
 
   setSalesHtml("salesCompletedSummary", salesSummaryHtml(completed, "Completed assignment totals", "completed"));
   setSalesHtml("salesUpcomingSummary", salesSummaryHtml(upcoming, "Upcoming assignment projection", "upcoming"));
@@ -10474,6 +10494,79 @@ function isSalesUpcomingAssignment(row = {}) {
   return Boolean(start && start >= startOfToday() && !isSalesCompletedAssignment(row) && !isSalesCancelledAssignment(row));
 }
 
+function salesYtdCompletedAssignments(rows = []) {
+  const now = new Date();
+  const yearStart = new Date(now.getFullYear(), 0, 1);
+  return (rows || []).filter((row) => {
+    const date = salesAssignmentFinancialDate(row, "actual");
+    return Boolean(date && date >= yearStart && date <= now);
+  });
+}
+
+function salesAssignmentSquareFeetTotal(rows = []) {
+  return (rows || [])
+    .filter((row) => !salesAssignmentExcludedFromSqft(row))
+    .reduce((total, row) => total + salesAssignmentSquareFeet(row), 0);
+}
+
+function salesAssignmentExcludedFromSqft(row = {}) {
+  const metadata = assignmentMetadata(row);
+  const text = [
+    row.title,
+    row.assignment_name,
+    row.assignment_type,
+    row.service_type,
+    row.scope,
+    row.description,
+    row.unit_name,
+    row.unit_number,
+    metadata.title,
+    metadata.assignment_name,
+    metadata.assignment_type,
+    metadata.service_type,
+    metadata.scope,
+    metadata.description,
+    metadata.unit_name,
+    metadata.unit_number,
+    metadata.property_unit_name
+  ].filter(Boolean).join(" ").toLowerCase().replace(/[^a-z0-9]+/g, " ");
+  return /\bleasing office\b/.test(text) || /\bmodel unit\b/.test(text);
+}
+
+function salesAssignmentSquareFeet(row = {}) {
+  const metadata = assignmentMetadata(row);
+  const stored = propertyUnitNumber(row.unit_square_feet || row.square_feet || metadata.unit_square_feet || metadata.square_feet);
+  if (stored) return stored;
+  return propertyUnitNumber(salesUnitForAssignment(row)?.square_feet);
+}
+
+function salesUnitForAssignment(row = {}) {
+  const metadata = assignmentMetadata(row);
+  const unitId = row.unit_id || metadata.unit_id;
+  if (unitId) {
+    const byId = salesReportState.units.find((unit) => String(unit.id || "") === String(unitId));
+    if (byId) return byId;
+  }
+
+  const label = invoiceUnitMatchKey(invoiceAssignmentUnitNumber(row));
+  if (!label) return null;
+  const property = assignmentPropertyForRow(row, salesReportState.properties);
+  const propertyKeys = new Set([
+    property?.id,
+    property?.contract_id,
+    property?.client_id,
+    row.property_id,
+    row.contract_id,
+    metadata.property_id,
+    metadata.contract_id
+  ].filter(Boolean).map(String));
+  return salesReportState.units.find((unit) => {
+    const unitPropertyKeys = [unit.property_id, unit.contract_id, unit.client_id].filter(Boolean).map(String);
+    const propertyMatches = !propertyKeys.size || unitPropertyKeys.some((id) => propertyKeys.has(id));
+    return propertyMatches && invoiceUnitMatchKey(assignmentUnitName(unit)) === label;
+  }) || null;
+}
+
 function salesParseMoney(value) {
   if (typeof value === "number") return Number.isFinite(value) ? value : null;
   if (value === null || value === undefined || value === "") return null;
@@ -10498,6 +10591,12 @@ function salesMoney(value) {
   const number = Number(value);
   const safe = Number.isFinite(number) ? number : 0;
   return safe.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 2 });
+}
+
+function salesSquareFeet(value) {
+  const number = Number(value);
+  const safe = Number.isFinite(number) && number > 0 ? Math.round(number) : 0;
+  return `${safe.toLocaleString()} sq ft`;
 }
 
 function salesPercent(value) {

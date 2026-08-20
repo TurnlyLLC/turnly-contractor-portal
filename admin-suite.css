@@ -4426,6 +4426,10 @@ a {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.metric-strip.sales-cleaning-strip {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .sales-report-workspace .status-message {
   margin: 0;
 }
@@ -5668,6 +5672,10 @@ a {
 
   .sales-chart-stat-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .metric-strip.sales-cleaning-strip {
+    grid-template-columns: 1fr;
   }
 
   .sales-pie-layout {
