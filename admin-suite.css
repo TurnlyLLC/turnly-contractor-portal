@@ -4876,9 +4876,16 @@ a {
 
 .sales-chart-legend i.green,
 .sales-compare-fill.green,
+.sales-trend-point.cleaned,
 .sales-trend-point.revenue {
   background: var(--suite-green);
   fill: var(--suite-green);
+}
+
+.sales-chart-legend i.blue,
+.sales-trend-point.projected {
+  background: var(--suite-blue);
+  fill: var(--suite-blue);
 }
 
 .sales-chart-legend i.purple,
@@ -5038,6 +5045,14 @@ a {
 
 .sales-trend-line.revenue {
   stroke: var(--suite-green);
+}
+
+.sales-trend-line.cleaned {
+  stroke: var(--suite-green);
+}
+
+.sales-trend-line.projected {
+  stroke: var(--suite-blue);
 }
 
 .sales-trend-line.profit {

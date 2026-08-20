@@ -417,6 +417,7 @@ const salesReportState = {
   properties: [],
   loading: false,
   selectedMonthKey: "",
+  selectedSqftYear: "",
   message: "",
   error: false
 };
@@ -10223,7 +10224,9 @@ function renderSalesReport() {
         ${panel("Upcoming Projection", `<div id="salesUpcomingSummary" class="property-unit-summary">${salesSummaryPlaceholder("Upcoming assignment projection")}</div>`, { className: "span-half", subtitle: "Future assignments that are not completed, cancelled, or declined." })}
         ${panel("Monthly Revenue vs Profit", `<div id="salesMonthlyBarChart" class="sales-chart-shell">${salesChartEmpty("Monthly financials will appear once assignments load.")}</div>`, { className: "span-half", subtitle: "Switch months to compare customer revenue against profit." })}
         ${panel("This Week Contractor Pay", `<div id="salesWeeklyPayChart" class="sales-chart-shell">${salesChartEmpty("This week contractor pay will appear once assignments load.")}</div>`, { className: "span-half", subtitle: "Projected contractor payout from Sunday through Saturday." })}
-        ${panel("Revenue and Profit Trend", `<div id="salesMonthlyTrendChart" class="sales-chart-shell">${salesChartEmpty("Revenue and profit trends will appear once assignments load.")}</div>`, { className: "span-half", subtitle: "Revenue and profit by month, using completed actuals and upcoming projections." })}
+        ${panel("Revenue and Profit Trend", `<div id="salesMonthlyTrendChart" class="sales-chart-shell">${salesChartEmpty("Revenue and profit trends will appear once assignments load.")}</div>`, { className: "span-all", subtitle: "Revenue and profit by month, using completed actuals and upcoming projections." })}
+        ${panel("Annual Sq Ft Trend", `<div id="salesAnnualSqftTrendChart" class="sales-chart-shell">${salesChartEmpty("Annual square footage will appear once assignments load.")}</div>`, { className: "span-half", subtitle: "Cleaned and projected square footage by calendar year." })}
+        ${panel("Monthly Cleaned Sq Ft", `<div id="salesMonthlySqftTrendChart" class="sales-chart-shell">${salesChartEmpty("Monthly square footage will appear once assignments load.")}</div>`, { className: "span-half", subtitle: "Completed unit-clean square footage by month." })}
       </section>
     </section>
   `;
@@ -10237,9 +10240,15 @@ function initSalesReport() {
   });
   root.addEventListener("change", (event) => {
     const target = event.target;
-    if (!target?.matches?.("[data-sales-month-select]")) return;
-    salesReportState.selectedMonthKey = target.value || "";
-    renderSalesReportData();
+    if (target?.matches?.("[data-sales-month-select]")) {
+      salesReportState.selectedMonthKey = target.value || "";
+      renderSalesReportData();
+      return;
+    }
+    if (target?.matches?.("[data-sales-sqft-year-select]")) {
+      salesReportState.selectedSqftYear = target.value || "";
+      renderSalesReportData();
+    }
   });
   void loadSalesReport();
 }
@@ -10335,6 +10344,11 @@ function renderSalesReportData() {
   salesReportState.selectedMonthKey = salesSelectedMonthKey(monthly, salesReportState.selectedMonthKey);
   setSalesHtml("salesMonthlyBarChart", salesMonthlyComparisonChart(monthly));
   setSalesHtml("salesMonthlyTrendChart", salesMonthlyTrendChart(monthly));
+  const annualSqft = salesAnnualSquareFootage(completed, upcoming);
+  const sqftYears = salesSqftYearOptions(completed, upcoming);
+  salesReportState.selectedSqftYear = salesSelectedSqftYear(sqftYears, salesReportState.selectedSqftYear);
+  setSalesHtml("salesAnnualSqftTrendChart", salesAnnualSqftTrendChart(annualSqft));
+  setSalesHtml("salesMonthlySqftTrendChart", salesMonthlySqftTrendChart(salesMonthlySquareFootage(completed, salesReportState.selectedSqftYear), sqftYears, salesReportState.selectedSqftYear));
 }
 
 function setSalesReportMessage(text = "", isError = false) {
@@ -10509,6 +10523,71 @@ function salesAssignmentSquareFeetTotal(rows = []) {
     .reduce((total, row) => total + salesAssignmentSquareFeet(row), 0);
 }
 
+function salesSqftStartYear() {
+  return 2026;
+}
+
+function salesSqftYearOptions(completed = [], upcoming = []) {
+  const years = new Set([salesSqftStartYear(), new Date().getFullYear()]);
+  [...(completed || []), ...(upcoming || [])].forEach((row) => {
+    const mode = isSalesCompletedAssignment(row) ? "actual" : "projected";
+    const date = salesAssignmentFinancialDate(row, mode);
+    if (date && date.getFullYear() >= salesSqftStartYear()) years.add(date.getFullYear());
+  });
+  const maxYear = Math.max(...Array.from(years));
+  return Array.from({ length: Math.max(1, maxYear - salesSqftStartYear() + 1) }, (_, index) => String(salesSqftStartYear() + index));
+}
+
+function salesSelectedSqftYear(years = [], selectedYear = "") {
+  const normalizedYears = years.length ? years : [String(salesSqftStartYear())];
+  if (normalizedYears.includes(String(selectedYear))) return String(selectedYear);
+  const currentYear = String(Math.max(new Date().getFullYear(), salesSqftStartYear()));
+  return normalizedYears.includes(currentYear) ? currentYear : normalizedYears[normalizedYears.length - 1];
+}
+
+function salesAnnualSquareFootage(completed = [], upcoming = []) {
+  const years = salesSqftYearOptions(completed, upcoming);
+  const groups = years.map((year) => ({
+    key: year,
+    label: year,
+    shortLabel: year,
+    cleaned: 0,
+    projected: 0
+  }));
+  const byYear = new Map(groups.map((group) => [group.key, group]));
+  const addRow = (row, mode, key) => {
+    if (salesAssignmentExcludedFromSqft(row)) return;
+    const date = salesAssignmentFinancialDate(row, mode);
+    if (!date) return;
+    const year = String(date.getFullYear());
+    if (!byYear.has(year)) return;
+    byYear.get(year)[key] += salesAssignmentSquareFeet(row);
+  };
+  (completed || []).forEach((row) => addRow(row, "actual", "cleaned"));
+  (upcoming || []).forEach((row) => addRow(row, "projected", "projected"));
+  return groups;
+}
+
+function salesMonthlySquareFootage(completed = [], selectedYear = salesSqftStartYear()) {
+  const year = Number(selectedYear) || salesSqftStartYear();
+  const groups = Array.from({ length: 12 }, (_, month) => {
+    const date = new Date(year, month, 1);
+    return {
+      key: `${year}-${String(month + 1).padStart(2, "0")}`,
+      label: date.toLocaleDateString([], { month: "long", year: "numeric" }),
+      shortLabel: date.toLocaleDateString([], { month: "short" }),
+      cleaned: 0
+    };
+  });
+  (completed || []).forEach((row) => {
+    if (salesAssignmentExcludedFromSqft(row)) return;
+    const date = salesAssignmentFinancialDate(row, "actual");
+    if (!date || date.getFullYear() !== year) return;
+    groups[date.getMonth()].cleaned += salesAssignmentSquareFeet(row);
+  });
+  return groups;
+}
+
 function salesAssignmentExcludedFromSqft(row = {}) {
   const metadata = assignmentMetadata(row);
   const text = [
@@ -10597,6 +10676,14 @@ function salesSquareFeet(value) {
   const number = Number(value);
   const safe = Number.isFinite(number) && number > 0 ? Math.round(number) : 0;
   return `${safe.toLocaleString()} sq ft`;
+}
+
+function salesSquareFeetShort(value) {
+  const number = Number(value) || 0;
+  const abs = Math.abs(number);
+  if (abs >= 1000000) return `${(number / 1000000).toFixed(abs >= 10000000 ? 0 : 1)}M`;
+  if (abs >= 1000) return `${(number / 1000).toFixed(abs >= 10000 ? 0 : 1)}K`;
+  return Math.round(number).toLocaleString();
 }
 
 function salesPercent(value) {
@@ -10905,6 +10992,137 @@ function salesMonthlyTrendChart(groups = []) {
         }).join("")}
       </svg>
     </div>
+  `;
+}
+
+function salesAnnualSqftTrendChart(groups = []) {
+  if (!groups.length) return salesChartEmpty("No annual square-footage data found.");
+  const cleanedTotal = groups.reduce((sum, group) => sum + group.cleaned, 0);
+  const projectedTotal = groups.reduce((sum, group) => sum + group.projected, 0);
+  return `
+    <div class="sales-chart-control">
+      <div>
+        <strong>${esc(salesSquareFeet(cleanedTotal + projectedTotal))}</strong>
+        <small>${esc(`${groups[0]?.label || salesSqftStartYear()}${groups.length > 1 ? ` - ${groups[groups.length - 1]?.label}` : ""}`)}</small>
+      </div>
+      <span>${esc(groups.length.toLocaleString())} year${groups.length === 1 ? "" : "s"} shown</span>
+    </div>
+    ${salesChartLegend([["Cleaned Sq Ft", "green"], ["Projected Sq Ft", "blue"]])}
+    ${salesSqftTrendSvg(groups, [
+      { key: "cleaned", label: "Cleaned Sq Ft", tone: "cleaned" },
+      { key: "projected", label: "Projected Sq Ft", tone: "projected" }
+    ], "Annual cleaned and projected square footage trend")}
+    <dl class="sales-chart-stat-grid">
+      <div><dt>Cleaned</dt><dd>${esc(salesSquareFeet(cleanedTotal))}</dd></div>
+      <div><dt>Projected</dt><dd>${esc(salesSquareFeet(projectedTotal))}</dd></div>
+      <div><dt>Years</dt><dd>${esc(groups.length.toLocaleString())}</dd></div>
+      <div><dt>Total Outlook</dt><dd>${esc(salesSquareFeet(cleanedTotal + projectedTotal))}</dd></div>
+    </dl>
+  `;
+}
+
+function salesMonthlySqftTrendChart(groups = [], years = [], selectedYear = salesSqftStartYear()) {
+  if (!groups.length) return salesChartEmpty("No monthly square-footage data found.");
+  const total = groups.reduce((sum, group) => sum + group.cleaned, 0);
+  const peak = groups.reduce((best, group) => group.cleaned > best.cleaned ? group : best, groups[0] || { cleaned: 0, shortLabel: "None" });
+  const average = groups.length ? total / groups.length : 0;
+  const yearOptions = years.length ? years : [String(salesSqftStartYear())];
+  return `
+    <div class="sales-chart-control">
+      <div>
+        <strong>${esc(salesSquareFeet(total))}</strong>
+        <small>${esc(`${selectedYear} completed unit-clean square footage`)}</small>
+      </div>
+      <label>
+        <span>Year</span>
+        <select data-sales-sqft-year-select aria-label="Choose year for monthly square footage chart">
+          ${yearOptions.map((year) => `<option value="${esc(year)}" ${String(year) === String(selectedYear) ? "selected" : ""}>${esc(year)}</option>`).join("")}
+        </select>
+      </label>
+    </div>
+    ${salesChartLegend([["Cleaned Sq Ft", "green"]])}
+    ${salesSqftTrendSvg(groups, [
+      { key: "cleaned", label: "Cleaned Sq Ft", tone: "cleaned" }
+    ], `Monthly cleaned square footage for ${selectedYear}`)}
+    <dl class="sales-chart-stat-grid">
+      <div><dt>Total Cleaned</dt><dd>${esc(salesSquareFeet(total))}</dd></div>
+      <div><dt>Peak Month</dt><dd>${esc(`${peak.shortLabel}: ${salesSquareFeet(peak.cleaned)}`)}</dd></div>
+      <div><dt>Monthly Avg</dt><dd>${esc(salesSquareFeet(average))}</dd></div>
+      <div><dt>Year</dt><dd>${esc(selectedYear)}</dd></div>
+    </dl>
+  `;
+}
+
+function salesSqftTrendSvg(groups = [], series = [], ariaLabel = "Square footage trend") {
+  const width = Math.max(660, groups.length * 96);
+  const height = 300;
+  const padding = { top: 32, right: 30, bottom: 58, left: 74 };
+  const values = groups.flatMap((group) => series.map((item) => Number(group[item.key]) || 0));
+  const max = Math.max(1, ...values);
+  const min = 0;
+  const plotWidth = width - padding.left - padding.right;
+  const plotHeight = height - padding.top - padding.bottom;
+  const xFor = (index) => groups.length === 1
+    ? padding.left + plotWidth / 2
+    : padding.left + (index / (groups.length - 1)) * plotWidth;
+  const yFor = (value) => padding.top + ((max - value) / (max - min)) * plotHeight;
+  const point = (group, index, key) => `${salesSvgNumber(xFor(index))},${salesSvgNumber(yFor(group[key]))}`;
+  const ticks = salesTrendTicks(min, max, 4);
+  return `
+    <div class="sales-trend-wrap">
+      <svg class="sales-trend-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(ariaLabel)}">
+        ${ticks.map((tick) => {
+          const y = salesSvgNumber(yFor(tick));
+          return `
+            <line class="sales-trend-grid" x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}"></line>
+            <text class="sales-trend-axis" x="${padding.left - 12}" y="${Number(y) + 4}" text-anchor="end">${esc(salesSquareFeetShort(tick))}</text>
+          `;
+        }).join("")}
+        <line class="sales-trend-axis-line" x1="${padding.left}" y1="${height - padding.bottom}" x2="${width - padding.right}" y2="${height - padding.bottom}"></line>
+        ${series.map((item) => `<polyline class="sales-trend-line ${esc(item.tone)}" points="${groups.map((group, index) => point(group, index, item.key)).join(" ")}"></polyline>`).join("")}
+        ${groups.map((group, index) => {
+          const x = salesSvgNumber(xFor(index));
+          return `
+            <g>
+              <line class="sales-trend-month-line" x1="${x}" y1="${padding.top}" x2="${x}" y2="${height - padding.bottom}"></line>
+              ${series.map((item) => salesSqftTrendMarker(group, x, salesSvgNumber(yFor(group[item.key])), item, width)).join("")}
+              <text class="sales-trend-month" x="${x}" y="${height - 30}" text-anchor="middle">${esc(group.shortLabel || group.label)}</text>
+              ${group.shortLabel !== group.label ? `<text class="sales-trend-month-year" x="${x}" y="${height - 14}" text-anchor="middle">${esc(String(group.label).slice(-4))}</text>` : ""}
+            </g>
+          `;
+        }).join("")}
+      </svg>
+    </div>
+  `;
+}
+
+function salesSqftTrendMarker(group, x, y, item, chartWidth) {
+  const value = Number(group[item.key]) || 0;
+  const displayValue = salesSquareFeet(value);
+  const tooltipValue = `${item.label}: ${displayValue}`;
+  const tooltipMonth = group.label || "Period";
+  const ariaLabel = `${tooltipMonth} ${tooltipValue}`;
+  const tooltipWidth = Math.max(146, Math.min(280, Math.max(tooltipMonth.length, tooltipValue.length) * 7 + 28));
+  const halfWidth = tooltipWidth / 2;
+  const xNumber = Number(x) || 0;
+  const yNumber = Number(y) || 0;
+  const tooltipX = Math.min(chartWidth - halfWidth - 8, Math.max(halfWidth + 8, xNumber));
+  const tooltipY = Math.max(52, yNumber - 14);
+  const pointerX = xNumber - tooltipX;
+  return `
+    <g class="sales-trend-marker ${esc(item.tone)}" tabindex="0" aria-label="${esc(ariaLabel)}">
+      <title>${esc(ariaLabel)}</title>
+      <circle class="sales-trend-hit" cx="${x}" cy="${y}" r="15"></circle>
+      <circle class="sales-trend-point ${esc(item.tone)}" cx="${x}" cy="${y}" r="5"></circle>
+      <g class="sales-trend-tooltip" transform="translate(${salesSvgNumber(tooltipX)} ${salesSvgNumber(tooltipY)})">
+        <rect x="${salesSvgNumber(-halfWidth)}" y="-44" width="${salesSvgNumber(tooltipWidth)}" height="40" rx="7"></rect>
+        <path d="M ${salesSvgNumber(pointerX - 5)} -4 L ${salesSvgNumber(pointerX + 5)} -4 L ${salesSvgNumber(pointerX)} 2 Z"></path>
+        <text x="0" y="-28" text-anchor="middle">
+          <tspan class="sales-trend-tooltip-month" x="0">${esc(tooltipMonth)}</tspan>
+          <tspan class="sales-trend-tooltip-value" x="0" dy="16">${esc(tooltipValue)}</tspan>
+        </text>
+      </g>
+    </g>
   `;
 }
 
