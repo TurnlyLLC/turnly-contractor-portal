@@ -10856,8 +10856,16 @@ function salesCombineTotals(...totalsList) {
 
 function salesMonthlyFinancials(completed = [], upcoming = []) {
   const groups = new Map();
-  const ensure = (date) => {
-    if (!date) return null;
+  const yearSet = new Set([new Date().getFullYear()]);
+  [...(completed || []), ...(upcoming || [])].forEach((row) => {
+    const mode = isSalesCompletedAssignment(row) ? "actual" : "projected";
+    const date = salesAssignmentFinancialDate(row, mode);
+    if (date) yearSet.add(date.getFullYear());
+  });
+  const years = Array.from(yearSet).sort((a, b) => a - b);
+  const ensure = (year, month) => {
+    if (!Number.isFinite(year) || !Number.isFinite(month)) return null;
+    const date = new Date(year, month, 1);
     const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
     if (!groups.has(key)) {
       groups.set(key, {
@@ -10874,9 +10882,14 @@ function salesMonthlyFinancials(completed = [], upcoming = []) {
     }
     return groups.get(key);
   };
+  years.forEach((year) => {
+    for (let month = 0; month < 12; month += 1) {
+      ensure(year, month);
+    }
+  });
   const addRow = (row, mode) => {
     const date = salesAssignmentFinancialDate(row, mode);
-    const group = ensure(date);
+    const group = date ? ensure(date.getFullYear(), date.getMonth()) : null;
     if (!group) return;
     const revenue = salesAssignmentRevenue(row);
     const contractorPay = salesAssignmentContractorPay(row, mode === "actual" ? "actual" : "projected");
