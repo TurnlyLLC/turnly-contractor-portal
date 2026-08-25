@@ -10,8 +10,10 @@ const state = {
   accessProperties: [],
   accessRegions: [],
   search: "",
-  team: "all",
+  managerSearch: "",
+  team: "contractor",
   status: "active",
+  managerStatus: "active",
   loading: false,
   saving: false
 };
@@ -132,8 +134,18 @@ function isSales(row) {
   return roleText(row).includes("sales");
 }
 
+function isPropertyManager(row) {
+  const text = roleText(row);
+  return text.includes("property_manager")
+    || text.includes("propertymanagement")
+    || text.includes("property_management")
+    || Boolean(row?.property_manager_property_id)
+    || Boolean(row?.requested_property_name);
+}
+
 function isContractor(row, source) {
   const text = roleText(row);
+  if (isPropertyManager(row)) return false;
   return source === "contractors"
     || Boolean(row?.contractor_approved)
     || text.includes("contractor")
@@ -157,6 +169,7 @@ function activeStatus(row) {
 }
 
 function teamFor(row, source) {
+  if (isPropertyManager(row)) return "property_manager";
   if (isSales(row)) return "sales";
   if (isContractor(row, source)) return "contractor";
   return "";
@@ -166,6 +179,7 @@ function visibleStatus(row, team) {
   if (isInactive(row)) return token(row?.status || row?.approval_status) || "inactive";
   if (team === "contractor" && !isApproved(row)) return "pending_approval";
   if (team === "contractor" && isApproved(row)) return "active";
+  if (team === "property_manager" && activeStatus(row)) return "active";
   if (activeStatus(row)) return "active";
   return token(row?.status) && token(row?.status) !== "pending_approval" ? token(row?.status) : "active";
 }
@@ -177,7 +191,9 @@ function normalizePerson(row, source) {
   const email = row?.email || row?.contact_email || row?.primary_email || "";
   const name = row?.full_name || row?.name || row?.display_name || row?.contractor_name || row?.sales_name || email.split("@")[0] || "Unnamed";
   const id = row?.profile_id || row?.user_id || row?.auth_user_id || row?.id || email || name;
-  const service = team === "sales"
+  const service = team === "property_manager"
+    ? "Property Manager"
+    : team === "sales"
     ? row?.title || row?.department || row?.service_type || "Sales Team"
     : Array.isArray(row?.service_types)
       ? row.service_types.filter(Boolean).join(", ")
@@ -190,7 +206,7 @@ function normalizePerson(row, source) {
     source,
     sourceLabel: source === "profiles" ? "Registered Account" : "Directory Invite",
     team,
-    teamLabel: team === "sales" ? "Sales Team" : "Contractor",
+    teamLabel: team === "property_manager" ? "Property Manager" : team === "sales" ? "Sales Team" : "Contractor",
     name: String(name || "Unnamed"),
     email: String(email || ""),
     phone: String(row?.phone || row?.contact_phone || row?.primary_phone || ""),
@@ -201,6 +217,8 @@ function normalizePerson(row, source) {
     allowedRegions: access.allowedRegions,
     allowedPropertyIds: access.allowedPropertyIds,
     allowedPropertyNames: access.allowedPropertyNames,
+    propertyManagerPropertyId: String(row?.property_manager_property_id || ""),
+    requestedPropertyName: String(row?.requested_property_name || ""),
     status,
     approved: team !== "contractor" || isApproved(row),
     raw: row
@@ -269,13 +287,35 @@ function accessDetails(person = {}) {
   return uniqueList(details).slice(0, 3).join(" | ");
 }
 
+function propertyOptionById(id = "") {
+  const normalized = String(id || "").toLowerCase();
+  if (!normalized) return null;
+  return state.accessProperties.find((option) => String(option.id || "").toLowerCase() === normalized) || null;
+}
+
+function propertyManagerAccessSummary(person = {}) {
+  const linked = propertyOptionById(person.propertyManagerPropertyId);
+  if (linked?.name) return linked.name;
+  if (person.requestedPropertyName) return person.requestedPropertyName;
+  if (person.allowedPropertyNames?.length) return person.allowedPropertyNames.join(", ");
+  if (person.allowedPropertyIds?.length) return `${person.allowedPropertyIds.length} linked ${person.allowedPropertyIds.length === 1 ? "property" : "properties"}`;
+  return "No property linked";
+}
+
+function propertyManagerAccessDetails(person = {}) {
+  const linked = propertyOptionById(person.propertyManagerPropertyId);
+  return [linked?.address, linked?.region, person.propertyManagerPropertyId ? `ID: ${person.propertyManagerPropertyId}` : ""]
+    .filter(Boolean)
+    .join(" | ");
+}
+
 function workspaceMarkup() {
   return `
     <section class="contractor-directory-workspace" data-contractor-directory-page>
       <section class="metric-strip six">
-        ${metric("Directory Total", "directoryTotal", "contractors and sales", "blue", "DT")}
+        ${metric("Directory Total", "directoryTotal", "portal accounts", "blue", "DT")}
         ${metric("Contractors", "contractorTotal", "service network", "green", "CN")}
-        ${metric("Sales Team", "salesTotal", "active sales", "purple", "ST")}
+        ${metric("Property Managers", "propertyManagerTotal", "client access", "purple", "PM")}
         ${metric("Active", "activeTotal", "ready for work", "green", "A")}
         ${metric("Pending", "pendingTotal", "needs approval", "yellow", "PA")}
         ${metric("Inactive", "inactiveTotal", "not active", "red", "IA")}
@@ -285,8 +325,8 @@ function workspaceMarkup() {
           <section class="table-card contractor-directory-card">
             <div class="suite-toolbar">
               <div class="toolbar-left">
-                <input id="contractorSearch" class="inline-search" type="search" placeholder="Search contractors or sales..." autocomplete="off" />
-                <label class="suite-field compact-field"><span>Team</span><select id="contractorTeamFilter"><option value="all">All Teams</option><option value="contractor">Contractors</option><option value="sales">Sales Team</option></select></label>
+                <input id="contractorSearch" class="inline-search" type="search" placeholder="Search contractors..." autocomplete="off" />
+                <label class="suite-field compact-field"><span>Team</span><select id="contractorTeamFilter"><option value="contractor" selected>Contractors</option><option value="sales">Sales Team</option><option value="all">All Contractor/Sales</option></select></label>
                 <label class="suite-field compact-field"><span>Status</span><select id="contractorStatusFilter"><option value="active">Active</option><option value="pending_approval">Pending Approval</option><option value="inactive">Inactive</option><option value="all">All Statuses</option></select></label>
               </div>
               <div class="toolbar-right">
@@ -301,8 +341,33 @@ function workspaceMarkup() {
                 <tbody id="contractorRows"></tbody>
               </table>
             </div>
-            <div id="contractorEmpty" class="empty-state" hidden><strong>No people found</strong><p>Contractors and sales team members from Supabase will appear here.</p></div>
-            <div class="table-foot"><span id="contractorCount">Showing 0 people</span><a class="secondary-action" href="property-managers.html"><span>Property Managers</span></a></div>
+            <div id="contractorEmpty" class="empty-state" hidden><strong>No contractors found</strong><p>Only contractor accounts and sales team entries appear in this section.</p></div>
+            <div class="table-foot"><span id="contractorCount">Showing 0 contractors</span></div>
+          </section>
+          <section class="table-card contractor-directory-card property-manager-directory-card">
+            <div class="suite-toolbar">
+              <div class="toolbar-left">
+                <input id="propertyManagerSearch" class="inline-search" type="search" placeholder="Search property managers..." autocomplete="off" />
+                <label class="suite-field compact-field"><span>Status</span><select id="propertyManagerStatusFilter"><option value="active">Active</option><option value="inactive">Inactive</option><option value="all">All Statuses</option></select></label>
+              </div>
+              <div class="toolbar-right">
+                <a class="secondary-action" href="coverage-center.html"><span>Regions & Access</span></a>
+              </div>
+            </div>
+            <div class="directory-section-heading">
+              <div>
+                <h2>Property Manager Accounts</h2>
+                <p>Manage property manager portal accounts separately from contractor accounts.</p>
+              </div>
+            </div>
+            <div class="table-scroll">
+              <table class="suite-table">
+                <thead><tr><th>Name</th><th>Status</th><th>Property Access</th><th>Phone</th><th>Source</th><th>Actions</th></tr></thead>
+                <tbody id="propertyManagerRows"></tbody>
+              </table>
+            </div>
+            <div id="propertyManagerEmpty" class="empty-state" hidden><strong>No property managers found</strong><p>Property manager accounts created from Regions & Access will appear here.</p></div>
+            <div class="table-foot"><span id="propertyManagerCount">Showing 0 property managers</span></div>
           </section>
         </div>
       </section>
@@ -325,7 +390,7 @@ function injectStyles() {
   const style = document.createElement("style");
   style.id = "contractorDirectorySourceStyles";
   style.textContent = `
-    .contractor-directory-workspace{display:grid;gap:14px}.contractor-directory-card .suite-toolbar{padding:14px 16px 0}.contractor-directory-card .request-message{padding:0 16px 8px}.contractor-directory-card td strong,.contractor-directory-card td small{display:block}.contractor-directory-card td small{color:var(--suite-soft);font-size:11px;margin-top:3px}.contractor-file-name-link{color:var(--suite-text);text-decoration:none}.contractor-file-name-link:hover strong{color:var(--suite-green)}.compact-field{min-width:150px}.compact-field select{min-height:36px}.contractor-actions{align-items:center;display:flex;flex-wrap:wrap;gap:6px}.contractor-actions .secondary-action,.contractor-actions .primary-action{min-height:32px;padding:0 10px;white-space:nowrap}.contractor-form .checkbox-field{align-self:center}.contractor-password-note,.contractor-access-note{background:rgba(6,214,160,.1);border:1px solid rgba(6,214,160,.28);border-radius:8px;color:var(--suite-text);font-size:12px;line-height:1.5;margin:0;padding:12px}.contractor-password-message{font-size:12px;margin:0}.contractor-password-message.error{color:#ff5c7a}.contractor-password-message.success{color:var(--suite-green)}.contractor-access-scope{border:1px solid var(--suite-border);border-radius:12px;display:grid;gap:12px;padding:14px}.contractor-access-scope h3{font-size:14px;margin:0}.contractor-access-scope p{color:var(--suite-soft);font-size:12px;margin:0}.contractor-access-grid{display:grid;gap:12px;grid-template-columns:repeat(2,minmax(0,1fr))}.contractor-access-list{border:1px solid var(--suite-border);border-radius:10px;display:grid;gap:6px;max-height:190px;overflow:auto;padding:10px}.contractor-access-list strong{font-size:12px;margin-bottom:2px}.contractor-access-check{align-items:flex-start;display:flex;gap:8px;font-size:12px;line-height:1.35}.contractor-access-check input{margin-top:2px}.contractor-access-check span{display:grid}.contractor-access-check small{color:var(--suite-soft);font-size:11px}.contractor-access-empty{color:var(--suite-soft);font-size:12px}.contractor-access-summary{min-width:130px}.contractor-access-summary strong,.contractor-access-summary small{display:block}@media(max-width:980px){.contractor-directory-card .suite-toolbar,.contractor-directory-card .toolbar-left,.contractor-directory-card .toolbar-right,.contractor-access-grid{align-items:stretch;display:grid;grid-template-columns:1fr}}
+    .contractor-directory-workspace{display:grid;gap:14px}.contractor-directory-card .suite-toolbar{padding:14px 16px 0}.contractor-directory-card .request-message{padding:0 16px 8px}.contractor-directory-card td strong,.contractor-directory-card td small{display:block}.contractor-directory-card td small{color:var(--suite-soft);font-size:11px;margin-top:3px}.directory-section-heading{border-top:1px solid var(--suite-border);padding:14px 16px 0}.directory-section-heading h2{font-size:16px;margin:0}.directory-section-heading p{color:var(--suite-soft);font-size:12px;margin:4px 0 0}.property-manager-directory-card{margin-top:12px}.contractor-file-name-link{color:var(--suite-text);text-decoration:none}.contractor-file-name-link:hover strong{color:var(--suite-green)}.compact-field{min-width:150px}.compact-field select{min-height:36px}.contractor-actions{align-items:center;display:flex;flex-wrap:wrap;gap:6px}.contractor-actions .secondary-action,.contractor-actions .primary-action{min-height:32px;padding:0 10px;white-space:nowrap}.contractor-form .checkbox-field{align-self:center}.contractor-password-note,.contractor-access-note{background:rgba(6,214,160,.1);border:1px solid rgba(6,214,160,.28);border-radius:8px;color:var(--suite-text);font-size:12px;line-height:1.5;margin:0;padding:12px}.contractor-password-message{font-size:12px;margin:0}.contractor-password-message.error{color:#ff5c7a}.contractor-password-message.success{color:var(--suite-green)}.contractor-access-scope{border:1px solid var(--suite-border);border-radius:12px;display:grid;gap:12px;padding:14px}.contractor-access-scope h3{font-size:14px;margin:0}.contractor-access-scope p{color:var(--suite-soft);font-size:12px;margin:0}.contractor-access-grid{display:grid;gap:12px;grid-template-columns:repeat(2,minmax(0,1fr))}.contractor-access-list{border:1px solid var(--suite-border);border-radius:10px;display:grid;gap:6px;max-height:190px;overflow:auto;padding:10px}.contractor-access-list strong{font-size:12px;margin-bottom:2px}.contractor-access-check{align-items:flex-start;display:flex;gap:8px;font-size:12px;line-height:1.35}.contractor-access-check input{margin-top:2px}.contractor-access-check span{display:grid}.contractor-access-check small{color:var(--suite-soft);font-size:11px}.contractor-access-empty{color:var(--suite-soft);font-size:12px}.contractor-access-summary{min-width:130px}.contractor-access-summary strong,.contractor-access-summary small{display:block}@media(max-width:980px){.contractor-directory-card .suite-toolbar,.contractor-directory-card .toolbar-left,.contractor-directory-card .toolbar-right,.contractor-access-grid{align-items:stretch;display:grid;grid-template-columns:1fr}}
   `;
   document.head.appendChild(style);
 }
@@ -335,7 +400,7 @@ function install() {
   const title = document.querySelector(".page-heading h1");
   const subtitle = document.querySelector(".page-heading p");
   if (title) title.textContent = "Contractor Directory";
-  if (subtitle) subtitle.textContent = "Approve contractors, manage sales team entries, and invite contractor accounts.";
+  if (subtitle) subtitle.textContent = "Manage contractor accounts separately from property manager portal accounts.";
   const content = document.querySelector(".suite-content");
   if (!content) return null;
   content.innerHTML = workspaceMarkup();
@@ -418,10 +483,22 @@ async function loadPeople() {
 function filteredPeople() {
   const term = state.search.trim().toLowerCase();
   return state.people.filter((person) => {
+    if (person.team === "property_manager") return false;
     if (state.team !== "all" && person.team !== state.team) return false;
     if (state.status !== "all" && person.status !== state.status) return false;
     if (!term) return true;
     return [person.name, person.email, person.phone, person.company, person.service, person.location, person.teamLabel, accessSummary(person), accessDetails(person)]
+      .some((value) => String(value || "").toLowerCase().includes(term));
+  });
+}
+
+function filteredPropertyManagers() {
+  const term = state.managerSearch.trim().toLowerCase();
+  return state.people.filter((person) => {
+    if (person.team !== "property_manager") return false;
+    if (state.managerStatus !== "all" && person.status !== state.managerStatus) return false;
+    if (!term) return true;
+    return [person.name, person.email, person.phone, person.company, person.status, propertyManagerAccessSummary(person), propertyManagerAccessDetails(person)]
       .some((value) => String(value || "").toLowerCase().includes(term));
   });
 }
@@ -433,7 +510,7 @@ function badge(value) {
 function renderMetrics() {
   setText("directoryTotal", state.people.length.toLocaleString());
   setText("contractorTotal", state.people.filter((p) => p.team === "contractor").length.toLocaleString());
-  setText("salesTotal", state.people.filter((p) => p.team === "sales").length.toLocaleString());
+  setText("propertyManagerTotal", state.people.filter((p) => p.team === "property_manager").length.toLocaleString());
   setText("activeTotal", state.people.filter((p) => p.status === "active").length.toLocaleString());
   setText("pendingTotal", state.people.filter((p) => p.status === "pending_approval").length.toLocaleString());
   setText("inactiveTotal", state.people.filter((p) => ["inactive", "disabled", "suspended"].includes(p.status)).length.toLocaleString());
@@ -465,7 +542,28 @@ function renderRows() {
     </tr>`;
   }).join("");
   if (empty) empty.hidden = Boolean(rows.length);
-  setText("contractorCount", `Showing ${rows.length.toLocaleString()} of ${state.people.length.toLocaleString()} people`);
+  const contractorTotal = state.people.filter((person) => person.team !== "property_manager").length;
+  setText("contractorCount", `Showing ${rows.length.toLocaleString()} of ${contractorTotal.toLocaleString()} contractor/sales accounts`);
+}
+
+function renderPropertyManagerRows() {
+  const rows = filteredPropertyManagers();
+  const body = document.getElementById("propertyManagerRows");
+  const empty = document.getElementById("propertyManagerEmpty");
+  if (!body) return;
+  body.innerHTML = rows.map((person) => `
+    <tr>
+      <td><strong>${esc(person.name)}</strong><small>${esc(person.email || "No email")}</small></td>
+      <td>${badge(person.status)}</td>
+      <td class="contractor-access-summary"><strong>${esc(propertyManagerAccessSummary(person))}</strong><small>${esc(propertyManagerAccessDetails(person) || "")}</small></td>
+      <td>${esc(person.phone || "-")}</td>
+      <td>${esc(person.sourceLabel)}</td>
+      <td><div class="contractor-actions"><button class="secondary-action" type="button" data-edit="${esc(person.key)}"><span>Edit</span></button><a class="secondary-action" href="coverage-center.html"><span>Access</span></a></div></td>
+    </tr>
+  `).join("");
+  if (empty) empty.hidden = Boolean(rows.length);
+  const managerTotal = state.people.filter((person) => person.team === "property_manager").length;
+  setText("propertyManagerCount", `Showing ${rows.length.toLocaleString()} of ${managerTotal.toLocaleString()} property managers`);
 }
 
 function contractorFileUrl(person) {
@@ -480,6 +578,7 @@ function contractorFileUrl(person) {
 function render() {
   renderMetrics();
   renderRows();
+  renderPropertyManagerRows();
 }
 
 function field(id, label, type, value = "", extra = "") {
@@ -488,6 +587,25 @@ function field(id, label, type, value = "", extra = "") {
 
 function selectField(id, label, options, value) {
   return `<label class="suite-field"><span>${esc(label)}</span><select id="${esc(id)}">${options.map(([key, text]) => `<option value="${esc(key)}" ${key === value ? "selected" : ""}>${esc(text)}</option>`).join("")}</select></label>`;
+}
+
+function propertyManagerPropertyField(person = null, team = "contractor") {
+  const selected = person?.propertyManagerPropertyId || person?.requestedPropertyName || "";
+  const options = state.accessProperties.map((option) => {
+    const value = option.id || option.name;
+    const label = [option.name, option.address].filter(Boolean).join(" - ");
+    const isSelected = String(value) === String(selected) || normalizeLookup(option.name) === normalizeLookup(selected);
+    return `<option value="${esc(value)}" ${isSelected ? "selected" : ""} data-property-name="${esc(option.name)}">${esc(label || option.name)}</option>`;
+  }).join("");
+  return `
+    <label id="propertyManagerPropertyWrap" class="suite-field wide" ${team === "property_manager" ? "" : "hidden"}>
+      <span>Linked Property</span>
+      <select id="propertyManagerProperty">
+        <option value="">No property linked</option>
+        ${options}
+      </select>
+    </label>
+  `;
 }
 
 function accessScopeMarkup(person = null, team = "contractor") {
@@ -537,18 +655,22 @@ function formMarkup(person = null) {
   const status = person?.status || "active";
   const approved = person ? person.approved : team === "contractor";
   const isNew = !person;
+  const roleOptions = team === "property_manager"
+    ? [["property_manager", "Property Manager"]]
+    : [["contractor", "Contractor"], ["sales", "Sales Team"]];
   return `<form id="contractorForm" class="lead-form contractor-form" data-source="${esc(person?.source || "")}" data-id="${esc(person?.id || "")}" data-profile-id="${esc(person?.profileId || "")}">
     <div class="form-grid">
       ${field("contractorName", "Name", "text", person?.name || "", "required")}
       ${field("contractorEmail", "Email", "email", person?.email || "", isNew ? "required" : "")}
       ${field("contractorPhone", "Phone", "tel", person?.phone || "")}
-      ${selectField("contractorTeam", "Team", [["contractor", "Contractor"], ["sales", "Sales Team"]], team)}
+      ${selectField("contractorTeam", "Portal Role", roleOptions, team)}
       ${selectField("contractorStatus", "Status", [["active", "Active"], ["pending_approval", "Pending Approval"], ["inactive", "Inactive"], ["suspended", "Suspended"]], status)}
       ${field("contractorCompany", "Company", "text", person?.company || "")}
-      ${field("contractorService", team === "sales" ? "Sales Role" : "Service Types", "text", person?.service || "")}
+      ${field("contractorService", team === "property_manager" ? "Role Notes" : team === "sales" ? "Sales Role" : "Service Types", "text", team === "property_manager" ? "" : person?.service || "")}
       ${field("contractorLocation", "Location / Market", "text", person?.location || "")}
       <label class="suite-field wide"><span>Notes</span><textarea id="contractorNotes" rows="3">${esc(person?.notes || "")}</textarea></label>
-      <label class="checkbox-field wide"><input id="contractorApproved" type="checkbox" ${approved ? "checked" : ""} /> <span>Approved / auto approve on signup</span></label>
+      <label id="contractorApprovedWrap" class="checkbox-field wide" ${team === "contractor" ? "" : "hidden"}><input id="contractorApproved" type="checkbox" ${approved ? "checked" : ""} /> <span>Approved / auto approve on signup</span></label>
+      ${propertyManagerPropertyField(person, team)}
       ${accessScopeMarkup(person, team)}
       ${isNew ? `
         <div id="contractorLiveAccountFields" class="contractor-live-account-fields wide">
@@ -583,7 +705,8 @@ function openModal(person = null) {
   const body = document.getElementById("contractorModalBody");
   const heading = document.getElementById("contractorModalTitle");
   if (!modal || !body) return;
-  if (heading) heading.textContent = person ? `Edit ${person.name}` : "Add Contractor";
+  const roleLabel = person?.team === "property_manager" ? "Property Manager" : person?.team === "sales" ? "Sales Team Member" : "Contractor";
+  if (heading) heading.textContent = person ? `Edit ${roleLabel}: ${person.name}` : "Add Contractor";
   body.innerHTML = formMarkup(person);
   modal.hidden = false;
   document.getElementById("contractorName")?.focus();
@@ -621,6 +744,7 @@ function setLiveAccountFieldsVisible() {
   const team = value("contractorTeam") || "contractor";
   const wrap = document.getElementById("contractorLiveAccountFields");
   const isContractor = team === "contractor";
+  const isPropertyManager = team === "property_manager";
   if (wrap) {
     wrap.hidden = !isContractor;
     wrap.querySelectorAll("input").forEach((input) => {
@@ -630,6 +754,10 @@ function setLiveAccountFieldsVisible() {
   }
   const accessWrap = document.getElementById("contractorAccessControls");
   if (accessWrap) accessWrap.hidden = !isContractor;
+  const approvalWrap = document.getElementById("contractorApprovedWrap");
+  if (approvalWrap) approvalWrap.hidden = !isContractor;
+  const propertyWrap = document.getElementById("propertyManagerPropertyWrap");
+  if (propertyWrap) propertyWrap.hidden = !isPropertyManager;
 }
 
 function checkedValues(selector) {
@@ -655,20 +783,22 @@ function formPayload(table) {
   const status = approved && value("contractorStatus") === "pending_approval" ? "active" : value("contractorStatus") || "active";
   const services = value("contractorService");
   const access = team === "contractor" ? accessPayload() : { allowed_regions: [], allowed_property_ids: [], allowed_property_names: [] };
+  const selectedPropertyValue = team === "property_manager" ? value("propertyManagerProperty") : "";
+  const selectedProperty = propertyOptionById(selectedPropertyValue) || state.accessProperties.find((option) => normalizeLookup(option.name) === normalizeLookup(selectedPropertyValue)) || null;
   const base = {
     full_name: value("contractorName"),
     name: value("contractorName"),
     email: value("contractorEmail"),
     phone: value("contractorPhone"),
-    role: team === "sales" ? "sales" : "contractor",
+    role: team === "property_manager" ? "property_manager" : team === "sales" ? "sales" : "contractor",
     team,
     status,
-    contractor_approved: approved,
+    contractor_approved: team === "property_manager" ? true : approved,
     approval_status: team === "contractor" ? approved ? "approved" : "pending" : "approved",
     company_name: value("contractorCompany"),
     business_name: value("contractorCompany"),
-    service_type: services,
-    service_types: services ? services.split(",").map((item) => item.trim()).filter(Boolean) : [],
+    service_type: team === "property_manager" ? "" : services,
+    service_types: team === "property_manager" ? [] : services ? services.split(",").map((item) => item.trim()).filter(Boolean) : [],
     title: team === "sales" ? services : "",
     department: team === "sales" ? "Sales" : "",
     market: value("contractorLocation"),
@@ -678,8 +808,10 @@ function formPayload(table) {
     allowed_regions: access.allowed_regions,
     allowed_property_ids: access.allowed_property_ids,
     allowed_property_names: access.allowed_property_names,
-    invited_by_admin: approved,
-    invited_at: approved ? new Date().toISOString() : null,
+    property_manager_property_id: team === "property_manager" ? selectedProperty?.id || null : null,
+    requested_property_name: team === "property_manager" ? selectedProperty?.name || selectedPropertyValue || "" : "",
+    invited_by_admin: team === "property_manager" || approved,
+    invited_at: team === "property_manager" || approved ? new Date().toISOString() : null,
     contractor_approved_at: approved ? new Date().toISOString() : null
   };
   if (table === "profiles") {
@@ -687,7 +819,7 @@ function formPayload(table) {
       full_name: base.full_name,
       email: base.email,
       phone: base.phone,
-      role: team === "sales" ? "sales_team" : "contractor",
+      role: team === "property_manager" ? "property_manager" : team === "sales" ? "sales_team" : "contractor",
       team,
       status: base.status,
       contractor_approved: base.contractor_approved,
@@ -704,6 +836,8 @@ function formPayload(table) {
       allowed_property_names: base.allowed_property_names,
       department: base.department,
       title: base.title,
+      property_manager_property_id: base.property_manager_property_id,
+      requested_property_name: base.requested_property_name,
       invited_by_admin: base.invited_by_admin,
       invited_at: base.invited_at,
       contractor_approved_at: base.contractor_approved_at
@@ -828,7 +962,7 @@ async function saveContractor(event) {
   const result = await writeFallback(table, formPayload(table), id);
   if (result.error) {
     state.saving = false;
-    setMessage("Unable to save contractor: " + result.error.message, true);
+    setMessage("Unable to save account: " + result.error.message, true);
     return;
   }
   const invite = await syncInvite(formPayload("contractors"), table === "profiles" ? id : profileId || result.data?.profile_id || "");
@@ -836,6 +970,7 @@ async function saveContractor(event) {
   if (invite.error) setMessage("Contractor saved, but invite sync failed: " + invite.error.message, true);
   closeModal();
   await loadPeople();
+  setMessage(`${value("contractorName") || "Account"} was saved.`);
 }
 
 async function approvePerson(person) {
@@ -914,19 +1049,26 @@ async function resetContractorPassword(event) {
 
 function bind(root) {
   root.addEventListener("input", (event) => {
-    if (event.target?.id !== "contractorSearch") return;
-    state.search = event.target.value || "";
-    renderRows();
+    if (event.target?.id === "contractorSearch") {
+      state.search = event.target.value || "";
+      renderRows();
+    }
+    if (event.target?.id === "propertyManagerSearch") {
+      state.managerSearch = event.target.value || "";
+      renderPropertyManagerRows();
+    }
   });
   root.addEventListener("change", (event) => {
     if (event.target?.id === "contractorTeamFilter") state.team = event.target.value || "all";
     if (event.target?.id === "contractorStatusFilter") state.status = event.target.value || "active";
+    if (event.target?.id === "propertyManagerStatusFilter") state.managerStatus = event.target.value || "active";
     if (event.target?.id === "contractorTeam") {
       const label = document.getElementById("contractorService")?.closest(".suite-field")?.querySelector("span");
-      if (label) label.textContent = event.target.value === "sales" ? "Sales Role" : "Service Types";
+      if (label) label.textContent = event.target.value === "property_manager" ? "Role Notes" : event.target.value === "sales" ? "Sales Role" : "Service Types";
       setLiveAccountFieldsVisible();
     }
     renderRows();
+    renderPropertyManagerRows();
   });
   root.addEventListener("click", (event) => {
     if (event.target.closest("#contractorAdd")) return openModal();

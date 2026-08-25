@@ -105,6 +105,7 @@ async function findContractorProfile(supabase, contractorUserId, email) {
 
 function isContractorProfile(profile) {
   const role = normalizeToken(profile?.role);
+  if (role === "property_manager" || role === "propertymanagement" || role === "property_management") return false;
   return contractorRoles.has(role) || profile?.contractor_approved === true;
 }
 
