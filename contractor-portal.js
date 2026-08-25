@@ -1007,6 +1007,10 @@ function sidebar() {
         <strong>Turnly Ops Center</strong>
         <small>ops@turnlypros.com</small>
       </section>
+      <div class="cp-legal-links" aria-label="Turnly legal links">
+        <a href="/privacy-policy.html" target="_blank" rel="noopener">Privacy Policy</a>
+        <a href="/terms-and-conditions.html" target="_blank" rel="noopener">Terms</a>
+      </div>
       <section class="cp-profile-wrap">
         ${profileAccountTrigger("cpProfileMenu")}
         ${profileAccountMenu("cpProfileMenu")}
@@ -1028,6 +1032,10 @@ function mobileNav() {
       <div class="cp-mobile-profile-account">
         ${profileAccountTrigger("cpMobileProfileMenu")}
         ${profileAccountMenu("cpMobileProfileMenu")}
+      </div>
+      <div class="cp-mobile-legal-links" aria-label="Turnly legal links">
+        <a href="/privacy-policy.html" target="_blank" rel="noopener">Privacy Policy</a>
+        <a href="/terms-and-conditions.html" target="_blank" rel="noopener">Terms</a>
       </div>
     </div>
     <nav class="cp-mobile-nav" aria-label="Contractor mobile navigation">

@@ -251,6 +251,27 @@ a {
   gap: 3px;
 }
 
+.suite-legal-links {
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 4px 0;
+  padding-top: 12px;
+}
+
+.suite-legal-links a {
+  color: #9fb1c5;
+  font-size: 11px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.suite-legal-links a:hover,
+.suite-legal-links a:focus-visible {
+  color: var(--suite-green);
+}
+
 .nav-section-group,
 .nav-section-links {
   display: grid;
@@ -5884,6 +5905,14 @@ body.turnly-admin-suite[data-dashboard-theme="light"] .quick-actions button {
 
 body.turnly-admin-suite[data-dashboard-theme="light"] .nav-section-title {
   color: #667b92;
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"] .suite-legal-links {
+  border-color: rgba(15, 35, 55, 0.12);
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"] .suite-legal-links a {
+  color: #5c7086;
 }
 
 body.turnly-admin-suite[data-dashboard-theme="light"] .suite-nav-link,

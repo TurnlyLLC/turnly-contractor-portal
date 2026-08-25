@@ -147,6 +147,33 @@
   padding: 12px;
 }
 
+.cp-legal-links,
+.cp-mobile-legal-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.cp-legal-links {
+  border-top: 1px solid var(--cp-line);
+  padding: 2px 4px 0;
+}
+
+.cp-legal-links a,
+.cp-mobile-legal-links a {
+  color: var(--cp-muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.cp-legal-links a:hover,
+.cp-legal-links a:focus-visible,
+.cp-mobile-legal-links a:hover,
+.cp-mobile-legal-links a:focus-visible {
+  color: var(--cp-green);
+}
+
 .cp-profile-wrap {
   position: relative;
 }
@@ -1740,6 +1767,10 @@
 .contractor-portal-body[data-dashboard-theme="light"] .cp-profile-menu,
 .contractor-portal-body[data-dashboard-theme="light"] .topbar-dropdown {
   background: #f8fbfd;
+  border-color: var(--cp-line);
+}
+
+.contractor-portal-body[data-dashboard-theme="light"] .cp-legal-links {
   border-color: var(--cp-line);
 }
 

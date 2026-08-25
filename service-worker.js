@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-contractor-pwa-v20260820-sales-12-month-trend";
+const CACHE_NAME = "turnly-contractor-pwa-v20260825-legal-pages";
 
 const PRECACHE_URLS = [
   "/",
@@ -8,9 +8,12 @@ const PRECACHE_URLS = [
   "/pwa-register.js",
   "/style.css",
   "/portal-public.css",
+  "/legal.css",
   "/auth-recovery-router.js",
   "/portal-auth.js",
   "/reset-password.html",
+  "/privacy-policy.html",
+  "/terms-and-conditions.html",
   "/reset-password.js",
   "/admin-preview-context.js",
   "/portal-auth-overrides.css",

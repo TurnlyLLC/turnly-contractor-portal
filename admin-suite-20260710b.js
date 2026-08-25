@@ -10021,6 +10021,10 @@ function renderSidebar(activeKey) {
           `;
         }).join("")}
       </nav>
+      <div class="suite-legal-links" aria-label="Turnly legal links">
+        <a href="/privacy-policy.html" target="_blank" rel="noopener">Privacy Policy</a>
+        <a href="/terms-and-conditions.html" target="_blank" rel="noopener">Terms</a>
+      </div>
     </aside>
   `;
 }
