@@ -956,8 +956,8 @@ function renderPerformance() {
 function renderJobs() {
   return `
     <section class="contractor-file-grid">
-      ${panel("Accepted Jobs", assignmentTable(activeJobs(), "No accepted or active jobs."))}
-      ${panel("Completed Jobs", assignmentTable(completedJobs(), "No completed jobs."))}
+      ${panel("Accepted Jobs", assignmentTable(activeJobs(), "No accepted or active jobs.", { canDelete: true }))}
+      ${panel("Completed Jobs", assignmentTable(completedJobs(), "No completed jobs.", { canDelete: true }))}
     </section>
   `;
 }
@@ -1073,14 +1073,22 @@ function assignmentList(rows, emptyText) {
   `;
 }
 
-function assignmentTable(rows, emptyText) {
-  return tableRows(rows, [
+function assignmentDeleteButton(row) {
+  const deleting = state.savingId === `delete:${row.id}`;
+  const disabled = Boolean(state.savingId);
+  return `<button class="secondary-action danger-action" type="button" data-assignment-delete="${esc(row.id)}" ${disabled ? "disabled" : ""}><span>${deleting ? "Deleting..." : "Delete"}</span></button>`;
+}
+
+function assignmentTable(rows, emptyText, options = {}) {
+  const columns = [
     ["Assignment", (row) => `<strong>${esc(assignmentTitle(row))}</strong><small>${esc([row.address, row.service_type].filter(Boolean).join(" - "))}</small><small>${esc(assignmentUnitLabel(row))}</small>`],
     ["Schedule", (row) => esc(formatWindow(row))],
     ["Status", (row) => esc(title(row.status || "open"))],
     ["Pay", (row) => esc(money(row.pay_amount))],
     ["Payment", (row) => esc(isPaid(row) ? `Paid ${formatDate(assignmentPaidDate(row), "")}` : "Unpaid")]
-  ], emptyText);
+  ];
+  if (options.canDelete) columns.push(["Action", (row) => assignmentDeleteButton(row)]);
+  return tableRows(rows, columns, emptyText);
 }
 
 function payTable() {
@@ -1096,8 +1104,8 @@ function payTable() {
     ["Notes", (row) => `<textarea class="contractor-file-pay-notes" rows="2" data-pay-field="notes" data-pay-row="${esc(row.id)}" aria-label="Payment notes for ${esc(assignmentTitle(row))}">${esc(paymentNotes(row))}</textarea>`],
     ["Payment", (row) => esc(isPaid(row) ? `Paid ${formatDate(assignmentPaidDate(row), "")}` : "Unpaid")],
     ["Action", (row) => {
-      const saving = state.savingId === "bulk-pay" || state.savingId === row.id || state.savingId === `pay:${row.id}`;
-      return `<div class="contractor-file-pay-actions"><button class="secondary-action" type="button" data-pay-save="${esc(row.id)}" ${saving ? "disabled" : ""}><span>Save Pay</span></button><button class="${isPaid(row) ? "secondary-action" : "primary-action"}" type="button" data-pay-toggle="${esc(row.id)}" ${saving ? "disabled" : ""}><span>${esc(isPaid(row) ? "Mark Unpaid" : "Mark Paid")}</span></button></div>`;
+      const saving = state.savingId === "bulk-pay" || state.savingId === row.id || state.savingId === `pay:${row.id}` || state.savingId === `delete:${row.id}`;
+      return `<div class="contractor-file-pay-actions"><button class="secondary-action" type="button" data-pay-save="${esc(row.id)}" ${saving ? "disabled" : ""}><span>Save Pay</span></button><button class="${isPaid(row) ? "secondary-action" : "primary-action"}" type="button" data-pay-toggle="${esc(row.id)}" ${saving ? "disabled" : ""}><span>${esc(isPaid(row) ? "Mark Unpaid" : "Mark Paid")}</span></button>${assignmentDeleteButton(row)}</div>`;
     }]
   ], "No payable assignments found for this contractor.");
   if (!rows.length) return body;
@@ -1581,6 +1589,148 @@ async function updateAssignmentWithFallback(id, payload) {
   return { data: null, error: new Error("Unable to update assignment payment fields.") };
 }
 
+function uniqueIds(values = []) {
+  return Array.from(new Set(values.map((value) => String(value || "").trim()).filter(Boolean)));
+}
+
+function isMissingDeleteRelation(error) {
+  const code = String(error?.code || "").toLowerCase();
+  const text = String(error?.message || "").toLowerCase();
+  return ["42p01", "42703", "pgrst200", "pgrst204"].includes(code)
+    || text.includes("does not exist")
+    || text.includes("could not find")
+    || text.includes("schema cache");
+}
+
+async function fetchDeleteRows(query, label) {
+  const { data, error } = await query;
+  if (!error) return data || [];
+  if (isMissingDeleteRelation(error)) {
+    console.warn(`[contractor-file] Skipping ${label}; table or column is not available.`, error);
+    return [];
+  }
+  throw new Error(error.message || `Unable to load ${label}.`);
+}
+
+async function loadAssignmentStorageObjects(client, assignmentIds = []) {
+  const ids = uniqueIds(assignmentIds);
+  if (!client || !ids.length) return [];
+
+  const qaJobIds = new Set();
+  const objects = new Map();
+  const addQaJobId = (value) => {
+    const id = String(value || "").trim();
+    if (id) qaJobIds.add(id);
+  };
+  const addObject = (row, fallbackBucket) => {
+    const bucket = String(row?.storage_bucket || fallbackBucket || "").trim();
+    const path = String(row?.storage_path || "").trim();
+    if (!bucket || !path) return;
+    objects.set(`${bucket}/${path}`, { bucket, path });
+  };
+
+  const assignments = await fetchDeleteRows(
+    client.from("assignment_blocks").select("id, metadata").in("id", ids),
+    "assignment metadata"
+  );
+  assignments.forEach((row) => addQaJobId(row?.metadata?.qa_job_id));
+
+  const qaJobs = await fetchDeleteRows(
+    client.from("qa_jobs").select("id").in("assignment_id", ids),
+    "QA jobs"
+  );
+  qaJobs.forEach((row) => addQaJobId(row?.id));
+
+  const videosByAssignment = await fetchDeleteRows(
+    client.from("qa_videos").select("storage_bucket, storage_path, qa_job_id").in("assignment_id", ids),
+    "QA videos"
+  );
+  videosByAssignment.forEach((row) => {
+    addObject(row, "qa-videos");
+    addQaJobId(row?.qa_job_id);
+  });
+
+  const qaJobIdList = Array.from(qaJobIds);
+  if (qaJobIdList.length) {
+    const videosByJob = await fetchDeleteRows(
+      client.from("qa_videos").select("storage_bucket, storage_path").in("qa_job_id", qaJobIdList),
+      "QA job videos"
+    );
+    videosByJob.forEach((row) => addObject(row, "qa-videos"));
+  }
+
+  const photos = await fetchDeleteRows(
+    client.from("qa_photos").select("storage_bucket, storage_path").in("assignment_id", ids),
+    "QA photos"
+  );
+  photos.forEach((row) => addObject(row, "qa-photos"));
+
+  return Array.from(objects.values());
+}
+
+async function removeAssignmentStorageObjects(client, assignmentIds = []) {
+  const objects = await loadAssignmentStorageObjects(client, assignmentIds);
+  if (!objects.length) return 0;
+
+  const byBucket = new Map();
+  objects.forEach((item) => {
+    if (!byBucket.has(item.bucket)) byBucket.set(item.bucket, new Set());
+    byBucket.get(item.bucket).add(item.path);
+  });
+
+  let removedCount = 0;
+  for (const [bucket, paths] of byBucket.entries()) {
+    const cleanPaths = Array.from(paths).filter(Boolean);
+    if (!cleanPaths.length) continue;
+    const { error } = await client.storage.from(bucket).remove(cleanPaths);
+    if (error) throw new Error(error.message || `Unable to remove files from ${bucket}.`);
+    removedCount += cleanPaths.length;
+  }
+  return removedCount;
+}
+
+async function deleteContractorAssignment(id) {
+  const row = state.assignments.find((item) => String(item.id) === String(id));
+  if (!row || state.savingId) return;
+  const label = assignmentTitle(row);
+  const confirmed = window.confirm(`Delete ${label} from this contractor file and all linked Supabase records? This cannot be undone.`);
+  if (!confirmed) return;
+  const typed = window.prompt("Type DELETE to permanently delete this assignment.");
+  if (typed !== "DELETE") {
+    message("Delete cancelled. Type DELETE exactly to confirm.", true);
+    return;
+  }
+  if (!supabase) {
+    message("Supabase config is missing. Unable to delete the assignment.", true);
+    return;
+  }
+
+  state.savingId = `delete:${id}`;
+  message(`Deleting attached QA media for ${label}...`);
+  render();
+
+  try {
+    const removedMediaCount = await removeAssignmentStorageObjects(supabase, [id]);
+    message(removedMediaCount
+      ? `Deleted ${removedMediaCount.toLocaleString()} attached media file${removedMediaCount === 1 ? "" : "s"}. Deleting ${label}...`
+      : `Deleting ${label}...`);
+    const { data, error } = await supabase.rpc("delete_schedule_assignment_blocks", {
+      target_assignment_ids: [id],
+      confirmation_text: "DELETE"
+    });
+    if (error) throw error;
+    state.assignments = state.assignments.filter((item) => String(item.id) !== String(id));
+    state.media = state.media.filter((item) => String(item.assignment_id || "") !== String(id));
+    state.savingId = "";
+    message(`${Number(data || 1).toLocaleString()} assignment deleted from Supabase.`);
+    render();
+  } catch (error) {
+    state.savingId = "";
+    message(`Unable to delete assignment: ${error.message}`, true);
+    render();
+  }
+}
+
 function payField(id, field) {
   return Array.from(document.querySelectorAll(`[data-pay-field="${field}"]`))
     .find((node) => String(node.dataset.payRow || "") === String(id)) || null;
@@ -1863,6 +2013,11 @@ function bind() {
     const payBulk = event.target.closest("[data-pay-bulk-paid]");
     if (payBulk) {
       void bulkMarkSelectedPaid();
+      return;
+    }
+    const assignmentDelete = event.target.closest("[data-assignment-delete]");
+    if (assignmentDelete) {
+      void deleteContractorAssignment(assignmentDelete.dataset.assignmentDelete);
       return;
     }
     const storage = event.target.closest("[data-open-storage-path]");

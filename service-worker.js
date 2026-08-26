@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-contractor-pwa-v20260825-directory-roles";
+const CACHE_NAME = "turnly-contractor-pwa-v20260826-contractor-file-delete";
 
 const PRECACHE_URLS = [
   "/",
