@@ -390,6 +390,9 @@ const assignmentPriorityOptions = [
   ["urgent", "Urgent"]
 ];
 const assignmentPageSizeOptions = [30, 50, 100];
+const assignmentVideoBucket = "qa-videos";
+const assignmentVideoMaxBytes = 524288000;
+const assignmentVideoSignedUrlSeconds = 60 * 60 * 4;
 const assignmentState = {
   rows: [],
   properties: [],
@@ -405,11 +408,14 @@ const assignmentState = {
   currentPage: 1,
   selectedIds: new Set(),
   bulkUnitIds: new Set(),
+  videosByAssignmentId: new Map(),
   editingId: null,
+  currentVideoAssignmentId: "",
   isSaving: false,
   isGenerating: false,
   isBulkSaving: false,
-  isDeleting: false
+  isDeleting: false,
+  isVideoUploading: false
 };
 const salesReportState = {
   rows: [],
@@ -11365,6 +11371,7 @@ function assignmentForm() {
         leadTextareaField("special_instructions", "Special Instructions")
       ], "assignment-notes-grid")}
       <div id="assignmentChecklistPreview" class="checklist-summary assignment-checklist-preview"></div>
+      ${assignmentVideoUploadSection()}
       <p id="assignmentFormMessage" class="status-message"></p>
       <div class="form-actions assignment-edit-actions">
         <button id="assignmentDeleteBtn" type="button" class="secondary-action danger-action assignment-delete-action" data-assignment-delete-current hidden>${icon("trash")}<span data-assignment-delete-label>Delete Assignment</span></button>
@@ -11372,6 +11379,411 @@ function assignmentForm() {
       </div>
     </form>
   `;
+}
+
+function assignmentVideoUploadSection() {
+  return `
+    <section class="assignment-form-section assignment-video-upload-section" data-assignment-video-section hidden>
+      <div class="assignment-section-title-row">
+        <div>
+          <h3>Before and After Videos</h3>
+          <p>Attach admin-uploaded QA videos directly to this assignment.</p>
+        </div>
+        <span class="assignment-video-count" data-assignment-video-count>0 attached</span>
+      </div>
+      <div class="assignment-video-list" data-assignment-video-list>
+        <div class="assignment-video-empty">Open an existing assignment to manage videos.</div>
+      </div>
+      <div class="assignment-video-upload-grid">
+        ${assignmentVideoFileField("before", "Before Video")}
+        ${assignmentVideoFileField("after", "After Video")}
+        <label class="suite-field assignment-video-notes-field">
+          <span>Admin Notes</span>
+          <textarea id="assignmentVideoNotes" rows="3" placeholder="Optional note for these uploads"></textarea>
+        </label>
+      </div>
+      <div class="assignment-video-upload-actions">
+        <p class="status-message assignment-video-message" data-assignment-video-message aria-live="polite"></p>
+        <button class="secondary-action" type="button" data-assignment-video-upload>${icon("upload")}<span>Upload Videos</span></button>
+      </div>
+    </section>
+  `;
+}
+
+function assignmentVideoFileField(phase, label) {
+  return `
+    <label class="assignment-video-upload-card">
+      <span>${esc(label)}</span>
+      <strong data-assignment-video-file-name="${esc(phase)}">Choose a video file</strong>
+      <small>MP4, MOV, or video file up to ${esc(formatBytes(assignmentVideoMaxBytes))}</small>
+      <input type="file" accept="video/*" data-assignment-video-file="${esc(phase)}" />
+    </label>
+  `;
+}
+
+function renderAssignmentVideoSection(row = null) {
+  const section = document.querySelector("[data-assignment-video-section]");
+  if (!section) return;
+  const id = String(row?.id || assignmentState.editingId || "");
+  assignmentState.currentVideoAssignmentId = id;
+  section.hidden = !id;
+  if (!id) {
+    const list = document.querySelector("[data-assignment-video-list]");
+    const count = document.querySelector("[data-assignment-video-count]");
+    if (list) list.innerHTML = `<div class="assignment-video-empty">Open an existing assignment to manage videos.</div>`;
+    if (count) count.textContent = "0 attached";
+    setAssignmentVideoMessage("");
+    return;
+  }
+  renderAssignmentVideoList(row);
+}
+
+function renderAssignmentVideoList(row = null) {
+  const id = String(row?.id || assignmentState.currentVideoAssignmentId || "");
+  const list = document.querySelector("[data-assignment-video-list]");
+  const count = document.querySelector("[data-assignment-video-count]");
+  const videos = assignmentState.videosByAssignmentId.get(id) || [];
+  if (count) count.textContent = `${videos.length.toLocaleString()} attached`;
+  if (!list) return;
+  list.innerHTML = videos.length
+    ? videos.map(renderAssignmentVideoChip).join("")
+    : `<div class="assignment-video-empty">No before or after videos are attached yet.</div>`;
+}
+
+function renderAssignmentVideoChip(video) {
+  const meta = [
+    video.file_name || "Video file",
+    formatBytes(video.file_size || video.file_size_bytes || 0),
+    formatDashboardDate(video.created_at || video.recorded_at, "")
+  ].filter(Boolean).join(" - ");
+  return `
+    <article class="assignment-video-chip">
+      <div>
+        <span>${esc(assignmentVideoPhaseLabel(video.video_phase))}</span>
+        <strong>${esc(video.title || video.label || video.file_name || "Uploaded video")}</strong>
+        <small>${esc(meta)}</small>
+      </div>
+      ${video.signedUrl ? `<a class="secondary-action" href="${esc(video.signedUrl)}" target="_blank" rel="noreferrer"><span>Open</span></a>` : `<small>Preview unavailable</small>`}
+    </article>
+  `;
+}
+
+function updateAssignmentVideoFileLabel(input) {
+  const phase = input.dataset.assignmentVideoFile || "";
+  const label = input.closest(".assignment-video-upload-card")?.querySelector(`[data-assignment-video-file-name="${selectorValue(phase)}"]`);
+  const file = input.files?.[0];
+  if (label) label.textContent = file ? file.name : "Choose a video file";
+}
+
+async function refreshAssignmentDetailVideos(row) {
+  const id = String(row?.id || "");
+  if (!id || !suiteSupabase) return;
+  const list = document.querySelector("[data-assignment-video-list]");
+  if (assignmentState.currentVideoAssignmentId === id && list) {
+    list.innerHTML = `<div class="assignment-video-empty">Loading attached videos...</div>`;
+  }
+  try {
+    const videos = await loadAssignmentDetailVideos(row);
+    assignmentState.videosByAssignmentId.set(id, videos);
+    if (assignmentState.currentVideoAssignmentId === id) renderAssignmentVideoList(row);
+  } catch (error) {
+    console.warn("[admin-suite] Unable to load assignment videos", error);
+    setAssignmentVideoMessage("Unable to load attached videos: " + (error?.message || "Unknown error"), true);
+  }
+}
+
+async function loadAssignmentDetailVideos(row) {
+  const assignmentId = String(row?.id || "");
+  if (!assignmentId || !suiteSupabase) return [];
+  const byId = new Map();
+  const addRows = (rows = []) => rows.forEach((video) => {
+    if (video?.id) byId.set(String(video.id), video);
+  });
+
+  const assignmentResult = await suiteSupabase
+    .from("qa_videos")
+    .select("*")
+    .eq("assignment_id", assignmentId)
+    .order("created_at", { ascending: false })
+    .limit(80);
+  if (assignmentResult.error) throw assignmentResult.error;
+  addRows(assignmentResult.data);
+
+  const qaJobId = assignmentQaJobId(row);
+  if (qaJobId) {
+    const qaJobResult = await suiteSupabase
+      .from("qa_videos")
+      .select("*")
+      .eq("qa_job_id", qaJobId)
+      .order("created_at", { ascending: false })
+      .limit(80);
+    if (qaJobResult.error) throw qaJobResult.error;
+    addRows(qaJobResult.data);
+  }
+
+  const videos = Array.from(byId.values())
+    .sort((a, b) => dateValue(b.created_at || b.recorded_at, 0) - dateValue(a.created_at || a.recorded_at, 0));
+  return attachAssignmentVideoUrls(videos);
+}
+
+async function attachAssignmentVideoUrls(videos = []) {
+  return Promise.all(videos.map(async (video) => ({
+    ...video,
+    signedUrl: await assignmentVideoSignedUrl(video)
+  })));
+}
+
+async function assignmentVideoSignedUrl(video) {
+  const path = String(video?.storage_path || "").trim();
+  if (!path || !suiteSupabase) return "";
+  try {
+    const { data, error } = await suiteSupabase.storage
+      .from(video.storage_bucket || assignmentVideoBucket)
+      .createSignedUrl(path, assignmentVideoSignedUrlSeconds);
+    return error ? "" : (data?.signedUrl || "");
+  } catch {
+    return "";
+  }
+}
+
+async function uploadAssignmentDetailVideos() {
+  const assignmentId = String(assignmentState.currentVideoAssignmentId || assignmentState.editingId || "");
+  const row = assignmentState.rows.find((item) => String(item.id || "") === assignmentId);
+  if (!suiteSupabase || !row) {
+    setAssignmentVideoMessage("Unable to find this assignment. Refresh the assignment board and try again.", true);
+    return;
+  }
+
+  const uploads = ["before", "after"]
+    .map((phase) => [phase, document.querySelector(`[data-assignment-video-file="${selectorValue(phase)}"]`)?.files?.[0]])
+    .filter(([, file]) => file);
+  if (!uploads.length) {
+    setAssignmentVideoMessage("Choose a before or after video before uploading.", true);
+    return;
+  }
+  const oversized = uploads.find(([, file]) => file.size > assignmentVideoMaxBytes);
+  if (oversized) {
+    setAssignmentVideoMessage(`${oversized[1].name} is larger than ${formatBytes(assignmentVideoMaxBytes)}.`, true);
+    return;
+  }
+
+  setAssignmentVideoUploading(true);
+  setAssignmentVideoMessage("Preparing upload...");
+  try {
+    const user = await assignmentCurrentUser();
+    if (!user) throw new Error("Sign in as an admin before uploading videos.");
+    const qaJobId = await ensureAssignmentDetailQaJob(row);
+    const pairId = randomAssignmentVideoId();
+    const note = document.getElementById("assignmentVideoNotes")?.value || "";
+    for (let index = 0; index < uploads.length; index += 1) {
+      const [phase, file] = uploads[index];
+      setAssignmentVideoMessage(`Uploading ${assignmentVideoPhaseLabel(phase).toLowerCase()} (${index + 1} of ${uploads.length})...`);
+      await uploadAssignmentDetailVideo(row, phase, file, qaJobId, pairId, note, user);
+    }
+    clearAssignmentVideoInputs();
+    setAssignmentVideoMessage(`${uploads.length} video${uploads.length === 1 ? "" : "s"} uploaded.`);
+    await refreshAssignmentDetailVideos(row);
+  } catch (error) {
+    console.warn("[admin-suite] Admin assignment video upload failed", error);
+    const sizeHint = /size|exceeded|maximum/i.test(String(error?.message || ""))
+      ? " Check the Supabase project and bucket upload limits."
+      : "";
+    setAssignmentVideoMessage("Unable to upload video: " + (error?.message || "Unknown error") + sizeHint, true);
+  } finally {
+    setAssignmentVideoUploading(false);
+  }
+}
+
+async function uploadAssignmentDetailVideo(row, phase, file, qaJobId, pairId, note, user) {
+  const duration = await assignmentVideoDuration(file);
+  const datePath = new Date().toISOString().slice(0, 10);
+  const path = `${user.id}/${datePath}/admin-assignments/${row.id}-${phase}-${Date.now()}-${safeAssignmentVideoFileName(file.name)}`;
+  const uploadResult = await suiteSupabase.storage
+    .from(assignmentVideoBucket)
+    .upload(path, file, {
+      contentType: file.type || "video/mp4",
+      upsert: false
+    });
+  if (uploadResult.error) throw uploadResult.error;
+
+  const propertyName = row.property_name || row.title || "Assignment";
+  const unit = assignmentUnitNumber(row);
+  const portalPropertyId = uuidOrNull(assignmentPortalPropertyId(row));
+  const workerId = assignmentWorkerId(row);
+  const workerName = assignmentContractorText(row);
+  const payload = {
+    pair_id: pairId,
+    title: `${propertyName} - ${assignmentVideoPhaseLabel(phase)}`,
+    label: [propertyName, unit && unit !== "No unit" ? `Unit ${unit}` : ""].filter(Boolean).join(" - "),
+    video_phase: phase,
+    property_id: uuidOrNull(assignmentDetailPropertyId(row)) || portalPropertyId,
+    portal_property_id: portalPropertyId,
+    property_name: propertyName,
+    unit_name: unit && unit !== "No unit" ? unit : "",
+    assignment_id: row.id || null,
+    contractor_id: uuidOrNull(workerId),
+    contractor_name: workerName === "Unassigned" ? "" : workerName,
+    recorded_at: new Date().toISOString(),
+    notes: note || `Admin uploaded ${assignmentVideoPhaseLabel(phase).toLowerCase()} from the assignment details modal.`,
+    tags: ["admin_upload", "assignment_board", phase],
+    storage_bucket: assignmentVideoBucket,
+    storage_path: path,
+    file_name: file.name || "",
+    mime_type: file.type || "",
+    file_size: file.size || 0,
+    file_size_bytes: file.size || 0,
+    duration_seconds: duration,
+    uploaded_by: user.id,
+    uploaded_by_name: user.email || "",
+    source: "admin_assignment_upload",
+    qa_job_id: qaJobId,
+    room_name: unit && unit !== "No unit" ? `Unit ${unit}` : (row.service_type || propertyName),
+    review_status: "pending_review",
+    metadata: {
+      original_file_name: file.name || "",
+      upload_user_agent: navigator.userAgent || "",
+      uploaded_from: "admin_assignment_modal",
+      assignment_id: row.id || "",
+      qa_job_id: qaJobId || "",
+      portal_property_id: portalPropertyId || "",
+      property_name: propertyName,
+      unit_number: unit && unit !== "No unit" ? unit : ""
+    }
+  };
+
+  const insertResult = await suiteSupabase
+    .from("qa_videos")
+    .insert(payload)
+    .select("*")
+    .single();
+  if (insertResult.error) {
+    await suiteSupabase.storage.from(assignmentVideoBucket).remove([path]).catch(() => null);
+    throw insertResult.error;
+  }
+  return insertResult.data;
+}
+
+async function assignmentCurrentUser() {
+  if (assignmentState.user) return assignmentState.user;
+  const { data, error } = await suiteSupabase.auth.getUser();
+  if (error) throw error;
+  assignmentState.user = data?.user || null;
+  return assignmentState.user;
+}
+
+async function ensureAssignmentDetailQaJob(row) {
+  const existing = assignmentQaJobId(row);
+  if (existing) return existing;
+  const { data, error } = await suiteSupabase.rpc("ensure_assignment_qa_job", {
+    target_assignment_id: row.id
+  });
+  if (error) throw error;
+  const qaJobId = String(data || "").trim();
+  if (!qaJobId) throw new Error("Supabase did not return a QA job ID.");
+  const metadata = { ...assignmentMetadata(row), qa_job_id: qaJobId };
+  row.metadata = metadata;
+  assignmentState.rows = assignmentState.rows.map((item) => String(item.id || "") === String(row.id || "") ? { ...item, metadata } : item);
+  return qaJobId;
+}
+
+function assignmentQaJobId(row) {
+  const metadata = assignmentMetadata(row);
+  return String(row?.qa_job_id || metadata.qa_job_id || "").trim();
+}
+
+function assignmentPortalPropertyId(row) {
+  const metadata = assignmentMetadata(row);
+  return row?.portal_property_id
+    || row?.recurring_portal_property_id
+    || metadata.portal_property_id
+    || metadata.recurring_portal_property_id
+    || row?.property_id
+    || metadata.property_id
+    || null;
+}
+
+function assignmentDetailPropertyId(row) {
+  const metadata = assignmentMetadata(row);
+  return row?.property_id || metadata.property_id || row?.portal_property_id || metadata.portal_property_id || null;
+}
+
+function setAssignmentVideoMessage(text = "", isError = false) {
+  const message = document.querySelector("[data-assignment-video-message]");
+  if (!message) return;
+  message.textContent = text || "";
+  message.classList.toggle("error", Boolean(isError));
+}
+
+function setAssignmentVideoUploading(isUploading) {
+  assignmentState.isVideoUploading = Boolean(isUploading);
+  const button = document.querySelector("[data-assignment-video-upload]");
+  if (button) {
+    button.disabled = Boolean(isUploading);
+    const label = button.querySelector("span:last-child");
+    if (label) label.textContent = isUploading ? "Uploading..." : "Upload Videos";
+  }
+}
+
+function clearAssignmentVideoInputs() {
+  document.querySelectorAll("[data-assignment-video-file]").forEach((input) => {
+    input.value = "";
+    updateAssignmentVideoFileLabel(input);
+  });
+  const notes = document.getElementById("assignmentVideoNotes");
+  if (notes) notes.value = "";
+}
+
+function assignmentVideoPhaseLabel(phase) {
+  const key = normalizeToken(phase || "");
+  if (key === "before") return "Before Video";
+  if (key === "after") return "After Video";
+  if (key === "final") return "Final Video";
+  if (key === "issue") return "Issue Video";
+  return "QA Video";
+}
+
+function assignmentVideoDuration(file) {
+  return new Promise((resolve) => {
+    const video = document.createElement("video");
+    const url = URL.createObjectURL(file);
+    video.preload = "metadata";
+    video.onloadedmetadata = () => {
+      URL.revokeObjectURL(url);
+      resolve(Number.isFinite(video.duration) ? video.duration : null);
+    };
+    video.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(null);
+    };
+    video.src = url;
+  });
+}
+
+function safeAssignmentVideoFileName(name) {
+  return String(name || "video")
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 90) || "video";
+}
+
+function randomAssignmentVideoId() {
+  return window.crypto?.randomUUID?.() || `assignment-video-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function formatBytes(value) {
+  const size = Number(value) || 0;
+  if (size >= 1024 * 1024 * 1024) return `${(size / 1024 / 1024 / 1024).toFixed(2)} GB`;
+  if (size >= 1024 * 1024) return `${(size / 1024 / 1024).toFixed(1)} MB`;
+  if (size >= 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${size} B`;
+}
+
+function uuidOrNull(value) {
+  const text = String(value || "").trim();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(text)
+    ? text
+    : null;
 }
 
 function assignmentBulkUnitSection() {
@@ -11561,7 +11973,9 @@ function openAssignmentModal(row = null) {
   updateAssignmentRecurrenceVisibility();
   updateAssignmentContractorControls();
   renderAssignmentBulkUnitPicker();
+  renderAssignmentVideoSection(row);
   modal.hidden = false;
+  if (row) void refreshAssignmentDetailVideos(row);
   document.getElementById("title")?.focus();
 }
 
@@ -11569,6 +11983,7 @@ function closeAssignmentModal() {
   const modal = document.getElementById("assignmentModal");
   if (modal) modal.hidden = true;
   assignmentState.editingId = null;
+  assignmentState.currentVideoAssignmentId = "";
   updateAssignmentModalMode();
   closeAssignmentContractorDropdowns();
 }
@@ -11629,9 +12044,11 @@ function updateAssignmentModalMode() {
   const buttonLabel = assignmentSaveButtonLabel(button);
   const deleteButton = document.getElementById("assignmentDeleteBtn");
   const bulkUnitSection = document.querySelector("[data-assignment-bulk-unit-section]");
+  const videoSection = document.querySelector("[data-assignment-video-section]");
   if (title) title.textContent = isEditing ? "Edit Assignment" : "New Assignment";
   if (propertySelect) propertySelect.required = !isEditing;
   if (bulkUnitSection) bulkUnitSection.hidden = isEditing;
+  if (videoSection) videoSection.hidden = !isEditing;
   document.querySelectorAll("[data-assignment-create-only]").forEach((field) => {
     field.hidden = isEditing;
   });
@@ -11822,6 +12239,12 @@ function handleAssignmentClick(event) {
     return;
   }
 
+  const videoUpload = event.target.closest("[data-assignment-video-upload]");
+  if (videoUpload) {
+    void uploadAssignmentDetailVideos();
+    return;
+  }
+
   if (event.target.closest("[data-assignment-status-select], [data-assignment-select], .assignment-select-cell")) {
     return;
   }
@@ -11857,6 +12280,12 @@ function shouldSuppressAssignmentFormEnter(event) {
 }
 
 function handleAssignmentChange(event) {
+  const videoFile = event.target.closest("[data-assignment-video-file]");
+  if (videoFile) {
+    updateAssignmentVideoFileLabel(videoFile);
+    return;
+  }
+
   const rowSelect = event.target.closest("[data-assignment-select]");
   if (rowSelect) {
     const id = String(rowSelect.dataset.assignmentSelect || "");

@@ -5,10 +5,17 @@ const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
   ? createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY)
   : null;
 
+const QA_VIDEO_BUCKET = "qa-videos";
+const QA_VIDEO_MAX_BYTES = 524288000;
+const QA_VIDEO_SIGNED_URL_SECONDS = 60 * 60 * 4;
+
 const state = {
   view: "week",
   dateCursor: new Date(),
   rows: [],
+  user: null,
+  detailAssignmentId: "",
+  assignmentVideosById: new Map(),
   deletingAssignmentIds: new Set(),
   movingAssignmentIds: new Set(),
   draggingAssignmentId: "",
@@ -202,10 +209,23 @@ function bindScheduleEvents() {
   });
 
   root.addEventListener("change", (event) => {
+    const videoFile = event.target.closest("[data-schedule-video-file]");
+    if (videoFile) {
+      updateScheduleVideoFileLabel(videoFile);
+      return;
+    }
+
     const select = event.target.closest("[data-schedule-filter]");
     if (!select) return;
     state.filters[select.dataset.scheduleFilter] = select.value || "all";
     renderSchedule();
+  });
+
+  root.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-schedule-video-upload-form]");
+    if (!form) return;
+    event.preventDefault();
+    void uploadScheduleAssignmentVideos(form);
   });
 
   root.addEventListener("dragstart", handleScheduleDragStart);
@@ -740,14 +760,17 @@ function openScheduleAssignmentModal(id) {
   const modal = document.getElementById("scheduleAssignmentModal");
   const body = document.getElementById("scheduleAssignmentModalBody");
   if (!row || !modal || !body) return;
+  state.detailAssignmentId = String(row.id || "");
   body.innerHTML = scheduleAssignmentDetail(row);
   modal.hidden = false;
   modal.querySelector("[data-schedule-detail-close]")?.focus();
+  void refreshScheduleAssignmentVideos(row);
 }
 
 function closeScheduleAssignmentModal() {
   const modal = document.getElementById("scheduleAssignmentModal");
   if (modal) modal.hidden = true;
+  state.detailAssignmentId = "";
 }
 
 function scheduleAssignmentDetail(row) {
@@ -785,6 +808,7 @@ function scheduleAssignmentDetail(row) {
           </div>
         `).join("")}
       </div>
+      ${scheduleAssignmentVideoSection(row)}
       <div class="schedule-assignment-actions">
         <button class="primary-action" type="button" data-schedule-assignment-edit="${escapeHtml(String(row.id || ""))}"><span>Edit Assignment</span></button>
       </div>
@@ -802,6 +826,407 @@ function scheduleAssignmentDetail(row) {
       </div>
     </section>
   `;
+}
+
+function scheduleAssignmentVideoSection(row) {
+  const id = String(row.id || "");
+  return `
+    <section class="schedule-assignment-video-panel" data-schedule-video-panel="${escapeHtml(id)}">
+      ${scheduleAssignmentVideoPanelContent(row)}
+    </section>
+  `;
+}
+
+function scheduleAssignmentVideoPanelContent(row) {
+  const id = String(row.id || "");
+  const videos = state.assignmentVideosById.get(id) || [];
+  const list = renderScheduleAssignmentVideoList(videos);
+  return `
+    <div class="schedule-video-head">
+      <div>
+        <span>Before and After Videos</span>
+        <strong>Upload assignment QA videos</strong>
+        <small>Files save to this assignment and appear with the property manager-facing clean details.</small>
+      </div>
+      <span class="schedule-video-count">${escapeHtml(String(videos.length))} attached</span>
+    </div>
+    <div class="schedule-video-list">
+      ${list}
+    </div>
+    <form class="schedule-video-upload-form" data-schedule-video-upload-form="${escapeHtml(id)}">
+      <div class="schedule-video-upload-grid">
+        ${scheduleVideoFileField("before", "Before Video")}
+        ${scheduleVideoFileField("after", "After Video")}
+        <label class="suite-field schedule-video-notes-field">
+          <span>Admin Notes</span>
+          <textarea data-schedule-video-notes rows="3" placeholder="Optional note for these uploads"></textarea>
+        </label>
+      </div>
+      <div class="schedule-video-upload-actions">
+        <p class="schedule-video-message" data-schedule-video-message aria-live="polite"></p>
+        <button class="primary-action" type="submit"><span>Upload Videos</span></button>
+      </div>
+    </form>
+  `;
+}
+
+function scheduleVideoFileField(phase, label) {
+  return `
+    <label class="schedule-video-upload-card">
+      <span>${escapeHtml(label)}</span>
+      <strong data-schedule-video-file-name="${escapeHtml(phase)}">Choose a video file</strong>
+      <small>MP4, MOV, or video file up to ${escapeHtml(bytes(QA_VIDEO_MAX_BYTES))}</small>
+      <input type="file" accept="video/*" data-schedule-video-file="${escapeHtml(phase)}" />
+    </label>
+  `;
+}
+
+function renderScheduleAssignmentVideoList(videos = []) {
+  if (!videos.length) {
+    return `<div class="schedule-video-empty">No before or after videos are attached yet.</div>`;
+  }
+  return videos.map((video) => {
+    const phase = scheduleVideoPhaseLabel(video.video_phase);
+    const meta = [
+      video.file_name || "Video file",
+      bytes(video.file_size || video.file_size_bytes || 0),
+      formatShortDate(video.created_at || video.recorded_at)
+    ].filter(Boolean).join(" - ");
+    return `
+      <article class="schedule-video-chip">
+        <div>
+          <span>${escapeHtml(phase)}</span>
+          <strong>${escapeHtml(video.title || video.label || video.file_name || "Uploaded video")}</strong>
+          <small>${escapeHtml(meta)}</small>
+        </div>
+        ${video.signedUrl ? `<a class="secondary-action" href="${escapeHtml(video.signedUrl)}" target="_blank" rel="noreferrer"><span>Open</span></a>` : `<small>Preview unavailable</small>`}
+      </article>
+    `;
+  }).join("");
+}
+
+function updateScheduleVideoFileLabel(input) {
+  const phase = input.dataset.scheduleVideoFile || "";
+  const label = input.closest(".schedule-video-upload-card")?.querySelector(`[data-schedule-video-file-name="${phase}"]`);
+  const file = input.files?.[0];
+  if (label) label.textContent = file ? file.name : "Choose a video file";
+}
+
+async function refreshScheduleAssignmentVideos(row) {
+  const id = String(row?.id || "");
+  if (!id || !supabase) return;
+  const panel = scheduleVideoPanelFor(id);
+  if (panel) {
+    const list = panel.querySelector(".schedule-video-list");
+    if (list) list.innerHTML = `<div class="schedule-video-empty">Loading attached videos...</div>`;
+  }
+  try {
+    const videos = await loadScheduleAssignmentVideos(row);
+    state.assignmentVideosById.set(id, videos);
+    if (state.detailAssignmentId === id) renderScheduleAssignmentVideoPanel(row);
+  } catch (error) {
+    console.warn("[schedule-live] Unable to load assignment videos", error);
+    setScheduleVideoMessage(id, "Unable to load attached videos: " + (error?.message || "Unknown error"), true);
+  }
+}
+
+function renderScheduleAssignmentVideoPanel(row) {
+  const id = String(row?.id || "");
+  const panel = scheduleVideoPanelFor(id);
+  if (panel) panel.innerHTML = scheduleAssignmentVideoPanelContent(row);
+}
+
+async function loadScheduleAssignmentVideos(row) {
+  const assignmentId = String(row?.id || "");
+  if (!assignmentId) return [];
+  const byId = new Map();
+  const addRows = (rows = []) => rows.forEach((video) => {
+    if (video?.id) byId.set(video.id, video);
+  });
+
+  const assignmentResult = await supabase
+    .from("qa_videos")
+    .select("*")
+    .eq("assignment_id", assignmentId)
+    .order("created_at", { ascending: false })
+    .limit(80);
+  if (assignmentResult.error) throw assignmentResult.error;
+  addRows(assignmentResult.data);
+
+  const qaJobId = assignmentQaJobId(row);
+  if (qaJobId) {
+    const jobResult = await supabase
+      .from("qa_videos")
+      .select("*")
+      .eq("qa_job_id", qaJobId)
+      .order("created_at", { ascending: false })
+      .limit(80);
+    if (jobResult.error) throw jobResult.error;
+    addRows(jobResult.data);
+  }
+
+  const videos = Array.from(byId.values())
+    .sort((a, b) => dateValue(b.created_at, 0) - dateValue(a.created_at, 0));
+  return attachScheduleVideoUrls(videos);
+}
+
+async function attachScheduleVideoUrls(videos = []) {
+  return Promise.all(videos.map(async (video) => ({
+    ...video,
+    signedUrl: await scheduleVideoSignedUrl(video)
+  })));
+}
+
+async function scheduleVideoSignedUrl(video) {
+  const path = String(video?.storage_path || "").trim();
+  if (!path || !supabase) return "";
+  try {
+    const { data, error } = await supabase.storage
+      .from(video.storage_bucket || QA_VIDEO_BUCKET)
+      .createSignedUrl(path, QA_VIDEO_SIGNED_URL_SECONDS);
+    return error ? "" : (data?.signedUrl || "");
+  } catch {
+    return "";
+  }
+}
+
+async function uploadScheduleAssignmentVideos(form) {
+  const assignmentId = String(form.dataset.scheduleVideoUploadForm || "");
+  const row = state.rows.find((item) => String(item.id || "") === assignmentId);
+  if (!supabase || !row) {
+    setScheduleVideoMessage(assignmentId, "Unable to find this assignment. Refresh the schedule and try again.", true);
+    return;
+  }
+
+  const uploads = ["before", "after"]
+    .map((phase) => [phase, form.querySelector(`[data-schedule-video-file="${phase}"]`)?.files?.[0]])
+    .filter(([, file]) => file);
+  if (!uploads.length) {
+    setScheduleVideoMessage(assignmentId, "Choose a before or after video before uploading.", true);
+    return;
+  }
+  const oversized = uploads.find(([, file]) => file.size > QA_VIDEO_MAX_BYTES);
+  if (oversized) {
+    setScheduleVideoMessage(assignmentId, `${oversized[1].name} is larger than ${bytes(QA_VIDEO_MAX_BYTES)}.`, true);
+    return;
+  }
+
+  const button = form.querySelector('button[type="submit"]');
+  if (button) button.disabled = true;
+  setScheduleVideoMessage(assignmentId, "Preparing upload...");
+
+  try {
+    const user = await scheduleUser();
+    if (!user) throw new Error("Sign in as an admin before uploading videos.");
+    const qaJobId = await ensureScheduleAssignmentQaJob(row);
+    const pairId = randomId();
+    const note = form.querySelector("[data-schedule-video-notes]")?.value || "";
+    for (let index = 0; index < uploads.length; index += 1) {
+      const [phase, file] = uploads[index];
+      setScheduleVideoMessage(assignmentId, `Uploading ${scheduleVideoPhaseLabel(phase).toLowerCase()} (${index + 1} of ${uploads.length})...`);
+      await uploadScheduleAssignmentVideo(row, phase, file, qaJobId, pairId, note);
+    }
+    form.reset();
+    form.querySelectorAll("[data-schedule-video-file-name]").forEach((label) => {
+      label.textContent = "Choose a video file";
+    });
+    setScheduleVideoMessage(assignmentId, `${uploads.length} video${uploads.length === 1 ? "" : "s"} uploaded.`);
+    await refreshScheduleAssignmentVideos(row);
+  } catch (error) {
+    console.warn("[schedule-live] Admin assignment video upload failed", error);
+    const sizeHint = /size|exceeded|maximum/i.test(String(error?.message || ""))
+      ? " Check the Supabase project and bucket upload limits."
+      : "";
+    setScheduleVideoMessage(assignmentId, "Unable to upload video: " + (error?.message || "Unknown error") + sizeHint, true);
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+async function uploadScheduleAssignmentVideo(row, phase, file, qaJobId, pairId, note = "") {
+  const user = await scheduleUser();
+  const duration = await fileDuration(file);
+  const datePath = new Date().toISOString().slice(0, 10);
+  const path = `${user.id}/${datePath}/admin-schedule/${row.id}-${phase}-${Date.now()}-${safeFileName(file.name)}`;
+  const uploadResult = await supabase.storage
+    .from(QA_VIDEO_BUCKET)
+    .upload(path, file, {
+      contentType: file.type || "video/mp4",
+      upsert: false
+    });
+  if (uploadResult.error) throw uploadResult.error;
+
+  const propertyName = row.property_name || row.title || "Assignment";
+  const unit = unitLabel(row);
+  const portalPropertyId = uuidOrNull(schedulePortalPropertyId(row));
+  const payload = {
+    pair_id: pairId,
+    title: `${propertyName} - ${scheduleVideoPhaseLabel(phase)}`,
+    label: [propertyName, unit && unit !== "No unit" ? `Unit ${unit}` : ""].filter(Boolean).join(" - "),
+    video_phase: phase,
+    property_id: uuidOrNull(schedulePropertyId(row)) || portalPropertyId,
+    portal_property_id: portalPropertyId,
+    property_name: propertyName,
+    unit_name: unit && unit !== "No unit" ? unit : "",
+    assignment_id: row.id || null,
+    contractor_id: uuidOrNull(row.claimed_by || row.assigned_to),
+    contractor_name: contractorText(row) === "Unassigned" ? "" : contractorText(row),
+    recorded_at: new Date().toISOString(),
+    notes: note || `Admin uploaded ${scheduleVideoPhaseLabel(phase).toLowerCase()} from the schedule assignment details.`,
+    tags: ["admin_upload", "schedule", phase],
+    storage_bucket: QA_VIDEO_BUCKET,
+    storage_path: path,
+    file_name: file.name || "",
+    mime_type: file.type || "",
+    file_size: file.size || 0,
+    file_size_bytes: file.size || 0,
+    duration_seconds: duration,
+    uploaded_by: user.id,
+    uploaded_by_name: user.email || "",
+    source: "admin_schedule_upload",
+    qa_job_id: qaJobId,
+    room_name: unit && unit !== "No unit" ? `Unit ${unit}` : (row.service_type || propertyName),
+    review_status: "pending_review",
+    metadata: {
+      original_file_name: file.name || "",
+      upload_user_agent: navigator.userAgent || "",
+      uploaded_from: "admin_schedule_assignment_modal",
+      assignment_id: row.id || "",
+      qa_job_id: qaJobId || "",
+      portal_property_id: portalPropertyId || "",
+      property_name: propertyName,
+      unit_number: unit && unit !== "No unit" ? unit : ""
+    }
+  };
+
+  const insertResult = await supabase
+    .from("qa_videos")
+    .insert(payload)
+    .select("*")
+    .single();
+  if (insertResult.error) {
+    await supabase.storage.from(QA_VIDEO_BUCKET).remove([path]).catch(() => null);
+    throw insertResult.error;
+  }
+  return insertResult.data;
+}
+
+async function scheduleUser() {
+  if (state.user) return state.user;
+  const { data, error } = await supabase.auth.getUser();
+  if (error) throw error;
+  state.user = data?.user || null;
+  return state.user;
+}
+
+async function ensureScheduleAssignmentQaJob(row) {
+  const existing = assignmentQaJobId(row);
+  if (existing) return existing;
+  const { data, error } = await supabase.rpc("ensure_assignment_qa_job", {
+    target_assignment_id: row.id
+  });
+  if (error) throw error;
+  const qaJobId = String(data || "").trim();
+  if (!qaJobId) throw new Error("Supabase did not return a QA job ID.");
+  const metadata = { ...assignmentMetadata(row), qa_job_id: qaJobId };
+  row.metadata = metadata;
+  state.rows = state.rows.map((item) => String(item.id || "") === String(row.id || "") ? { ...item, metadata } : item);
+  return qaJobId;
+}
+
+function assignmentQaJobId(row) {
+  const metadata = assignmentMetadata(row);
+  return String(row?.qa_job_id || metadata.qa_job_id || "").trim();
+}
+
+function schedulePortalPropertyId(row) {
+  const metadata = assignmentMetadata(row);
+  return row?.portal_property_id
+    || row?.recurring_portal_property_id
+    || metadata.portal_property_id
+    || metadata.recurring_portal_property_id
+    || row?.property_id
+    || metadata.property_id
+    || null;
+}
+
+function schedulePropertyId(row) {
+  const metadata = assignmentMetadata(row);
+  return row?.property_id || metadata.property_id || row?.portal_property_id || metadata.portal_property_id || null;
+}
+
+function scheduleVideoPanelFor(id) {
+  return Array.from(document.querySelectorAll("[data-schedule-video-panel]"))
+    .find((node) => String(node.dataset.scheduleVideoPanel || "") === String(id || ""));
+}
+
+function setScheduleVideoMessage(id, text = "", isError = false) {
+  const panel = scheduleVideoPanelFor(id);
+  const message = panel?.querySelector("[data-schedule-video-message]");
+  if (!message) {
+    showMessage(text, isError);
+    return;
+  }
+  message.textContent = text || "";
+  message.classList.toggle("error", Boolean(isError));
+}
+
+function scheduleVideoPhaseLabel(phase) {
+  const key = token(phase || "");
+  if (key === "before") return "Before Video";
+  if (key === "after") return "After Video";
+  if (key === "final") return "Final Video";
+  if (key === "issue") return "Issue Video";
+  return "QA Video";
+}
+
+function fileDuration(file) {
+  return new Promise((resolve) => {
+    const video = document.createElement("video");
+    const url = URL.createObjectURL(file);
+    video.preload = "metadata";
+    video.onloadedmetadata = () => {
+      URL.revokeObjectURL(url);
+      resolve(Number.isFinite(video.duration) ? video.duration : null);
+    };
+    video.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(null);
+    };
+    video.src = url;
+  });
+}
+
+function safeFileName(name) {
+  return String(name || "video")
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 90) || "video";
+}
+
+function randomId() {
+  return window.crypto?.randomUUID?.() || `schedule-video-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function bytes(value) {
+  const size = Number(value) || 0;
+  if (size >= 1024 * 1024 * 1024) return `${(size / 1024 / 1024 / 1024).toFixed(2)} GB`;
+  if (size >= 1024 * 1024) return `${(size / 1024 / 1024).toFixed(1)} MB`;
+  if (size >= 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${size} B`;
+}
+
+function formatShortDate(value) {
+  const date = parseDate(value);
+  return date ? date.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }) : "";
+}
+
+function uuidOrNull(value) {
+  const text = String(value || "").trim();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(text)
+    ? text
+    : null;
 }
 
 function assignmentDateWindow(row) {
@@ -1021,6 +1446,7 @@ function injectScheduleStyles() {
     document.head.insertAdjacentHTML("beforeend", `
       <style id="scheduleLiveActionStyles">
         .schedule-assignment-actions{display:flex;justify-content:flex-end;margin-top:14px}.schedule-assignment-actions .primary-action{min-width:150px}.schedule-assignment-danger-zone{align-items:center;background:rgba(255,91,104,.06);border:1px solid rgba(255,91,104,.24);border-radius:8px;display:flex;gap:16px;justify-content:space-between;margin-top:16px;padding:14px}.schedule-assignment-danger-zone strong{color:#fff;display:block;font-size:13px}.schedule-assignment-danger-zone p{color:var(--suite-soft);font-size:12px;margin:4px 0 0}.schedule-assignment-danger-zone .danger-btn{border-color:rgba(255,91,104,.7);color:var(--suite-red);min-width:150px}.schedule-assignment-danger-zone .danger-btn:disabled{cursor:wait;opacity:.58}@media(max-width:620px){.schedule-assignment-actions{display:grid}.schedule-assignment-danger-zone{align-items:stretch;flex-direction:column}.schedule-assignment-danger-zone .danger-btn{width:100%}}
+        .schedule-assignment-video-panel{background:rgba(0,214,163,.055);border:1px solid rgba(0,214,163,.22);border-radius:8px;display:grid;gap:14px;margin-top:16px;padding:14px}.schedule-video-head{align-items:start;display:flex;gap:12px;justify-content:space-between}.schedule-video-head span{color:var(--suite-green);font-size:11px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}.schedule-video-head strong{color:var(--suite-text);display:block;font-size:15px;margin-top:3px}.schedule-video-head small{color:var(--suite-soft);display:block;font-size:12px;margin-top:4px}.schedule-video-count{background:rgba(0,214,163,.12);border:1px solid rgba(0,214,163,.24);border-radius:999px;padding:5px 9px;white-space:nowrap}.schedule-video-list{display:grid;gap:8px}.schedule-video-empty{border:1px dashed var(--suite-border-soft);border-radius:8px;color:var(--suite-soft);font-size:12px;padding:12px}.schedule-video-chip{align-items:center;background:rgba(4,14,25,.46);border:1px solid var(--suite-border-soft);border-radius:8px;display:flex;gap:12px;justify-content:space-between;padding:10px 12px}.schedule-video-chip div{min-width:0}.schedule-video-chip span{color:var(--suite-green);display:block;font-size:10px;font-weight:900;text-transform:uppercase}.schedule-video-chip strong{color:var(--suite-text);display:block;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.schedule-video-chip small{color:var(--suite-soft);font-size:11px}.schedule-video-chip .secondary-action{min-height:30px;min-width:70px}.schedule-video-upload-form{display:grid;gap:12px}.schedule-video-upload-grid{display:grid;gap:10px;grid-template-columns:repeat(2,minmax(0,1fr))}.schedule-video-upload-card{background:rgba(255,255,255,.035);border:1px solid var(--suite-border-soft);border-radius:8px;cursor:pointer;display:grid;gap:4px;padding:12px}.schedule-video-upload-card span{color:var(--suite-soft);font-size:11px;font-weight:900;text-transform:uppercase}.schedule-video-upload-card strong{color:var(--suite-text);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.schedule-video-upload-card small{color:var(--suite-soft);font-size:11px}.schedule-video-upload-card input{margin-top:6px;width:100%}.schedule-video-notes-field{grid-column:1/-1}.schedule-video-upload-actions{align-items:center;display:flex;gap:12px;justify-content:space-between}.schedule-video-message{color:var(--suite-soft);font-size:12px;margin:0}.schedule-video-message.error{color:var(--suite-red)}.schedule-video-upload-actions .primary-action{min-width:140px}@media(max-width:720px){.schedule-video-head,.schedule-video-chip,.schedule-video-upload-actions{align-items:stretch;flex-direction:column}.schedule-video-upload-grid{grid-template-columns:1fr}.schedule-video-upload-actions .primary-action{width:100%}}
       </style>
     `);
   }
