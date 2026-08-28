@@ -973,7 +973,7 @@ function renderAssignmentModal() {
           </div>
           <button class="ap-close" type="button" aria-label="Close assignment" data-close-assignment>${icon("x")}</button>
         </div>
-        <form id="apAssignmentForm" data-assignment-id="${isNew ? "" : esc(current.id || "")}">
+        <form id="apAssignmentForm" class="ap-modal-form" data-assignment-id="${isNew ? "" : esc(current.id || "")}">
           <div class="ap-form-grid">
             <label class="ap-form-field wide">
               <span>Property</span>

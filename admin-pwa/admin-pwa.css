@@ -1116,7 +1116,8 @@ a {
 .ap-modal {
   bottom: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(340px, 560px);
+  grid-template-columns: minmax(0, 1fr) clamp(420px, 42vw, 720px);
+  height: 100dvh;
   left: 0;
   position: fixed;
   right: 0;
@@ -1142,12 +1143,30 @@ a {
   box-shadow: -24px 0 60px rgba(0, 0, 0, 0.34);
   display: grid;
   gap: 14px;
-  overflow: auto;
-  padding: 18px;
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 18px 18px;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
 }
 
 .ap-modal-head {
   align-items: flex-start;
+  background: var(--ap-panel);
+  border-bottom: 1px solid var(--ap-line);
+  margin: 0 -18px;
+  padding: 18px;
+  position: sticky;
+  top: 0;
+  z-index: 4;
+}
+
+.ap-modal-form {
+  display: grid;
+  gap: 14px;
 }
 
 .ap-close {
@@ -1170,6 +1189,16 @@ a {
   display: grid;
   gap: 10px;
   padding: 12px;
+}
+
+.ap-modal-panel .ap-upload-actions {
+  align-items: center;
+  background: linear-gradient(180deg, rgba(16, 29, 44, 0), var(--ap-panel) 32%);
+  bottom: 0;
+  margin: 0 -18px;
+  padding: 16px 18px 18px;
+  position: sticky;
+  z-index: 3;
 }
 
 .ap-upload-grid {
@@ -1496,8 +1525,22 @@ body.admin-pwa-body[data-theme="light"] .ap-calendar-empty {
 
   .ap-modal-panel {
     border: 0;
-    min-height: 100dvh;
-    padding: calc(16px + env(safe-area-inset-top)) 14px calc(92px + env(safe-area-inset-bottom));
+    height: 100dvh;
+    max-height: 100dvh;
+    min-height: 0;
+    padding: 0 14px calc(92px + env(safe-area-inset-bottom));
+  }
+
+  .ap-modal-head {
+    margin: 0 -14px;
+    padding: calc(16px + env(safe-area-inset-top)) 14px 14px;
+  }
+
+  .ap-modal-panel .ap-upload-actions {
+    margin-left: -14px;
+    margin-right: -14px;
+    padding-left: 14px;
+    padding-right: 14px;
   }
 
   .ap-message-panel {
