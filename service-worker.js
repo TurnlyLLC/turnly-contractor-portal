@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-contractor-pwa-v20260828-admin-schedule-videos";
+const CACHE_NAME = "turnly-contractor-pwa-v20260828-admin-pwa-safe-cache";
 
 const PRECACHE_URLS = [
   "/",
@@ -162,7 +162,7 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys()
       .then((keys) => Promise.all(keys
-        .filter((key) => key !== CACHE_NAME)
+        .filter((key) => key.startsWith("turnly-contractor-pwa-") && key !== CACHE_NAME)
         .map((key) => caches.delete(key))))
       .then(() => self.clients.claim())
   );
