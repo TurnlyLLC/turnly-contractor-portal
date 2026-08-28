@@ -1114,14 +1114,12 @@ a {
 }
 
 .ap-modal {
-  bottom: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) clamp(420px, 42vw, 720px);
+  grid-template-columns: minmax(0, 1fr) minmax(380px, min(760px, 94vw));
   height: 100dvh;
-  left: 0;
+  inset: 0;
+  overflow: hidden;
   position: fixed;
-  right: 0;
-  top: 0;
   z-index: 100;
 }
 
@@ -1135,16 +1133,16 @@ a {
 }
 
 .ap-modal-panel {
+  align-self: center;
   background: var(--ap-panel);
-  border-bottom: 0;
-  border-radius: 0;
-  border-right: 0;
-  border-top: 0;
+  border: 1px solid var(--ap-line);
+  border-radius: 12px 0 0 12px;
   box-shadow: -24px 0 60px rgba(0, 0, 0, 0.34);
   display: grid;
   gap: 14px;
-  height: 100dvh;
-  max-height: 100dvh;
+  height: calc(100dvh - 24px);
+  max-height: calc(100dvh - 24px);
+  min-width: 0;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -1193,12 +1191,17 @@ a {
 
 .ap-modal-panel .ap-upload-actions {
   align-items: center;
-  background: linear-gradient(180deg, rgba(16, 29, 44, 0), var(--ap-panel) 32%);
-  bottom: 0;
-  margin: 0 -18px;
-  padding: 16px 18px 18px;
-  position: sticky;
-  z-index: 3;
+  background: transparent;
+  bottom: auto;
+  margin: 0;
+  padding: 4px 0 0;
+  position: static;
+  z-index: auto;
+}
+
+.ap-modal-panel .ap-upload-actions .ap-btn {
+  min-width: 154px;
+  width: auto;
 }
 
 .ap-upload-grid {
@@ -1517,6 +1520,7 @@ body.admin-pwa-body[data-theme="light"] .ap-calendar-empty {
 
   .ap-modal {
     display: block;
+    overflow: hidden;
   }
 
   .ap-modal-backdrop {
@@ -1525,10 +1529,11 @@ body.admin-pwa-body[data-theme="light"] .ap-calendar-empty {
 
   .ap-modal-panel {
     border: 0;
+    border-radius: 0;
     height: 100dvh;
     max-height: 100dvh;
     min-height: 0;
-    padding: 0 14px calc(92px + env(safe-area-inset-bottom));
+    padding: 0 14px calc(18px + env(safe-area-inset-bottom));
   }
 
   .ap-modal-head {
@@ -1537,10 +1542,8 @@ body.admin-pwa-body[data-theme="light"] .ap-calendar-empty {
   }
 
   .ap-modal-panel .ap-upload-actions {
-    margin-left: -14px;
-    margin-right: -14px;
-    padding-left: 14px;
-    padding-right: 14px;
+    margin: 0;
+    padding: 4px 0 0;
   }
 
   .ap-message-panel {

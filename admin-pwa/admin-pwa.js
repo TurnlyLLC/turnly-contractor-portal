@@ -10,7 +10,10 @@ const pageKey = document.body?.dataset?.adminPwaPage || "dashboard";
 const themeKey = "turnlyAdminPwaTheme";
 const videoBucket = "qa-videos";
 const videoMaxBytes = 524288000;
+const videoResumableThresholdBytes = 6 * 1024 * 1024;
 const signedUrlSeconds = 60 * 60 * 4;
+const tusClientUrl = "https://cdn.jsdelivr.net/npm/tus-js-client@4.3.1/+esm";
+let tusClientPromise = null;
 
 const navItems = [
   ["dashboard", "Dashboard", "/admin-pwa/", "home"],
@@ -1082,7 +1085,7 @@ function videoFileField(phase, label) {
     <label class="ap-file-card">
       <span>${esc(label)}</span>
       <strong data-video-file-label="${esc(phase)}">Choose a video file</strong>
-      <small>Video file up to ${esc(formatBytes(videoMaxBytes))}</small>
+      <small>Resumable upload for larger files. Limit: ${esc(formatBytes(videoMaxBytes))}</small>
       <input type="file" accept="video/*" data-video-file="${esc(phase)}" />
     </label>
   `;
@@ -1449,8 +1452,7 @@ async function uploadAssignmentVideos() {
   }
 
   state.uploadingVideos = true;
-  state.videoMessage = "Preparing upload...";
-  state.videoError = false;
+  setVideoUploadMessage("Preparing upload...");
   renderShell();
   try {
     const qaJobId = await ensureAssignmentQaJob(row);
@@ -1458,23 +1460,24 @@ async function uploadAssignmentVideos() {
     const note = document.getElementById("apVideoNotes")?.value || "";
     for (let index = 0; index < uploads.length; index += 1) {
       const [phase, file] = uploads[index];
-      state.videoMessage = `Uploading ${videoPhaseLabel(phase).toLowerCase()} (${index + 1} of ${uploads.length})...`;
-      renderShell();
-      await uploadAssignmentVideo(row, phase, file, qaJobId, pairId, note);
+      const label = videoPhaseLabel(phase).toLowerCase();
+      setVideoUploadMessage(`Uploading ${label} (${index + 1} of ${uploads.length})...`);
+      await uploadAssignmentVideo(row, phase, file, qaJobId, pairId, note, (percent) => {
+        const progress = Number.isFinite(percent) ? ` ${Math.max(0, Math.min(100, Math.round(percent * 100)))}%` : "";
+        setVideoUploadMessage(`Uploading ${label} (${index + 1} of ${uploads.length})...${progress}`);
+      });
     }
     state.uploadingVideos = false;
-    state.videoMessage = `${uploads.length} video${uploads.length === 1 ? "" : "s"} uploaded.`;
-    state.videoError = false;
+    setVideoUploadMessage(`${uploads.length} video${uploads.length === 1 ? "" : "s"} uploaded.`);
     await loadAssignmentVideos(row);
     const latest = await loadVideos();
     state.videos = latest.rows;
   } catch (error) {
     state.uploadingVideos = false;
-    const sizeHint = /size|exceeded|maximum/i.test(String(error?.message || ""))
-      ? " Check the Supabase project and bucket upload limits."
+    const sizeHint = /size|exceeded|maximum|large|entity/i.test(String(error?.message || ""))
+      ? ` The ${videoBucket} bucket is set to ${formatBytes(videoMaxBytes)}; check the Supabase global Storage file-size limit.`
       : "";
-    state.videoMessage = `Unable to upload video: ${error?.message || "Unknown error"}${sizeHint}`;
-    state.videoError = true;
+    setVideoUploadMessage(`Unable to upload video: ${error?.message || "Unknown error"}${sizeHint}`, true);
   }
   renderShell();
 }
@@ -1499,17 +1502,11 @@ function assignmentQaJobId(row) {
   return String(row?.qa_job_id || meta.qa_job_id || "").trim();
 }
 
-async function uploadAssignmentVideo(row, phase, file, qaJobId, pairId, note = "") {
+async function uploadAssignmentVideo(row, phase, file, qaJobId, pairId, note = "", onProgress = null) {
   const duration = await fileDuration(file);
   const datePath = new Date().toISOString().slice(0, 10);
   const path = `${state.user.id}/${datePath}/admin-pwa/${row.id}-${phase}-${Date.now()}-${safeFileName(file.name)}`;
-  const uploadResult = await supabase.storage
-    .from(videoBucket)
-    .upload(path, file, {
-      contentType: file.type || "video/mp4",
-      upsert: false
-    });
-  if (uploadResult.error) throw uploadResult.error;
+  await uploadVideoFileToStorage(path, file, onProgress);
 
   const propertyId = uuidOrNull(rowPropertyId(row));
   const unit = unitNumber(row);
@@ -1558,6 +1555,107 @@ async function uploadAssignmentVideo(row, phase, file, qaJobId, pairId, note = "
     throw insertResult.error;
   }
   return insertResult.data;
+}
+
+function setVideoUploadMessage(message, isError = false) {
+  state.videoMessage = message || "";
+  state.videoError = Boolean(isError);
+  const element = document.querySelector("[data-video-message]");
+  if (element) {
+    element.textContent = state.videoMessage;
+    element.classList.toggle("error", state.videoError);
+  }
+}
+
+async function uploadVideoFileToStorage(path, file, onProgress = null) {
+  if (file.size >= videoResumableThresholdBytes) {
+    await uploadVideoFileResumable(path, file, onProgress);
+    return;
+  }
+  const uploadResult = await supabase.storage
+    .from(videoBucket)
+    .upload(path, file, {
+      contentType: file.type || "video/mp4",
+      upsert: false
+    });
+  if (uploadResult.error) throw new Error(storageErrorMessage(uploadResult.error));
+  if (onProgress) onProgress(1);
+}
+
+async function uploadVideoFileResumable(path, file, onProgress = null) {
+  const tus = await loadTusClient();
+  const { data, error } = await supabase.auth.getSession();
+  if (error) throw error;
+  const token = data?.session?.access_token;
+  if (!token) throw new Error("Sign in again before uploading videos.");
+
+  await new Promise((resolve, reject) => {
+    const upload = new tus.Upload(file, {
+      endpoint: storageResumableEndpoint(),
+      retryDelays: [0, 3000, 5000, 10000, 20000],
+      headers: {
+        authorization: `Bearer ${token}`
+      },
+      uploadDataDuringCreation: true,
+      removeFingerprintOnSuccess: true,
+      chunkSize: videoResumableThresholdBytes,
+      metadata: {
+        bucketName: videoBucket,
+        objectName: path,
+        contentType: file.type || "video/mp4",
+        cacheControl: "3600"
+      },
+      onError(error) {
+        reject(new Error(storageErrorMessage(error)));
+      },
+      onProgress(bytesUploaded, bytesTotal) {
+        if (onProgress && bytesTotal > 0) onProgress(bytesUploaded / bytesTotal);
+      },
+      onSuccess() {
+        if (onProgress) onProgress(1);
+        resolve();
+      }
+    });
+
+    upload.start();
+  });
+}
+
+async function loadTusClient() {
+  if (!tusClientPromise) {
+    tusClientPromise = import(tusClientUrl).then((module) => {
+      const candidate = module.default?.Upload ? module.default : module;
+      if (!candidate?.Upload) throw new Error("Unable to load the resumable upload client.");
+      return candidate;
+    });
+  }
+  return tusClientPromise;
+}
+
+function storageResumableEndpoint() {
+  try {
+    const url = new URL(env.SUPABASE_URL || "");
+    const projectRef = url.hostname.split(".")[0];
+    if (projectRef && projectRef !== "localhost") {
+      return `https://${projectRef}.storage.supabase.co/storage/v1/upload/resumable`;
+    }
+  } catch {
+    // Fall back to the project URL below.
+  }
+  return `${String(env.SUPABASE_URL || "").replace(/\/+$/, "")}/storage/v1/upload/resumable`;
+}
+
+function storageErrorMessage(error) {
+  const parts = [
+    error?.message,
+    error?.details,
+    error?.hint,
+    error?.error,
+    error?.originalResponse?.getBody?.()
+  ].filter(Boolean).map(String);
+  const text = parts.join(" ");
+  if (/entitytoolarge/i.test(text)) return "The object exceeded the maximum allowed size.";
+  return text || "Storage upload failed.";
 }
 
 function videoPhaseLabel(phase) {

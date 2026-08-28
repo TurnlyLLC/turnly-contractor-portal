@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-admin-pwa-v20260828e";
+const CACHE_NAME = "turnly-admin-pwa-v20260828f";
 const APP_SHELL = [
   "/admin-pwa/",
   "/admin-pwa/index.html",
@@ -7,8 +7,8 @@ const APP_SHELL = [
   "/admin-pwa/videos.html",
   "/admin-pwa/people.html",
   "/admin-pwa/messages.html",
-  "/admin-pwa/admin-pwa.css?v=20260828e",
-  "/admin-pwa/admin-pwa.js?v=20260828e",
+  "/admin-pwa/admin-pwa.css?v=20260828f",
+  "/admin-pwa/admin-pwa.js?v=20260828f",
   "/admin-pwa/manifest.webmanifest",
   "/env.js",
   "/favicon-32x32.png?v=20260624t",
