@@ -648,33 +648,63 @@ function renderSchedule() {
   const start = state.scheduleCursor;
   const days = Array.from({ length: 7 }, (_, index) => addDays(start, index));
   const rows = weekAssignments();
+  const pendingCount = rows.filter((row) => ["pending", "draft", "preferred-pending"].includes(statusKey(row.status))).length;
+  const openCount = rows.filter((row) => ["open", "scheduled", "claimed"].includes(statusKey(row.status))).length;
+  const activeCount = rows.filter((row) => statusKey(row.status) === "in-progress").length;
+  const completedCount = rows.filter((row) => statusKey(row.status) === "completed").length;
   return `
-    <section class="ap-panel">
-      <div class="ap-calendar-toolbar">
-        <div>
-          <strong>${esc(formatDate(days[0]))} - ${esc(formatDate(days[6]))}</strong>
-          <p class="ap-muted">${rows.length.toLocaleString()} assignment${rows.length === 1 ? "" : "s"} this week.</p>
-        </div>
-        <div class="ap-filter-row">
+    <section class="ap-schedule-hero">
+      <div class="ap-schedule-title">
+        <span class="ap-eyebrow">Weekly Schedule</span>
+        <h2>${esc(formatDate(days[0]))} - ${esc(formatDate(days[6]))}</h2>
+        <p>${rows.length.toLocaleString()} assignment${rows.length === 1 ? "" : "s"} scheduled for this Sunday through Saturday window.</p>
+      </div>
+      <div class="ap-schedule-actions">
+        <div class="ap-week-stepper" aria-label="Week navigation">
           <button class="ap-secondary" type="button" data-week-nav="prev">${icon("chevronLeft")}<span>Prev</span></button>
           <button class="ap-secondary" type="button" data-week-nav="today">Today</button>
           <button class="ap-secondary" type="button" data-week-nav="next"><span>Next</span>${icon("chevronRight")}</button>
-          <button class="ap-btn" type="button" data-open-assignment="new">${icon("plus")}<span>New</span></button>
         </div>
+        <button class="ap-btn" type="button" data-open-assignment="new">${icon("plus")}<span>New Assignment</span></button>
       </div>
     </section>
-    <section class="ap-calendar">
+    <section class="ap-schedule-stats" aria-label="Week summary">
+      ${scheduleStat("Pending", pendingCount, "Needs review", "pending")}
+      ${scheduleStat("Open / Claimed", openCount, "Ready to work", "open")}
+      ${scheduleStat("In Progress", activeCount, "Active now", "active")}
+      ${scheduleStat("Completed", completedCount, "Finished this week", "completed")}
+    </section>
+    <section class="ap-calendar" aria-label="Weekly assignment calendar">
       ${days.map((day) => renderScheduleDay(day, rows)).join("")}
     </section>
   `;
 }
 
+function scheduleStat(label, value, meta, tone) {
+  return `
+    <article class="ap-schedule-stat ${tone ? `tone-${esc(tone)}` : ""}">
+      <span>${esc(label)}</span>
+      <strong>${esc(Number(value || 0).toLocaleString())}</strong>
+      <small>${esc(meta)}</small>
+    </article>
+  `;
+}
+
 function renderScheduleDay(day, rows) {
   const dayRows = rows.filter((row) => sameDay(parseDate(row.start_window), day));
+  const dayLabel = day.toLocaleDateString([], { weekday: "long" });
   return `
-    <article class="ap-calendar-day ${sameDay(day, new Date()) ? "today" : ""}">
-      <header><strong>${esc(day.toLocaleDateString([], { weekday: "short" }))}</strong><span>${esc(formatShortDate(day))}</span></header>
-      ${dayRows.length ? dayRows.map((row) => assignmentCard(row)).join("") : `<div class="ap-calendar-empty">No jobs</div>`}
+    <article class="ap-calendar-day ${sameDay(day, new Date()) ? "today" : ""} ${dayRows.length ? "has-jobs" : ""}">
+      <header class="ap-calendar-day-head">
+        <div>
+          <span class="ap-day-name">${esc(dayLabel)}</span>
+          <strong>${esc(formatShortDate(day))}</strong>
+        </div>
+        <span class="ap-day-count">${dayRows.length.toLocaleString()} ${dayRows.length === 1 ? "job" : "jobs"}</span>
+      </header>
+      <div class="ap-calendar-jobs">
+        ${dayRows.length ? dayRows.map((row) => assignmentCard(row)).join("") : `<div class="ap-calendar-empty">No jobs scheduled</div>`}
+      </div>
     </article>
   `;
 }
@@ -706,22 +736,33 @@ function renderAssignments() {
 
 function assignmentCard(row, detailed = false, approval = false) {
   const id = String(row.id || "");
+  const key = statusKey(row.status);
+  const unit = unitNumber(row);
+  const timeStart = formatTime(row.start_window, "No start");
+  const timeEnd = formatTime(row.end_window);
+  const timeText = timeEnd ? `${timeStart} - ${timeEnd}` : timeStart;
+  const code = row.assignment_code || row.assignment_number || (id ? `A-${id.slice(0, 8).toUpperCase()}` : "");
   return `
-    <article class="ap-list-item ap-assignment-card" role="button" tabindex="0" data-open-assignment="${esc(id)}" aria-label="Open ${esc(assignmentTitle(row))}">
-      <div class="ap-list-row">
+    <article class="ap-list-item ap-assignment-card ap-status-accent-${esc(key)} ${detailed ? "is-detailed" : ""}" role="button" tabindex="0" data-open-assignment="${esc(id)}" aria-label="Open ${esc(assignmentTitle(row))}">
+      <div class="ap-list-row ap-assignment-top">
         <div class="ap-assignment-main">
+          <div class="ap-assignment-kicker">
+            ${code ? `<span>${esc(code)}</span>` : ""}
+            <span>${esc(timeText)}</span>
+          </div>
           <strong>${esc(assignmentTitle(row))}</strong>
-          <small>${esc(row.property_name || "No property")} ${unitMeta(row) ? `- ${unitMeta(row)}` : ""}</small>
+          <small>${esc(row.property_name || "No property")}${unit ? ` - Unit ${esc(unit)}` : ""}</small>
         </div>
-        ${statusBadge(row.status)}
+        ${statusBadge(key)}
       </div>
       <div class="ap-assignment-meta">
-        <span>${esc(formatDateWindow(row.start_window, row.end_window))}</span>
-        <span>${esc(contractorName(row))}</span>
-        <span>${esc(money(row.pay_amount))}</span>
+        <span>${icon("calendar")}<b>${esc(formatDateWindow(row.start_window, row.end_window))}</b></span>
+        <span>${icon("clipboard")}<b>${esc(unitMeta(row) || (unit ? `Unit ${unit}` : "No unit details"))}</b></span>
+        <span>${icon("users")}<b>${esc(contractorName(row))}</b></span>
+        <span class="ap-pay-chip">${esc(money(row.pay_amount))}</span>
       </div>
       ${detailed ? `<p class="ap-muted">${esc(row.special_instructions || row.scope || "No notes entered.")}</p>` : ""}
-      ${approval ? `<button class="ap-btn" type="button" data-approve-assignment="${esc(id)}">${icon("check")}<span>Approve</span></button>` : ""}
+      ${approval ? `<button class="ap-btn ap-approve-btn" type="button" data-approve-assignment="${esc(id)}">${icon("check")}<span>Approve</span></button>` : ""}
     </article>
   `;
 }
@@ -1654,6 +1695,12 @@ function attachEvents() {
       return;
     }
 
+    const approve = event.target.closest("[data-approve-assignment]");
+    if (approve) {
+      await approveAssignment(approve.dataset.approveAssignment);
+      return;
+    }
+
     const openAssignment = event.target.closest("[data-open-assignment]");
     if (openAssignment) {
       state.selectedAssignmentId = openAssignment.dataset.openAssignment || "";
@@ -1672,12 +1719,6 @@ function attachEvents() {
     if (closeAssignment) {
       state.selectedAssignmentId = "";
       renderShell();
-      return;
-    }
-
-    const approve = event.target.closest("[data-approve-assignment]");
-    if (approve) {
-      await approveAssignment(approve.dataset.approveAssignment);
       return;
     }
 
