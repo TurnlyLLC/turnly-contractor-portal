@@ -1,4 +1,5 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+import { contractorHomeForBrowser } from "./contractor-routing.js?v=20260828-contractor-desktop-split";
 
 const env = window.__ENV || {};
 const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
@@ -20,11 +21,16 @@ let pendingVerificationAccessNote = "";
 
 const portalByRole = {
   admin: "admin.html",
-  contractor: "contractor.html",
   property_manager: "property-manager.html",
   sales: "sales.html",
   sales_team: "sales.html"
 };
+
+function portalForRole(role, fallback = pageHome) {
+  const normalizedRole = normalizeRole(role);
+  if (normalizedRole === "contractor") return contractorHomeForBrowser();
+  return portalByRole[normalizedRole] || fallback || contractorHomeForBrowser();
+}
 
 function authCallbackUrl(role = pageRole, intent = "") {
   const url = new URL("auth-callback.html", window.location.origin);
@@ -289,7 +295,7 @@ async function routeAuthenticatedUser(user, fallbackRole = pageRole) {
     : normalizeRole(profile?.role || user.user_metadata?.role || fallbackRole);
 
   if (isPropertyManagerPortal && role !== "property_manager") {
-    const target = portalByRole[role] || "contractor.html";
+    const target = portalForRole(role);
     showMessage("Taking you to the correct portal...");
     window.location.href = target;
     return true;
@@ -301,7 +307,7 @@ async function routeAuthenticatedUser(user, fallbackRole = pageRole) {
     return true;
   }
 
-  window.location.href = portalByRole[role] || pageHome;
+  window.location.href = portalForRole(role, pageHome);
   return true;
 }
 

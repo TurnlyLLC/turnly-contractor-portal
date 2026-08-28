@@ -1,4 +1,5 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+import { contractorHomeForBrowser } from "./contractor-routing.js?v=20260828-contractor-desktop-split";
 
 const env = window.__ENV || {};
 const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
@@ -7,7 +8,6 @@ const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
 
 const portalByRole = {
   admin: "admin.html",
-  contractor: "contractor.html",
   property_manager: "property-manager.html",
   sales: "sales.html",
   sales_team: "sales.html"
@@ -62,6 +62,12 @@ function loginFallback() {
   return preferredPortal === "property_manager"
     ? "property-manager-login.html"
     : "contractor-login.html";
+}
+
+function portalForRole(role) {
+  const normalizedRole = normalizeRole(role);
+  if (normalizedRole === "contractor") return contractorHomeForBrowser();
+  return portalByRole[normalizedRole] || "";
 }
 
 function showStatus(title, message, tone = "", actionHref = "", actionText = "") {
@@ -191,7 +197,7 @@ async function routeUser() {
   const role = metadataRole === "property_manager"
     ? "property_manager"
     : normalizeRole(profile?.role || metadataRole || preferredPortal);
-  const destination = portalByRole[role] || portalByRole[preferredPortal] || "contractor.html";
+  const destination = portalForRole(role) || portalForRole(preferredPortal) || contractorHomeForBrowser();
 
   window.setTimeout(() => {
     window.location.replace(destination);

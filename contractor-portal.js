@@ -15,7 +15,11 @@ import {
   rowMatchesPreviewUser,
   verifyAdminPreviewSession,
   writeAdminPreviewContext
-} from "./admin-preview-context.js?v=20260804-contractor-access-scope";
+} from "./admin-preview-context.js?v=20260828-contractor-desktop-split";
+import {
+  contractorRoute,
+  currentContractorSurface
+} from "./contractor-routing.js?v=20260828-contractor-desktop-split";
 
 const env = window.__ENV || {};
 const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
@@ -24,35 +28,36 @@ const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
 
 const root = document.getElementById("contractorPortalApp");
 const pageKey = document.body?.dataset?.contractorPage || "dashboard";
+const contractorSurface = currentContractorSurface();
 const contractorDashboardThemeStorageKey = "turnlyContractorDashboardTheme";
 
 const navItems = [
-  ["dashboard", "Dashboard", "contractor.html"],
-  ["my-jobs", "My Jobs", "contractor-my-assignments.html"],
-  ["schedule", "Schedule", "contractor-schedule.html"],
-  ["resources", "Resources", "contractor-resources.html"],
-  ["messages", "Messages", "contractor-messages.html"],
-  ["documents", "Documents", "contractor-documents.html"],
-  ["payments", "Payments", "contractor-payments.html"],
-  ["performance", "Performance", "contractor-performance-portal.html"],
-  ["job-board", "Job Board", "contractor-available.html"],
-  ["video-library", "Video Library", "contractor-video-library.html"]
+  ["dashboard", "Dashboard", contractorRoute("dashboard", contractorSurface)],
+  ["my-jobs", "My Jobs", contractorRoute("my-jobs", contractorSurface)],
+  ["schedule", "Schedule", contractorRoute("schedule", contractorSurface)],
+  ["resources", "Resources", contractorRoute("resources", contractorSurface)],
+  ["messages", "Messages", contractorRoute("messages", contractorSurface)],
+  ["documents", "Documents", contractorRoute("documents", contractorSurface)],
+  ["payments", "Payments", contractorRoute("payments", contractorSurface)],
+  ["performance", "Performance", contractorRoute("performance", contractorSurface)],
+  ["job-board", "Job Board", contractorRoute("job-board", contractorSurface)],
+  ["video-library", "Video Library", contractorRoute("video-library", contractorSurface)]
 ];
 
 const mobileNavItems = [
-  ["dashboard", "Today", "contractor.html"],
-  ["job-board", "Jobs", "contractor-available.html"],
-  ["schedule", "Schedule", "contractor-schedule.html"],
-  ["payments", "Pay", "contractor-payments.html"]
+  ["dashboard", "Today", contractorRoute("dashboard", contractorSurface)],
+  ["job-board", "Jobs", contractorRoute("job-board", contractorSurface)],
+  ["schedule", "Schedule", contractorRoute("schedule", contractorSurface)],
+  ["payments", "Pay", contractorRoute("payments", contractorSurface)]
 ];
 
 const mobileMoreItems = [
-  ["my-jobs", "My Jobs", "contractor-my-assignments.html"],
-  ["messages", "Messages", "contractor-messages.html"],
-  ["resources", "Resources", "contractor-resources.html"],
-  ["documents", "Documents", "contractor-documents.html"],
-  ["performance", "Performance", "contractor-performance-portal.html"],
-  ["video-library", "Videos", "contractor-video-library.html"]
+  ["my-jobs", "My Jobs", contractorRoute("my-jobs", contractorSurface)],
+  ["messages", "Messages", contractorRoute("messages", contractorSurface)],
+  ["resources", "Resources", contractorRoute("resources", contractorSurface)],
+  ["documents", "Documents", contractorRoute("documents", contractorSurface)],
+  ["performance", "Performance", contractorRoute("performance", contractorSurface)],
+  ["video-library", "Videos", contractorRoute("video-library", contractorSurface)]
 ];
 
 const pageMeta = {
@@ -989,7 +994,7 @@ function profileAccountTrigger(menuId = "cpProfileMenu") {
 function sidebar() {
   return `
     <aside class="cp-sidebar">
-      <a class="cp-brand" href="contractor.html" aria-label="Turnly contractor dashboard">
+      <a class="cp-brand" href="${esc(contractorRoute("dashboard", contractorSurface))}" aria-label="Turnly contractor dashboard">
         <span class="cp-brand-mark">T</span>
         <span>TURNLY</span>
       </a>
@@ -1099,7 +1104,9 @@ function renderHomeJobList(rows, mode, emptyText, limit = 4) {
   if (!rows.length) return emptyState(emptyText);
   const visible = rows.slice(0, limit);
   const remaining = rows.length - visible.length;
-  const href = mode === "open" ? "contractor-available.html" : "contractor-my-assignments.html";
+  const href = mode === "open"
+    ? contractorRoute("job-board", contractorSurface)
+    : contractorRoute("my-jobs", contractorSurface);
   return `
     <div class="cp-home-job-list">
       ${visible.map((item) => homeJobCard(item, mode)).join("")}
@@ -1160,22 +1167,22 @@ function renderDashboard() {
     <section class="cp-opening-jobs" aria-label="Contractor jobs">
       ${panel("Accepted Jobs", renderHomeJobList(accepted, "mine", "No accepted jobs yet."), {
         kicker: "Your Work",
-        action: `<a class="cp-ghost-action" href="contractor-my-assignments.html">All</a>`
+        action: `<a class="cp-ghost-action" href="${esc(contractorRoute("my-jobs", contractorSurface))}">All</a>`
       })}
       ${panel("Preferred Jobs", renderHomeJobList(preferred, "open", "No preferred jobs right now."), {
         kicker: "Offered First",
-        action: `<a class="cp-ghost-action" href="contractor-available.html">Jobs</a>`
+        action: `<a class="cp-ghost-action" href="${esc(contractorRoute("job-board", contractorSurface))}">Jobs</a>`
       })}
       ${panel("Available Jobs", renderHomeJobList(available, "open", "No available jobs right now."), {
         kicker: "Job Board",
-        action: `<a class="cp-ghost-action" href="contractor-available.html">Jobs</a>`
+        action: `<a class="cp-ghost-action" href="${esc(contractorRoute("job-board", contractorSurface))}">Jobs</a>`
       })}
     </section>
     ${renderTodayMetrics(today)}
     <section class="cp-dashboard-grid">
       <div class="cp-stack">
         ${panel("Today's Jobs", today.length ? `<div class="cp-job-list">${today.map((item) => assignmentRow(item, "mine")).join("")}</div>` : emptyState("No jobs scheduled for today."), {
-          action: `<a class="cp-ghost-action" href="contractor-schedule.html">Week View</a>`
+          action: `<a class="cp-ghost-action" href="${esc(contractorRoute("schedule", contractorSurface))}">Week View</a>`
         })}
         ${panel("Today's Schedule", renderTodaySchedule(today), { kicker: new Date().toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" }) })}
       </div>
@@ -1184,10 +1191,10 @@ function renderDashboard() {
         ${panel("Today's Tasks", renderTodayTasks(today))}
         ${panel("Actions", `
           <div class="cp-quick-grid">
-            <a class="cp-action" href="contractor-my-assignments.html">My Jobs</a>
-            <a class="cp-ghost-action" href="contractor-available.html">Find Jobs</a>
-            <a class="cp-ghost-action" href="contractor-schedule.html">Schedule</a>
-            <a class="cp-ghost-action" href="contractor-messages.html">Messages</a>
+            <a class="cp-action" href="${esc(contractorRoute("my-jobs", contractorSurface))}">My Jobs</a>
+            <a class="cp-ghost-action" href="${esc(contractorRoute("job-board", contractorSurface))}">Find Jobs</a>
+            <a class="cp-ghost-action" href="${esc(contractorRoute("schedule", contractorSurface))}">Schedule</a>
+            <a class="cp-ghost-action" href="${esc(contractorRoute("messages", contractorSurface))}">Messages</a>
           </div>
         `)}
       </div>
@@ -1543,7 +1550,7 @@ function renderCalendar(start) {
           <section class="cp-calendar-day ${isSameDay(day, new Date()) ? "today" : ""}">
             <strong>${esc(day.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }))}</strong>
             ${rows.map((item) => `
-              <a class="cp-calendar-event" href="contractor-my-assignments.html">
+              <a class="cp-calendar-event" href="${esc(contractorRoute("my-jobs", contractorSurface))}">
                 <strong>${esc(assignmentTitle(item))}</strong>
                 <small>${esc(formatTime(item.start_window, "Time pending"))}</small>
               </a>
@@ -1850,7 +1857,7 @@ function renderVideoLibrary() {
             <div class="cp-mini-row"><span>This Month</span><strong>${state.videos.filter((video) => dateValue(video.created_at) > Date.now() - 30 * 24 * 60 * 60 * 1000).length}</strong></div>
           </div>
         `)}
-        ${panel("Quick Actions", `<div class="cp-mini-list"><a class="cp-ghost-action" href="contractor-my-assignments.html">Open Active Jobs</a><a class="cp-ghost-action" href="contractor-resources.html">Training Resources</a></div>`)}
+        ${panel("Quick Actions", `<div class="cp-mini-list"><a class="cp-ghost-action" href="${esc(contractorRoute("my-jobs", contractorSurface))}">Open Active Jobs</a><a class="cp-ghost-action" href="${esc(contractorRoute("resources", contractorSurface))}">Training Resources</a></div>`)}
       </aside>
     </section>
   `;

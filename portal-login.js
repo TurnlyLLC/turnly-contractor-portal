@@ -1,4 +1,5 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+import { contractorHomeForBrowser } from "./contractor-routing.js?v=20260828-contractor-desktop-split";
 
 const env = window.__ENV || {};
 const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
@@ -27,7 +28,7 @@ function getPortalHome(role) {
   if (role === "admin") return "admin.html";
   if (role === "sales" || role === "sales_team") return "sales.html";
   if (role === "property_manager") return "property-manager.html";
-  return "contractor.html";
+  return contractorHomeForBrowser();
 }
 
 async function getProfile(userId) {

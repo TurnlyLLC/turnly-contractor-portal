@@ -2,7 +2,7 @@ export const adminPreviewStorageKey = "turnlyAdminPreviewContext";
 
 export const adminPreviewPortalOptions = [
   { value: "admin", label: "Admin", href: "admin.html" },
-  { value: "contractor", label: "Contractor", href: "contractor.html" },
+  { value: "contractor", label: "Contractor", href: "contractor-desktop.html" },
   { value: "property_manager", label: "Property Manager", href: "property-manager.html" }
 ];
 

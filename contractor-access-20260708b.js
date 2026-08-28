@@ -5,6 +5,13 @@ import {
   resolvePreviewProperty,
   verifyAdminPreviewSession
 } from "./admin-preview-context.js?v=20260804-contractor-access-scope";
+import {
+  contractorHomeForBrowser,
+  contractorRoute,
+  contractorSurfaceForBrowser,
+  currentContractorPageKey,
+  currentContractorSurface
+} from "./contractor-routing.js?v=20260828-contractor-desktop-split";
 
 const env = window.__ENV || {};
 const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
@@ -13,7 +20,6 @@ const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
 
 const roleDashboards = {
   admin: "admin.html",
-  contractor: "contractor.html",
   sales: "sales.html",
   sales_team: "sales.html",
   property_manager: "property-manager.html"
@@ -46,7 +52,9 @@ function isActiveProfile(profile) {
 }
 
 function getPortalHome(role) {
-  return roleDashboards[normalizeRole(role)] || "contractor.html";
+  return normalizeRole(role) === "contractor"
+    ? contractorHomeForBrowser()
+    : roleDashboards[normalizeRole(role)] || contractorHomeForBrowser();
 }
 
 function renderNotice(title, body) {
@@ -197,8 +205,17 @@ async function renderPasswordChangeRequired(user) {
 }
 
 async function loadContractorPortal() {
-  await import("./contractor-portal.js?v=20260825-legal-links");
+  await import("./contractor-portal.js?v=20260828-contractor-desktop-split");
   await import("./contractor-job-flow-mobile.js?v=20260807-contractor-feedback");
+}
+
+function redirectToMatchingContractorSurface() {
+  const expectedSurface = contractorSurfaceForBrowser();
+  const currentSurface = currentContractorSurface();
+  if (expectedSurface === currentSurface) return false;
+
+  window.location.replace(contractorRoute(currentContractorPageKey(), expectedSurface));
+  return true;
 }
 
 async function getProfile(userId) {
@@ -235,7 +252,7 @@ document.getElementById("logoutBtn")?.addEventListener("click", async () => {
 
 if (!supabase) {
   renderNotice("Configuration needed", "Supabase configuration is missing for this deployment.");
-} else {
+} else if (!redirectToMatchingContractorSurface()) {
   const { data: userData } = await supabase.auth.getUser();
   const user = userData?.user || null;
 

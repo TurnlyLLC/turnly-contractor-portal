@@ -12,7 +12,8 @@ import {
   resolvePreviewProperty,
   verifyAdminPreviewSession,
   writeAdminPreviewContext
-} from "./admin-preview-context.js?v=20260724-admin-preview-menu-fix";
+} from "./admin-preview-context.js?v=20260828-contractor-desktop-split";
+import { contractorHomeForBrowser } from "./contractor-routing.js?v=20260828-contractor-desktop-split";
 
 const VIDEO_BUCKET = "qa-videos";
 const SIGNED_URL_SECONDS = 60 * 60 * 4;
@@ -87,7 +88,6 @@ const state = {
 
 const roleDashboards = {
   admin: "admin.html",
-  contractor: "contractor.html",
   sales: "sales.html",
   sales_team: "sales.html",
   property_manager: "property-manager.html"
@@ -504,7 +504,9 @@ async function repairPropertyManagerProfile(user, profile = {}) {
 }
 
 function getPortalHome(role) {
-  return roleDashboards[normalizeRole(role)] || "contractor.html";
+  return normalizeRole(role) === "contractor"
+    ? contractorHomeForBrowser()
+    : roleDashboards[normalizeRole(role)] || contractorHomeForBrowser();
 }
 
 function getName(user, profile) {
