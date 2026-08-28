@@ -9,7 +9,7 @@ const root = document.getElementById("adminPwaApp");
 const pageKey = document.body?.dataset?.adminPwaPage || "dashboard";
 const themeKey = "turnlyAdminPwaTheme";
 const videoBucket = "qa-videos";
-const videoMaxBytes = 524288000;
+const videoMaxBytes = 1073741824;
 const videoResumableThresholdBytes = 6 * 1024 * 1024;
 const signedUrlSeconds = 60 * 60 * 4;
 const tusClientUrl = "https://cdn.jsdelivr.net/npm/tus-js-client@4.3.1/+esm";
@@ -1475,7 +1475,7 @@ async function uploadAssignmentVideos() {
   } catch (error) {
     state.uploadingVideos = false;
     const sizeHint = /size|exceeded|maximum|large|entity/i.test(String(error?.message || ""))
-      ? ` The ${videoBucket} bucket is set to ${formatBytes(videoMaxBytes)}; check the Supabase global Storage file-size limit.`
+      ? ` The ${videoBucket} bucket is set to ${formatBytes(videoMaxBytes)}; if this file is smaller than that, raise the Supabase project-wide global Storage file-size limit to match.`
       : "";
     setVideoUploadMessage(`Unable to upload video: ${error?.message || "Unknown error"}${sizeHint}`, true);
   }
