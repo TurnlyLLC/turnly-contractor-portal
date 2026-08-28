@@ -703,7 +703,7 @@ function renderScheduleDay(day, rows) {
         <span class="ap-day-count">${dayRows.length.toLocaleString()} ${dayRows.length === 1 ? "job" : "jobs"}</span>
       </header>
       <div class="ap-calendar-jobs">
-        ${dayRows.length ? dayRows.map((row) => assignmentCard(row)).join("") : `<div class="ap-calendar-empty">No jobs scheduled</div>`}
+        ${dayRows.length ? dayRows.map((row) => assignmentCard(row, false, false, "schedule")).join("") : `<div class="ap-calendar-empty">No jobs scheduled</div>`}
       </div>
     </article>
   `;
@@ -734,7 +734,7 @@ function renderAssignments() {
   `;
 }
 
-function assignmentCard(row, detailed = false, approval = false) {
+function assignmentCard(row, detailed = false, approval = false, variant = "") {
   const id = String(row.id || "");
   const key = statusKey(row.status);
   const unit = unitNumber(row);
@@ -742,8 +742,9 @@ function assignmentCard(row, detailed = false, approval = false) {
   const timeEnd = formatTime(row.end_window);
   const timeText = timeEnd ? `${timeStart} - ${timeEnd}` : timeStart;
   const code = row.assignment_code || row.assignment_number || (id ? `A-${id.slice(0, 8).toUpperCase()}` : "");
+  const variantClass = variant ? ` is-${esc(variant)}` : "";
   return `
-    <article class="ap-list-item ap-assignment-card ap-status-accent-${esc(key)} ${detailed ? "is-detailed" : ""}" role="button" tabindex="0" data-open-assignment="${esc(id)}" aria-label="Open ${esc(assignmentTitle(row))}">
+    <article class="ap-list-item ap-assignment-card ap-status-accent-${esc(key)} ${detailed ? "is-detailed" : ""}${variantClass}" role="button" tabindex="0" data-open-assignment="${esc(id)}" aria-label="Open ${esc(assignmentTitle(row))}">
       <div class="ap-list-row ap-assignment-top">
         <div class="ap-assignment-main">
           <div class="ap-assignment-kicker">

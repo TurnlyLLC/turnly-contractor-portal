@@ -140,6 +140,7 @@ a {
 }
 
 .ap-main {
+  align-content: start;
   display: grid;
   gap: 16px;
   padding: 20px 22px 92px;
@@ -604,23 +605,18 @@ a {
 
 .ap-schedule-hero {
   align-items: center;
+  background: linear-gradient(135deg, rgba(16, 31, 48, 0.98), rgba(8, 22, 37, 0.98));
+  border-color: rgba(0, 214, 163, 0.2);
   display: grid;
-  gap: 16px;
+  gap: 14px;
   grid-template-columns: minmax(0, 1fr) auto;
   overflow: hidden;
+  padding: 16px;
   position: relative;
 }
 
 .ap-schedule-hero::after {
-  background: linear-gradient(135deg, rgba(0, 214, 163, 0.18), rgba(57, 169, 255, 0.1));
-  bottom: -80px;
-  content: "";
-  height: 170px;
-  pointer-events: none;
-  position: absolute;
-  right: -60px;
-  transform: rotate(18deg);
-  width: 260px;
+  content: none;
 }
 
 .ap-schedule-title,
@@ -641,10 +637,10 @@ a {
 }
 
 .ap-schedule-title h2 {
-  font-size: clamp(24px, 4vw, 38px);
+  font-size: clamp(23px, 3vw, 32px);
   letter-spacing: 0;
-  line-height: 1.02;
-  margin: 7px 0 8px;
+  line-height: 1.08;
+  margin: 6px 0 7px;
 }
 
 .ap-schedule-title p,
@@ -664,16 +660,23 @@ a {
   gap: 8px;
 }
 
+.ap-week-stepper .ap-secondary {
+  min-width: 82px;
+}
+
 .ap-schedule-stats {
   display: grid;
-  gap: 10px;
+  gap: 12px;
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .ap-schedule-stat {
-  border-left: 3px solid var(--ap-line-strong);
+  border-left: 0;
+  border-top: 3px solid var(--ap-line-strong);
   display: grid;
   gap: 4px;
+  min-height: 88px;
+  padding: 12px;
 }
 
 .ap-schedule-stat strong {
@@ -701,6 +704,11 @@ a {
   border-left: 3px solid var(--ap-line-strong);
   cursor: pointer;
   transition: border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+}
+
+.ap-assignment-card:hover,
+.ap-assignment-card:focus-visible {
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.18);
 }
 
 .ap-status-accent-open,
@@ -802,17 +810,29 @@ a {
 }
 
 .ap-calendar {
+  background: rgba(6, 17, 29, 0.46);
+  border: 1px solid var(--ap-line);
+  border-radius: 8px;
   display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0;
+  grid-template-columns: repeat(7, minmax(150px, 1fr));
+  overflow: hidden;
 }
 
 .ap-calendar-day {
   align-content: start;
+  background: rgba(12, 26, 42, 0.76);
+  border: 0;
+  border-radius: 0;
+  border-right: 1px solid var(--ap-line);
   display: grid;
-  min-height: 420px;
+  min-height: 500px;
   overflow: hidden;
   padding: 0;
+}
+
+.ap-calendar-day:last-child {
+  border-right: 0;
 }
 
 .ap-calendar-day.today {
@@ -822,13 +842,13 @@ a {
 
 .ap-calendar-day-head {
   align-items: center;
-  background: rgba(6, 17, 29, 0.58);
+  background: rgba(6, 17, 29, 0.76);
   border-bottom: 1px solid var(--ap-line);
   display: flex;
   gap: 8px;
   justify-content: space-between;
-  min-height: 58px;
-  padding: 10px;
+  min-height: 54px;
+  padding: 10px 9px;
 }
 
 .ap-calendar-day-head div {
@@ -837,7 +857,7 @@ a {
 }
 
 .ap-calendar-day-head strong {
-  font-size: 16px;
+  font-size: 14px;
 }
 
 .ap-day-count {
@@ -846,31 +866,52 @@ a {
   border-radius: 999px;
   color: var(--ap-green);
   flex: 0 0 auto;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 950;
-  padding: 5px 7px;
+  padding: 5px 6px;
 }
 
 .ap-calendar-jobs {
   align-content: start;
   display: grid;
-  gap: 8px;
-  padding: 10px;
+  gap: 7px;
+  padding: 8px;
 }
 
-.ap-calendar-day .ap-assignment-card {
+.ap-assignment-card.is-schedule {
+  background: rgba(5, 16, 28, 0.88);
+  border-color: var(--ap-line);
+  border-left-width: 3px;
+  box-shadow: none;
   gap: 8px;
-  padding: 10px;
+  padding: 9px;
 }
 
-.ap-calendar-day .ap-assignment-top {
-  align-items: flex-start;
+.ap-assignment-card.is-schedule:hover,
+.ap-assignment-card.is-schedule:focus-visible {
+  border-color: rgba(0, 214, 163, 0.5);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.22);
+  transform: translateY(-1px);
+}
+
+.ap-assignment-card.is-schedule .ap-assignment-top {
   display: grid;
-  gap: 8px;
+  gap: 7px;
+  justify-content: stretch;
 }
 
-.ap-calendar-day .ap-assignment-main strong {
+.ap-assignment-card.is-schedule .ap-assignment-kicker {
+  gap: 6px;
+  line-height: 1.2;
+}
+
+.ap-assignment-card.is-schedule .ap-assignment-kicker span:first-child {
+  display: none;
+}
+
+.ap-assignment-card.is-schedule .ap-assignment-main strong {
   display: -webkit-box;
+  font-size: 13px;
   line-height: 1.25;
   overflow: hidden;
   white-space: normal;
@@ -878,25 +919,35 @@ a {
   -webkit-line-clamp: 2;
 }
 
-.ap-calendar-day .ap-assignment-main small {
+.ap-assignment-card.is-schedule .ap-assignment-main small {
+  font-size: 11px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.ap-calendar-day .ap-assignment-meta {
-  display: grid;
-  gap: 5px;
+.ap-assignment-card.is-schedule .ap-pill {
+  font-size: 10px;
+  justify-self: start;
+  padding: 5px 7px;
 }
 
-.ap-calendar-day .ap-assignment-meta span {
+.ap-assignment-card.is-schedule .ap-assignment-meta {
+  display: grid;
+  gap: 4px;
+}
+
+.ap-assignment-card.is-schedule .ap-assignment-meta span {
   background: transparent;
   border: 0;
+  font-size: 11px;
+  line-height: 1.25;
   min-height: 0;
   padding: 0;
 }
 
-.ap-calendar-day .ap-assignment-meta .ap-pay-chip {
+.ap-assignment-card.is-schedule .ap-assignment-meta span:first-child,
+.ap-assignment-card.is-schedule .ap-assignment-meta .ap-pay-chip {
   display: none;
 }
 
@@ -908,9 +959,16 @@ a {
   color: var(--ap-muted);
   display: flex;
   justify-content: center;
-  min-height: 118px;
+  min-height: 96px;
   padding: 16px;
   text-align: center;
+}
+
+.ap-calendar-empty {
+  background: rgba(255, 255, 255, 0.025);
+  border-style: solid;
+  font-size: 12px;
+  min-height: 72px;
 }
 
 .ap-video-grid {
@@ -1260,6 +1318,21 @@ body.admin-pwa-body[data-theme="light"] .ap-message-bubble.mine {
   border-color: rgba(0, 214, 163, 0.28);
 }
 
+body.admin-pwa-body[data-theme="light"] .ap-schedule-hero {
+  background: linear-gradient(135deg, #ffffff, #f4fbf8);
+  border-color: rgba(0, 166, 128, 0.2);
+}
+
+body.admin-pwa-body[data-theme="light"] .ap-calendar {
+  background: #eef5f8;
+  border-color: var(--ap-line);
+}
+
+body.admin-pwa-body[data-theme="light"] .ap-calendar-day {
+  background: #ffffff;
+  border-color: var(--ap-line);
+}
+
 body.admin-pwa-body[data-theme="light"] .ap-calendar-day-head {
   background: #f3f7fb;
 }
@@ -1272,6 +1345,15 @@ body.admin-pwa-body[data-theme="light"] .ap-calendar-day .ap-assignment-meta spa
   background: transparent;
 }
 
+body.admin-pwa-body[data-theme="light"] .ap-assignment-card.is-schedule {
+  background: #ffffff;
+  box-shadow: 0 8px 20px rgba(15, 35, 55, 0.08);
+}
+
+body.admin-pwa-body[data-theme="light"] .ap-calendar-empty {
+  background: #f8fbfd;
+}
+
 @media (max-width: 1180px) {
   .ap-dashboard-grid,
   .ap-thread-layout {
@@ -1282,6 +1364,11 @@ body.admin-pwa-body[data-theme="light"] .ap-calendar-day .ap-assignment-meta spa
   .ap-schedule-stats,
   .ap-video-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ap-calendar {
+    grid-template-columns: repeat(7, minmax(178px, 1fr));
+    overflow-x: auto;
   }
 }
 
@@ -1340,6 +1427,7 @@ body.admin-pwa-body[data-theme="light"] .ap-calendar-day .ap-assignment-meta spa
 
   .ap-schedule-hero {
     grid-template-columns: 1fr;
+    padding: 14px;
   }
 
   .ap-schedule-actions {
@@ -1365,24 +1453,37 @@ body.admin-pwa-body[data-theme="light"] .ap-calendar-day .ap-assignment-meta spa
   }
 
   .ap-calendar {
+    background: transparent;
+    border: 0;
+    gap: 10px;
     grid-template-columns: 1fr;
+    overflow: visible;
   }
 
   .ap-calendar-day {
+    border: 1px solid var(--ap-line);
+    border-radius: 8px;
     min-height: auto;
+  }
+
+  .ap-calendar-day:last-child {
+    border-right: 1px solid var(--ap-line);
   }
 
   .ap-calendar-day-head {
     min-height: 54px;
   }
 
-  .ap-calendar-day .ap-assignment-top {
-    align-items: center;
-    display: flex;
+  .ap-calendar-empty {
+    min-height: 58px;
   }
 
-  .ap-calendar-day .ap-assignment-meta {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .ap-assignment-card.is-schedule .ap-assignment-top {
+    display: grid;
+  }
+
+  .ap-assignment-card.is-schedule .ap-assignment-meta {
+    grid-template-columns: 1fr;
   }
 
   .ap-modal {
