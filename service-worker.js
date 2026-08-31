@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-contractor-pwa-v20260828-contractor-desktop-split";
+const CACHE_NAME = "turnly-contractor-pwa-v20260831-turn-request-sms";
 
 const PRECACHE_URLS = [
   "/",

@@ -3274,6 +3274,15 @@ async function createTurnRequest(form) {
     notes
   ].filter((line) => line !== "").join("\n");
 
+  notifyAdminTurnRequestSms({
+    assignment_id: assignmentId,
+    property_name: propertyTitle(),
+    unit_number: unit,
+    service_type: service,
+    move_in_date: moveInDateValue,
+    move_in_time: MOVE_IN_TIME_LABEL
+  });
+
   await createManagerMessageThread(form, {
     subject: `${TURN_REQUEST_SERVICE} request - ${unit || propertyTitle()}`,
     topic: "Unit cleaning request",
@@ -3290,6 +3299,34 @@ async function createTurnRequest(form) {
     state.dataError = false;
     await refreshManagerPortal();
     renderManagerPortal();
+  }
+}
+
+async function notifyAdminTurnRequestSms(payload = {}) {
+  const assignmentId = payload.assignment_id || payload.assignmentId || "";
+  if (!supabase || !assignmentId) return;
+
+  try {
+    const { data } = await supabase.auth.getSession();
+    const token = data?.session?.access_token || "";
+    if (!token) return;
+
+    const response = await fetch("/api/notify-turn-request", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload),
+      keepalive: true
+    });
+
+    if (!response.ok) {
+      const details = await response.json().catch(() => ({}));
+      console.warn("[property-manager] Turn request SMS notification failed", details.error || response.statusText);
+    }
+  } catch (error) {
+    console.warn("[property-manager] Turn request SMS notification failed", error);
   }
 }
 
