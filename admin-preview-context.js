@@ -1,4 +1,5 @@
 export const adminPreviewStorageKey = "turnlyAdminPreviewContext";
+export const adminPreviewUserOptionsStorageKey = "turnlyAdminPreviewUserOptions:v1";
 
 export const adminPreviewPortalOptions = [
   { value: "admin", label: "Admin", href: "admin.html" },
@@ -70,8 +71,18 @@ function compact(values = []) {
 
 function exactOptionForValue(options = [], value) {
   if (!options.length) return null;
+  const raw = String(value || "").trim();
   const token = normalizePreviewToken(value);
-  return options.find((option) => option.value === token || normalizePreviewToken(option.label) === token) || null;
+  const lookup = normalizePreviewLookup(value);
+  return options.find((option) => {
+    const optionValues = [option?.value, option?.label, ...(option?.aliases || [])].filter(Boolean);
+    return optionValues.some((optionValue) => {
+      const optionRaw = String(optionValue || "").trim();
+      return optionRaw === raw ||
+        normalizePreviewToken(optionRaw) === token ||
+        normalizePreviewLookup(optionRaw) === lookup;
+    });
+  }) || null;
 }
 
 function optionForValue(options = [], value) {
@@ -91,11 +102,11 @@ export function adminPreviewPortalRole(portal) {
 
 export function adminPreviewUsersForPortal(portal) {
   const role = adminPreviewPortalRole(portal);
-  return adminPreviewUserOptions.filter((option) => optionMatchesRole(option, role));
+  return readAdminPreviewUserOptions().filter((option) => optionMatchesRole(option, role));
 }
 
 export function isAdminPreviewUserAllowedForPortal(user, portal) {
-  const userOption = exactOptionForValue(adminPreviewUserOptions, user);
+  const userOption = exactOptionForValue(readAdminPreviewUserOptions(), user);
   if (!userOption) return false;
   return adminPreviewUsersForPortal(portal).some((option) => option.value === userOption.value);
 }
@@ -119,6 +130,131 @@ function lookupMatchesAny(rowValues, optionValues) {
   }));
 }
 
+const inactivePreviewStatuses = new Set(["archived", "deleted", "disabled", "inactive", "rejected", "removed", "suspended"]);
+
+function adminPreviewRoleForProfile(profile = {}) {
+  const role = normalizePreviewToken(profile?.role);
+  if (isAdminRoleValue(role)) return "admin";
+  if (role === "contractor") return "contractor";
+  if (role === "property_manager" || role === "propertymanager") return "property_manager";
+  if (profile?.property_manager_property_id || profile?.requested_property_name) return "property_manager";
+  if (profile?.contractor_approved !== undefined && profile?.contractor_approved !== null) return "contractor";
+  return "";
+}
+
+function previewProfileIsActive(profile = {}) {
+  const role = adminPreviewRoleForProfile(profile);
+  const status = normalizePreviewToken(profile?.status);
+  if (!role || inactivePreviewStatuses.has(status)) return false;
+  if (role === "contractor") {
+    return profile?.contractor_approved === true || ["active", "approved", "enabled", "live"].includes(status);
+  }
+  return true;
+}
+
+function normalizeAdminPreviewUserOption(option = {}) {
+  const role = adminPreviewPortalRole(option.roles?.[0] || option.role || "");
+  const value = String(option.value || option.id || option.email || normalizePreviewToken(option.label)).trim();
+  const label = String(option.label || option.full_name || option.name || option.email || value || "Preview User").trim();
+  if (!value || !label) return null;
+  return {
+    value,
+    label,
+    aliases: compact([...(option.aliases || []), option.id, option.email, option.full_name, option.name, option.display_name, value, label]),
+    roles: [role],
+    email: option.email || "",
+    status: option.status || ""
+  };
+}
+
+function mergeAdminPreviewUserOptions(...optionGroups) {
+  const seen = new Set();
+  return optionGroups
+    .flat()
+    .map(normalizeAdminPreviewUserOption)
+    .filter(Boolean)
+    .filter((option) => {
+      const key = `${adminPreviewPortalRole(option.roles?.[0])}:${normalizePreviewLookup(option.value)}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => {
+      const roleOrder = { admin: 0, contractor: 1, property_manager: 2 };
+      const roleDelta = (roleOrder[adminPreviewPortalRole(a.roles?.[0])] ?? 9) - (roleOrder[adminPreviewPortalRole(b.roles?.[0])] ?? 9);
+      return roleDelta || a.label.localeCompare(b.label);
+    });
+}
+
+export function adminPreviewUserOptionFromProfile(profile = {}) {
+  if (!previewProfileIsActive(profile)) return null;
+  const role = adminPreviewRoleForProfile(profile);
+  const label = profile.full_name || profile.name || profile.display_name || profile.email || "Preview User";
+  return normalizeAdminPreviewUserOption({
+    value: profile.id || profile.email || normalizePreviewToken(label),
+    label,
+    aliases: [profile.id, profile.email, profile.full_name, profile.name, profile.display_name],
+    roles: [role],
+    email: profile.email || "",
+    status: profile.status || ""
+  });
+}
+
+export function readAdminPreviewUserOptions() {
+  let stored = [];
+  try {
+    const raw = typeof window !== "undefined" ? window.localStorage?.getItem(adminPreviewUserOptionsStorageKey) : "";
+    stored = raw ? JSON.parse(raw) : [];
+  } catch {
+    stored = [];
+  }
+  return Array.isArray(stored) && stored.length
+    ? mergeAdminPreviewUserOptions(stored)
+    : mergeAdminPreviewUserOptions(adminPreviewUserOptions);
+}
+
+export function writeAdminPreviewUserOptions(options = []) {
+  const normalized = mergeAdminPreviewUserOptions(options);
+  try {
+    if (typeof window !== "undefined") {
+      window.localStorage?.setItem(adminPreviewUserOptionsStorageKey, JSON.stringify(normalized));
+    }
+  } catch {
+    // Storage may be unavailable in private browsing.
+  }
+  return normalized;
+}
+
+export async function loadAdminPreviewUserOptions(supabase) {
+  if (!supabase) return readAdminPreviewUserOptions();
+
+  let result = await supabase
+    .from("profiles")
+    .select("id,role,full_name,email,status,contractor_approved,property_manager_property_id,requested_property_name")
+    .order("full_name", { ascending: true, nullsFirst: false })
+    .limit(1000);
+
+  if (result.error) {
+    result = await supabase
+      .from("profiles")
+      .select("id,role,full_name,email,status,contractor_approved")
+      .order("full_name", { ascending: true, nullsFirst: false })
+      .limit(1000);
+  }
+
+  if (result.error) {
+    result = await supabase
+      .from("profiles")
+      .select("id,role,full_name,email,status")
+      .order("full_name", { ascending: true, nullsFirst: false })
+      .limit(1000);
+  }
+
+  if (result.error) return readAdminPreviewUserOptions();
+  const liveOptions = (result.data || []).map(adminPreviewUserOptionFromProfile).filter(Boolean);
+  return liveOptions.length ? writeAdminPreviewUserOptions(liveOptions) : readAdminPreviewUserOptions();
+}
+
 export function defaultAdminPreviewContext() {
   return normalizeAdminPreviewContext({
     enabled: true,
@@ -132,7 +268,16 @@ export function normalizeAdminPreviewContext(context = {}) {
   const portalOption = optionForValue(adminPreviewPortalOptions, context.portal) || adminPreviewPortalOptions[0];
   const propertyOption = optionForValue(adminPreviewPropertyOptions, context.property) || adminPreviewPropertyOptions[0];
   const allowedUsers = adminPreviewUsersForPortal(portalOption.value);
-  const userOption = optionForValue(allowedUsers, context.user) || allowedUsers[0] || adminPreviewUserOptions[0];
+  const requestedUser = String(context.user || "").trim();
+  const fallbackUser = requestedUser
+    ? normalizeAdminPreviewUserOption({
+        value: requestedUser,
+        label: context.userLabel || context.previewUserLabel || context.user_label || requestedUser,
+        aliases: [requestedUser, context.userLabel, context.previewUserLabel],
+        roles: [portalOption.value]
+      })
+    : null;
+  const userOption = exactOptionForValue(allowedUsers, requestedUser) || fallbackUser || allowedUsers[0] || adminPreviewUserOptions[0];
   return {
     enabled: context.enabled !== false,
     portal: portalOption.value,
@@ -152,7 +297,8 @@ export function readAdminPreviewContext(options = {}) {
       enabled: params.get("adminPreview") !== "0",
       portal: params.get("previewPortal") || params.get("portal"),
       property: params.get("previewProperty") || params.get("property"),
-      user: params.get("previewUser") || params.get("user")
+      user: params.get("previewUser") || params.get("user"),
+      userLabel: params.get("previewUserLabel") || params.get("userLabel")
     });
     if (options.persistFromUrl !== false) writeAdminPreviewContext(context);
     return context;
@@ -192,7 +338,8 @@ export function adminPreviewTargetUrl(context = {}) {
     adminPreview: "1",
     previewPortal: normalized.portal,
     previewProperty: normalized.property,
-    previewUser: normalized.user
+    previewUser: normalized.user,
+    previewUserLabel: normalized.userLabel
   });
   return `${portal.href}?${params.toString()}`;
 }
@@ -227,22 +374,27 @@ export async function verifyAdminPreviewSession(supabase, user) {
 function profileMatchesRole(profile, targetRole) {
   if (!targetRole) return true;
   const role = normalizePreviewToken(profile?.role);
+  if (targetRole === "admin") return isAdminRoleValue(role);
   if (targetRole === "property_manager") return role === "property_manager" || Boolean(profile?.property_manager_property_id || profile?.requested_property_name);
   return role === normalizePreviewToken(targetRole);
 }
 
 function profileMatchesUser(profile, userOption) {
   const optionValues = optionLookupValues(userOption);
-  const rowValues = fieldLookupValues(profile, ["full_name", "email", "name", "display_name"]);
+  const rowValues = fieldLookupValues(profile, ["id", "full_name", "email", "name", "display_name"]);
   return lookupMatchesAny(rowValues, optionValues);
 }
 
 export async function resolvePreviewProfile(supabase, preview, targetRole = "") {
   if (!supabase || !preview) return null;
   const targetRoleToken = normalizePreviewToken(targetRole);
-  const allowedUsers = targetRoleToken ? adminPreviewUsersForPortal(targetRoleToken) : adminPreviewUserOptions;
-  const userOption = exactOptionForValue(allowedUsers, preview.user);
-  if (!userOption) return null;
+  const allowedUsers = targetRoleToken ? adminPreviewUsersForPortal(targetRoleToken) : readAdminPreviewUserOptions();
+  const userOption = exactOptionForValue(allowedUsers, preview.user) || normalizeAdminPreviewUserOption({
+    value: preview.user,
+    label: preview.userLabel || preview.user,
+    aliases: [preview.user, preview.userLabel],
+    roles: [targetRoleToken || preview.portal || "contractor"]
+  });
 
   let result = await supabase
     .from("profiles")
@@ -265,6 +417,13 @@ export async function resolvePreviewProfile(supabase, preview, targetRole = "") 
 
   if (result.error) return null;
   const profiles = result.data || [];
+  const previewValue = normalizePreviewLookup(preview.user);
+  const directMatch = profiles.find((profile) => {
+    const rowValues = fieldLookupValues(profile, ["id", "full_name", "email", "name", "display_name"]);
+    return rowValues.includes(previewValue) && (!targetRoleToken || profileMatchesRole(profile, targetRoleToken));
+  });
+  if (directMatch) return directMatch;
+  if (!userOption) return null;
   const userMatches = profiles.filter((profile) => profileMatchesUser(profile, userOption));
   if (targetRoleToken) {
     return userMatches.find((profile) => profileMatchesRole(profile, targetRoleToken)) || null;

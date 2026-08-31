@@ -7,6 +7,7 @@ import {
   adminPreviewUsersForPortal,
   buildPreviewEffectiveUser,
   clearAdminPreviewContext,
+  loadAdminPreviewUserOptions,
   normalizeAdminPreviewContext,
   previewIdentityValues,
   resolvePreviewProfile,
@@ -15,7 +16,7 @@ import {
   rowMatchesPreviewUser,
   verifyAdminPreviewSession,
   writeAdminPreviewContext
-} from "./admin-preview-context.js?v=20260831-contractor-dashboard-split";
+} from "./admin-preview-context.js?v=20260831-live-preview-users";
 import {
   contractorRoute,
   currentContractorSurface
@@ -336,6 +337,7 @@ async function applyContractorAdminPreview(authUser) {
     : await verifyAdminPreviewSession(supabase, authUser);
   if (session?.preview?.portal !== "contractor") return false;
 
+  await loadAdminPreviewUserOptions(supabase);
   const previewProfile = session.effectiveProfile || await resolvePreviewProfile(supabase, session.preview, "contractor");
   const previewUser = session.effectiveUser || buildPreviewEffectiveUser(previewProfile, authUser, "contractor");
   if (!previewProfile || !previewUser) {
@@ -431,9 +433,15 @@ function syncAdminPreviewControls(context = state.adminPreview) {
 
 function adminPreviewContextFromControls() {
   const current = { ...(state.adminPreview || {}) };
+  const previousPortal = current.portal;
   document.querySelectorAll("[data-admin-preview-field]").forEach((field) => {
     current[field.dataset.adminPreviewField] = field.value;
   });
+  if (current.portal !== previousPortal) {
+    const firstUser = adminPreviewUsersForPortal(current.portal)[0];
+    current.user = firstUser?.value || "";
+    current.userLabel = firstUser?.label || "";
+  }
   const context = writeAdminPreviewContext(current);
   state.adminPreview = context;
   syncAdminPreviewControls(context);

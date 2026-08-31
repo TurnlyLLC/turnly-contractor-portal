@@ -6,10 +6,11 @@ import {
   adminPreviewSummary,
   adminPreviewTargetUrl,
   clearAdminPreviewContext,
+  loadAdminPreviewUserOptions,
   normalizeAdminPreviewContext,
   readAdminPreviewContext,
   writeAdminPreviewContext
-} from "./admin-preview-context.js?v=20260828-contractor-desktop-split";
+} from "./admin-preview-context.js?v=20260831-live-preview-users";
 
 const suiteEnv = window.__ENV || {};
 const suiteSupabase = suiteEnv.SUPABASE_URL && suiteEnv.SUPABASE_ANON_KEY
@@ -14993,9 +14994,15 @@ function renderAdminPreviewSwitcher() {
 
 function adminPreviewContextFromControls() {
   const current = readAdminPreviewContext();
+  const previousPortal = current.portal;
   document.querySelectorAll("[data-admin-preview-field]").forEach((field) => {
     current[field.dataset.adminPreviewField] = field.value;
   });
+  if (current.portal !== previousPortal) {
+    const firstUser = adminPreviewUsersForPortal(current.portal)[0];
+    current.user = firstUser?.value || "";
+    current.userLabel = firstUser?.label || "";
+  }
   const context = writeAdminPreviewContext(current);
   syncAdminPreviewControls(context);
   return context;
@@ -15189,6 +15196,8 @@ async function loadTopbarProfile() {
     topbarState.profile = result.data || null;
   }
 
+  await loadAdminPreviewUserOptions(suiteSupabase);
+  syncAdminPreviewControls();
   await loadTopbarMessageNotifications({ render: false });
   topbarState.loaded = true;
   topbarState.loading = false;

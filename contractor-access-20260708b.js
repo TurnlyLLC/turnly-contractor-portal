@@ -1,10 +1,11 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 import {
   buildPreviewEffectiveUser,
+  loadAdminPreviewUserOptions,
   resolvePreviewProfile,
   resolvePreviewProperty,
   verifyAdminPreviewSession
-} from "./admin-preview-context.js?v=20260804-contractor-access-scope";
+} from "./admin-preview-context.js?v=20260831-live-preview-users";
 import {
   contractorHomeForBrowser,
   contractorRoute,
@@ -205,7 +206,7 @@ async function renderPasswordChangeRequired(user) {
 }
 
 async function loadContractorPortal() {
-  await import("./contractor-portal.js?v=20260831-pwa-schedule-agenda");
+  await import("./contractor-portal.js?v=20260831-live-preview-users");
   await import("./contractor-job-flow-mobile.js?v=20260807-contractor-feedback");
 }
 
@@ -261,6 +262,7 @@ if (!supabase) {
   } else {
     const previewSession = await verifyAdminPreviewSession(supabase, user);
     if (previewSession?.preview?.portal === "contractor") {
+      await loadAdminPreviewUserOptions(supabase);
       const previewProfile = await resolvePreviewProfile(supabase, previewSession.preview, "contractor");
       const previewUser = buildPreviewEffectiveUser(previewProfile, user, "contractor");
       if (!previewProfile || !previewUser) {
