@@ -11,7 +11,7 @@ import {
   contractorSurfaceForBrowser,
   currentContractorPageKey,
   currentContractorSurface
-} from "./contractor-routing.js?v=20260828-contractor-desktop-split";
+} from "./contractor-routing.js?v=20260831-contractor-dashboard-split";
 
 const env = window.__ENV || {};
 const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
@@ -205,7 +205,7 @@ async function renderPasswordChangeRequired(user) {
 }
 
 async function loadContractorPortal() {
-  await import("./contractor-portal.js?v=20260828-contractor-desktop-split");
+  await import("./contractor-portal.js?v=20260831-contractor-dashboard-split");
   await import("./contractor-job-flow-mobile.js?v=20260807-contractor-feedback");
 }
 

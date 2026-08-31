@@ -15,11 +15,11 @@ import {
   rowMatchesPreviewUser,
   verifyAdminPreviewSession,
   writeAdminPreviewContext
-} from "./admin-preview-context.js?v=20260828-contractor-desktop-split";
+} from "./admin-preview-context.js?v=20260831-contractor-dashboard-split";
 import {
   contractorRoute,
   currentContractorSurface
-} from "./contractor-routing.js?v=20260828-contractor-desktop-split";
+} from "./contractor-routing.js?v=20260831-contractor-dashboard-split";
 
 const env = window.__ENV || {};
 const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
@@ -242,6 +242,10 @@ function money(value) {
   const number = Number(value);
   if (!Number.isFinite(number) || number <= 0) return "$0";
   return number.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+}
+
+function compact(values = []) {
+  return values.map((value) => String(value || "").trim()).filter(Boolean);
 }
 
 function dateValue(value) {
@@ -1158,45 +1162,241 @@ function renderMetrics() {
 }
 
 function renderDashboard() {
+  return contractorSurface === "desktop"
+    ? renderDesktopDashboard()
+    : renderMobileDashboard();
+}
+
+function firstName() {
+  return contractorName().split(/\s+/).filter(Boolean)[0] || "Contractor";
+}
+
+function dashboardGreeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+}
+
+function activeAssignmentsSorted() {
+  return activeAssignments()
+    .slice()
+    .sort((a, b) => {
+      const aValue = dateValue(a.start_window) || Number.MAX_SAFE_INTEGER;
+      const bValue = dateValue(b.start_window) || Number.MAX_SAFE_INTEGER;
+      return aValue - bValue;
+    });
+}
+
+function upcomingAssignments(limit = 6) {
+  const now = Date.now();
+  return activeAssignmentsSorted()
+    .filter((item) => {
+      const value = dateValue(item.start_window);
+      return !value || value >= now - 4 * 60 * 60 * 1000;
+    })
+    .slice(0, limit);
+}
+
+function currentWeekAssignments() {
+  const start = startOfWeek(new Date());
+  const end = addDays(start, 7);
+  return activeAssignmentsSorted().filter((item) => {
+    const value = dateValue(item.start_window);
+    return value >= start.getTime() && value < end.getTime();
+  });
+}
+
+function dashboardNextAssignment() {
+  return upcomingAssignments(1)[0]
+    || activeAssignmentsSorted()[0]
+    || filteredOpenAssignments()[0]
+    || null;
+}
+
+function dashboardJobMode(item) {
+  if (!item) return "mine";
+  return state.openAssignments.some((row) => String(row.id) === String(item.id)) ? "open" : "mine";
+}
+
+function renderDashboardHeroJob(item, isCompact = false) {
+  if (!item) {
+    return `
+      <article class="${isCompact ? "cp-mobile-next-card" : "cp-desktop-next-card"}">
+        <p class="cp-panel-kicker">Next Job</p>
+        <h2>No active jobs</h2>
+        <p class="cp-muted">Claim a job from the board when you are ready for more work.</p>
+        <a class="cp-action" href="${esc(contractorRoute("job-board", contractorSurface))}">Open Job Board</a>
+      </article>
+    `;
+  }
+
+  const mode = dashboardJobMode(item);
+  const actions = assignmentActions(item, mode);
+  const detailRows = [
+    ["Property", assignmentTitle(item)],
+    ["Unit", assignmentUnitLabel(item) || "Not set"],
+    ["Schedule", formatWindow(item)],
+    ["Pay", money(item.pay_amount)]
+  ];
+  return `
+    <article class="${isCompact ? "cp-mobile-next-card" : "cp-desktop-next-card"}">
+      <div class="cp-next-card-heading">
+        <p class="cp-panel-kicker">${mode === "open" ? "Available Job" : "Next Job"}</p>
+        <strong class="cp-pill ${statusClass(item.status || "open")}">${esc(titleCase(item.status || "open"))}</strong>
+      </div>
+      <h2>${esc(assignmentTitle(item))}</h2>
+      <p>${esc(assignmentSubtitle(item))}</p>
+      <div class="cp-next-card-details">
+        ${detailRows.map(([label, value]) => `
+          <div>
+            <span>${esc(label)}</span>
+            <strong>${esc(value)}</strong>
+          </div>
+        `).join("")}
+      </div>
+      ${actions ? `<div class="cp-next-card-actions">${actions}</div>` : ""}
+    </article>
+  `;
+}
+
+function renderDashboardWeekAgenda(rows, isCompact = false) {
+  if (!rows.length) return emptyState("No scheduled jobs this week.");
+  return `
+    <div class="${isCompact ? "cp-mobile-agenda-list" : "cp-dashboard-agenda"}">
+      ${rows.slice(0, isCompact ? 4 : 7).map((item) => `
+        <article class="cp-dashboard-agenda-row">
+          <time>${esc(formatShortDate(item.start_window, "Unscheduled"))}</time>
+          <div>
+            <strong>${esc(assignmentTitle(item))}</strong>
+            <small>${esc(compact([assignmentUnitLabel(item), formatTime(item.start_window), money(item.pay_amount)]).join(" - "))}</small>
+          </div>
+          <strong class="cp-pill ${statusClass(item.status || "scheduled")}">${esc(titleCase(item.status || "scheduled"))}</strong>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderDashboardPaySnapshot() {
+  const completed30 = completedAssignments(30);
+  const week = currentWeekAssignments();
+  const completedAll = completedAssignments(365);
+  return `
+    <div class="cp-dashboard-pay-grid">
+      <div><span>Last 30 Days</span><strong>${esc(money(totalPay(completed30)))}</strong></div>
+      <div><span>This Week Scheduled</span><strong>${esc(money(totalPay(week)))}</strong></div>
+      <div><span>Completed Jobs</span><strong>${esc(String(completedAll.length))}</strong></div>
+    </div>
+    ${renderChart(completedAll)}
+  `;
+}
+
+function renderDesktopDashboard() {
   const today = todayAssignments();
+  const week = currentWeekAssignments();
+  const nextJob = dashboardNextAssignment();
   const accepted = acceptedAssignments();
   const boardRows = filteredOpenAssignments();
   const preferred = boardRows.filter(isPreferredOffer);
   const available = boardRows.filter((item) => !isPreferredOffer(item));
   return `
-    <section class="cp-opening-jobs" aria-label="Contractor jobs">
-      ${panel("Accepted Jobs", renderHomeJobList(accepted, "mine", "No accepted jobs yet."), {
-        kicker: "Your Work",
-        action: `<a class="cp-ghost-action" href="${esc(contractorRoute("my-jobs", contractorSurface))}">All</a>`
-      })}
-      ${panel("Preferred Jobs", renderHomeJobList(preferred, "open", "No preferred jobs right now."), {
-        kicker: "Offered First",
-        action: `<a class="cp-ghost-action" href="${esc(contractorRoute("job-board", contractorSurface))}">Jobs</a>`
-      })}
-      ${panel("Available Jobs", renderHomeJobList(available, "open", "No available jobs right now."), {
-        kicker: "Job Board",
-        action: `<a class="cp-ghost-action" href="${esc(contractorRoute("job-board", contractorSurface))}">Jobs</a>`
-      })}
-    </section>
-    ${renderTodayMetrics(today)}
-    <section class="cp-dashboard-grid">
-      <div class="cp-stack">
-        ${panel("Today's Jobs", today.length ? `<div class="cp-job-list">${today.map((item) => assignmentRow(item, "mine")).join("")}</div>` : emptyState("No jobs scheduled for today."), {
-          action: `<a class="cp-ghost-action" href="${esc(contractorRoute("schedule", contractorSurface))}">Week View</a>`
-        })}
-        ${panel("Today's Schedule", renderTodaySchedule(today), { kicker: new Date().toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" }) })}
-      </div>
-      <div class="cp-stack">
-        ${panel("Route Summary", renderTodayRouteSummary(today))}
-        ${panel("Today's Tasks", renderTodayTasks(today))}
-        ${panel("Actions", `
-          <div class="cp-quick-grid">
+    <section class="cp-desktop-dashboard" aria-label="Contractor desktop dashboard">
+      <section class="cp-desktop-hero">
+        <div class="cp-desktop-hero-copy">
+          <div class="cp-desktop-hero-topline">
+            <p class="cp-panel-kicker">Contractor Operations</p>
+            ${dashboardThemeToggle()}
+          </div>
+          <h1>${esc(dashboardGreeting())}, ${esc(firstName())}</h1>
+          <p>Review your active work, claim open jobs, and keep today's route moving from one dashboard.</p>
+          <div class="cp-desktop-hero-actions">
             <a class="cp-action" href="${esc(contractorRoute("my-jobs", contractorSurface))}">My Jobs</a>
             <a class="cp-ghost-action" href="${esc(contractorRoute("job-board", contractorSurface))}">Find Jobs</a>
-            <a class="cp-ghost-action" href="${esc(contractorRoute("schedule", contractorSurface))}">Schedule</a>
             <a class="cp-ghost-action" href="${esc(contractorRoute("messages", contractorSurface))}">Messages</a>
           </div>
-        `)}
+        </div>
+        ${renderDashboardHeroJob(nextJob)}
+      </section>
+
+      <section class="cp-dashboard-stat-grid">
+        ${metric("Today's Jobs", String(today.length), "scheduled today", "T")}
+        ${metric("Active Jobs", String(activeAssignments().length), "claimed or in progress", "A")}
+        ${metric("This Week", String(week.length), "scheduled jobs", "W")}
+        ${metric("Open Jobs", String(boardRows.length), "available to claim", "J")}
+        ${metric("Last 30 Days", money(totalPay(completedAssignments(30))), "completed earnings", "$")}
+      </section>
+
+      <section class="cp-desktop-workbench">
+        <div class="cp-stack">
+          ${panel("This Week's Work", renderDashboardWeekAgenda(week), {
+            kicker: "Sunday - Saturday",
+            action: `<a class="cp-ghost-action" href="${esc(contractorRoute("schedule", contractorSurface))}">Open Schedule</a>`
+          })}
+          ${panel("Accepted Jobs", renderHomeJobList(accepted, "mine", "No accepted jobs yet.", 5), {
+            kicker: "Your Work",
+            action: `<a class="cp-ghost-action" href="${esc(contractorRoute("my-jobs", contractorSurface))}">View All</a>`
+          })}
+        </div>
+        <div class="cp-stack">
+          ${panel("Preferred Jobs", renderHomeJobList(preferred, "open", "No preferred jobs right now.", 3), {
+            kicker: "Offered First",
+            action: `<a class="cp-ghost-action" href="${esc(contractorRoute("job-board", contractorSurface))}">Board</a>`
+          })}
+          ${panel("Available Jobs", renderHomeJobList(available, "open", "No available jobs right now.", 3), {
+            kicker: "Job Board",
+            action: `<a class="cp-ghost-action" href="${esc(contractorRoute("job-board", contractorSurface))}">Claim Work</a>`
+          })}
+          ${panel("Pay Snapshot", renderDashboardPaySnapshot())}
+        </div>
+      </section>
+    </section>
+  `;
+}
+
+function renderMobileDashboard() {
+  const today = todayAssignments();
+  const week = currentWeekAssignments();
+  const nextJob = dashboardNextAssignment();
+  const boardRows = filteredOpenAssignments();
+  const preferred = boardRows.filter(isPreferredOffer);
+  const available = boardRows.filter((item) => !isPreferredOffer(item));
+  return `
+    <section class="cp-mobile-dashboard" aria-label="Contractor mobile dashboard">
+      <section class="cp-mobile-dashboard-hero">
+        <div class="cp-mobile-dashboard-topline">
+          <div>
+            <p class="cp-panel-kicker">Today</p>
+            <h1>${esc(dashboardGreeting())}, ${esc(firstName())}</h1>
+          </div>
+          ${dashboardThemeToggle()}
+        </div>
+        <p>${today.length ? `${today.length} job${today.length === 1 ? "" : "s"} scheduled today.` : "No jobs are scheduled for today."}</p>
+      </section>
+
+      ${renderDashboardHeroJob(nextJob, true)}
+
+      <section class="cp-mobile-quick-actions" aria-label="Quick actions">
+        <a class="cp-action" href="${esc(contractorRoute("my-jobs", contractorSurface))}">My Jobs</a>
+        <a class="cp-ghost-action" href="${esc(contractorRoute("job-board", contractorSurface))}">Find Jobs</a>
+        <a class="cp-ghost-action" href="${esc(contractorRoute("messages", contractorSurface))}">Messages</a>
+      </section>
+
+      <section class="cp-mobile-metric-grid">
+        ${metric("Today", String(today.length), "scheduled", "T")}
+        ${metric("Week", String(week.length), "scheduled", "W")}
+        ${metric("Open", String(boardRows.length), "job board", "J")}
+      </section>
+
+      <div class="cp-stack">
+        ${panel("Today's Route", renderTodaySchedule(today), {
+          action: `<a class="cp-ghost-action" href="${esc(contractorRoute("schedule", contractorSurface))}">Schedule</a>`
+        })}
+        ${panel("This Week", renderDashboardWeekAgenda(week, true))}
+        ${panel("Preferred Jobs", renderHomeJobList(preferred, "open", "No preferred jobs right now.", 2), {
+          action: `<a class="cp-ghost-action" href="${esc(contractorRoute("job-board", contractorSurface))}">Board</a>`
+        })}
+        ${panel("Available Jobs", renderHomeJobList(available, "open", "No available jobs right now.", 2))}
       </div>
     </section>
   `;
