@@ -976,33 +976,35 @@ function renderAssignmentModal() {
           </div>
           <button class="ap-close" type="button" aria-label="Close assignment" data-close-assignment>${icon("x")}</button>
         </div>
-        <form id="apAssignmentForm" class="ap-modal-form" data-assignment-id="${isNew ? "" : esc(current.id || "")}">
-          <div class="ap-form-grid">
-            <label class="ap-form-field wide">
-              <span>Property</span>
-              <select name="property_id" required>
-                <option value="">Choose property...</option>
-                ${state.properties.map((property) => `<option value="${esc(property.id)}" ${String(property.id) === String(propertyId) ? "selected" : ""}>${esc(propertyTitle(property))}</option>`).join("")}
-              </select>
-            </label>
-            ${field("title", "Assignment Title", current.title || "", "text", true)}
-            ${field("unit_number", "Unit Number", unitNumber(current), "text")}
-            ${selectField("status", "Status", statusOptions, current.status || "open")}
-            ${selectField("priority", "Priority", priorityOptions, current.priority || "normal")}
-            ${field("start_window", "Start", toDatetimeInput(current.start_window), "datetime-local", true)}
-            ${field("end_window", "End", toDatetimeInput(current.end_window), "datetime-local", true)}
-            ${field("pay_amount", "Contractor Pay", current.pay_amount ?? "", "number")}
-            ${contractorSelect(assigned)}
-            ${textareaField("scope", "Scope", current.scope || "")}
-            ${textareaField("supplies_notes", "Supplies Notes", current.supplies_notes || "")}
-            ${textareaField("special_instructions", "Special Instructions", current.special_instructions || "")}
-          </div>
-          <div class="ap-form-actions">
-            <button class="ap-secondary" type="button" data-close-assignment>Cancel</button>
-            <button class="ap-btn" type="submit" ${state.savingAssignment ? "disabled" : ""}>${state.savingAssignment ? "Saving..." : "Save Assignment"}</button>
-          </div>
-        </form>
-        ${isNew ? "" : renderVideoUploadPanel(current)}
+        <div class="ap-modal-body">
+          <form id="apAssignmentForm" class="ap-modal-form" data-assignment-id="${isNew ? "" : esc(current.id || "")}">
+            <div class="ap-form-grid">
+              <label class="ap-form-field wide">
+                <span>Property</span>
+                <select name="property_id" required>
+                  <option value="">Choose property...</option>
+                  ${state.properties.map((property) => `<option value="${esc(property.id)}" ${String(property.id) === String(propertyId) ? "selected" : ""}>${esc(propertyTitle(property))}</option>`).join("")}
+                </select>
+              </label>
+              ${field("title", "Assignment Title", current.title || "", "text", true)}
+              ${field("unit_number", "Unit Number", unitNumber(current), "text")}
+              ${selectField("status", "Status", statusOptions, current.status || "open")}
+              ${selectField("priority", "Priority", priorityOptions, current.priority || "normal")}
+              ${field("start_window", "Start", toDatetimeInput(current.start_window), "datetime-local", true)}
+              ${field("end_window", "End", toDatetimeInput(current.end_window), "datetime-local", true)}
+              ${field("pay_amount", "Contractor Pay", current.pay_amount ?? "", "number")}
+              ${contractorSelect(assigned)}
+              ${textareaField("scope", "Scope", current.scope || "")}
+              ${textareaField("supplies_notes", "Supplies Notes", current.supplies_notes || "")}
+              ${textareaField("special_instructions", "Special Instructions", current.special_instructions || "")}
+            </div>
+            <div class="ap-form-actions">
+              <button class="ap-secondary" type="button" data-close-assignment>Cancel</button>
+              <button class="ap-btn" type="submit" ${state.savingAssignment ? "disabled" : ""}>${state.savingAssignment ? "Saving..." : "Save Assignment"}</button>
+            </div>
+          </form>
+          ${isNew ? "" : renderVideoUploadPanel(current)}
+        </div>
       </section>
     </div>
   `;
