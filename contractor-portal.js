@@ -1665,6 +1665,11 @@ function renderBoardFilterSummary() {
 }
 
 function renderSchedule() {
+  if (contractorSurface !== "desktop") return renderPwaSchedule();
+  return renderDesktopSchedule();
+}
+
+function renderDesktopSchedule() {
   const start = new Date(state.scheduleCursor);
   const end = addDays(start, 6);
   return `
@@ -1685,6 +1690,116 @@ function renderSchedule() {
       </aside>
     </section>
   `;
+}
+
+function renderPwaSchedule() {
+  const start = startOfWeek(state.scheduleCursor);
+  const days = Array.from({ length: 7 }, (_, index) => addDays(start, index));
+  const rows = scheduleWeekAssignments(start);
+  const scheduledCount = rows.filter((item) => ["open", "preferred-pending", "claimed", "scheduled"].includes(normalizeToken(item.status))).length;
+  const activeCount = rows.filter((item) => normalizeToken(item.status) === "in-progress").length;
+  const completedCount = rows.filter(isCompletedAssignment).length;
+  return `
+    <section class="cp-pwa-schedule">
+      <section class="cp-pwa-schedule-hero">
+        <div class="cp-pwa-schedule-title">
+          <span class="cp-panel-kicker">Weekly Schedule</span>
+          <h2>${esc(formatShortDate(days[0]))} - ${esc(formatDate(days[6]))}</h2>
+          <p>${esc(rows.length ? `${rows.length} assignment${rows.length === 1 ? "" : "s"} scheduled for this Sunday through Saturday window.` : "No assignments are scheduled for this Sunday through Saturday window.")}</p>
+        </div>
+        <div class="cp-pwa-week-stepper" aria-label="Week navigation">
+          <button class="cp-ghost-action" type="button" data-schedule-nav="prev">Prev</button>
+          <button class="cp-ghost-action" type="button" data-schedule-nav="today">Today</button>
+          <button class="cp-ghost-action" type="button" data-schedule-nav="next">Next</button>
+        </div>
+      </section>
+      <section class="cp-pwa-schedule-stats" aria-label="Week summary">
+        ${renderPwaScheduleStat("Scheduled", scheduledCount, "ready to work", "scheduled")}
+        ${renderPwaScheduleStat("In Progress", activeCount, "active now", "active")}
+        ${renderPwaScheduleStat("Completed", completedCount, "finished this week", "completed")}
+        ${renderPwaScheduleStat("Week Pay", money(totalPay(rows)), "scheduled earnings", "pay")}
+      </section>
+      <section class="cp-pwa-schedule-agenda" aria-label="Weekly assignment list">
+        ${days.map((day) => renderPwaScheduleDay(day, rows)).join("")}
+      </section>
+    </section>
+  `;
+}
+
+function renderPwaScheduleStat(label, value, meta, tone) {
+  return `
+    <article class="cp-pwa-schedule-stat tone-${esc(tone || "scheduled")}">
+      <span>${esc(label)}</span>
+      <strong>${esc(value)}</strong>
+      <small>${esc(meta)}</small>
+    </article>
+  `;
+}
+
+function renderPwaScheduleDay(day, rows) {
+  const dayRows = rows.filter((item) => {
+    const start = item.start_window ? new Date(item.start_window) : null;
+    return start && isSameDay(start, day);
+  });
+  return `
+    <article class="cp-pwa-schedule-day ${isSameDay(day, new Date()) ? "today" : ""} ${dayRows.length ? "has-jobs" : ""}">
+      <header class="cp-pwa-schedule-day-head">
+        <div>
+          <span>${esc(day.toLocaleDateString([], { weekday: "long" }))}</span>
+          <strong>${esc(formatShortDate(day))}</strong>
+        </div>
+        <em>${esc(`${dayRows.length} ${dayRows.length === 1 ? "job" : "jobs"}`)}</em>
+      </header>
+      <div class="cp-pwa-schedule-jobs">
+        ${dayRows.length ? dayRows.map(renderPwaScheduleCard).join("") : `<div class="cp-pwa-schedule-empty">No jobs scheduled</div>`}
+      </div>
+    </article>
+  `;
+}
+
+function renderPwaScheduleCard(item) {
+  const status = item.status || "scheduled";
+  const actions = assignmentActions(item, "mine");
+  const unit = assignmentUnitLabel(item);
+  const details = compact([
+    unit,
+    item.service_type,
+    assignmentSquareFeetLabel(item)
+  ]).join(" - ");
+  return `
+    <article class="cp-pwa-schedule-card cp-status-accent-${esc(normalizeToken(status) || "scheduled")}">
+      <a class="cp-pwa-schedule-card-link" href="${esc(contractorRoute("my-jobs", contractorSurface))}">
+        <div class="cp-pwa-schedule-card-time">${esc(scheduleCardTime(item))}</div>
+        <div class="cp-pwa-schedule-card-main">
+          <strong>${esc(assignmentTitle(item))}</strong>
+          <small>${esc(details || assignmentSubtitle(item))}</small>
+        </div>
+        <div class="cp-pwa-schedule-card-meta">
+          <span><b>Schedule</b>${esc(formatWindow(item))}</span>
+          <span><b>Pay</b>${esc(money(item.pay_amount))}</span>
+        </div>
+        <strong class="cp-pill ${statusClass(status)}">${esc(titleCase(status))}</strong>
+      </a>
+      ${actions ? `<div class="cp-pwa-schedule-card-actions">${actions}</div>` : ""}
+    </article>
+  `;
+}
+
+function scheduleWeekAssignments(start = state.scheduleCursor) {
+  const weekStart = startOfWeek(start);
+  const weekEnd = addDays(weekStart, 7);
+  return state.myAssignments
+    .filter((item) => {
+      const value = dateValue(item.start_window);
+      return value >= weekStart.getTime() && value < weekEnd.getTime();
+    })
+    .sort((a, b) => dateValue(a.start_window) - dateValue(b.start_window));
+}
+
+function scheduleCardTime(item) {
+  const start = formatTime(item.start_window, "Time pending");
+  const end = formatTime(item.end_window);
+  return end ? `${start} - ${end}` : start;
 }
 
 function renderAvailabilityEditor() {
