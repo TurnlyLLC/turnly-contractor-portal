@@ -5299,6 +5299,61 @@ a {
   overflow: auto;
 }
 
+.message-thread-tools {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.message-thread-select-all,
+.message-thread-check {
+  align-items: center;
+  color: var(--suite-soft);
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 800;
+  gap: 8px;
+}
+
+.message-thread-select-all input,
+.message-thread-check input {
+  accent-color: var(--suite-green);
+  cursor: pointer;
+  height: 16px;
+  width: 16px;
+}
+
+.message-thread-tool-actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.message-thread-tool-actions small {
+  color: var(--suite-soft);
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.message-thread-row {
+  align-items: stretch;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 24px minmax(0, 1fr);
+}
+
+.message-thread-row.selected .message-thread-item {
+  border-color: rgba(0, 214, 163, 0.56);
+}
+
+.message-thread-check {
+  justify-content: center;
+  padding-top: 12px;
+}
+
 .message-thread-item {
   background: rgba(7, 18, 32, 0.58);
   border: 1px solid var(--suite-border-soft);
@@ -5309,6 +5364,7 @@ a {
   gap: 7px;
   padding: 12px;
   text-align: left;
+  width: 100%;
 }
 
 .message-thread-item.active,

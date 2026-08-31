@@ -514,9 +514,11 @@ const internalMessageState = {
   participants: [],
   messages: [],
   selectedThreadId: "",
+  selectedThreadIds: new Set(),
   selectedRecipientIds: new Set(),
   recipientSearch: "",
   loading: false,
+  deleting: false,
   sending: false,
   message: "",
   error: false
@@ -7006,7 +7008,10 @@ function renderMessages() {
         `<button class="secondary-action" type="button" data-message-refresh>${icon("refresh")}<span>Refresh</span></button>`
       )}
       <section class="message-center-layout">
-        ${panel("Threads", `<div id="messageThreadList" class="message-thread-list">${skeletonRows(4)}</div>`, { className: "message-thread-panel" })}
+        ${panel("Threads", `
+          <div id="messageThreadTools" class="message-thread-tools">${renderInternalMessageThreadTools()}</div>
+          <div id="messageThreadList" class="message-thread-list">${skeletonRows(4)}</div>
+        `, { className: "message-thread-panel" })}
         ${panel("Conversation", `<div id="messageConversation" class="message-conversation">${emptyState("message-square", "Select a message", "Choose a thread to view the conversation.")}</div>`, { className: "message-conversation-panel" })}
         <div id="messageComposePanel" class="message-compose-anchor">
           ${panel("New Message", renderMessageComposer(), { className: "message-compose-panel", key: "message-compose" })}
@@ -7108,6 +7113,13 @@ function initMessages() {
       return;
     }
 
+    const deleteSelected = event.target.closest("[data-message-delete-selected]");
+    if (deleteSelected) {
+      event.preventDefault();
+      void deleteSelectedInternalMessageThreads();
+      return;
+    }
+
     const addRecipient = event.target.closest("[data-message-add-recipient]");
     if (addRecipient) {
       internalMessageState.selectedRecipientIds.add(addRecipient.dataset.messageAddRecipient || "");
@@ -7140,6 +7152,21 @@ function initMessages() {
     if (event.target.matches("#messageRecipientSearch")) {
       internalMessageState.recipientSearch = event.target.value || "";
       renderMessageRecipientPickerData();
+    }
+  });
+
+  root.addEventListener("change", (event) => {
+    if (event.target.matches("[data-message-select-all]")) {
+      setAllVisibleMessageThreadsSelected(event.target.checked);
+      renderMessageThreadListData();
+      return;
+    }
+
+    if (event.target.matches("[data-message-thread-select]")) {
+      const threadId = event.target.dataset.messageThreadSelect || "";
+      if (threadId && event.target.checked) internalMessageState.selectedThreadIds.add(threadId);
+      if (threadId && !event.target.checked) internalMessageState.selectedThreadIds.delete(threadId);
+      renderMessageThreadListData();
     }
   });
 
@@ -7203,6 +7230,7 @@ async function loadInternalMessages() {
     internalMessageState.participants = [];
     internalMessageState.messages = [];
     internalMessageState.selectedThreadId = "";
+    internalMessageState.selectedThreadIds.clear();
     internalMessageState.loading = false;
     setInternalMessageStatus("No message threads yet.");
     await loadTopbarMessageNotifications();
@@ -7224,6 +7252,7 @@ async function loadInternalMessages() {
 
   internalMessageState.threads = threadsResult.data || [];
   internalMessageState.participants = participantsResult.data || [];
+  pruneSelectedInternalMessageThreads();
   if (!internalMessageState.threads.some((thread) => thread.id === internalMessageState.selectedThreadId)) {
     internalMessageState.selectedThreadId = internalMessageState.threads[0]?.id || "";
   }
@@ -7347,10 +7376,66 @@ async function markInternalMessageThreadRead(threadId, options = {}) {
   if (options.refreshTopbar !== false) await loadTopbarMessageNotifications();
 }
 
+async function deleteSelectedInternalMessageThreads() {
+  if (!suiteSupabase || internalMessageState.deleting) return;
+  const threadIds = selectedInternalMessageThreadIds();
+  if (!threadIds.length) {
+    setInternalMessageStatus("Select at least one message thread to delete.", true);
+    return;
+  }
+
+  const label = `${threadIds.length} message thread${threadIds.length === 1 ? "" : "s"}`;
+  const confirmed = window.confirm(`Delete ${label}? This removes the conversation for every participant.`);
+  if (!confirmed) return;
+
+  const { data: sessionData, error: sessionError } = await suiteSupabase.auth.getSession();
+  const accessToken = sessionData?.session?.access_token || "";
+  if (sessionError || !accessToken) {
+    setInternalMessageStatus("Sign in again before deleting message threads.", true);
+    return;
+  }
+
+  internalMessageState.deleting = true;
+  setInternalMessageStatus(`Deleting ${label}...`);
+  renderMessageThreadListData();
+
+  try {
+    const response = await fetch("/api/admin-delete-message-threads", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`
+      },
+      body: JSON.stringify({ thread_ids: threadIds })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload?.error) {
+      throw new Error(payload?.error || `Delete request failed with ${response.status}.`);
+    }
+
+    const deletedIds = new Set((payload.deleted_ids || threadIds).map(String));
+    if (deletedIds.has(String(internalMessageState.selectedThreadId))) {
+      internalMessageState.selectedThreadId = "";
+      internalMessageState.messages = [];
+    }
+    internalMessageState.selectedThreadIds.clear();
+    setInternalMessageStatus(`Deleted ${payload.deleted_count || deletedIds.size || threadIds.length} message thread${(payload.deleted_count || deletedIds.size || threadIds.length) === 1 ? "" : "s"}.`);
+    await loadInternalMessages();
+  } catch (error) {
+    setInternalMessageStatus(`Unable to delete message threads: ${error.message || error}`, true);
+    renderMessageThreadListData();
+  } finally {
+    internalMessageState.deleting = false;
+    renderMessageThreadListData();
+  }
+}
+
 function renderMessageCenterData() {
   const list = document.getElementById("messageThreadList");
+  const tools = document.getElementById("messageThreadTools");
   const conversation = document.getElementById("messageConversation");
   const composer = document.getElementById("messageNewThreadForm");
+  if (tools) tools.innerHTML = renderInternalMessageThreadTools();
   if (list) list.innerHTML = renderInternalMessageThreadList();
   if (conversation) conversation.innerHTML = renderInternalMessageConversation();
   if (composer) {
@@ -7359,6 +7444,14 @@ function renderMessageCenterData() {
     if (submit) submit.disabled = internalMessageState.sending;
   }
   setInternalMessageStatus(internalMessageState.message, internalMessageState.error);
+}
+
+function renderMessageThreadListData() {
+  pruneSelectedInternalMessageThreads();
+  const list = document.getElementById("messageThreadList");
+  const tools = document.getElementById("messageThreadTools");
+  if (tools) tools.innerHTML = renderInternalMessageThreadTools();
+  if (list) list.innerHTML = renderInternalMessageThreadList();
 }
 
 function renderMessageRecipientPickerData() {
@@ -7381,17 +7474,68 @@ function renderInternalMessageThreadList() {
   return internalMessageState.threads.map((thread) => {
     const active = thread.id === internalMessageState.selectedThreadId;
     const unread = internalMessageThreadUnread(thread);
+    const checked = internalMessageState.selectedThreadIds.has(String(thread.id || ""));
     return `
-      <button class="message-thread-item ${active ? "active" : ""} ${unread ? "unread" : ""}" type="button" data-message-thread-id="${esc(thread.id)}">
-        <span>
-          <strong>${esc(thread.subject || "Message")}</strong>
-          <small>${esc(internalMessageParticipantLine(thread.id))}</small>
-        </span>
-        <em>${esc(formatMessageTimestamp(thread.last_message_at || thread.created_at))}</em>
-        <p>${esc(thread.last_message_preview || "No messages yet.")}</p>
-      </button>
+      <article class="message-thread-row ${checked ? "selected" : ""}">
+        <label class="message-thread-check" title="Select message thread">
+          <input type="checkbox" data-message-thread-select="${esc(thread.id)}" ${checked ? "checked" : ""} ${internalMessageState.deleting ? "disabled" : ""} />
+          <span aria-hidden="true"></span>
+        </label>
+        <button class="message-thread-item ${active ? "active" : ""} ${unread ? "unread" : ""}" type="button" data-message-thread-id="${esc(thread.id)}">
+          <span>
+            <strong>${esc(thread.subject || "Message")}</strong>
+            <small>${esc(internalMessageParticipantLine(thread.id))}</small>
+          </span>
+          <em>${esc(formatMessageTimestamp(thread.last_message_at || thread.created_at))}</em>
+          <p>${esc(thread.last_message_preview || "No messages yet.")}</p>
+        </button>
+      </article>
     `;
   }).join("");
+}
+
+function renderInternalMessageThreadTools() {
+  const visibleIds = internalMessageVisibleThreadIds();
+  const selectedIds = selectedInternalMessageThreadIds();
+  const selectedVisibleCount = visibleIds.filter((id) => internalMessageState.selectedThreadIds.has(id)).length;
+  const allVisibleSelected = Boolean(visibleIds.length && selectedVisibleCount === visibleIds.length);
+  const disabled = internalMessageState.deleting || !selectedIds.length;
+  return `
+    <label class="message-thread-select-all">
+      <input type="checkbox" data-message-select-all ${allVisibleSelected ? "checked" : ""} ${internalMessageState.deleting || !visibleIds.length ? "disabled" : ""} />
+      <span>Select all</span>
+    </label>
+    <div class="message-thread-tool-actions">
+      <small>${esc(`${selectedIds.length} selected`)}</small>
+      <button class="secondary-action danger-action" type="button" data-message-delete-selected ${disabled ? "disabled" : ""}>
+        ${icon("trash")}
+        <span>${internalMessageState.deleting ? "Deleting..." : "Delete Selected"}</span>
+      </button>
+    </div>
+  `;
+}
+
+function internalMessageVisibleThreadIds() {
+  return internalMessageState.threads.map((thread) => String(thread.id || "")).filter(Boolean);
+}
+
+function selectedInternalMessageThreadIds() {
+  const visible = new Set(internalMessageVisibleThreadIds());
+  return [...internalMessageState.selectedThreadIds].map(String).filter((id) => visible.has(id));
+}
+
+function pruneSelectedInternalMessageThreads() {
+  const visible = new Set(internalMessageVisibleThreadIds());
+  [...internalMessageState.selectedThreadIds].forEach((id) => {
+    if (!visible.has(String(id))) internalMessageState.selectedThreadIds.delete(id);
+  });
+}
+
+function setAllVisibleMessageThreadsSelected(selected) {
+  internalMessageVisibleThreadIds().forEach((id) => {
+    if (selected) internalMessageState.selectedThreadIds.add(id);
+    else internalMessageState.selectedThreadIds.delete(id);
+  });
 }
 
 function renderInternalMessageConversation() {
