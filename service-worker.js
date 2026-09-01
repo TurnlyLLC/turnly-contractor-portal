@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-contractor-pwa-v20260831-live-preview-users";
+const CACHE_NAME = "turnly-contractor-pwa-v20260901-sales-platform";
 
 const PRECACHE_URLS = [
   "/",
@@ -53,6 +53,16 @@ const PRECACHE_URLS = [
   "/contractor-file.html",
   "/messages.html",
   "/property-manager.html",
+  "/sales-login.html",
+  "/sales.html",
+  "/sales-leads.html",
+  "/sales-walkthroughs.html",
+  "/sales-quotes.html",
+  "/sales-contracts.html",
+  "/sales-tasks.html",
+  "/sales-portal.css",
+  "/sales-portal.js",
+  "/sales-prospect-template.csv",
   "/assets/vetra-forest-hills-front-office.jpg",
   "/assets/property-manager-operations-hero.jpg",
   "/favicon.ico",
@@ -101,6 +111,7 @@ function isAdminRuntimeAsset(request) {
     || pathname === "/contractor-portal.css"
     || pathname === "/portal-public.css"
     || pathname === "/sales-portal.css"
+    || pathname === "/sales-portal.js"
     || pathname === "/auth-recovery-router.js"
     || pathname === "/portal-auth.js"
     || pathname === "/reset-password.js"

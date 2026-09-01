@@ -186,7 +186,7 @@
 
 .portal-choice-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -226,6 +226,11 @@
   color: var(--public-blue);
 }
 
+.portal-choice-card.sales .choice-icon {
+  background: rgba(155, 108, 255, 0.15);
+  color: var(--public-violet);
+}
+
 .portal-choice-card small {
   color: var(--public-green);
   font-size: 12px;
@@ -236,6 +241,10 @@
 
 .portal-choice-card.property-manager small {
   color: var(--public-blue);
+}
+
+.portal-choice-card.sales small {
+  color: var(--public-violet);
 }
 
 .portal-choice-card strong {
@@ -258,6 +267,11 @@
 .portal-choice-card.property-manager em {
   border-color: rgba(58, 185, 255, 0.46);
   color: var(--public-blue);
+}
+
+.portal-choice-card.sales em {
+  border-color: rgba(155, 108, 255, 0.46);
+  color: var(--public-violet);
 }
 
 .portal-entry-status {

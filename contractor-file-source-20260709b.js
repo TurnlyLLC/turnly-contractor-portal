@@ -1758,6 +1758,7 @@ function paymentUpdatePayload(row, options) {
   const paidAt = paid ? (assignmentPaidDate(row) || now) : null;
   const notes = String(options.notes || "").trim();
   const userId = options.userId || null;
+  const manualOverride = options.manualOverride === true;
   const currentMetadata = metadata(row);
   const payment = {
     ...assignmentPayment(row),
@@ -1782,7 +1783,13 @@ function paymentUpdatePayload(row, options) {
     updated_at: now,
     updated_by: userId
   };
-  return {
+  if (manualOverride) {
+    payment.source = "manual";
+    payment.override = true;
+    payment.override_at = now;
+    payment.override_by = userId;
+  }
+  const payload = {
     metadata: { ...currentMetadata, payment },
     payment_status: paid ? "paid" : "unpaid",
     pay_status: paid ? "paid" : "unpaid",
@@ -1805,6 +1812,13 @@ function paymentUpdatePayload(row, options) {
     payment_notes: notes,
     fee_notes: notes
   };
+  if (manualOverride) {
+    payload.payment_status_source = "manual";
+    payload.payment_status_override = true;
+    payload.payment_status_override_at = now;
+    payload.payment_status_override_by = userId;
+  }
+  return payload;
 }
 
 function updatePayNetPreview(id) {
@@ -1833,7 +1847,8 @@ async function savePayDetails(id) {
       feeAmount,
       notes,
       userId: userData?.user?.id || null,
-      now: new Date().toISOString()
+      now: new Date().toISOString(),
+      manualOverride: false
     });
     const result = await updateAssignmentWithFallback(id, payload);
     state.savingId = "";
@@ -1904,7 +1919,8 @@ async function bulkMarkSelectedPaid() {
         feeAmount: entry.feeAmount,
         notes: entry.notes,
         userId: userData?.user?.id || null,
-        now: new Date().toISOString()
+        now: new Date().toISOString(),
+        manualOverride: true
       });
       payload.paid_notes = entry.notes || "Bulk marked paid from admin contractor file.";
       const result = await updateAssignmentWithFallback(entry.id, payload);
@@ -1948,7 +1964,8 @@ async function togglePaid(id) {
     feeAmount,
     notes,
     userId: userData?.user?.id || null,
-    now: new Date().toISOString()
+    now: new Date().toISOString(),
+    manualOverride: true
   });
   payload.paid_notes = notes || (nextPaid ? "Marked paid from admin contractor file." : "Marked unpaid from admin contractor file.");
   const result = await updateAssignmentWithFallback(id, payload);

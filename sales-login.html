@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sales Access | Turnly Portal</title>
+  <link rel="icon" href="/favicon.ico?v=20260624t" sizes="any" />
+  <link rel="shortcut icon" href="/favicon.ico?v=20260624t" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=20260624t" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png?v=20260624t" />
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="portal-public.css?v=20260803-logo-wordmark" />
+  <link rel="stylesheet" href="portal-auth-overrides.css?v=20260722d" />
+</head>
+<body class="public-portal-body" data-auth-role="sales" data-auth-home="sales.html" data-auth-label="Sales">
+  <div class="public-shell">
+    <header class="public-nav">
+      <a class="public-brand" href="index.html" aria-label="Turnly home">
+        <span class="public-brand-mark">T</span>
+        <span>
+          <strong>TURNLY</strong>
+          <small>Sales Portal</small>
+        </span>
+      </a>
+
+      <nav class="public-nav-actions" aria-label="Sales access navigation">
+        <a href="index.html">Portal Home</a>
+      </nav>
+    </header>
+
+    <main class="role-auth-layout">
+      <section class="role-auth-intro">
+        <p class="public-kicker">Sales Access</p>
+        <h1>Prospects, walkthroughs, quotes, and follow-ups.</h1>
+        <p>
+          Sign in to manage the Turnly sales pipeline, import prospect lists,
+          schedule walkthroughs, and move opportunities toward signed contracts.
+        </p>
+      </section>
+
+      <section class="role-auth-card" aria-label="Sales authentication">
+        <form id="loginForm" class="public-form auth-panel active" data-auth-panel="login">
+          <div class="public-form-grid">
+            <label class="span-two">
+              Email
+              <input type="email" id="loginEmail" autocomplete="email" required />
+            </label>
+            <label class="span-two">
+              Password
+              <input type="password" id="loginPassword" autocomplete="current-password" required />
+            </label>
+          </div>
+          <button class="public-btn primary full" type="submit">Log In</button>
+          <div class="auth-helper-row">
+            <a class="auth-text-action" href="reset-password.html">Forgot your password?</a>
+          </div>
+        </form>
+
+        <p class="signup-message" data-tone="muted">
+          Sales accounts are created by Turnly admin so prospect data stays private.
+        </p>
+
+        <p id="authMessage" class="signup-message" aria-live="polite"></p>
+      </section>
+    </main>
+  </div>
+
+  <script src="env.js"></script>
+  <script src="auth-recovery-router.js?v=20260722e"></script>
+  <script type="module" src="portal-auth.js?v=20260828-contractor-desktop-split"></script>
+</body>
+</html>

@@ -348,6 +348,18 @@ const assignmentOptionalColumns = [
   "payment_status",
   "pay_status",
   "payout_status",
+  "quickbooks_invoice_link_id",
+  "quickbooks_invoice_id",
+  "quickbooks_invoice_status",
+  "quickbooks_invoice_synced_at",
+  "quickbooks_payment_status",
+  "quickbooks_payment_txn_id",
+  "quickbooks_payment_txn_type",
+  "quickbooks_payment_synced_at",
+  "payment_status_source",
+  "payment_status_override",
+  "payment_status_override_at",
+  "payment_status_override_by",
   "metadata",
   "completion_notes"
 ];
@@ -435,7 +447,19 @@ const invoiceReportState = {
   weekStart: "",
   loading: false,
   message: "",
-  error: false
+  error: false,
+  quickbooks: {
+    connected: false,
+    connection: null,
+    loading: false,
+    connecting: false,
+    syncingInvoices: false,
+    syncingPayments: false,
+    message: "",
+    error: false,
+    lastInvoiceSync: null,
+    lastPaymentSync: null
+  }
 };
 const contractorFeedbackReportState = {
   rows: [],
@@ -732,6 +756,7 @@ const iconPaths = {
   home: '<path d="m3 11 9-8 9 8"/><path d="M5 10v11h14V10"/><path d="M9 21v-7h6v7"/>',
   "layout-grid": '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>',
   "line-chart": '<path d="M3 3v18h18"/><path d="m7 16 4-4 3 3 5-7"/>',
+  link: '<path d="M10 13a5 5 0 0 0 7.07 0l2.83-2.83a5 5 0 0 0-7.07-7.07L11.2 4.73"/><path d="M14 11a5 5 0 0 0-7.07 0L4.1 13.83a5 5 0 0 0 7.07 7.07l1.63-1.63"/>',
   list: '<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/>',
   map: '<path d="M9 18 3 21V6l6-3 6 3 6-3v15l-6 3Z"/><path d="M9 3v15"/><path d="M15 6v15"/>',
   "message-square": '<path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z"/>',
@@ -9935,6 +9960,7 @@ function renderInvoiceReport() {
         `<button class="secondary-action" type="button" data-invoice-print>${icon("download")}<span>Print</span></button><button class="secondary-action" type="button" data-invoice-refresh>${icon("refresh")}<span>Refresh</span></button>`
       )}
       ${renderInvoiceWeekControls(range)}
+      <div id="quickbooksSyncPanelMount">${renderQuickBooksSyncPanel()}</div>
       <section class="metric-strip invoice-metric-strip">
         ${metric("Week", invoiceWeekLabel(range.start, range.end), "Sunday through Saturday", "calendar", "blue", 'id="invoiceWeekRange"')}
         ${metric("Properties", "0", "with scheduled jobs", "building", "green", 'id="invoicePropertyCount"')}
@@ -9946,6 +9972,189 @@ function renderInvoiceReport() {
       </section>
     </section>
   `;
+}
+
+function quickBooksState() {
+  return invoiceReportState.quickbooks;
+}
+
+function renderQuickBooksSyncPanel() {
+  const state = quickBooksState();
+  const connection = state.connection || {};
+  const connected = Boolean(state.connected);
+  const busy = state.loading || state.connecting || state.syncingInvoices || state.syncingPayments;
+  const title = connected
+    ? `QuickBooks connected${connection.companyName ? `: ${connection.companyName}` : ""}`
+    : "QuickBooks not connected";
+  const meta = connected
+    ? [
+      connection.environment ? `${connection.environment} company` : "",
+      connection.realmLabel ? `Company ${connection.realmLabel}` : "",
+      connection.lastSyncAt ? `Last sync ${formatDate(connection.lastSyncAt, "")}` : ""
+    ].filter(Boolean).join(" - ")
+    : "Connect QuickBooks before sending invoices or pulling payment statuses.";
+  const message = state.message || (connected
+    ? "Sync invoices for the selected week, then pull contractor payment statuses back from QuickBooks."
+    : "Invoices and payment syncs run through secure server routes.");
+  const invoiceText = state.syncingInvoices ? "Syncing Invoices..." : "Sync Invoices";
+  const paymentText = state.syncingPayments ? "Syncing Payments..." : "Sync Payment Statuses";
+  return `
+    <section class="quickbooks-sync-panel ${connected ? "is-connected" : "is-disconnected"}" aria-label="QuickBooks sync">
+      <div class="quickbooks-sync-copy">
+        <span class="quickbooks-sync-icon">${icon(connected ? "check" : "link")}</span>
+        <div>
+          <p>QuickBooks Sync</p>
+          <h2>${esc(title)}</h2>
+          <small>${esc(meta)}</small>
+          <span class="quickbooks-sync-message ${state.error ? "error" : ""}" aria-live="polite">${esc(message)}</span>
+        </div>
+      </div>
+      <div class="quickbooks-sync-actions">
+        <button class="secondary-action" type="button" data-quickbooks-connect ${busy ? "disabled" : ""}>${icon("link")}<span>${connected ? "Reconnect" : state.connecting ? "Opening..." : "Connect QuickBooks"}</span></button>
+        <button class="primary-action" type="button" data-quickbooks-sync-invoices ${!connected || busy ? "disabled" : ""}>${icon("document")}<span>${esc(invoiceText)}</span></button>
+        <button class="secondary-action" type="button" data-quickbooks-sync-payments ${!connected || busy ? "disabled" : ""}>${icon("refresh")}<span>${esc(paymentText)}</span></button>
+      </div>
+    </section>
+  `;
+}
+
+function updateQuickBooksSyncPanel() {
+  setInvoiceHtml("quickbooksSyncPanelMount", renderQuickBooksSyncPanel());
+}
+
+async function quickBooksAuthHeaders() {
+  if (!suiteSupabase) throw new Error("Supabase config is missing.");
+  const { data, error } = await suiteSupabase.auth.getSession();
+  const accessToken = data?.session?.access_token || "";
+  if (error || !accessToken) throw new Error("Sign in again before using QuickBooks sync.");
+  return {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${accessToken}`
+  };
+}
+
+async function quickBooksApi(path, options = {}) {
+  const headers = await quickBooksAuthHeaders();
+  const response = await fetch(path, {
+    ...options,
+    headers: {
+      ...headers,
+      ...(options.headers || {})
+    }
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload?.error) {
+    throw new Error(payload?.error || `QuickBooks request failed with ${response.status}.`);
+  }
+  return payload;
+}
+
+async function loadQuickBooksStatus() {
+  const state = quickBooksState();
+  if (!suiteSupabase) {
+    state.connected = false;
+    state.connection = null;
+    state.error = true;
+    state.message = "Supabase config is missing.";
+    updateQuickBooksSyncPanel();
+    return;
+  }
+  state.loading = true;
+  state.error = false;
+  updateQuickBooksSyncPanel();
+  try {
+    const payload = await quickBooksApi("/api/quickbooks-status", { method: "GET" });
+    state.connected = Boolean(payload.connected);
+    state.connection = payload.connection || null;
+    state.error = false;
+    if (payload.setupRequired && payload.message) {
+      state.message = payload.message;
+    } else if (!state.message || state.message.includes("not connected")) {
+      state.message = state.connected
+        ? "QuickBooks is ready for invoice and payment syncing."
+        : "Connect QuickBooks before syncing invoices or payment statuses.";
+    }
+  } catch (error) {
+    state.connected = false;
+    state.connection = null;
+    state.error = true;
+    state.message = error.message || "Unable to load QuickBooks connection status.";
+  } finally {
+    state.loading = false;
+    updateQuickBooksSyncPanel();
+  }
+}
+
+async function connectQuickBooks() {
+  const state = quickBooksState();
+  state.connecting = true;
+  state.error = false;
+  state.message = "Opening QuickBooks authorization...";
+  updateQuickBooksSyncPanel();
+  try {
+    const payload = await quickBooksApi("/api/quickbooks-connect", { method: "POST", body: "{}" });
+    if (!payload.authorizationUrl) throw new Error("QuickBooks did not return an authorization URL.");
+    window.location.href = payload.authorizationUrl;
+  } catch (error) {
+    state.connecting = false;
+    state.error = true;
+    state.message = error.message || "Unable to start QuickBooks connection.";
+    updateQuickBooksSyncPanel();
+  }
+}
+
+function quickBooksSyncPayload() {
+  return JSON.stringify({ weekStart: invoiceDateInputValue(invoiceSelectedWeekRange().start) });
+}
+
+async function syncQuickBooksInvoices() {
+  const state = quickBooksState();
+  state.syncingInvoices = true;
+  state.error = false;
+  state.message = "Syncing selected week invoices to QuickBooks...";
+  updateQuickBooksSyncPanel();
+  try {
+    const payload = await quickBooksApi("/api/quickbooks-sync-invoices", {
+      method: "POST",
+      body: quickBooksSyncPayload()
+    });
+    state.lastInvoiceSync = payload;
+    state.error = Boolean(payload.failed);
+    state.message = `QuickBooks invoices: ${Number(payload.created || 0).toLocaleString()} created, ${Number(payload.refreshed || 0).toLocaleString()} refreshed${payload.failed ? `, ${Number(payload.failed).toLocaleString()} failed` : ""}.`;
+    await loadInvoiceReport();
+    void loadQuickBooksStatus();
+  } catch (error) {
+    state.error = true;
+    state.message = error.message || "Unable to sync QuickBooks invoices.";
+  } finally {
+    state.syncingInvoices = false;
+    updateQuickBooksSyncPanel();
+  }
+}
+
+async function syncQuickBooksPaymentStatuses() {
+  const state = quickBooksState();
+  state.syncingPayments = true;
+  state.error = false;
+  state.message = "Pulling contractor payment statuses from QuickBooks...";
+  updateQuickBooksSyncPanel();
+  try {
+    const payload = await quickBooksApi("/api/quickbooks-sync-payment-statuses", {
+      method: "POST",
+      body: quickBooksSyncPayload()
+    });
+    state.lastPaymentSync = payload;
+    state.error = Boolean(payload.invoiceLinksError || payload.invoiceRefreshErrors?.length);
+    state.message = `QuickBooks payments: ${Number(payload.matched?.length || 0).toLocaleString()} job${payload.matched?.length === 1 ? "" : "s"} marked paid, ${Number(payload.skippedOverrides?.length || 0).toLocaleString()} manual override${payload.skippedOverrides?.length === 1 ? "" : "s"} skipped.`;
+    await loadInvoiceReport();
+    void loadQuickBooksStatus();
+  } catch (error) {
+    state.error = true;
+    state.message = error.message || "Unable to sync QuickBooks payment statuses.";
+  } finally {
+    state.syncingPayments = false;
+    updateQuickBooksSyncPanel();
+  }
 }
 
 function initInvoiceReport() {
@@ -9972,6 +10181,27 @@ function initInvoiceReport() {
   root.querySelector("[data-invoice-print]")?.addEventListener("click", () => {
     printInvoiceReport(root);
   });
+  root.addEventListener("click", (event) => {
+    const connect = event.target.closest("[data-quickbooks-connect]");
+    if (connect) {
+      void connectQuickBooks();
+      return;
+    }
+    const invoices = event.target.closest("[data-quickbooks-sync-invoices]");
+    if (invoices) {
+      void syncQuickBooksInvoices();
+      return;
+    }
+    const payments = event.target.closest("[data-quickbooks-sync-payments]");
+    if (payments) {
+      void syncQuickBooksPaymentStatuses();
+    }
+  });
+  if (new URLSearchParams(window.location.search).get("quickbooks") === "connected") {
+    invoiceReportState.quickbooks.message = "QuickBooks connected. Choose a week, then sync invoices or payment statuses.";
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+  void loadQuickBooksStatus();
   void loadInvoiceReport();
 }
 
