@@ -2341,6 +2341,12 @@
 }
 
 .contractor-portal-body[data-dashboard-theme="light"] {
+  --admin-bg: #ffffff;
+  --admin-panel: #ffffff;
+  --admin-panel-soft: #f2f7fb;
+  --admin-border: rgba(15, 35, 55, 0.14);
+  --admin-text: #102033;
+  --admin-muted: #5c7086;
   --cp-bg: #ffffff;
   --cp-rail: #f7fafc;
   --cp-panel: #ffffff;
@@ -2438,6 +2444,25 @@
   color: var(--cp-text);
 }
 
+.contractor-portal-body[data-dashboard-theme="light"] :where(h1, h2, h3, h4, h5, h6, label),
+.contractor-portal-body[data-dashboard-theme="light"] :where(.cp-metric strong, .cp-panel strong, .cp-job-row strong, .cp-home-job-card strong, .cp-calendar-day > strong, .cp-calendar-event, .cp-chat-item strong, .cp-message-bubble strong, .cp-message-bubble p, .cp-table td, .cp-pay-card div, .cp-resource-item strong, .cp-document-tile strong, .cp-video-card strong, .cp-detail-panel) {
+  color: var(--cp-text);
+}
+
+.contractor-portal-body[data-dashboard-theme="light"] :where(.cp-metric p, .cp-home-job-main small, .cp-job-main small, .cp-job-meta small, .cp-open-job-lines span, .cp-mini-row small, .cp-feed-item small, .cp-calendar-event small, .cp-chat-item p, .cp-chat-item span, .cp-message-bubble time, .cp-table td small, .cp-resource-item p, .cp-document-tile p, .cp-video-card p, .cp-pay-card small, .admin-preview-trigger small, .topbar-dropdown small) {
+  color: var(--cp-muted);
+}
+
+.contractor-portal-body[data-dashboard-theme="light"] :where(.cp-search input, .cp-field input, .cp-field textarea)::placeholder {
+  color: #71849a;
+  opacity: 1;
+}
+
+.contractor-portal-body[data-dashboard-theme="light"] :where(.cp-select, .cp-field select, .admin-preview-field select) option {
+  background: #ffffff;
+  color: var(--cp-text);
+}
+
 .contractor-portal-body[data-dashboard-theme="light"] .cp-metric,
 .contractor-portal-body[data-dashboard-theme="light"] .cp-panel,
 .contractor-portal-body[data-dashboard-theme="light"] .cp-resource-item,
@@ -2526,6 +2551,44 @@
 .contractor-portal-body[data-dashboard-theme="light"] .cp-calendar-event,
 .contractor-portal-body[data-dashboard-theme="light"] .cp-detail-panel {
   background: var(--cp-panel);
+}
+
+.contractor-portal-body[data-dashboard-theme="light"] .cp-video-thumb {
+  background: linear-gradient(135deg, rgba(18, 217, 155, 0.12), rgba(54, 169, 255, 0.1));
+  border-color: var(--cp-line);
+}
+
+.contractor-portal-body[data-dashboard-theme="light"] .cp-play {
+  background: #ffffff;
+  border-color: var(--cp-line);
+  color: var(--cp-text);
+}
+
+.contractor-portal-body[data-dashboard-theme="light"] .cp-action,
+.contractor-portal-body[data-dashboard-theme="light"] .primary-action,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-nav-badge,
+.contractor-portal-body[data-dashboard-theme="light"] .cp-mini-calendar .active {
+  color: #041816;
+}
+
+.contractor-portal-body[data-dashboard-theme="light"] :where(.cp-status-open, .cp-status-preferred-pending) {
+  color: #058b64;
+}
+
+.contractor-portal-body[data-dashboard-theme="light"] :where(.cp-status-claimed, .cp-status-scheduled) {
+  color: #0874bd;
+}
+
+.contractor-portal-body[data-dashboard-theme="light"] :where(.cp-status-in-progress, .cp-status-qa-pending) {
+  color: #8a6100;
+}
+
+.contractor-portal-body[data-dashboard-theme="light"] .cp-status-completed {
+  color: #6d4bd5;
+}
+
+.contractor-portal-body[data-dashboard-theme="light"] :where(.cp-status-cancelled, .cp-status-declined, .cp-status-overdue) {
+  color: #c22f40;
 }
 
 .contractor-portal-body[data-dashboard-theme="light"] .cp-message-bubble {

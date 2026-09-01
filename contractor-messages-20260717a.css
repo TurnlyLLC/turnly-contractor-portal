@@ -108,6 +108,11 @@ body[data-contractor-page="messages"] #cpMessageReplyForm .cp-reply-send {
   width: 92px;
 }
 
+body.contractor-portal-body[data-dashboard-theme="light"][data-contractor-page="messages"] #cpMessageReplyForm.cp-message-reply-bar {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), #ffffff 34%);
+  border-top-color: var(--cp-line);
+}
+
 @media (max-width: 1180px) {
   body[data-contractor-page="messages"] .cp-messages-layout {
     grid-template-columns: minmax(240px, 320px) minmax(0, 1fr) !important;
@@ -168,6 +173,10 @@ body[data-contractor-page="messages"] #cpMessageReplyForm .cp-reply-send {
   body[data-contractor-page="messages"] #cpMessageReplyForm .cp-reply-send {
     min-height: 44px;
     width: 72px;
+  }
+
+  body.contractor-portal-body[data-dashboard-theme="light"][data-contractor-page="messages"] #cpMessageReplyForm.cp-message-reply-bar {
+    background: #ffffff;
   }
 }
 
