@@ -693,7 +693,7 @@ function renderTopbar() {
           ${icon("bell")}
           <span class="sales-badge">${number(openTasks().length)}</span>
         </button>
-        <button class="sales-primary-button" type="button" data-open-import>
+        <button class="sales-primary-button sales-upload-prospects-button" type="button" data-open-import>
           ${icon("upload")}<span>Upload Prospects</span>
         </button>
         <div class="sales-profile">

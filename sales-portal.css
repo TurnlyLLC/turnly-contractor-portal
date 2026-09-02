@@ -25,7 +25,13 @@
   box-sizing: border-box;
 }
 
+html {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 body.sales-portal-body {
+  max-width: 100%;
   min-height: 100vh;
   margin: 0;
   background:
@@ -34,6 +40,7 @@ body.sales-portal-body {
     linear-gradient(135deg, var(--sales-bg-deep) 0%, var(--sales-bg) 52%, #071522 100%);
   color: var(--sales-ink);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  overflow-x: hidden;
 }
 
 body.sales-portal-body button,
@@ -54,7 +61,10 @@ body.sales-portal-body a {
 .sales-app {
   display: grid;
   grid-template-columns: 236px minmax(0, 1fr);
+  width: 100%;
+  max-width: 100vw;
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 .sales-sidebar {
@@ -187,6 +197,7 @@ body.sales-portal-body a {
 
 .sales-main {
   min-width: 0;
+  max-width: 100%;
   padding: 24px 24px 34px;
 }
 
@@ -195,7 +206,7 @@ body.sales-portal-body a {
   top: 0;
   z-index: 50;
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) auto;
+  grid-template-columns: minmax(190px, 300px) minmax(0, 1fr);
   gap: 18px;
   align-items: center;
   margin: -24px -24px 22px;
@@ -209,26 +220,33 @@ body.sales-portal-body a {
   margin: 0;
   font-size: 30px;
   line-height: 1.1;
+  overflow-wrap: anywhere;
 }
 
 .sales-title p {
   margin: 8px 0 0;
   color: var(--sales-muted);
   font-size: 15px;
+  overflow-wrap: anywhere;
 }
 
 .sales-top-actions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 14px;
+  min-width: 0;
 }
 
 .sales-search {
+  flex: 1 1 240px;
   display: flex;
   align-items: center;
   gap: 10px;
-  width: min(430px, 30vw);
+  width: auto;
+  max-width: 360px;
+  min-width: 220px;
   min-height: 47px;
   padding: 0 14px;
   border: 1px solid var(--sales-line);
@@ -238,6 +256,7 @@ body.sales-portal-body a {
 }
 
 .sales-search input {
+  min-width: 0;
   width: 100%;
   border: 0;
   outline: 0;
@@ -265,6 +284,8 @@ body.sales-portal-body a {
 
 .sales-date-pill,
 .sales-profile-button {
+  flex: 0 0 auto;
+  max-width: 100%;
   min-height: 47px;
   display: inline-flex;
   align-items: center;
@@ -304,6 +325,7 @@ body.sales-portal-body a {
 .sales-profile-button {
   cursor: pointer;
   text-align: left;
+  max-width: 230px;
 }
 
 .sales-avatar {
@@ -329,6 +351,13 @@ body.sales-portal-body a {
   margin-top: 2px;
   color: #9fb0c2;
   font-size: 11px;
+}
+
+.sales-upload-prospects-button {
+  flex: 0 0 auto;
+  min-height: 47px;
+  padding-inline: 15px;
+  white-space: nowrap;
 }
 
 .sales-profile-menu {
@@ -372,6 +401,7 @@ body.sales-portal-body a {
 .sales-page-body {
   display: grid;
   gap: 16px;
+  min-width: 0;
 }
 
 .sales-grid,
@@ -387,6 +417,21 @@ body.sales-portal-body a {
 .sales-task-layout {
   display: grid;
   gap: 14px;
+  min-width: 0;
+}
+
+.sales-grid > *,
+.sales-metric-grid > *,
+.sales-dashboard-grid > *,
+.sales-two-column > *,
+.sales-three-column > *,
+.sales-workspace > *,
+.sales-card-grid > *,
+.sales-filter-bar > *,
+.sales-table-layout > *,
+.sales-quote-layout > *,
+.sales-task-layout > * {
+  min-width: 0;
 }
 
 .sales-metric-grid {
@@ -777,7 +822,7 @@ button.sales-activity-row:hover {
 }
 
 .sales-filter-bar {
-  grid-template-columns: minmax(220px, 1fr) 170px 170px 170px auto;
+  grid-template-columns: minmax(220px, 1fr) minmax(145px, 170px) minmax(145px, 170px) minmax(145px, 170px) auto;
   align-items: center;
   margin-bottom: 14px;
 }
@@ -822,6 +867,8 @@ button.sales-activity-row:hover {
 }
 
 .sales-table-wrap {
+  width: 100%;
+  max-width: 100%;
   overflow: auto;
   border: 1px solid rgba(148, 163, 184, 0.10);
   border-radius: var(--sales-radius);
@@ -1301,9 +1348,11 @@ button.sales-activity-row:hover {
 .sales-month-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(120px, 1fr));
+  width: 100%;
+  max-width: 100%;
   border: 1px solid rgba(148, 163, 184, 0.12);
   border-radius: var(--sales-radius);
-  overflow: hidden;
+  overflow: auto;
 }
 
 .sales-month-label,
@@ -1384,6 +1433,8 @@ button.sales-activity-row:hover {
   display: grid;
   grid-template-columns: repeat(7, minmax(150px, 1fr));
   gap: 8px;
+  width: 100%;
+  max-width: 100%;
   overflow-x: auto;
 }
 
@@ -1496,6 +1547,14 @@ button.sales-activity-row:hover {
 }
 
 @media (max-width: 1460px) {
+  .sales-topbar {
+    grid-template-columns: 1fr;
+  }
+
+  .sales-top-actions {
+    justify-content: flex-start;
+  }
+
   .sales-metric-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -1511,6 +1570,16 @@ button.sales-activity-row:hover {
 
   .sales-detail-card {
     position: static;
+  }
+}
+
+@media (max-width: 1240px) {
+  .sales-filter-bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .sales-filter-bar > span:empty {
+    display: none;
   }
 }
 
@@ -1545,7 +1614,9 @@ button.sales-activity-row:hover {
   }
 
   .sales-search {
-    width: min(100%, 520px);
+    width: 100%;
+    max-width: 520px;
+    min-width: 0;
   }
 
   .sales-filter-bar,
@@ -1599,9 +1670,24 @@ button.sales-activity-row:hover {
 
   .sales-profile-button,
   .sales-date-pill,
-  .sales-primary-button,
   .sales-secondary-button,
   .sales-danger-button {
     width: 100%;
+  }
+
+  .sales-primary-button {
+    width: fit-content;
+  }
+
+  .sales-section-title .sales-primary-button,
+  .sales-form-grid .sales-primary-button,
+  .sales-action-stack .sales-primary-button,
+  .sales-row-actions .sales-primary-button,
+  .sales-modal-footer .sales-primary-button {
+    width: 100%;
+  }
+
+  .sales-upload-prospects-button {
+    width: fit-content;
   }
 }
