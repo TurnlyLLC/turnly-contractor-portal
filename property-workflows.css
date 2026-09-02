@@ -395,12 +395,14 @@ button.secondary-command-btn {
 }
 
 .property-modal {
+  --property-modal-edge: clamp(16px, 4vh, 36px);
   display: grid;
   inset: 0;
-  padding: 24px;
-  place-items: center;
+  overflow: hidden;
+  padding: var(--property-modal-edge);
+  place-items: start center;
   position: fixed;
-  z-index: 100;
+  z-index: 1200;
 }
 
 .property-modal-backdrop {
@@ -414,12 +416,15 @@ button.secondary-command-btn {
   background: linear-gradient(145deg, rgba(30, 45, 64, 0.98), rgba(16, 29, 45, 0.98));
   border: 1px solid rgba(144, 164, 183, 0.2);
   border-radius: 10px;
+  box-sizing: border-box;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
-  max-height: calc(100vh - 48px);
+  max-height: calc(100vh - var(--property-modal-edge) - var(--property-modal-edge));
+  max-height: calc(100dvh - var(--property-modal-edge) - var(--property-modal-edge));
+  overscroll-behavior: contain;
   overflow: auto;
   padding: 18px;
   position: relative;
-  width: min(1040px, 100%);
+  width: min(1040px, calc(100vw - var(--property-modal-edge) - var(--property-modal-edge)));
 }
 
 .property-modal-open {
@@ -1404,11 +1409,13 @@ body[data-admin-page="assignments"] .assignment-bulk-field.is-enabled .suite-fie
   }
 
   .property-modal {
-    padding: 12px;
+    --property-modal-edge: 12px;
+    padding: var(--property-modal-edge);
   }
 
   .property-modal-panel {
-    max-height: calc(100vh - 24px);
+    max-height: calc(100vh - var(--property-modal-edge) - var(--property-modal-edge));
+    max-height: calc(100dvh - var(--property-modal-edge) - var(--property-modal-edge));
     padding: 14px;
   }
 

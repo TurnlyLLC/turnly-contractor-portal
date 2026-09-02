@@ -2084,12 +2084,13 @@ a {
 }
 
 .client-modal {
+  --admin-modal-edge: clamp(16px, 4vh, 36px);
   bottom: 0;
   left: 0;
   position: fixed;
   right: 0;
   top: 0;
-  z-index: 45;
+  z-index: 1200;
 }
 
 .client-modal-backdrop {
@@ -2109,15 +2110,18 @@ a {
   background: #102035;
   border: 1px solid var(--suite-border);
   border-radius: 10px;
+  box-sizing: border-box;
   box-shadow: var(--suite-shadow);
   left: 50%;
-  max-height: 90vh;
+  max-height: calc(100vh - var(--admin-modal-edge) - var(--admin-modal-edge));
+  max-height: calc(100dvh - var(--admin-modal-edge) - var(--admin-modal-edge));
   max-width: 940px;
+  overscroll-behavior: contain;
   overflow: auto;
   padding: 18px;
   position: absolute;
-  top: 50%;
-  transform: translate(-50%, -50%);
+  top: var(--admin-modal-edge);
+  transform: translateX(-50%);
   width: min(94vw, 940px);
 }
 
@@ -2187,11 +2191,11 @@ a {
 @keyframes clientModalIn {
   from {
     opacity: 0;
-    transform: translate(-50%, calc(-50% - 8px));
+    transform: translate(-50%, -8px);
   }
   to {
     opacity: 1;
-    transform: translate(-50%, -50%);
+    transform: translateX(-50%);
   }
 }
 
@@ -5656,12 +5660,13 @@ a {
 }
 
 .property-modal {
+  --admin-modal-edge: clamp(16px, 4vh, 36px);
   bottom: 0;
   left: 0;
   position: fixed;
   right: 0;
   top: 0;
-  z-index: 40;
+  z-index: 1200;
 }
 
 .property-modal-backdrop {
@@ -5677,15 +5682,18 @@ a {
   background: #102035;
   border: 1px solid var(--suite-border);
   border-radius: 10px;
+  box-sizing: border-box;
   box-shadow: var(--suite-shadow);
   left: 50%;
-  max-height: 90vh;
+  max-height: calc(100vh - var(--admin-modal-edge) - var(--admin-modal-edge));
+  max-height: calc(100dvh - var(--admin-modal-edge) - var(--admin-modal-edge));
   max-width: 840px;
+  overscroll-behavior: contain;
   overflow: auto;
   padding: 18px;
   position: absolute;
-  top: 50%;
-  transform: translate(-50%, -50%);
+  top: var(--admin-modal-edge);
+  transform: translateX(-50%);
   width: min(92vw, 840px);
 }
 
