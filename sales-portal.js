@@ -1099,8 +1099,8 @@ function renderDashboardPage() {
       <article class="sales-panel sales-chart-shell">
         <div class="sales-panel-header">
           <div>
-            <h2>Sales Pipeline</h2>
-            <p>Conversion across each active stage.</p>
+            <h2>Qualification Funnel</h2>
+            <p>Where prospects stand before management walkthroughs.</p>
           </div>
         </div>
         ${renderFunnel()}
@@ -1122,8 +1122,8 @@ function renderDashboardPage() {
       <article class="sales-panel">
         <div class="sales-panel-header">
           <div>
-            <h2>Lead Conversion</h2>
-            <p>Current mix of prospects, pricing fit, walkthroughs, and wins.</p>
+            <h2>Fit-Ready Snapshot</h2>
+            <p>How many prospects are ready for a walkthrough conversation.</p>
           </div>
         </div>
         ${renderConversionDonut()}
@@ -1203,18 +1203,31 @@ function renderMonthlyLineChart() {
 }
 
 function renderFunnel() {
+  const funnelStages = [
+    { id: "new_leads", label: "New Prospects", detail: "Need first touch", tone: "green" },
+    { id: "contacted", label: "Contacted", detail: "Conversation started", tone: "cyan" },
+    { id: "quote_sent", label: "Pricing Confirmed", detail: "$0.25/sq ft accepted", tone: "yellow" },
+    { id: "walkthrough", label: "Walkthrough Set", detail: "Ready for management", tone: "blue" },
+    { id: "contract_out", label: "Management Review", detail: "Management closing", tone: "violet" },
+    { id: "active", label: "Won", detail: "Active client", tone: "green" }
+  ].map((stage) => ({ ...stage, count: rowsByStage(stage.id).length }));
   const total = Math.max(1, state.rows.length);
-  const funnelStages = stageDefs.filter((stage) => stage.id !== "lost");
+  const maxCount = Math.max(1, ...funnelStages.map((stage) => stage.count));
   return `
     <div class="sales-funnel">
       ${funnelStages.map((stage) => {
-        const count = rowsByStage(stage.id).length;
-        const percent = Math.round((count / total) * 1000) / 10;
-        const width = Math.max(38, Math.round(100 - funnelStages.findIndex((item) => item.id === stage.id) * 10));
+        const percent = Math.round((stage.count / total) * 1000) / 10;
+        const width = stage.count ? Math.max(8, Math.round((stage.count / maxCount) * 100)) : 0;
         return `
           <div class="sales-funnel-row">
-            <div class="sales-funnel-bar" style="width:${width}%">${esc(stage.label)}</div>
-            <span class="sales-funnel-count">${number(count)}</span>
+            <div class="sales-funnel-stage">
+              <strong>${esc(stage.label)}</strong>
+              <small>${esc(stage.detail)}</small>
+            </div>
+            <div class="sales-funnel-track" aria-label="${esc(`${stage.label}: ${stage.count} prospects`)}">
+              <div class="sales-funnel-bar ${esc(stage.tone)}" style="width:${width}%"></div>
+            </div>
+            <span class="sales-funnel-count">${number(stage.count)}</span>
             <span class="sales-funnel-rate">${percent}%</span>
           </div>
         `;
@@ -1225,25 +1238,37 @@ function renderFunnel() {
 
 function renderConversionDonut() {
   const total = Math.max(1, state.rows.length);
+  const pricingFit = rowsByStage("quote_sent").length;
+  const walkthroughSet = rowsByStage("walkthrough").length;
+  const managementReview = rowsByStage("contract_out").length;
   const won = rowsByStage("active").length;
-  const rate = Math.round((won / total) * 1000) / 10;
+  const idealCandidates = state.rows.filter((row) =>
+    Number(row.opportunity_score || 0) >= 75 ||
+    ["quote_sent", "walkthrough", "contract_out", "active"].includes(stageFor(row))
+  ).length;
+  const needsQualification = state.rows.filter((row) => ["new_leads", "contacted"].includes(stageFor(row))).length;
+  const rate = Math.round((idealCandidates / total) * 1000) / 10;
+  const legendRows = [
+    { label: "Ideal candidates", value: `${number(idealCandidates)} (${rate}%)`, tone: "green" },
+    { label: "$0.25/sq ft confirmed", value: number(pricingFit), tone: "yellow" },
+    { label: "Walkthroughs set", value: number(walkthroughSet), tone: "blue" },
+    { label: "Management review", value: number(managementReview), tone: "violet" },
+    { label: "Needs qualification", value: number(needsQualification), tone: "cyan" },
+    { label: "Won", value: number(won), tone: "green" }
+  ];
   return `
     <div class="sales-donut-layout">
-      <div class="sales-donut" style="--donut-value:${Math.max(2, rate)}%">
-        <span>${rate}%<small>Overall Conversion</small></span>
+      <div class="sales-donut" style="--donut-value:${Math.max(2, rate)}%" role="img" aria-label="${esc(`${rate}% of prospects are fit ready`)}">
+        <span>${rate}%<small>Fit Ready</small></span>
       </div>
       <div class="sales-legend">
-        ${stageDefs.slice(0, 6).map((stage) => {
-          const count = rowsByStage(stage.id).length;
-          const percent = Math.round((count / total) * 1000) / 10;
-          return `
+        ${legendRows.map((item) => `
             <div class="sales-legend-row">
-              <i class="sales-dot ${esc(stage.tone)}"></i>
-              <span>${esc(stage.label)}</span>
-              <strong>${number(count)} (${percent}%)</strong>
+              <i class="sales-dot ${esc(item.tone)}"></i>
+              <span>${esc(item.label)}</span>
+              <strong>${esc(item.value)}</strong>
             </div>
-          `;
-        }).join("")}
+          `).join("")}
       </div>
     </div>
   `;

@@ -671,34 +671,56 @@ body.sales-portal-body a {
 
 .sales-funnel {
   display: grid;
-  gap: 10px;
-  padding: 6px 0;
+  gap: 12px;
+  padding: 4px 0;
 }
 
 .sales-funnel-row {
   display: grid;
-  grid-template-columns: minmax(130px, 1fr) 72px 68px;
-  gap: 10px;
+  grid-template-columns: minmax(132px, 174px) minmax(0, 1fr) 56px 56px;
+  gap: 12px;
   align-items: center;
+}
+
+.sales-funnel-stage {
+  display: grid;
+  gap: 3px;
+}
+
+.sales-funnel-stage strong {
+  color: #f7fbff;
+  font-size: 13px;
+}
+
+.sales-funnel-stage small {
+  color: var(--sales-muted);
+  font-size: 11px;
+}
+
+.sales-funnel-track {
+  height: 38px;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 999px;
+  background: rgba(5, 14, 24, 0.74);
+  box-shadow: inset 0 1px 10px rgba(0, 0, 0, 0.22);
 }
 
 .sales-funnel-bar {
-  min-height: 44px;
+  min-width: 0;
+  height: 100%;
   display: flex;
   align-items: center;
-  justify-content: center;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
+  border-radius: inherit;
   background: linear-gradient(90deg, rgba(22, 217, 137, 0.54), rgba(22, 217, 137, 0.18));
-  color: #fff;
-  font-weight: 900;
-  text-align: center;
+  box-shadow: 0 0 18px rgba(22, 217, 137, 0.20);
+  transition: width 180ms ease;
 }
 
-.sales-funnel-row:nth-child(2) .sales-funnel-bar { background: linear-gradient(90deg, rgba(20, 213, 207, 0.52), rgba(20, 213, 207, 0.16)); }
-.sales-funnel-row:nth-child(3) .sales-funnel-bar { background: linear-gradient(90deg, rgba(53, 168, 255, 0.50), rgba(53, 168, 255, 0.16)); }
-.sales-funnel-row:nth-child(4) .sales-funnel-bar { background: linear-gradient(90deg, rgba(242, 201, 22, 0.52), rgba(242, 201, 22, 0.16)); }
-.sales-funnel-row:nth-child(5) .sales-funnel-bar { background: linear-gradient(90deg, rgba(155, 108, 255, 0.50), rgba(155, 108, 255, 0.16)); }
+.sales-funnel-bar.cyan { background: linear-gradient(90deg, rgba(20, 213, 207, 0.66), rgba(20, 213, 207, 0.20)); box-shadow: 0 0 18px rgba(20, 213, 207, 0.20); }
+.sales-funnel-bar.blue { background: linear-gradient(90deg, rgba(53, 168, 255, 0.66), rgba(53, 168, 255, 0.20)); box-shadow: 0 0 18px rgba(53, 168, 255, 0.20); }
+.sales-funnel-bar.yellow { background: linear-gradient(90deg, rgba(242, 201, 22, 0.72), rgba(242, 201, 22, 0.22)); box-shadow: 0 0 18px rgba(242, 201, 22, 0.18); }
+.sales-funnel-bar.violet { background: linear-gradient(90deg, rgba(155, 108, 255, 0.66), rgba(155, 108, 255, 0.20)); box-shadow: 0 0 18px rgba(155, 108, 255, 0.20); }
 
 .sales-funnel-count,
 .sales-funnel-rate {
@@ -722,7 +744,8 @@ body.sales-portal-body a {
   width: 188px;
   height: 188px;
   border-radius: 50%;
-  background: conic-gradient(var(--sales-green) 0 var(--donut-value), var(--sales-blue) var(--donut-value) 54%, var(--sales-yellow) 54% 72%, rgba(148, 163, 184, 0.32) 72% 100%);
+  background: conic-gradient(var(--sales-green) 0 var(--donut-value), rgba(148, 163, 184, 0.28) var(--donut-value) 100%);
+  box-shadow: 0 0 28px rgba(22, 217, 137, 0.15);
 }
 
 .sales-donut::after {
@@ -1697,8 +1720,14 @@ button.sales-activity-row:hover {
   .sales-detail-grid,
   .sales-form-grid,
   .sales-donut-layout,
+  .sales-funnel-row,
   .sales-score {
     grid-template-columns: 1fr;
+  }
+
+  .sales-funnel-count,
+  .sales-funnel-rate {
+    text-align: left;
   }
 
   .sales-form-grid .span-two {
