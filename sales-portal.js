@@ -52,6 +52,15 @@ const walkthroughStatuses = ["scheduled", "confirmed", "rescheduled", "completed
 const quoteStatuses = ["draft", "sent", "viewed", "accepted", "declined", "expired"];
 const taskStatuses = ["open", "in_progress", "pending", "completed"];
 const priorities = ["low", "medium", "high"];
+const salesTaskTypes = [
+  "Call decision maker",
+  "Confirm $0.25/sq ft",
+  "Follow up on pricing fit",
+  "Schedule walkthrough",
+  "Prepare management handoff",
+  "Follow up after walkthrough",
+  "No-answer follow-up"
+];
 const services = [
   "Turnover Cleaning",
   "Model / Leasing Office",
@@ -1967,33 +1976,211 @@ function openTasks() {
 }
 
 function taskRows() {
-  return baseFilteredRows(state.rows.filter((row) => row.next_step || taskDue(row) || row.task_status || row.task_type));
+  return baseFilteredRows(state.rows.filter((row) =>
+    row.next_step ||
+    taskDue(row) ||
+    row.task_status ||
+    row.task_type ||
+    !["active", "lost"].includes(stageFor(row))
+  ));
+}
+
+function pricingFitConfirmed(row) {
+  const stage = stageFor(row);
+  const fitText = normalize(row?.budget_range || "");
+  if (["no", "not_ok", "not_accepted", "not_confirmed", "needs_confirmation", "pending", "unknown", "declined", "too_high", "does_not_work"].includes(fitText)) return false;
+  return ["quote_sent", "walkthrough", "contract_out", "active"].includes(stage) ||
+    fitText.includes("confirmed") ||
+    fitText.includes("accepted") ||
+    fitText.includes("works") ||
+    fitText === "yes" ||
+    fitText === "ok";
+}
+
+function pricingFitText(row) {
+  if (pricingFitConfirmed(row)) return row?.budget_range || "Confirmed at $0.25/sq ft";
+  return row?.budget_range || "Needs confirmation";
+}
+
+function taskDueMeta(row) {
+  const status = taskStatus(row);
+  const due = dateValue(taskDue(row));
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const endToday = new Date(today);
+  endToday.setHours(23, 59, 59, 999);
+  if (status === "completed") return { label: "Completed", tone: "completed", rank: 4 };
+  if (!due) return { label: "No due date", tone: "low", rank: 3 };
+  if (due < today) return { label: "Overdue", tone: "overdue", rank: 0 };
+  if (due <= endToday) return { label: "Due today", tone: "open", rank: 1 };
+  return { label: formatDateTime(due), tone: "low", rank: 2 };
+}
+
+function recommendedTaskAction(row) {
+  if (taskStatus(row) === "completed") return "Review completed follow-up";
+  const savedTask = row?.task_type || row?.next_step;
+  if (savedTask) return savedTask;
+  const stage = stageFor(row);
+  if (stage === "new_leads") return "Call decision maker";
+  if (!pricingFitConfirmed(row)) return "Confirm $0.25/sq ft";
+  if (!walkthroughAt(row) && !["walkthrough", "contract_out", "active", "lost"].includes(stage)) return "Schedule walkthrough";
+  if (stage === "walkthrough") return "Prepare management walkthrough";
+  if (stage === "contract_out") return "Management is closing";
+  return row?.next_step || "Follow up";
+}
+
+function contactPhoneHref(row) {
+  const phone = String(row?.contact_phone || "").replace(/[^\d+]/g, "");
+  return phone ? `tel:${phone}` : "";
+}
+
+function contactEmailHref(row) {
+  const email = String(row?.contact_email || "").trim();
+  if (!email) return "";
+  const subject = encodeURIComponent(`Turnly walkthrough for ${recordTitle(row)}`);
+  return `mailto:${email}?subject=${subject}`;
+}
+
+function renderTaskFilters() {
+  const ownerOptions = `<option value="all">All Reps</option><option value="unassigned" ${state.ownerFilter === "unassigned" ? "selected" : ""}>Unassigned</option>${state.reps.map((rep) => `<option value="${rep.id}" ${state.ownerFilter === rep.id ? "selected" : ""}>${esc(rep.full_name || rep.email || "Sales user")}</option>`).join("")}`;
+  const stageOptions = `<option value="all">All Stages</option>${stageDefs.map((stage) => `<option value="${stage.id}" ${state.stageFilter === stage.id ? "selected" : ""}>${esc(stage.label)}</option>`).join("")}`;
+  const statusOptions = `<option value="all">All Task Statuses</option>${taskStatuses.map((status) => `<option value="${status}" ${state.statusFilter === status ? "selected" : ""}>${esc(titleCase(status))}</option>`).join("")}`;
+  return `
+    <div class="sales-task-toolbar">
+      <label class="sales-search">
+        ${icon("search")}
+        <input id="salesPageSearch" type="search" value="${esc(state.search)}" placeholder="Search follow-ups, contacts, or properties..." />
+      </label>
+      <select class="sales-filter" data-filter-owner>${ownerOptions}</select>
+      <select class="sales-filter" data-filter-stage>${stageOptions}</select>
+      <select class="sales-filter" data-filter-status>${statusOptions}</select>
+      <button class="sales-primary-button" type="button" data-open-task="${esc(state.selectedId || "")}">${icon("plus")}New Follow-up</button>
+    </div>
+  `;
+}
+
+function renderTaskFlowStrip() {
+  const steps = [
+    { label: "Identify", detail: "Find ideal apartment prospects.", count: rowsByStage("new_leads").length, iconName: "users" },
+    { label: "Confirm Price", detail: "Make sure $0.25/sq ft works.", count: rowsByStage("quote_sent").length, iconName: "check" },
+    { label: "Set Walkthrough", detail: "Put management on site.", count: rowsByStage("walkthrough").length, iconName: "calendar" }
+  ];
+  return `
+    <section class="sales-task-flow-strip" aria-label="Sales workflow">
+      ${steps.map((step) => `
+        <article class="sales-task-flow-step">
+          <span>${icon(step.iconName)}</span>
+          <div>
+            <strong>${esc(step.label)}</strong>
+            <small>${esc(step.detail)}</small>
+          </div>
+          <b>${number(step.count)}</b>
+        </article>
+      `).join("")}
+    </section>
+  `;
+}
+
+function renderTaskFocusLanes(groups) {
+  const lanes = [
+    {
+      title: "Work First",
+      detail: "Overdue and due-today follow-ups.",
+      total: [...groups.overdue, ...groups.dueToday].length,
+      rows: [...groups.overdue, ...groups.dueToday].slice(0, 4),
+      empty: "No urgent follow-ups.",
+      tone: "yellow"
+    },
+    {
+      title: "Confirm Price Fit",
+      detail: "Prospects that still need $0.25/sq ft confirmation.",
+      total: groups.pricingFollowUps.length,
+      rows: groups.pricingFollowUps.slice(0, 4),
+      empty: "No price-fit follow-ups waiting.",
+      tone: "green"
+    },
+    {
+      title: "Ready For Walkthrough",
+      detail: "Price-fit prospects that need a walkthrough scheduled.",
+      total: groups.walkthroughsToSchedule.length,
+      rows: groups.walkthroughsToSchedule.slice(0, 4),
+      empty: "No walkthrough-ready prospects.",
+      tone: "cyan"
+    }
+  ];
+  return `
+    <section class="sales-task-focus-grid">
+      ${lanes.map((lane) => `
+        <article class="sales-task-focus-card ${esc(lane.tone)}">
+          <header>
+            <div>
+              <h3>${esc(lane.title)}</h3>
+              <p>${esc(lane.detail)}</p>
+            </div>
+            <strong>${number(lane.total)}</strong>
+          </header>
+          <div class="sales-task-mini-list">
+            ${lane.rows.length ? lane.rows.map((row) => `
+              <button type="button" data-select-record="${esc(row.id)}">
+                <span>${esc(recordTitle(row))}</span>
+                <small>${esc(recommendedTaskAction(row))}</small>
+              </button>
+            `).join("") : `<p>${esc(lane.empty)}</p>`}
+          </div>
+        </article>
+      `).join("")}
+    </section>
+  `;
 }
 
 function renderTasksPage() {
-  const rows = taskRows().sort((a, b) => (dateValue(taskDue(a)) || new Date(8640000000000000)) - (dateValue(taskDue(b)) || new Date(8640000000000000)));
+  const rows = taskRows().sort((a, b) => {
+    const aMeta = taskDueMeta(a);
+    const bMeta = taskDueMeta(b);
+    const aDue = dateValue(taskDue(a))?.getTime() || Number.MAX_SAFE_INTEGER;
+    const bDue = dateValue(taskDue(b))?.getTime() || Number.MAX_SAFE_INTEGER;
+    return aMeta.rank - bMeta.rank || aDue - bDue;
+  });
   const selected = selectRecord(rows);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const endToday = new Date(today);
   endToday.setHours(23, 59, 59, 999);
+  const openRows = rows.filter((row) => taskStatus(row) !== "completed");
   const overdue = rows.filter((row) => {
     const due = dateValue(taskDue(row));
     return due && due < today && taskStatus(row) !== "completed";
   });
-  const dueToday = rows.filter((row) => dateInRange(taskDue(row), today, endToday));
+  const dueToday = openRows.filter((row) => dateInRange(taskDue(row), today, endToday));
+  const pricingFollowUps = openRows.filter((row) => {
+    const action = normalize(`${row.task_type || ""} ${row.next_step || ""}`);
+    return !pricingFitConfirmed(row) && (["new_leads", "contacted"].includes(stageFor(row)) || action.includes("pricing") || action.includes("price"));
+  });
+  const walkthroughsToSchedule = openRows.filter((row) =>
+    pricingFitConfirmed(row) &&
+    !walkthroughAt(row) &&
+    !["walkthrough", "contract_out", "active", "lost"].includes(stageFor(row))
+  );
   return `
     <section class="sales-metric-grid">
-      ${metricCard("Open Tasks", number(rows.filter((row) => taskStatus(row) !== "completed").length), "active follow-ups", "clipboard-check", "green")}
-      ${metricCard("Due Today", number(dueToday.length), "needs attention", "calendar", "blue")}
+      ${metricCard("Due Today", number(dueToday.length), "calls and follow-ups", "calendar", "blue")}
       ${metricCard("Overdue", number(overdue.length), "past due", "clock", "yellow")}
+      ${metricCard("Pricing Fit Follow-ups", number(pricingFollowUps.length), "confirm $0.25/sq ft", "check", "green")}
+      ${metricCard("Walkthroughs To Schedule", number(walkthroughsToSchedule.length), "ready for management", "calendar", "cyan")}
       ${metricCard("Completed This Week", number(thisWeekRows(rows.filter((row) => taskStatus(row) === "completed"), "last_activity_at").length), "finished tasks", "check", "green")}
-      ${metricCard("High Priority", number(rows.filter((row) => normalize(row.task_priority) === "high").length), "important follow-ups", "bell", "violet")}
-      ${metricCard("With Next Step", number(rows.filter((row) => row.next_step).length), "qualified next action", "file-check", "cyan")}
+      ${metricCard("High Priority", number(openRows.filter((row) => normalize(row.task_priority) === "high").length), "important follow-ups", "bell", "violet")}
     </section>
+    ${renderTaskFlowStrip()}
+    ${renderTaskFocusLanes({ overdue, dueToday, pricingFollowUps, walkthroughsToSchedule })}
     <section class="sales-task-layout">
-      <article class="sales-panel">
-        ${renderFilters({ placeholder: "Search tasks...", statuses: taskStatuses })}
+      <article class="sales-panel sales-task-command-panel">
+        <div class="sales-panel-header">
+          <div>
+            <h2>Daily Sales Work Queue</h2>
+            <p>Work from the top down: contact, confirm price fit, then schedule management walkthroughs.</p>
+          </div>
+        </div>
+        ${renderTaskFilters()}
         ${renderTaskTable(rows)}
       </article>
       ${renderTaskDetail(selected)}
@@ -2004,44 +2191,50 @@ function renderTasksPage() {
 function renderTaskTable(rows) {
   if (!rows.length) return emptyState("No follow-ups found", "Create a next step from any prospect.");
   return `
-    <div class="sales-table-wrap">
-      <table class="sales-table">
-        <thead>
-          <tr>
-            <th>Task</th>
-            <th>Related Property</th>
-            <th>Due Date</th>
-            <th>Priority</th>
-            <th>Status</th>
-            <th>Owner</th>
-            <th>Next Step / Notes</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rows.map((row) => `
-            <tr class="${row.id === state.selectedId ? "active" : ""}" data-select-record="${esc(row.id)}">
-              <td><strong>${esc(row.task_type || row.next_step || "Follow-up")}</strong><small>${esc(String(row.id).slice(0, 8).toUpperCase())}</small></td>
-              <td><strong>${esc(recordTitle(row))}</strong><small>${esc(recordContact(row))}</small></td>
-              <td>${esc(formatDateTime(taskDue(row)))}</td>
-              <td><span class="sales-status-pill ${esc(normalize(row.task_priority || "medium"))}">${esc(titleCase(row.task_priority || "Medium"))}</span></td>
-              <td><span class="sales-status-pill ${esc(taskStatus(row))}">${esc(titleCase(taskStatus(row)))}</span></td>
-              <td>${esc(ownerName(row))}</td>
-              <td>${esc(row.next_step || row.lead_notes || "No notes")}</td>
-            </tr>
-          `).join("")}
-        </tbody>
-      </table>
+    <div class="sales-task-queue">
+      ${rows.map((row) => {
+        const due = taskDueMeta(row);
+        const phoneHref = contactPhoneHref(row);
+        const emailHref = contactEmailHref(row);
+        return `
+          <article class="sales-task-item ${row.id === state.selectedId ? "active" : ""}">
+            <button class="sales-task-select" type="button" data-select-record="${esc(row.id)}">
+              <div class="sales-task-item-main">
+                <span class="sales-status-pill ${esc(due.tone)}">${esc(due.label)}</span>
+                <strong>${esc(recommendedTaskAction(row))}</strong>
+                <small>${esc(recordTitle(row))} - ${esc(recordContact(row))}</small>
+              </div>
+              <div class="sales-task-meta-grid">
+                <span><b>Stage</b>${esc(stageLabel(stageFor(row)))}</span>
+                <span><b>Price Fit</b>${esc(pricingFitText(row))}</span>
+                <span><b>Priority</b>${esc(titleCase(row.task_priority || "medium"))}</span>
+                <span><b>Owner</b>${esc(ownerName(row))}</span>
+              </div>
+              <p class="sales-task-note">${esc(row.next_step || row.lead_notes || "No next step saved yet.")}</p>
+            </button>
+            <div class="sales-task-actions">
+              ${phoneHref ? `<a class="sales-secondary-button" href="${esc(phoneHref)}">${icon("phone")}Call</a>` : `<button class="sales-secondary-button" type="button" disabled>${icon("phone")}Call</button>`}
+              ${emailHref ? `<a class="sales-secondary-button" href="${esc(emailHref)}">${icon("mail")}Email</a>` : `<button class="sales-secondary-button" type="button" disabled>${icon("mail")}Email</button>`}
+              ${pricingFitConfirmed(row) ? "" : `<button class="sales-secondary-button" type="button" data-update-stage="${esc(row.id)}" data-stage="quote_sent">${icon("check")}Confirm Fit</button>`}
+              <button class="sales-secondary-button" type="button" data-open-walkthrough="${esc(row.id)}">${icon("calendar")}Walkthrough</button>
+              <button class="sales-primary-button" type="button" data-update-task-status="${esc(row.id)}" data-status="completed">${icon("check")}Done</button>
+            </div>
+          </article>
+        `;
+      }).join("")}
     </div>
   `;
 }
 
 function renderTaskDetail(row) {
   if (!row) return `<aside class="sales-detail-card">${emptyState("Select a task", "Task details will appear here.")}</aside>`;
+  const phoneHref = contactPhoneHref(row);
+  const emailHref = contactEmailHref(row);
   return `
     <aside class="sales-detail-card">
       <section class="sales-detail-hero">
         <span class="sales-status-pill ${esc(taskStatus(row))}">${esc(titleCase(taskStatus(row)))}</span>
-        <h2>${esc(row.task_type || row.next_step || "Follow-up")}</h2>
+        <h2>${esc(recommendedTaskAction(row))}</h2>
         <p>${esc(recordTitle(row))}</p>
       </section>
       <div class="sales-detail-grid">
@@ -2049,6 +2242,14 @@ function renderTaskDetail(row) {
         <div class="sales-detail-stat"><span>Priority</span><strong>${esc(titleCase(row.task_priority || "medium"))}</strong></div>
         <div class="sales-detail-stat"><span>Contact</span><strong>${esc(recordContact(row))}</strong></div>
         <div class="sales-detail-stat"><span>Owner</span><strong>${esc(ownerName(row))}</strong></div>
+        <div class="sales-detail-stat"><span>Stage</span><strong>${esc(stageLabel(stageFor(row)))}</strong></div>
+        <div class="sales-detail-stat"><span>Price Fit</span><strong>${esc(pricingFitText(row))}</strong></div>
+        <div class="sales-detail-stat"><span>Decision Maker</span><strong>${esc(row.decision_maker_status || "Unknown")}</strong></div>
+        <div class="sales-detail-stat"><span>Units</span><strong>${recordUnits(row) ? number(recordUnits(row)) : "Not set"}</strong></div>
+      </div>
+      <div class="sales-qualification-block">
+        <span>Recommended Next Move</span>
+        <strong>${esc(recommendedTaskAction(row))}</strong>
       </div>
       <div class="sales-qualification-block">
         <span>Next Step / Notes</span>
@@ -2056,7 +2257,12 @@ function renderTaskDetail(row) {
       </div>
       <div class="sales-action-stack">
         <button class="sales-primary-button" type="button" data-update-task-status="${esc(row.id)}" data-status="completed">${icon("check")}Mark Complete</button>
-        <button class="sales-secondary-button" type="button" data-open-task="${esc(row.id)}">${icon("clipboard-check")}Edit Task</button>
+        ${phoneHref ? `<a class="sales-secondary-button" href="${esc(phoneHref)}">${icon("phone")}Call Now</a>` : `<button class="sales-secondary-button" type="button" disabled>${icon("phone")}Call Now</button>`}
+        <button class="sales-secondary-button" type="button" data-log-touch="${esc(row.id)}" data-touch-text="Call logged.">${icon("phone")}Log Call</button>
+        ${emailHref ? `<a class="sales-secondary-button" href="${esc(emailHref)}">${icon("mail")}Send Email</a>` : `<button class="sales-secondary-button" type="button" disabled>${icon("mail")}Send Email</button>`}
+        ${pricingFitConfirmed(row) ? "" : `<button class="sales-secondary-button" type="button" data-update-stage="${esc(row.id)}" data-stage="quote_sent">${icon("check")}Confirm $0.25/Sq Ft</button>`}
+        <button class="sales-secondary-button" type="button" data-open-walkthrough="${esc(row.id)}">${icon("calendar")}Schedule Walkthrough</button>
+        <button class="sales-secondary-button" type="button" data-open-task="${esc(row.id)}">${icon("clipboard-check")}Reschedule / Edit</button>
         <button class="sales-secondary-button" type="button" data-open-lead="${esc(row.id)}">${icon("users")}Open Prospect</button>
       </div>
     </aside>
@@ -2177,7 +2383,7 @@ function renderTaskModal(row) {
       <div class="sales-modal-body">
         <div class="sales-form-grid">
           ${selectField("record_id", "Property / Lead", recordOptions(), selectedId, true, "span-two")}
-          ${field("task_type", "Task Type", row?.task_type || row?.next_step || "Follow-up")}
+          ${selectField("task_type", "Task Type", taskTypeOptions(row?.task_type || row?.next_step || ""), row?.task_type || row?.next_step || salesTaskTypes[0])}
           ${selectField("task_status", "Status", taskStatuses.map((status) => [status, titleCase(status)]), row?.task_status || "open")}
           ${selectField("task_priority", "Priority", priorities.map((priority) => [priority, titleCase(priority)]), row?.task_priority || "medium")}
           ${field("task_due_at", "Due Date", toDateTimeLocal(taskDue(row)), "datetime-local")}
@@ -2270,6 +2476,12 @@ function repOptions() {
     ["", "Unassigned"],
     ...state.reps.map((rep) => [rep.id, rep.full_name || rep.email || "Sales user"])
   ];
+}
+
+function taskTypeOptions(current = "") {
+  const options = salesTaskTypes.map((item) => [item, item]);
+  if (current && !salesTaskTypes.includes(current)) options.push([current, current]);
+  return options;
 }
 
 function recordOptions() {
@@ -2675,7 +2887,12 @@ async function runImport() {
 async function updateStage(id, stage) {
   try {
     state.selectedId = id;
-    await saveRecord(id, { pipeline_stage: stage }, `Moved to ${stageLabel(stage)}.`);
+    const row = recordById(id);
+    const payload = { pipeline_stage: stage };
+    if (stage === "quote_sent" && !pricingFitConfirmed(row)) {
+      payload.budget_range = "Confirmed at $0.25/sq ft";
+    }
+    await saveRecord(id, payload, `Moved to ${stageLabel(stage)}.`);
     await refreshData(false);
     setMessage(`Moved to ${stageLabel(stage)}.`, "success");
   } catch (error) {
@@ -2705,6 +2922,17 @@ async function updateStatus(kind, id, status) {
     setMessage(text, "success");
   } catch (error) {
     setMessage(`Unable to update status: ${error.message}`, "error");
+  }
+}
+
+async function logSalesTouch(id, text) {
+  try {
+    state.selectedId = id;
+    await saveRecord(id, {}, text || "Sales touch logged.");
+    await refreshData(false);
+    setMessage(text || "Sales touch logged.", "success");
+  } catch (error) {
+    setMessage(`Unable to log activity: ${error.message}`, "error");
   }
 }
 
@@ -2832,6 +3060,12 @@ function bindEvents() {
     const taskStatusButton = target.closest("[data-update-task-status]");
     if (taskStatusButton) {
       await updateStatus("task", taskStatusButton.dataset.updateTaskStatus, taskStatusButton.dataset.status);
+      return;
+    }
+
+    const logTouchButton = target.closest("[data-log-touch]");
+    if (logTouchButton) {
+      await logSalesTouch(logTouchButton.dataset.logTouch, logTouchButton.dataset.touchText);
       return;
     }
 

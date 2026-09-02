@@ -1075,6 +1075,266 @@ button.sales-activity-row:hover {
   gap: 9px;
 }
 
+.sales-task-flow-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.sales-task-flow-step {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 15px;
+  border: 1px solid var(--sales-line);
+  border-radius: var(--sales-radius);
+  background: linear-gradient(145deg, rgba(20, 36, 52, 0.80), rgba(9, 22, 35, 0.74));
+}
+
+.sales-task-flow-step > span {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(22, 217, 137, 0.14);
+  color: var(--sales-green);
+}
+
+.sales-task-flow-step strong,
+.sales-task-flow-step b {
+  color: #fff;
+}
+
+.sales-task-flow-step small {
+  display: block;
+  margin-top: 4px;
+  color: var(--sales-muted);
+  font-size: 12px;
+}
+
+.sales-task-flow-step b {
+  font-size: 28px;
+}
+
+.sales-task-focus-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.sales-task-focus-card {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: var(--sales-radius);
+  background: linear-gradient(145deg, rgba(14, 28, 43, 0.84), rgba(7, 18, 31, 0.76));
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.16);
+}
+
+.sales-task-focus-card.green {
+  border-color: rgba(22, 217, 137, 0.24);
+}
+
+.sales-task-focus-card.cyan {
+  border-color: rgba(20, 213, 207, 0.24);
+}
+
+.sales-task-focus-card.yellow {
+  border-color: rgba(242, 201, 22, 0.22);
+}
+
+.sales-task-focus-card header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+}
+
+.sales-task-focus-card h3,
+.sales-task-focus-card p {
+  margin: 0;
+}
+
+.sales-task-focus-card h3 {
+  color: #fff;
+  font-size: 15px;
+}
+
+.sales-task-focus-card p {
+  margin-top: 4px;
+  color: var(--sales-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.sales-task-focus-card header > strong {
+  min-width: 40px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: rgba(22, 217, 137, 0.12);
+  color: var(--sales-green);
+  font-size: 18px;
+  text-align: center;
+}
+
+.sales-task-mini-list {
+  display: grid;
+  gap: 8px;
+}
+
+.sales-task-mini-list button,
+.sales-task-mini-list p {
+  margin: 0;
+  padding: 10px 11px;
+  border: 1px solid rgba(148, 163, 184, 0.10);
+  border-radius: 7px;
+  background: rgba(7, 18, 31, 0.58);
+}
+
+.sales-task-mini-list button {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.sales-task-mini-list button:hover {
+  border-color: rgba(22, 217, 137, 0.36);
+  background: rgba(22, 217, 137, 0.08);
+}
+
+.sales-task-mini-list span {
+  overflow: hidden;
+  color: #f7fbff;
+  font-size: 13px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sales-task-mini-list small,
+.sales-task-mini-list p {
+  color: var(--sales-muted);
+  font-size: 12px;
+}
+
+.sales-task-command-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.sales-task-toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) repeat(3, minmax(130px, 170px)) auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.sales-task-queue {
+  display: grid;
+  gap: 12px;
+}
+
+.sales-task-item {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: var(--sales-radius);
+  background: rgba(8, 20, 33, 0.70);
+}
+
+.sales-task-item.active {
+  border-color: rgba(22, 217, 137, 0.48);
+  background: linear-gradient(135deg, rgba(22, 217, 137, 0.10), rgba(53, 168, 255, 0.07));
+}
+
+.sales-task-select {
+  display: grid;
+  grid-template-columns: minmax(230px, 1.15fr) minmax(280px, 1fr);
+  gap: 14px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+
+.sales-task-item-main {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.sales-task-item-main strong {
+  color: #fff;
+  font-size: 16px;
+}
+
+.sales-task-item-main small,
+.sales-task-note {
+  color: var(--sales-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.sales-task-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.sales-task-meta-grid span {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.10);
+  border-radius: 7px;
+  background: rgba(15, 29, 43, 0.58);
+  color: #dbe7f4;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sales-task-meta-grid b {
+  display: block;
+  margin-bottom: 3px;
+  color: #8093aa;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sales-task-note {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.sales-task-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.sales-task-actions .sales-primary-button,
+.sales-task-actions .sales-secondary-button {
+  min-height: 36px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+
 .sales-qualification-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1676,8 +1936,12 @@ button.sales-activity-row:hover {
   }
 
   .sales-filter-bar,
+  .sales-task-toolbar,
   .sales-three-column,
   .sales-qualification-grid,
+  .sales-task-flow-strip,
+  .sales-task-focus-grid,
+  .sales-task-select,
   .sales-work-row {
     grid-template-columns: 1fr;
   }
@@ -1721,6 +1985,9 @@ button.sales-activity-row:hover {
   .sales-form-grid,
   .sales-donut-layout,
   .sales-funnel-row,
+  .sales-task-flow-step,
+  .sales-task-focus-card header,
+  .sales-task-meta-grid,
   .sales-score {
     grid-template-columns: 1fr;
   }
@@ -1754,6 +2021,15 @@ button.sales-activity-row:hover {
   .sales-primary-button,
   .sales-upload-prospects-button {
     width: 100%;
+  }
+
+  .sales-task-actions {
+    justify-content: stretch;
+  }
+
+  .sales-task-actions .sales-primary-button,
+  .sales-task-actions .sales-secondary-button {
+    flex: 1 1 150px;
   }
 
   .sales-section-title .sales-primary-button,
