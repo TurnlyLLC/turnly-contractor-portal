@@ -1,6 +1,13 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
-const TABLE = "portal_properties";
+const SALES_TABLES = {
+  leads: "sales_leads",
+  walkthroughs: "sales_walkthroughs",
+  quotes: "sales_quotes",
+  contracts: "sales_contracts",
+  tasks: "sales_tasks",
+  activities: "sales_activities"
+};
 const PROFILES_TABLE = "profiles";
 const XLSX_URL = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
 const allowedRoles = new Set(["admin", "sales", "sales_team"]);
@@ -159,6 +166,80 @@ const coreColumns = new Set([
   "created_by"
 ]);
 
+const leadColumnSet = new Set([
+  "created_by",
+  "client_id",
+  "property_name",
+  "name",
+  "company_name",
+  "contact_name",
+  "contact_email",
+  "contact_phone",
+  "address",
+  "sales_city",
+  "sales_state",
+  "sales_county",
+  "sales_website",
+  "property_class",
+  "prospect_unit_count",
+  "average_turns_per_month",
+  "budget_range",
+  "desired_start_date",
+  "decision_maker_status",
+  "current_vendor",
+  "service_needs",
+  "sales_pain_points",
+  "opportunity_score",
+  "qualification_notes",
+  "default_service_type",
+  "default_scope",
+  "lead_source",
+  "lead_notes",
+  "lead_value",
+  "pipeline_stage",
+  "sales_owner_id",
+  "sales_owner_name",
+  "next_step",
+  "next_step_due_at",
+  "task_priority",
+  "task_status",
+  "task_due_at",
+  "last_activity_at"
+]);
+
+const walkthroughColumnSet = new Set([
+  "walkthrough_at",
+  "walkthrough_end_at",
+  "walkthrough_type",
+  "walkthrough_location",
+  "walkthrough_assigned_to",
+  "walkthrough_status",
+  "walkthrough_notes"
+]);
+
+const quoteColumnSet = new Set([
+  "quote_amount",
+  "quote_status",
+  "quote_sent_at",
+  "quote_expires_at",
+  "quote_notes"
+]);
+
+const contractColumnSet = new Set([
+  "contract_status",
+  "contract_due_at",
+  "contract_value",
+  "contract_notes"
+]);
+
+const taskColumnSet = new Set([
+  "task_type",
+  "task_priority",
+  "task_status",
+  "task_due_at",
+  "next_step"
+]);
+
 const fieldAliases = {
   property_name: ["property", "property_name", "lead", "lead_name", "company", "company_name", "business_name"],
   company_name: ["company", "company_name", "management_company", "owner_company"],
@@ -216,6 +297,12 @@ const state = {
   user: null,
   profile: null,
   rows: [],
+  leads: [],
+  walkthroughs: [],
+  quotes: [],
+  contracts: [],
+  tasks: [],
+  activities: [],
   reps: [],
   selectedId: null,
   search: "",
@@ -494,18 +581,6 @@ function setMessage(text, tone = "") {
   render();
 }
 
-function missingColumn(error) {
-  const message = String(error?.message || "").toLowerCase();
-  return message.includes("schema cache") || /column .* does not exist/i.test(message);
-}
-
-function stripToCore(payload) {
-  return Object.entries(payload).reduce((acc, [key, value]) => {
-    if (coreColumns.has(key)) acc[key] = value;
-    return acc;
-  }, {});
-}
-
 function compactPayload(payload) {
   const output = {};
   Object.entries(payload).forEach(([key, value]) => {
@@ -514,38 +589,212 @@ function compactPayload(payload) {
   return output;
 }
 
+function pickPayload(payload, allowedColumns) {
+  return Object.entries(payload).reduce((acc, [key, value]) => {
+    if (allowedColumns.has(key) && value !== undefined) acc[key] = value;
+    return acc;
+  }, {});
+}
+
+function hasPayload(payload) {
+  return Object.keys(payload || {}).length > 0;
+}
+
+function sortableTime(value) {
+  const date = dateValue(value);
+  return date ? date.getTime() : 0;
+}
+
+function latestRelated(rows, leadId, dateFields = ["updated_at", "created_at"]) {
+  return rows
+    .filter((row) => row.lead_id === leadId)
+    .sort((a, b) => {
+      const aTime = Math.max(...dateFields.map((fieldName) => sortableTime(a[fieldName])));
+      const bTime = Math.max(...dateFields.map((fieldName) => sortableTime(b[fieldName])));
+      return bTime - aTime;
+    })[0] || null;
+}
+
+function latestTimestamp(...values) {
+  const latest = values
+    .map((value) => dateValue(value))
+    .filter(Boolean)
+    .sort((a, b) => b.getTime() - a.getTime())[0];
+  return latest ? latest.toISOString() : null;
+}
+
+function activityLogForLead(leadId) {
+  return state.activities
+    .filter((activity) => activity.lead_id === leadId)
+    .sort((a, b) => sortableTime(b.created_at) - sortableTime(a.created_at));
+}
+
+function composeSalesRow(lead) {
+  const leadId = lead.id;
+  const walkthrough = latestRelated(state.walkthroughs, leadId, ["walkthrough_at", "updated_at", "created_at"]);
+  const quote = latestRelated(state.quotes, leadId, ["quote_sent_at", "updated_at", "created_at"]);
+  const contract = latestRelated(state.contracts, leadId, ["contract_due_at", "updated_at", "created_at"]);
+  const task = latestRelated(state.tasks, leadId, ["task_due_at", "updated_at", "created_at"]);
+  const activities = activityLogForLead(leadId);
+  const lastActivityAt = latestTimestamp(
+    activities[0]?.created_at,
+    task?.updated_at,
+    task?.created_at,
+    contract?.updated_at,
+    contract?.created_at,
+    quote?.updated_at,
+    quote?.created_at,
+    walkthrough?.updated_at,
+    walkthrough?.created_at,
+    lead.last_activity_at,
+    lead.updated_at,
+    lead.created_at
+  );
+
+  return {
+    ...lead,
+    name: lead.name || lead.property_name || "",
+    walkthrough_at: walkthrough?.walkthrough_at || null,
+    walkthrough_end_at: walkthrough?.walkthrough_end_at || null,
+    walkthrough_type: walkthrough?.walkthrough_type || "",
+    walkthrough_location: walkthrough?.walkthrough_location || "",
+    walkthrough_assigned_to_id: walkthrough?.walkthrough_assigned_to_id || null,
+    walkthrough_assigned_to: walkthrough?.walkthrough_assigned_to || "",
+    walkthrough_status: walkthrough?.walkthrough_status || "",
+    walkthrough_notes: walkthrough?.walkthrough_notes || "",
+    quote_amount: quote?.quote_amount ?? null,
+    quote_status: quote?.quote_status || "draft",
+    quote_sent_at: quote?.quote_sent_at || null,
+    quote_expires_at: quote?.quote_expires_at || null,
+    quote_notes: quote?.quote_notes || "",
+    contract_status: contract?.contract_status || "",
+    contract_due_at: contract?.contract_due_at || null,
+    contract_value: contract?.contract_value ?? null,
+    contract_notes: contract?.contract_notes || "",
+    task_type: task?.task_type || "",
+    task_priority: task?.task_priority || lead.task_priority || "medium",
+    task_status: task?.task_status || lead.task_status || "open",
+    task_due_at: task?.task_due_at || lead.task_due_at || lead.next_step_due_at || null,
+    next_step: task?.next_step || lead.next_step || "",
+    next_step_due_at: task?.task_due_at || lead.next_step_due_at || null,
+    last_activity_at: lastActivityAt || lead.last_activity_at,
+    sales_activity_log: activities.map((activity) => ({
+      at: activity.created_at,
+      text: activity.activity_text,
+      user: activity.user_name,
+      type: activity.activity_type,
+      metadata: activity.metadata || {}
+    }))
+  };
+}
+
+function composeSalesRows() {
+  state.rows = state.leads
+    .map(composeSalesRow)
+    .sort((a, b) => sortableTime(b.last_activity_at || b.updated_at || b.created_at) - sortableTime(a.last_activity_at || a.updated_at || a.created_at));
+}
+
+async function upsertLatestRelated(tableName, existingRows, leadId, payload, dateFields) {
+  const cleanPayload = compactPayload(payload);
+  if (!hasPayload(cleanPayload)) return null;
+  const existing = latestRelated(existingRows, leadId, dateFields);
+  const result = existing?.id
+    ? await supabase.from(tableName).update(cleanPayload).eq("id", existing.id).select("*").maybeSingle()
+    : await supabase.from(tableName).insert([{ lead_id: leadId, created_by: state.user?.id || null, ...cleanPayload }]).select("*").single();
+
+  if (result.error) throw result.error;
+  return result.data;
+}
+
+async function writeSalesActivity(leadId, activityText, metadata = {}) {
+  if (!activityText) return null;
+  const { data, error } = await supabase
+    .from(SALES_TABLES.activities)
+    .insert([{
+      lead_id: leadId,
+      user_id: state.user?.id || null,
+      user_name: currentName(),
+      activity_type: "system",
+      activity_text: activityText,
+      metadata
+    }])
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+function contractStatusFromStage(stage) {
+  if (stage === "contract_out") return "pending";
+  if (stage === "active") return "won";
+  if (stage === "lost") return "lost";
+  return "";
+}
+
 async function saveRecord(id, payload, activityText = "") {
   if (!supabase) throw new Error("Supabase config is missing.");
-  const existing = id ? state.rows.find((row) => row.id === id) : null;
   const basePayload = compactPayload({
     ...payload,
     last_activity_at: new Date().toISOString()
   });
+  const leadPayload = pickPayload(basePayload, leadColumnSet);
 
-  if (activityText) {
-    basePayload.sales_activity_log = [
-      {
-        at: new Date().toISOString(),
-        text: activityText,
-        user: currentName()
-      },
-      ...parseActivity(existing).slice(0, 24)
-    ];
-  }
-
-  const run = (nextPayload) => {
-    if (id) {
-      return supabase.from(TABLE).update(nextPayload).eq("id", id).select("*").maybeSingle();
+  let leadId = id;
+  let savedLead = null;
+  if (leadId) {
+    if (hasPayload(leadPayload)) {
+      const result = await supabase
+        .from(SALES_TABLES.leads)
+        .update(leadPayload)
+        .eq("id", leadId)
+        .select("*")
+        .maybeSingle();
+      if (result.error) throw result.error;
+      savedLead = result.data;
+    } else {
+      savedLead = state.leads.find((row) => row.id === leadId) || null;
     }
-    return supabase.from(TABLE).insert([{ ...nextPayload, created_by: state.user?.id || null }]).select("*").single();
-  };
-
-  let result = await run(basePayload);
-  if (result.error && missingColumn(result.error)) {
-    result = await run(stripToCore(basePayload));
+  } else {
+    const result = await supabase
+      .from(SALES_TABLES.leads)
+      .insert([{ ...leadPayload, created_by: state.user?.id || null }])
+      .select("*")
+      .single();
+    if (result.error) throw result.error;
+    savedLead = result.data;
+    leadId = savedLead.id;
   }
-  if (result.error) throw result.error;
-  return result.data;
+
+  const walkthroughPayload = pickPayload(basePayload, walkthroughColumnSet);
+  if ("sales_owner_id" in basePayload) walkthroughPayload.walkthrough_assigned_to_id = basePayload.sales_owner_id || null;
+  await upsertLatestRelated(SALES_TABLES.walkthroughs, state.walkthroughs, leadId, walkthroughPayload, ["walkthrough_at", "updated_at", "created_at"]);
+
+  const quotePayload = pickPayload(basePayload, quoteColumnSet);
+  await upsertLatestRelated(SALES_TABLES.quotes, state.quotes, leadId, quotePayload, ["quote_sent_at", "updated_at", "created_at"]);
+
+  const taskPayload = pickPayload(basePayload, taskColumnSet);
+  if (basePayload.next_step_due_at && !taskPayload.task_due_at) taskPayload.task_due_at = basePayload.next_step_due_at;
+  const shouldSaveTask = Boolean(
+    taskPayload.task_type ||
+    taskPayload.task_due_at ||
+    taskPayload.next_step ||
+    basePayload.next_step_due_at ||
+    (taskPayload.task_status && taskPayload.task_status !== "open")
+  );
+  if (shouldSaveTask) {
+    await upsertLatestRelated(SALES_TABLES.tasks, state.tasks, leadId, taskPayload, ["task_due_at", "updated_at", "created_at"]);
+  }
+
+  const contractPayload = pickPayload(basePayload, contractColumnSet);
+  if (basePayload.pipeline_stage && ["contract_out", "active", "lost"].includes(basePayload.pipeline_stage)) {
+    contractPayload.contract_status = contractPayload.contract_status || contractStatusFromStage(basePayload.pipeline_stage);
+    contractPayload.contract_value = contractPayload.contract_value ?? basePayload.lead_value ?? basePayload.quote_amount ?? null;
+  }
+  await upsertLatestRelated(SALES_TABLES.contracts, state.contracts, leadId, contractPayload, ["contract_due_at", "updated_at", "created_at"]);
+
+  await writeSalesActivity(leadId, activityText, { changedFields: Object.keys(payload || {}) });
+  return { ...(savedLead || {}), id: leadId };
 }
 
 async function requireSalesAccess() {
@@ -581,15 +830,24 @@ async function requireSalesAccess() {
 }
 
 async function loadRows() {
-  const { data, error } = await supabase
-    .from(TABLE)
-    .select("*")
-    .order("last_activity_at", { ascending: false, nullsFirst: false })
-    .order("created_at", { ascending: false })
-    .limit(2000);
-
+  const queries = await Promise.all([
+    supabase.from(SALES_TABLES.leads).select("*").order("last_activity_at", { ascending: false }).limit(2000),
+    supabase.from(SALES_TABLES.walkthroughs).select("*").order("created_at", { ascending: false }).limit(2000),
+    supabase.from(SALES_TABLES.quotes).select("*").order("created_at", { ascending: false }).limit(2000),
+    supabase.from(SALES_TABLES.contracts).select("*").order("created_at", { ascending: false }).limit(2000),
+    supabase.from(SALES_TABLES.tasks).select("*").order("created_at", { ascending: false }).limit(2000),
+    supabase.from(SALES_TABLES.activities).select("*").order("created_at", { ascending: false }).limit(4000)
+  ]);
+  const error = queries.find((result) => result.error)?.error;
   if (error) throw error;
-  state.rows = data || [];
+
+  state.leads = queries[0].data || [];
+  state.walkthroughs = queries[1].data || [];
+  state.quotes = queries[2].data || [];
+  state.contracts = queries[3].data || [];
+  state.tasks = queries[4].data || [];
+  state.activities = queries[5].data || [];
+  composeSalesRows();
 }
 
 async function loadReps() {
@@ -2374,10 +2632,7 @@ async function runImport() {
   try {
     for (let index = 0; index < state.importPayloads.length; index += 100) {
       const batch = state.importPayloads.slice(index, index + 100);
-      let result = await supabase.from(TABLE).insert(batch.map(compactPayload));
-      if (result.error && missingColumn(result.error)) {
-        result = await supabase.from(TABLE).insert(batch.map((payload) => stripToCore(compactPayload(payload))));
-      }
+      const result = await supabase.from(SALES_TABLES.leads).insert(batch.map(compactPayload));
       if (result.error) throw result.error;
     }
     const count = state.importPayloads.length;
