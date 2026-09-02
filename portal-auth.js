@@ -158,6 +158,131 @@ function setFormLoading(form, isLoading, loadingText, readyText) {
   button.textContent = isLoading ? loadingText : readyText;
 }
 
+function metadataFlag(value) {
+  if (value === true || value === 1) return true;
+  if (typeof value === "string") return ["true", "1", "yes"].includes(value.trim().toLowerCase());
+  return false;
+}
+
+function requiresPasswordChange(user) {
+  return metadataFlag(user?.app_metadata?.turnly_force_password_change) ||
+    metadataFlag(user?.user_metadata?.turnly_force_password_change);
+}
+
+function roleName(role) {
+  const normalizedRole = normalizeRole(role);
+  if (normalizedRole === "sales" || normalizedRole === "sales_team") return "Sales Portal";
+  if (normalizedRole === "property_manager") return "Property Manager Portal";
+  if (normalizedRole === "admin") return "Admin Portal";
+  return "Contractor Portal";
+}
+
+function injectForcedPasswordStyles() {
+  if (document.getElementById("turnlyForcedPasswordStyles")) return;
+  const style = document.createElement("style");
+  style.id = "turnlyForcedPasswordStyles";
+  style.textContent = `
+    .forced-password-card{display:grid;gap:18px}
+    .forced-password-heading{display:grid;gap:8px}
+    .forced-password-heading h2{font-size:24px;margin:0}
+    .forced-password-heading p{color:#a8bfd8;line-height:1.55;margin:0}
+    .forced-password-message{border-radius:10px;font-size:13px;font-weight:800;line-height:1.45;margin:0;padding:10px 12px}
+    .forced-password-message:empty{display:none}
+    .forced-password-message.error{background:rgba(255,92,122,.12);border:1px solid rgba(255,92,122,.28);color:#ff8aa0}
+    .forced-password-message.success{background:rgba(18,214,135,.12);border:1px solid rgba(18,214,135,.28);color:#34f5b6}
+  `;
+  document.head.appendChild(style);
+}
+
+function setForcedPasswordMessage(text, error = false) {
+  const el = document.getElementById("forcedPasswordMessage");
+  if (!el) return;
+  el.textContent = text || "";
+  el.classList.toggle("error", error);
+  el.classList.toggle("success", Boolean(text) && !error);
+}
+
+async function clearForcedPasswordFlag(changedAt) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData?.session?.access_token || "";
+  if (!accessToken) throw new Error("Your session expired. Log in again, then retry.");
+  const response = await fetch("/api/portal-password-change-complete", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${accessToken}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ changedAt })
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || "Unable to finish password setup.");
+}
+
+async function renderPasswordChangeRequired(user, role) {
+  const card = document.querySelector(".role-auth-card");
+  if (!card) return false;
+  injectForcedPasswordStyles();
+  const portalName = roleName(role);
+  card.innerHTML = `
+    <div class="forced-password-card">
+      <div class="forced-password-heading">
+        <p class="public-kicker">Password Required</p>
+        <h2>Choose a new password</h2>
+        <p>Your admin created a temporary password for this account. Create your own password before opening the ${escapeHtml(portalName)}.</p>
+      </div>
+      <form id="forcedPasswordForm" class="public-form">
+        <div class="public-form-grid">
+          <label class="span-two">
+            New Password
+            <input type="password" id="forcedNewPassword" autocomplete="new-password" minlength="8" required />
+          </label>
+          <label class="span-two">
+            Confirm New Password
+            <input type="password" id="forcedConfirmPassword" autocomplete="new-password" minlength="8" required />
+          </label>
+        </div>
+        <button class="public-btn primary full" type="submit">Save Password</button>
+      </form>
+      <p id="forcedPasswordMessage" class="forced-password-message" aria-live="polite"></p>
+    </div>
+  `;
+  const form = document.getElementById("forcedPasswordForm");
+  form?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const password = document.getElementById("forcedNewPassword")?.value || "";
+    const confirmPassword = document.getElementById("forcedConfirmPassword")?.value || "";
+    if (password.length < 8) {
+      setForcedPasswordMessage("Password must be at least 8 characters.", true);
+      return;
+    }
+    if (password !== confirmPassword) {
+      setForcedPasswordMessage("Passwords do not match.", true);
+      return;
+    }
+    setFormLoading(form, true, "Saving Password...", "Save Password");
+    setForcedPasswordMessage("Saving your new password...");
+    try {
+      const changedAt = new Date().toISOString();
+      const { error } = await supabase.auth.updateUser({
+        password,
+        data: {
+          ...(user.user_metadata || {}),
+          turnly_force_password_change: false,
+          turnly_password_changed_at: changedAt
+        }
+      });
+      if (error) throw error;
+      await clearForcedPasswordFlag(changedAt);
+      await supabase.auth.refreshSession().catch(() => null);
+      window.location.href = portalForRole(role, pageHome);
+    } catch (error) {
+      setForcedPasswordMessage(error?.message || "Unable to save password.", true);
+      setFormLoading(form, false, "Saving Password...", "Save Password");
+    }
+  });
+  return true;
+}
+
 function showMode(mode) {
   clearPendingVerification();
 
@@ -293,6 +418,11 @@ async function routeAuthenticatedUser(user, fallbackRole = pageRole) {
   const role = propertyManagerLogin
     ? "property_manager"
     : normalizeRole(profile?.role || user.user_metadata?.role || fallbackRole);
+
+  if (requiresPasswordChange(user)) {
+    showMessage("Choose a new password to continue...");
+    return renderPasswordChangeRequired(user, role);
+  }
 
   if (isPropertyManagerPortal && role !== "property_manager") {
     const target = portalForRole(role);

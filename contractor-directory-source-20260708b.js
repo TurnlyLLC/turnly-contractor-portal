@@ -312,9 +312,10 @@ function propertyManagerAccessDetails(person = {}) {
 function workspaceMarkup() {
   return `
     <section class="contractor-directory-workspace" data-contractor-directory-page>
-      <section class="metric-strip six">
+      <section class="metric-strip seven">
         ${metric("Directory Total", "directoryTotal", "portal accounts", "blue", "DT")}
         ${metric("Contractors", "contractorTotal", "service network", "green", "CN")}
+        ${metric("Sales Team", "salesTotal", "sales portal", "blue", "ST")}
         ${metric("Property Managers", "propertyManagerTotal", "client access", "purple", "PM")}
         ${metric("Active", "activeTotal", "ready for work", "green", "A")}
         ${metric("Pending", "pendingTotal", "needs approval", "yellow", "PA")}
@@ -331,7 +332,7 @@ function workspaceMarkup() {
               </div>
               <div class="toolbar-right">
                 <button id="contractorRefresh" class="secondary-action" type="button"><span>Refresh</span></button>
-                <button id="contractorAdd" class="primary-action" type="button"><span>Add Contractor</span></button>
+                <button id="contractorAdd" class="primary-action" type="button"><span>Add Contractor / Sales</span></button>
               </div>
             </div>
             <p id="contractorMessage" class="request-message" aria-live="polite"></p>
@@ -374,7 +375,7 @@ function workspaceMarkup() {
       <div id="contractorModal" class="property-modal" hidden>
         <div class="property-modal-backdrop" data-modal-close></div>
         <section class="property-modal-panel">
-          <div class="property-modal-header"><div><h2 id="contractorModalTitle">Add Contractor</h2><p>Changes save back to Supabase.</p></div><button class="property-modal-close" type="button" data-modal-close>Close</button></div>
+          <div class="property-modal-header"><div><h2 id="contractorModalTitle">Add Contractor / Sales</h2><p>Changes save back to Supabase.</p></div><button class="property-modal-close" type="button" data-modal-close>Close</button></div>
           <div id="contractorModalBody"></div>
         </section>
       </div>
@@ -390,7 +391,7 @@ function injectStyles() {
   const style = document.createElement("style");
   style.id = "contractorDirectorySourceStyles";
   style.textContent = `
-    .contractor-directory-workspace{display:grid;gap:14px}.contractor-directory-card .suite-toolbar{padding:14px 16px 0}.contractor-directory-card .request-message{padding:0 16px 8px}.contractor-directory-card td strong,.contractor-directory-card td small{display:block}.contractor-directory-card td small{color:var(--suite-soft);font-size:11px;margin-top:3px}.directory-section-heading{border-top:1px solid var(--suite-border);padding:14px 16px 0}.directory-section-heading h2{font-size:16px;margin:0}.directory-section-heading p{color:var(--suite-soft);font-size:12px;margin:4px 0 0}.property-manager-directory-card{margin-top:12px}.contractor-file-name-link{color:var(--suite-text);text-decoration:none}.contractor-file-name-link:hover strong{color:var(--suite-green)}.compact-field{min-width:150px}.compact-field select{min-height:36px}.contractor-actions{align-items:center;display:flex;flex-wrap:wrap;gap:6px}.contractor-actions .secondary-action,.contractor-actions .primary-action{min-height:32px;padding:0 10px;white-space:nowrap}.contractor-form .checkbox-field{align-self:center}.contractor-password-note,.contractor-access-note{background:rgba(6,214,160,.1);border:1px solid rgba(6,214,160,.28);border-radius:8px;color:var(--suite-text);font-size:12px;line-height:1.5;margin:0;padding:12px}.contractor-password-message{font-size:12px;margin:0}.contractor-password-message.error{color:#ff5c7a}.contractor-password-message.success{color:var(--suite-green)}.contractor-access-scope{border:1px solid var(--suite-border);border-radius:12px;display:grid;gap:12px;padding:14px}.contractor-access-scope h3{font-size:14px;margin:0}.contractor-access-scope p{color:var(--suite-soft);font-size:12px;margin:0}.contractor-access-grid{display:grid;gap:12px;grid-template-columns:repeat(2,minmax(0,1fr))}.contractor-access-list{border:1px solid var(--suite-border);border-radius:10px;display:grid;gap:6px;max-height:190px;overflow:auto;padding:10px}.contractor-access-list strong{font-size:12px;margin-bottom:2px}.contractor-access-check{align-items:flex-start;display:flex;gap:8px;font-size:12px;line-height:1.35}.contractor-access-check input{margin-top:2px}.contractor-access-check span{display:grid}.contractor-access-check small{color:var(--suite-soft);font-size:11px}.contractor-access-empty{color:var(--suite-soft);font-size:12px}.contractor-access-summary{min-width:130px}.contractor-access-summary strong,.contractor-access-summary small{display:block}@media(max-width:980px){.contractor-directory-card .suite-toolbar,.contractor-directory-card .toolbar-left,.contractor-directory-card .toolbar-right,.contractor-access-grid{align-items:stretch;display:grid;grid-template-columns:1fr}}
+    .contractor-directory-workspace{display:grid;gap:14px}.contractor-directory-workspace .metric-strip.seven{grid-template-columns:repeat(7,minmax(0,1fr))}.contractor-directory-card .suite-toolbar{padding:14px 16px 0}.contractor-directory-card .request-message{padding:0 16px 8px}.contractor-directory-card td strong,.contractor-directory-card td small{display:block}.contractor-directory-card td small{color:var(--suite-soft);font-size:11px;margin-top:3px}.directory-section-heading{border-top:1px solid var(--suite-border);padding:14px 16px 0}.directory-section-heading h2{font-size:16px;margin:0}.directory-section-heading p{color:var(--suite-soft);font-size:12px;margin:4px 0 0}.property-manager-directory-card{margin-top:12px}.contractor-file-name-link{color:var(--suite-text);text-decoration:none}.contractor-file-name-link:hover strong{color:var(--suite-green)}.compact-field{min-width:150px}.compact-field select{min-height:36px}.contractor-actions{align-items:center;display:flex;flex-wrap:wrap;gap:6px}.contractor-actions .secondary-action,.contractor-actions .primary-action{min-height:32px;padding:0 10px;white-space:nowrap}.contractor-form .checkbox-field{align-self:center}.contractor-password-note,.contractor-access-note{background:rgba(6,214,160,.1);border:1px solid rgba(6,214,160,.28);border-radius:8px;color:var(--suite-text);font-size:12px;line-height:1.5;margin:0;padding:12px}.contractor-password-message{font-size:12px;margin:0}.contractor-password-message.error{color:#ff5c7a}.contractor-password-message.success{color:var(--suite-green)}.contractor-access-scope{border:1px solid var(--suite-border);border-radius:12px;display:grid;gap:12px;padding:14px}.contractor-access-scope h3{font-size:14px;margin:0}.contractor-access-scope p{color:var(--suite-soft);font-size:12px;margin:0}.contractor-access-grid{display:grid;gap:12px;grid-template-columns:repeat(2,minmax(0,1fr))}.contractor-access-list{border:1px solid var(--suite-border);border-radius:10px;display:grid;gap:6px;max-height:190px;overflow:auto;padding:10px}.contractor-access-list strong{font-size:12px;margin-bottom:2px}.contractor-access-check{align-items:flex-start;display:flex;gap:8px;font-size:12px;line-height:1.35}.contractor-access-check input{margin-top:2px}.contractor-access-check span{display:grid}.contractor-access-check small{color:var(--suite-soft);font-size:11px}.contractor-access-empty{color:var(--suite-soft);font-size:12px}.contractor-access-summary{min-width:130px}.contractor-access-summary strong,.contractor-access-summary small{display:block}@media(max-width:1280px){.contractor-directory-workspace .metric-strip.seven{grid-template-columns:repeat(4,minmax(0,1fr))}}@media(max-width:980px){.contractor-directory-workspace .metric-strip.seven,.contractor-directory-card .suite-toolbar,.contractor-directory-card .toolbar-left,.contractor-directory-card .toolbar-right,.contractor-access-grid{align-items:stretch;display:grid;grid-template-columns:1fr}}
   `;
   document.head.appendChild(style);
 }
@@ -510,6 +511,7 @@ function badge(value) {
 function renderMetrics() {
   setText("directoryTotal", state.people.length.toLocaleString());
   setText("contractorTotal", state.people.filter((p) => p.team === "contractor").length.toLocaleString());
+  setText("salesTotal", state.people.filter((p) => p.team === "sales").length.toLocaleString());
   setText("propertyManagerTotal", state.people.filter((p) => p.team === "property_manager").length.toLocaleString());
   setText("activeTotal", state.people.filter((p) => p.status === "active").length.toLocaleString());
   setText("pendingTotal", state.people.filter((p) => p.status === "pending_approval").length.toLocaleString());
@@ -528,7 +530,10 @@ function renderRows() {
     const fileLink = person.team === "contractor"
       ? `<a class="secondary-action" href="${esc(contractorFileUrl(person))}"><span>File</span></a>`
       : "";
-    const resetPassword = person.team === "contractor" && (person.profileId || person.email)
+    const salesLoginLink = person.team === "sales"
+      ? `<a class="secondary-action" href="sales-login.html"><span>Sales Login</span></a>`
+      : "";
+    const resetPassword = (person.team === "contractor" || person.team === "sales") && (person.profileId || person.email)
       ? `<button class="secondary-action" type="button" data-reset-password="${esc(person.key)}"><span>Reset Password</span></button>`
       : "";
     const nameCell = person.team === "contractor"
@@ -538,7 +543,7 @@ function renderRows() {
       <td>${nameCell}</td>
       <td>${badge(person.teamLabel)}</td><td>${esc(person.company || "-")}</td><td>${badge(person.status)}</td>
       <td>${esc(person.service || "-")}</td><td>${esc(person.location || "-")}</td><td class="contractor-access-summary"><strong>${esc(accessSummary(person))}</strong><small>${esc(accessDetails(person) || "")}</small></td><td>${esc(person.phone || "-")}</td><td>${esc(person.sourceLabel)}</td>
-      <td><div class="contractor-actions">${fileLink}${approve}${resetPassword}<button class="secondary-action" type="button" data-edit="${esc(person.key)}"><span>Edit</span></button></div></td>
+      <td><div class="contractor-actions">${fileLink}${salesLoginLink}${approve}${resetPassword}<button class="secondary-action" type="button" data-edit="${esc(person.key)}"><span>Edit</span></button></div></td>
     </tr>`;
   }).join("");
   if (empty) empty.hidden = Boolean(rows.length);
@@ -678,7 +683,7 @@ function formMarkup(person = null) {
             ${field("contractorTempPassword", "Temporary Password", "password", "", "autocomplete=\"new-password\" minlength=\"8\" required")}
             ${field("contractorTempPasswordConfirm", "Confirm Temporary Password", "password", "", "autocomplete=\"new-password\" minlength=\"8\" required")}
           </div>
-          <p class="contractor-password-note">New contractors are created as live portal users with this temporary password. On first login, Turnly will require them to choose a new password before the contractor portal opens.</p>
+          <p id="contractorLiveAccountNote" class="contractor-password-note">New portal users are created with this temporary password. On first login, Turnly will require them to choose a new password before their portal opens.</p>
         </div>
       ` : ""}
     </div>
@@ -690,10 +695,10 @@ function passwordFormMarkup(person) {
   const profileId = person?.profileId || (person?.source === "profiles" ? person?.id || "" : "");
   return `<form id="contractorPasswordForm" class="lead-form contractor-form" data-profile-id="${esc(profileId)}" data-email="${esc(person?.email || "")}" data-name="${esc(person?.name || "this contractor")}">
     <div class="form-grid">
-      <label class="suite-field wide"><span>Contractor</span><input type="text" value="${esc([person?.name, person?.email].filter(Boolean).join(" - ") || "Contractor")}" disabled /></label>
+      <label class="suite-field wide"><span>Portal User</span><input type="text" value="${esc([person?.name, person?.email].filter(Boolean).join(" - ") || "Portal User")}" disabled /></label>
       ${field("contractorTempPassword", "Temporary Password", "password", "", "autocomplete=\"new-password\" minlength=\"8\" required")}
       ${field("contractorTempPasswordConfirm", "Confirm Temporary Password", "password", "", "autocomplete=\"new-password\" minlength=\"8\" required")}
-      <p class="contractor-password-note wide">The contractor can sign in with this temporary password one time. On their next login, Turnly will require them to choose a new password before the portal opens.</p>
+      <p class="contractor-password-note wide">This portal user can sign in with this temporary password one time. On their next login, Turnly will require them to choose a new password before the portal opens.</p>
       <p id="contractorPasswordMessage" class="contractor-password-message wide" aria-live="polite"></p>
     </div>
     <div class="lead-form-actions"><button class="secondary-action" type="button" data-modal-close><span>Cancel</span></button><button id="contractorPasswordSave" class="primary-action" type="submit"><span>Reset Password</span></button></div>
@@ -706,9 +711,10 @@ function openModal(person = null) {
   const heading = document.getElementById("contractorModalTitle");
   if (!modal || !body) return;
   const roleLabel = person?.team === "property_manager" ? "Property Manager" : person?.team === "sales" ? "Sales Team Member" : "Contractor";
-  if (heading) heading.textContent = person ? `Edit ${roleLabel}: ${person.name}` : "Add Contractor";
+  if (heading) heading.textContent = person ? `Edit ${roleLabel}: ${person.name}` : "Add Contractor / Sales";
   body.innerHTML = formMarkup(person);
   modal.hidden = false;
+  setLiveAccountFieldsVisible();
   document.getElementById("contractorName")?.focus();
 }
 
@@ -744,13 +750,20 @@ function setLiveAccountFieldsVisible() {
   const team = value("contractorTeam") || "contractor";
   const wrap = document.getElementById("contractorLiveAccountFields");
   const isContractor = team === "contractor";
+  const isLivePortalAccount = isContractor || team === "sales";
   const isPropertyManager = team === "property_manager";
   if (wrap) {
-    wrap.hidden = !isContractor;
+    wrap.hidden = !isLivePortalAccount;
     wrap.querySelectorAll("input").forEach((input) => {
-      input.required = isContractor;
-      if (!isContractor) input.value = "";
+      input.required = isLivePortalAccount;
+      if (!isLivePortalAccount) input.value = "";
     });
+  }
+  const note = document.getElementById("contractorLiveAccountNote");
+  if (note) {
+    note.textContent = team === "sales"
+      ? "New sales team members are created as live portal users with this temporary password. On first login, Turnly will require them to choose a new password before the Sales Portal opens."
+      : "New contractors are created as live portal users with this temporary password. On first login, Turnly will require them to choose a new password before the contractor portal opens.";
   }
   const accessWrap = document.getElementById("contractorAccessControls");
   if (accessWrap) accessWrap.hidden = !isContractor;
@@ -900,9 +913,11 @@ async function syncInvite(payload, profileId = "") {
 }
 
 async function createLiveContractorAccount() {
+  const team = value("contractorTeam") || "contractor";
   const password = value("contractorTempPassword");
   const confirmPassword = value("contractorTempPasswordConfirm");
-  if (!value("contractorEmail")) throw new Error("Email is required for a live contractor account.");
+  if (team !== "contractor" && team !== "sales") throw new Error("Choose Contractor or Sales Team for a live portal account.");
+  if (!value("contractorEmail")) throw new Error("Email is required for a live portal account.");
   if (password.length < 8) throw new Error("Temporary password must be at least 8 characters.");
   if (password !== confirmPassword) throw new Error("Temporary passwords do not match.");
 
@@ -920,6 +935,8 @@ async function createLiveContractorAccount() {
     body: JSON.stringify({
       ...payload,
       name: value("contractorName"),
+      portal_role: team === "sales" ? "sales_team" : "contractor",
+      team,
       company_name: value("contractorCompany"),
       service_type: value("contractorService"),
       market: value("contractorLocation"),
@@ -928,7 +945,7 @@ async function createLiveContractorAccount() {
     })
   });
   const result = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(result.error || "Unable to create live contractor account.");
+  if (!response.ok) throw new Error(result.error || "Unable to create live portal account.");
   return result;
 }
 
@@ -940,18 +957,25 @@ async function saveContractor(event) {
   const source = form.dataset.source || "";
   const id = form.dataset.id || "";
   const profileId = form.dataset.profileId || "";
-  const isNewLiveContractor = !id && !profileId && value("contractorTeam") === "contractor";
+  const team = value("contractorTeam") || "contractor";
+  const isNewLivePortalAccount = !id && !profileId && (team === "contractor" || team === "sales");
 
-  if (isNewLiveContractor) {
-    const contractorName = value("contractorName") || value("contractorEmail") || "Contractor";
-    setMessage(`Creating live contractor account for ${contractorName}...`);
+  if (isNewLivePortalAccount) {
+    const contractorName = value("contractorName") || value("contractorEmail") || (team === "sales" ? "Sales team member" : "Contractor");
+    const roleLabel = team === "sales" ? "sales team member" : "contractor";
+    setMessage(`Creating live ${roleLabel} account for ${contractorName}...`);
     try {
       await createLiveContractorAccount();
       closeModal();
+      if (team === "sales") {
+        state.team = "sales";
+        const filter = document.getElementById("contractorTeamFilter");
+        if (filter) filter.value = "sales";
+      }
       await loadPeople();
-      setMessage(`${contractorName} was added as a live contractor. They must change their temporary password on first login.`);
+      setMessage(`${contractorName} was added as a live ${roleLabel}. They must change their temporary password on first login.`);
     } catch (error) {
-      setMessage("Unable to create live contractor: " + (error?.message || "Unknown error"), true);
+      setMessage(`Unable to create live ${roleLabel}: ` + (error?.message || "Unknown error"), true);
     } finally {
       state.saving = false;
     }
@@ -1035,13 +1059,13 @@ async function resetContractorPassword(event) {
       })
     });
     const payload = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(payload.error || "Unable to reset contractor password.");
+    if (!response.ok) throw new Error(payload.error || "Unable to reset portal user password.");
 
     closeModal();
     await loadPeople();
     setMessage(`${contractorName}'s password was reset. They will be prompted to change it on their next login.`);
   } catch (error) {
-    setPasswordFormMessage(error?.message || "Unable to reset contractor password.", true);
+    setPasswordFormMessage(error?.message || "Unable to reset portal user password.", true);
   } finally {
     state.saving = false;
   }

@@ -1,7 +1,7 @@
 const { createClient } = require("@supabase/supabase-js");
 
 const allowedAdminRoles = new Set(["admin", "owner", "super_admin"]);
-const contractorRoles = new Set(["contractor", "vendor", "cleaner", "service_provider"]);
+const resettablePortalRoles = new Set(["contractor", "vendor", "cleaner", "service_provider", "sales", "sales_team"]);
 
 function normalizeToken(value) {
   return String(value || "")
@@ -71,7 +71,7 @@ async function requireAdmin(supabase, req) {
 
   if (profileError) return { error: profileError.message, status: 500 };
   if (!allowedAdminRoles.has(normalizeToken(profile?.role))) {
-    return { error: "Only admins can reset contractor passwords.", status: 403 };
+    return { error: "Only admins can reset portal user passwords.", status: 403 };
   }
 
   return { user };
@@ -103,10 +103,10 @@ async function findContractorProfile(supabase, contractorUserId, email) {
   return data || null;
 }
 
-function isContractorProfile(profile) {
+function isResettablePortalProfile(profile) {
   const role = normalizeToken(profile?.role);
   if (role === "property_manager" || role === "propertymanagement" || role === "property_management") return false;
-  return contractorRoles.has(role) || profile?.contractor_approved === true;
+  return resettablePortalRoles.has(role) || profile?.contractor_approved === true;
 }
 
 module.exports = async function handler(req, res) {
@@ -143,15 +143,15 @@ module.exports = async function handler(req, res) {
     return sendJson(res, 500, { error: error.message || "Unable to verify contractor profile." });
   }
 
-  if (!profile?.id) return sendJson(res, 404, { error: "Registered contractor profile was not found." });
-  if (!isContractorProfile(profile)) {
-    return sendJson(res, 400, { error: "Selected user is not a contractor account." });
+  if (!profile?.id) return sendJson(res, 404, { error: "Registered portal profile was not found." });
+  if (!isResettablePortalProfile(profile)) {
+    return sendJson(res, 400, { error: "Selected user is not a contractor or sales account." });
   }
 
   const { data: targetResult, error: targetError } = await supabase.auth.admin.getUserById(profile.id);
   const targetUser = targetResult?.user || null;
   if (targetError || !targetUser) {
-    return sendJson(res, 404, { error: targetError?.message || "Contractor auth account was not found." });
+    return sendJson(res, 404, { error: targetError?.message || "Portal auth account was not found." });
   }
 
   const now = new Date().toISOString();

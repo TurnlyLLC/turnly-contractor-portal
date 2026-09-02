@@ -1,12 +1,31 @@
 const { createClient } = require("@supabase/supabase-js");
 
 const allowedAdminRoles = new Set(["admin", "owner", "super_admin"]);
+const allowedPortalRoles = new Set(["contractor", "sales", "sales_team"]);
 
 function normalizeToken(value) {
   return String(value || "")
     .trim()
     .toLowerCase()
     .replace(/[\s-]+/g, "_");
+}
+
+function requestedPortalRole(body = {}) {
+  const raw = normalizeToken(body.portal_role || body.portalRole || body.role || body.team || "contractor");
+  if (raw === "sales") return "sales_team";
+  return allowedPortalRoles.has(raw) ? raw : "contractor";
+}
+
+function portalTeam(role) {
+  return role === "sales_team" ? "sales" : "contractor";
+}
+
+function portalAccessPayload(body = {}) {
+  const role = requestedPortalRole(body);
+  if (role !== "contractor") {
+    return { allowed_regions: [], allowed_property_ids: [], allowed_property_names: [] };
+  }
+  return contractorAccessPayload(body);
 }
 
 function sendJson(res, statusCode, body) {
@@ -31,7 +50,7 @@ function getSupabaseAdmin() {
       !serviceKey ? "SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SECRET_KEY" : ""
     ].filter(Boolean).join(" and ");
     return {
-      error: new Error(`Server contractor route is missing ${missing}. Add it to the production server environment, then redeploy.`)
+      error: new Error(`Server portal account route is missing ${missing}. Add it to the production server environment, then redeploy.`)
     };
   }
 
@@ -70,7 +89,7 @@ async function requireAdmin(supabase, req) {
 
   if (profileError) return { error: profileError.message, status: 500 };
   if (!allowedAdminRoles.has(normalizeToken(profile?.role))) {
-    return { error: "Only admins can create contractor accounts.", status: 403 };
+    return { error: "Only admins can create portal accounts.", status: 403 };
   }
 
   return { user };
@@ -172,9 +191,15 @@ async function createOrUpdateAuthUser(supabase, body, adminUserId) {
   const password = String(body.password || "");
   const fullName = String(body.full_name || body.name || "").trim();
   const now = new Date().toISOString();
-  const access = contractorAccessPayload(body);
+  const role = requestedPortalRole(body);
+  const team = portalTeam(role);
+  const access = portalAccessPayload(body);
+  const serviceType = String(body.service_type || body.title || "").trim();
+  const department = role === "sales_team" ? "Sales" : String(body.department || "").trim();
+  const title = role === "sales_team" ? serviceType || "Sales Team" : String(body.title || "").trim();
   const baseAppMetadata = {
-    role: "contractor",
+    role,
+    team,
     turnly_force_password_change: true,
     turnly_temp_password_created_at: now,
     turnly_temp_password_created_by: adminUserId
@@ -183,9 +208,12 @@ async function createOrUpdateAuthUser(supabase, body, adminUserId) {
     full_name: fullName,
     phone: String(body.phone || "").trim(),
     company_name: String(body.company_name || "").trim(),
-    service_type: String(body.service_type || "").trim(),
+    service_type: serviceType,
     market: String(body.market || "").trim(),
-    role: "contractor",
+    role,
+    team,
+    department,
+    title,
     allowed_regions: access.allowed_regions,
     allowed_property_ids: access.allowed_property_ids,
     allowed_property_names: access.allowed_property_names,
@@ -236,26 +264,34 @@ async function createOrUpdateAuthUser(supabase, body, adminUserId) {
 }
 
 async function upsertProfile(supabase, user, body, adminUserId) {
-  const approved = body.contractor_approved !== false;
-  const status = approved ? "active" : normalizeToken(body.status) || "pending_approval";
+  const role = requestedPortalRole(body);
+  const team = portalTeam(role);
+  const isContractor = role === "contractor";
+  const approved = isContractor ? body.contractor_approved !== false : true;
+  const status = isContractor
+    ? (approved ? "active" : normalizeToken(body.status) || "pending_approval")
+    : normalizeToken(body.status) || "active";
   const now = new Date().toISOString();
-  const access = contractorAccessPayload(body);
+  const access = portalAccessPayload(body);
   const services = Array.isArray(body.service_types)
     ? body.service_types
     : String(body.service_type || "").split(",").map((item) => item.trim()).filter(Boolean);
+  const serviceType = String(body.service_type || body.title || "").trim();
+  const department = role === "sales_team" ? "Sales" : String(body.department || "").trim();
+  const title = role === "sales_team" ? serviceType || "Sales Team" : String(body.title || "").trim();
   const profilePayload = {
     id: user.id,
     email: user.email || String(body.email || "").trim().toLowerCase(),
     full_name: String(body.full_name || body.name || user.user_metadata?.full_name || "").trim(),
     phone: String(body.phone || "").trim(),
-    role: "contractor",
-    team: "contractor",
+    role,
+    team,
     status,
-    contractor_approved: approved,
-    approval_status: approved ? "approved" : "pending",
+    contractor_approved: isContractor ? approved : false,
+    approval_status: isContractor ? approved ? "approved" : "pending" : "approved",
     company_name: String(body.company_name || "").trim(),
     business_name: String(body.company_name || "").trim(),
-    service_type: String(body.service_type || "").trim(),
+    service_type: serviceType,
     service_types: services,
     market: String(body.market || "").trim(),
     region: String(body.market || body.region || "").trim(),
@@ -264,10 +300,12 @@ async function upsertProfile(supabase, user, body, adminUserId) {
     allowed_regions: access.allowed_regions,
     allowed_property_ids: access.allowed_property_ids,
     allowed_property_names: access.allowed_property_names,
+    department,
+    title,
     invited_by_admin: true,
     invited_by: adminUserId,
     invited_at: now,
-    contractor_approved_at: approved ? now : null
+    contractor_approved_at: isContractor && approved ? now : null
   };
 
   const { data, error } = await supabase
@@ -286,6 +324,7 @@ async function upsertProfile(supabase, user, body, adminUserId) {
 }
 
 async function syncContractorInvite(supabase, user, body, adminUserId) {
+  if (requestedPortalRole(body) !== "contractor") return;
   const email = String(body.email || user.email || "").trim().toLowerCase();
   if (!email) return;
   const now = new Date().toISOString();
@@ -344,7 +383,7 @@ module.exports = async function handler(req, res) {
   const email = String(body.email || "").trim().toLowerCase();
   const password = String(body.password || "");
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return sendJson(res, 400, { error: "A valid contractor email is required." });
+    return sendJson(res, 400, { error: "A valid email is required." });
   }
   if (!password || password.length < 8) {
     return sendJson(res, 400, { error: "Temporary password must be at least 8 characters." });
@@ -354,18 +393,22 @@ module.exports = async function handler(req, res) {
     const user = await createOrUpdateAuthUser(supabase, body, admin.user.id);
     const profile = await upsertProfile(supabase, user, body, admin.user.id);
     await syncContractorInvite(supabase, user, body, admin.user.id);
+    const account = {
+      id: user.id,
+      email: user.email || email,
+      name: profile?.full_name || body.full_name || body.name || "",
+      status: profile?.status || "active",
+      role: profile?.role || requestedPortalRole(body),
+      team: profile?.team || portalTeam(requestedPortalRole(body)),
+      contractor_approved: profile?.contractor_approved !== false
+    };
 
     return sendJson(res, 200, {
       ok: true,
-      contractor: {
-        id: user.id,
-        email: user.email || email,
-        name: profile?.full_name || body.full_name || body.name || "",
-        status: profile?.status || "active",
-        contractor_approved: profile?.contractor_approved !== false
-      }
+      account,
+      contractor: account
     });
   } catch (error) {
-    return sendJson(res, 500, { error: error.message || "Unable to create contractor account." });
+    return sendJson(res, 500, { error: error.message || "Unable to create portal account." });
   }
 };
