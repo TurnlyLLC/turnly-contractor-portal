@@ -15,27 +15,19 @@ const allowedRoles = new Set(["admin", "sales", "sales_team"]);
 const pageConfig = {
   dashboard: {
     title: "Sales Dashboard",
-    subtitle: "Track prospects, walkthroughs, quotes, contracts, and follow-ups."
+    subtitle: "Identify ideal properties, confirm the $0.25/sq ft fit, and schedule walkthroughs for management."
   },
   leads: {
     title: "Lead Qualification",
-    subtitle: "Work through prospects, qualify fit, and move leads through the pipeline."
+    subtitle: "Qualify prospects, confirm pricing fit, and prepare walkthrough-ready candidates."
   },
   walkthroughs: {
     title: "Walkthroughs",
-    subtitle: "Schedule and manage property walkthroughs."
-  },
-  quotes: {
-    title: "Quotes",
-    subtitle: "Create, track, and manage property quotes."
-  },
-  contracts: {
-    title: "Contracts Pending",
-    subtitle: "Track prospects that are ready for signed agreements."
+    subtitle: "Schedule walkthroughs for management to close qualified opportunities."
   },
   tasks: {
     title: "Tasks & Follow-ups",
-    subtitle: "Track outreach, reminders, and next sales actions."
+    subtitle: "Track outreach, pricing confirmation, reminders, and next sales actions."
   }
 };
 
@@ -43,17 +35,15 @@ const navItems = [
   ["dashboard", "Dashboard", "sales.html", "dashboard"],
   ["leads", "Leads", "sales-leads.html", "users"],
   ["walkthroughs", "Walkthroughs", "sales-walkthroughs.html", "calendar"],
-  ["quotes", "Quotes", "sales-quotes.html", "file-text"],
-  ["contracts", "Contracts Pending", "sales-contracts.html", "file-check"],
   ["tasks", "Tasks & Follow-ups", "sales-tasks.html", "clipboard-check"]
 ];
 
 const stageDefs = [
-  { id: "new_leads", label: "New Leads", tone: "green" },
+  { id: "new_leads", label: "New Prospects", tone: "green" },
   { id: "contacted", label: "Contacted", tone: "cyan" },
-  { id: "walkthrough", label: "Walkthroughs", tone: "blue" },
-  { id: "quote_sent", label: "Quotes Sent", tone: "yellow" },
-  { id: "contract_out", label: "Contracts Pending", tone: "violet" },
+  { id: "quote_sent", label: "Pricing Confirmed", tone: "yellow" },
+  { id: "walkthrough", label: "Walkthrough Set", tone: "blue" },
+  { id: "contract_out", label: "Management Review", tone: "violet" },
   { id: "active", label: "Won", tone: "green" },
   { id: "lost", label: "Lost", tone: "red" }
 ];
@@ -256,6 +246,7 @@ const fieldAliases = {
   lead_source: ["source", "lead_source", "referral_source"],
   lead_value: ["value", "lead_value", "pipeline_value", "annual_value", "quote_amount"],
   pipeline_stage: ["stage", "status", "pipeline_stage"],
+  budget_range: ["pricing_fit", "price_fit", "cost_fit", "pricing_acceptance", "budget_range"],
   next_step: ["next_step", "next_action", "task", "follow_up"],
   next_step_due_at: ["due_date", "follow_up_date", "next_step_due_at", "next_step_due"],
   lead_notes: ["notes", "lead_notes", "comments"]
@@ -292,8 +283,14 @@ const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
   : null;
 
 const app = document.getElementById("salesApp");
+const retiredPages = new Set(["quotes", "contracts"]);
+const requestedSalesPage = document.body.dataset.salesPage || "dashboard";
+if (retiredPages.has(requestedSalesPage)) {
+  window.history.replaceState(null, "", "sales.html");
+}
+
 const state = {
-  page: document.body.dataset.salesPage || "dashboard",
+  page: retiredPages.has(requestedSalesPage) ? "dashboard" : requestedSalesPage,
   user: null,
   profile: null,
   rows: [],
@@ -987,8 +984,6 @@ function renderLoading() {
 function renderPage() {
   if (state.page === "leads") return renderLeadsPage();
   if (state.page === "walkthroughs") return renderWalkthroughsPage();
-  if (state.page === "quotes") return renderQuotesPage();
-  if (state.page === "contracts") return renderContractsPage();
   if (state.page === "tasks") return renderTasksPage();
   return renderDashboardPage();
 }
@@ -1073,20 +1068,20 @@ function renderDashboardPage() {
   const total = state.rows.length;
   const newWeek = thisWeekRows().length;
   const walkthroughCount = walkthroughRows().length;
-  const quoteRowsCount = quoteRows().length;
+  const pricingConfirmedCount = rowsByStage("quote_sent").length;
+  const managementReviewCount = rowsByStage("contract_out").length;
   const won = rowsByStage("active").length;
   const closed = won + rowsByStage("lost").length;
   const winRate = closed ? Math.round((won / closed) * 1000) / 10 : 0;
-  const pipelineValue = state.rows.reduce((sum, row) => sum + recordValue(row), 0);
 
   return `
     <section class="sales-metric-grid">
-      ${metricCard("Total Leads", number(total), `${number(rowsByStage("new_leads").length)} new prospects`, "users", "green")}
+      ${metricCard("Total Prospects", number(total), `${number(rowsByStage("new_leads").length)} new this cycle`, "users", "green")}
       ${metricCard("New This Week", number(newWeek), "created this week", "plus", "green")}
-      ${metricCard("Walkthroughs Scheduled", number(walkthroughCount), "active site visits", "calendar", "cyan")}
-      ${metricCard("Quotes Sent", number(quoteRowsCount), "pricing in market", "file-text", "blue")}
+      ${metricCard("Pricing Confirmed", number(pricingConfirmedCount), "$0.25/sq ft fit accepted", "check", "yellow")}
+      ${metricCard("Walkthroughs Set", number(walkthroughCount), "ready for management", "calendar", "cyan")}
+      ${metricCard("Management Review", number(managementReviewCount), "ready to close", "clipboard-check", "violet")}
       ${metricCard("Win Rate", `${winRate}%`, `${number(won)} won opportunities`, "trophy", "violet")}
-      ${metricCard("Pipeline Value", money(pipelineValue, true), "open sales value", "dollar", "green")}
     </section>
 
     <section class="sales-dashboard-grid">
@@ -1128,7 +1123,7 @@ function renderDashboardPage() {
         <div class="sales-panel-header">
           <div>
             <h2>Lead Conversion</h2>
-            <p>Current mix of leads, walkthroughs, quotes, and wins.</p>
+            <p>Current mix of prospects, pricing fit, walkthroughs, and wins.</p>
           </div>
         </div>
         ${renderConversionDonut()}
@@ -1328,15 +1323,9 @@ function renderProspectWorkQueue(limit = 8) {
           : stage === "walkthrough"
             ? "Walkthrough"
             : stage === "quote_sent"
-              ? "Quote"
-              : "Contract";
-        const actionPage = stage === "walkthrough"
-          ? "walkthroughs"
-          : stage === "quote_sent"
-            ? "quotes"
-            : stage === "contract_out"
-              ? "contracts"
-              : "leads";
+              ? "Set Walkthrough"
+              : "Review";
+        const actionPage = ["walkthrough", "quote_sent", "contract_out"].includes(stage) ? "walkthroughs" : "leads";
         return `
           <article class="sales-work-row">
             <div>
@@ -1411,13 +1400,15 @@ function renderStageTabs() {
 function renderLeadsPage() {
   const rows = baseFilteredRows();
   const selected = selectRecord(rows);
+  const idealFits = state.rows.filter((row) => Number(row.opportunity_score || 0) >= 75).length;
   return `
     <section class="sales-metric-grid">
       ${metricCard("Open Prospects", number(state.rows.filter((row) => !["active", "lost"].includes(stageFor(row))).length), "still being worked", "users", "green")}
+      ${metricCard("Ideal Fits", number(idealFits), "75+ opportunity score", "trophy", "green")}
       ${metricCard("Contacted", number(rowsByStage("contacted").length), "follow-up started", "phone", "cyan")}
+      ${metricCard("Pricing Fit", number(rowsByStage("quote_sent").length), "$0.25/sq ft confirmed", "check", "yellow")}
       ${metricCard("Walkthroughs", number(rowsByStage("walkthrough").length), "site visits scheduled", "calendar", "blue")}
-      ${metricCard("Quotes", number(rowsByStage("quote_sent").length), "pricing sent", "file-text", "yellow")}
-      ${metricCard("Contracts", number(rowsByStage("contract_out").length), "waiting on signature", "file-check", "violet")}
+      ${metricCard("Management Review", number(rowsByStage("contract_out").length), "ready to close", "clipboard-check", "violet")}
       ${metricCard("Won", number(rowsByStage("active").length), "active clients", "trophy", "green")}
     </section>
     <section class="sales-table-layout">
@@ -1481,7 +1472,7 @@ function renderQualificationWorksheet(row) {
       <div class="sales-section-title">
         <div>
           <h2>Qualification Worksheet</h2>
-          <p>Capture fit, decision maker, service needs, timing, and budget.</p>
+          <p>Capture property fit, decision maker, service needs, $0.25/sq ft acceptance, and timing.</p>
         </div>
         <button class="sales-primary-button" type="submit">${icon("check")}Save Qualification</button>
       </div>
@@ -1502,10 +1493,10 @@ function renderQualificationWorksheet(row) {
           ${field("average_turns_per_month", "Average Turns / Month", row.average_turns_per_month || "")}
         </section>
         <section class="sales-qualification-block">
-          <span>Pain Points, Timing & Budget</span>
+          <span>Pain Points, Timing & Pricing Fit</span>
           <div class="sales-check-row">${checkboxList("sales_pain_points", painPoints, savedPain)}</div>
           ${field("desired_start_date", "Desired Start Date", toDateInput(row.desired_start_date), "date")}
-          ${field("budget_range", "Budget Range", row.budget_range || "")}
+          ${field("budget_range", "$0.25/Sq Ft Fit", row.budget_range || "")}
           ${field("opportunity_score", "Opportunity Score", row.opportunity_score || "", "number")}
         </section>
         <section class="sales-qualification-block span-two">
@@ -1553,12 +1544,12 @@ function renderLeadDetail(row) {
         <div class="sales-score-ring" style="--score:${Math.max(0, Math.min(100, score || 0))}%"><strong>${score || "--"}</strong></div>
         <div class="sales-score-copy">
           <strong>${score >= 75 ? "High Opportunity" : score >= 45 ? "Developing Opportunity" : "Needs Qualification"}</strong>
-          <p>${esc(row.qualification_notes || row.lead_notes || "Capture fit, decision maker, timing, budget, and service needs.")}</p>
+          <p>${esc(row.qualification_notes || row.lead_notes || "Capture fit, decision maker, timing, $0.25/sq ft acceptance, and service needs.")}</p>
         </div>
       </div>
       <div class="sales-detail-grid">
         <div class="sales-detail-stat"><span>Class</span><strong>${esc(row.property_class || "Not set")}</strong></div>
-        <div class="sales-detail-stat"><span>Budget</span><strong>${esc(row.budget_range || "Not set")}</strong></div>
+        <div class="sales-detail-stat"><span>$0.25/Sq Ft Fit</span><strong>${esc(row.budget_range || "Not set")}</strong></div>
         <div class="sales-detail-stat"><span>Decision Maker</span><strong>${esc(row.decision_maker_status || "Unknown")}</strong></div>
         <div class="sales-detail-stat"><span>Start Timeline</span><strong>${esc(formatDate(row.desired_start_date, { empty: "Not set" }))}</strong></div>
       </div>
@@ -1572,7 +1563,8 @@ function renderLeadDetail(row) {
       </div>
       <div class="sales-action-stack">
         <button class="sales-primary-button" type="button" data-open-walkthrough="${esc(row.id)}">${icon("calendar")}Schedule Walkthrough</button>
-        <button class="sales-secondary-button" type="button" data-open-quote="${esc(row.id)}">${icon("file-text")}Send Quote</button>
+        <button class="sales-secondary-button" type="button" data-update-stage="${esc(row.id)}" data-stage="quote_sent">${icon("check")}Confirm $0.25/Sq Ft Fit</button>
+        <button class="sales-secondary-button" type="button" data-update-stage="${esc(row.id)}" data-stage="contract_out">${icon("clipboard-check")}Send to Management</button>
         <button class="sales-secondary-button" type="button" data-open-task="${esc(row.id)}">${icon("clipboard-check")}Create Follow-up</button>
         <button class="sales-secondary-button" type="button" data-open-lead="${esc(row.id)}">${icon("users")}Edit Prospect</button>
       </div>
@@ -1596,9 +1588,9 @@ function renderWalkthroughsPage() {
       ${metricCard("Scheduled", number(rows.filter((row) => normalize(row.walkthrough_status || "scheduled") === "scheduled").length), "active walkthroughs", "calendar", "blue")}
       ${metricCard("Confirmed", number(rows.filter((row) => normalize(row.walkthrough_status) === "confirmed").length), "ready for visit", "check", "green")}
       ${metricCard("Today", number(todayRows.length), "on today's calendar", "clock", "yellow")}
-      ${metricCard("Completed", number(rows.filter((row) => normalize(row.walkthrough_status) === "completed").length), "ready for quote", "file-text", "violet")}
+      ${metricCard("Completed", number(rows.filter((row) => normalize(row.walkthrough_status) === "completed").length), "ready for management", "clipboard-check", "violet")}
       ${metricCard("This Week", number(thisWeekRows(rows, "walkthrough_at").length), "scheduled this week", "calendar", "cyan")}
-      ${metricCard("Conversion", `${conversionRate("walkthrough", "quote_sent")}%`, "walkthrough to quote", "trophy", "green")}
+      ${metricCard("Pricing Fit", number(rowsByStage("quote_sent").length), "$0.25/sq ft confirmed", "check", "green")}
     </section>
     <section class="sales-workspace">
       <article class="sales-panel">
@@ -1757,7 +1749,7 @@ function renderWalkthroughDetail(row) {
       </div>
       <div class="sales-action-stack">
         <button class="sales-primary-button" type="button" data-update-walkthrough-status="${esc(row.id)}" data-status="confirmed">${icon("check")}Confirm Walkthrough</button>
-        <button class="sales-secondary-button" type="button" data-update-walkthrough-status="${esc(row.id)}" data-status="completed">${icon("file-text")}Mark Completed</button>
+        <button class="sales-secondary-button" type="button" data-update-walkthrough-status="${esc(row.id)}" data-status="completed">${icon("clipboard-check")}Send to Management</button>
         <button class="sales-secondary-button" type="button" data-open-walkthrough="${esc(row.id)}">${icon("calendar")}Reschedule</button>
       </div>
     </aside>
@@ -2179,7 +2171,7 @@ function renderImportModal() {
       <label class="sales-import-dropzone">
         ${icon("upload")}
         <strong>Upload a CSV or Excel prospect list</strong>
-        <small>Supported columns include property, company, contact, email, phone, address, city, state, units, source, stage, value, next step, and notes.</small>
+        <small>Supported columns include property, company, contact, email, phone, address, city, state, units, source, stage, pricing fit, next step, and notes.</small>
         <input id="salesImportFile" type="file" accept=".csv,.tsv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
       </label>
       <p class="sales-template-link">
@@ -2552,8 +2544,15 @@ function stageFromUpload(value) {
     qualified: "contacted",
     walkthrough: "walkthrough",
     walkthrough_scheduled: "walkthrough",
+    pricing: "quote_sent",
+    pricing_fit: "quote_sent",
+    pricing_confirmed: "quote_sent",
+    price_confirmed: "quote_sent",
+    cost_confirmed: "quote_sent",
     quote: "quote_sent",
     quote_sent: "quote_sent",
+    management: "contract_out",
+    management_review: "contract_out",
     contract: "contract_out",
     contract_out: "contract_out",
     contracts_pending: "contract_out",
@@ -2587,6 +2586,7 @@ function payloadFromUpload(row, rowNumber) {
       lead_source: valueFrom(row, "lead_source") || "Imported",
       lead_value: cleanNumber(valueFrom(row, "lead_value")),
       pipeline_stage: stageFromUpload(valueFrom(row, "pipeline_stage")),
+      budget_range: valueFrom(row, "budget_range"),
       next_step: valueFrom(row, "next_step"),
       next_step_due_at: fromDateTimeLocal(valueFrom(row, "next_step_due_at")) || dateOnlyIso(valueFrom(row, "next_step_due_at")),
       lead_notes: leadNotes,
@@ -2664,8 +2664,8 @@ async function updateStatus(kind, id, status) {
     let text = "";
     if (kind === "walkthrough") {
       payload.walkthrough_status = status;
-      if (status === "completed") payload.pipeline_stage = "quote_sent";
-      text = `Walkthrough marked ${titleCase(status)}.`;
+      if (status === "completed") payload.pipeline_stage = "contract_out";
+      text = status === "completed" ? "Walkthrough sent to management review." : `Walkthrough marked ${titleCase(status)}.`;
     } else if (kind === "quote") {
       payload.quote_status = status;
       if (status === "accepted") payload.pipeline_stage = "contract_out";
