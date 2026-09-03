@@ -1553,29 +1553,33 @@ function renderLeadFocusMode(rows) {
     <section class="sales-lead-focus-shell">
       <article class="sales-panel sales-lead-focus-card">
         <header class="sales-focus-header">
-          <div>
+          <div class="sales-focus-heading">
             <span class="sales-status-pill ${esc(stageFor(row))}">${esc(stageLabel(stageFor(row)))}</span>
             <h2>${esc(recordTitle(row))}</h2>
-            <p>${number(position)} of ${number(rows.length)} prospects in this view</p>
+            <p>${esc(recordAddress(row) || "No address saved")}</p>
+            <small>${number(position)} of ${number(rows.length)} prospects in this view</small>
           </div>
           <button class="sales-secondary-button" type="button" data-exit-lead-focus>${icon("x")}Exit Focus</button>
         </header>
         <form data-focus-lead-form data-record-id="${esc(row.id)}">
-          <div class="sales-focus-grid">
-            ${field("property_name", "Name", recordTitle(row), "text", true)}
-            ${field("contact_phone", "Phone Number", row.contact_phone || "")}
-            ${field("address", "Address", row.address || "", "text", false, "span-two")}
-            ${selectField("pipeline_stage", "Stage", stageDefs.map((stage) => [stage.id, stage.label]), stageFor(row))}
-            ${selectField("task_status", "Follow-up Status", taskStatuses.map((status) => [status, titleCase(status)]), taskStatus(row))}
-            ${field("next_step_due_at", "Next Step Due", toDateTimeLocal(taskDue(row)), "datetime-local")}
-            ${textAreaField("next_step", "Next Steps", row.next_step || "", "span-two")}
-            ${textAreaField("lead_notes", "Notes", row.lead_notes || row.default_scope || "", "span-two")}
+          <div class="sales-focus-board">
+            <section class="sales-focus-info-box phone">
+              <span>Phone Number</span>
+              <strong>${esc(row.contact_phone || "No phone saved")}</strong>
+              ${phoneHref ? `<a class="sales-primary-button" href="${esc(phoneHref)}">${icon("phone")}Call Lead</a>` : `<button class="sales-primary-button" type="button" disabled>${icon("phone")}No Phone Saved</button>`}
+            </section>
+            <section class="sales-focus-info-box controls">
+              ${selectField("pipeline_stage", "Stage", stageDefs.map((stage) => [stage.id, stage.label]), stageFor(row))}
+              ${selectField("task_status", "Follow-up Status", taskStatuses.map((status) => [status, titleCase(status)]), taskStatus(row))}
+            </section>
+            <section class="sales-focus-info-box notes">
+              ${textAreaField("focus_note", "Notes", "", "span-two")}
+            </section>
           </div>
           <footer class="sales-focus-footer">
             <p class="sales-message" data-modal-message></p>
             <div class="sales-row-actions">
               <button class="sales-secondary-button" type="button" data-focus-prev ${rows.length <= 1 ? "disabled" : ""}>${icon("left")}Previous</button>
-              ${phoneHref ? `<a class="sales-secondary-button" href="${esc(phoneHref)}">${icon("phone")}Call</a>` : `<button class="sales-secondary-button" type="button" disabled>${icon("phone")}Call</button>`}
               <button class="sales-primary-button" type="submit">${icon("check")}Save Progress</button>
               <button class="sales-secondary-button" type="button" data-focus-next ${rows.length <= 1 ? "disabled" : ""}>Next${icon("chevron")}</button>
             </div>
@@ -2626,22 +2630,21 @@ async function handleLeadForm(form) {
 async function handleLeadFocusForm(form) {
   const values = readForm(form);
   const id = form.dataset.recordId || "";
-  const propertyName = values.property_name?.trim();
+  const row = recordById(id);
+  const note = values.focus_note?.trim();
   if (!id) return setInlineFormMessage(form, "Choose a lead before saving.", "error");
-  if (!propertyName) return setInlineFormMessage(form, "Lead name is required.", "error");
 
   const payload = {
-    property_name: propertyName,
-    name: propertyName,
-    contact_phone: values.contact_phone?.trim() || "",
-    address: values.address?.trim() || "",
     pipeline_stage: values.pipeline_stage || "new_leads",
     task_status: values.task_status || "open",
-    next_step: values.next_step?.trim() || "",
-    next_step_due_at: fromDateTimeLocal(values.next_step_due_at),
-    lead_notes: values.lead_notes?.trim() || "",
-    default_scope: values.lead_notes?.trim() || ""
+    task_type: row?.task_type || "Sales follow-up"
   };
+  if (note) {
+    const existingNotes = row?.lead_notes || row?.default_scope || "";
+    const stampedNote = `${new Date().toLocaleString()}: ${note}`;
+    payload.lead_notes = existingNotes ? `${existingNotes}\n\n${stampedNote}` : stampedNote;
+    payload.default_scope = payload.lead_notes;
+  }
 
   await persistForm(form, id, payload, "Lead progress saved.");
 }

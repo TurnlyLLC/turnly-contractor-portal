@@ -992,8 +992,8 @@ button.sales-activity-row:hover {
   display: grid;
   justify-items: center;
   gap: 8px;
-  width: min(100%, 440px);
-  min-height: 136px;
+  width: min(100%, 720px);
+  min-height: 152px;
   border: 1px solid rgba(22, 217, 137, 0.56);
   border-radius: var(--sales-radius);
   background:
@@ -1086,41 +1086,117 @@ button.sales-activity-row:hover {
 }
 
 .sales-lead-focus-card {
-  padding: 22px;
+  padding: clamp(20px, 3vw, 34px);
 }
 
 .sales-focus-header {
-  display: flex;
-  align-items: start;
-  justify-content: space-between;
+  position: relative;
+  display: grid;
   gap: 16px;
-  margin-bottom: 18px;
+  margin-bottom: 22px;
 }
 
-.sales-focus-header h2 {
-  margin: 10px 0 4px;
+.sales-focus-header > .sales-secondary-button {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+
+.sales-focus-heading {
+  display: grid;
+  justify-items: center;
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 12px 70px 0;
+  text-align: center;
+}
+
+.sales-focus-heading .sales-status-pill {
+  margin-bottom: 14px;
+}
+
+.sales-focus-heading h2 {
+  margin: 0;
   color: #fff;
-  font-size: clamp(28px, 4vw, 54px);
+  font-size: clamp(38px, 5vw, 72px);
   line-height: 1.02;
 }
 
-.sales-focus-header p {
-  margin: 0;
-  color: var(--sales-muted);
+.sales-focus-heading p {
+  margin: 12px 0 0;
+  color: #d4e1ef;
+  font-size: clamp(17px, 2vw, 24px);
+  font-weight: 850;
 }
 
-.sales-focus-grid {
+.sales-focus-heading small {
+  margin-top: 8px;
+  color: var(--sales-muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.sales-focus-board {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: 16px;
 }
 
-.sales-focus-grid .span-two {
+.sales-focus-info-box {
+  min-height: 210px;
+  padding: clamp(18px, 2vw, 26px);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: var(--sales-radius);
+  background: linear-gradient(145deg, rgba(12, 26, 40, 0.92), rgba(7, 18, 31, 0.80));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.sales-focus-info-box > span,
+.sales-focus-info-box .sales-field {
+  color: #8fa1b6;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sales-focus-info-box.phone {
+  display: grid;
+  align-content: space-between;
+  gap: 18px;
+}
+
+.sales-focus-info-box.phone strong {
+  color: #fff;
+  font-size: clamp(30px, 4vw, 54px);
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+
+.sales-focus-info-box.controls {
+  display: grid;
+  align-content: center;
+  gap: 16px;
+}
+
+.sales-focus-info-box.controls .sales-field {
+  gap: 8px;
+}
+
+.sales-focus-info-box.controls select {
+  min-height: 58px;
+  font-size: 17px;
+}
+
+.sales-focus-info-box.notes {
   grid-column: 1 / -1;
+  min-height: 230px;
 }
 
-.sales-focus-grid textarea {
-  min-height: 132px;
+.sales-focus-info-box.notes textarea {
+  min-height: 168px;
+  margin-top: 9px;
+  font-size: 16px;
 }
 
 .sales-focus-footer {
@@ -1135,8 +1211,9 @@ button.sales-activity-row:hover {
 
 .sales-task-layout .sales-detail-card {
   position: sticky;
-  top: 92px;
-  max-height: calc(100vh - 112px);
+  top: auto;
+  bottom: 18px;
+  max-height: calc(100vh - 36px);
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -2053,7 +2130,8 @@ button.sales-activity-row:hover {
 
   .sales-task-layout .sales-detail-card {
     position: sticky;
-    top: 92px;
+    top: auto;
+    bottom: 18px;
   }
 }
 
@@ -2179,14 +2257,22 @@ button.sales-activity-row:hover {
   .sales-task-flow-step,
   .sales-task-focus-card header,
   .sales-task-meta-grid,
-  .sales-focus-grid,
+  .sales-focus-board,
   .sales-score {
     grid-template-columns: 1fr;
   }
 
-  .sales-focus-header,
   .sales-focus-footer {
     display: grid;
+  }
+
+  .sales-focus-header > .sales-secondary-button {
+    position: static;
+    justify-self: stretch;
+  }
+
+  .sales-focus-heading {
+    padding: 0;
   }
 
   .sales-funnel-count,
@@ -2198,7 +2284,7 @@ button.sales-activity-row:hover {
     grid-column: span 1;
   }
 
-  .sales-focus-grid .span-two {
+  .sales-focus-info-box.notes {
     grid-column: span 1;
   }
 
