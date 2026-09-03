@@ -240,7 +240,7 @@ const taskColumnSet = new Set([
 ]);
 
 const fieldAliases = {
-  property_name: ["property", "property_name", "lead", "lead_name", "company", "company_name", "business_name"],
+  property_name: ["name", "property", "property_name", "lead", "lead_name", "company", "company_name", "business_name"],
   company_name: ["company", "company_name", "management_company", "owner_company"],
   contact_name: ["contact", "contact_name", "primary_contact", "manager", "name"],
   contact_email: ["email", "email_address", "contact_email", "primary_contact_email"],
@@ -256,7 +256,7 @@ const fieldAliases = {
   lead_value: ["value", "lead_value", "pipeline_value", "annual_value", "quote_amount"],
   pipeline_stage: ["stage", "status", "pipeline_stage"],
   budget_range: ["pricing_fit", "price_fit", "cost_fit", "pricing_acceptance", "budget_range"],
-  next_step: ["next_step", "next_action", "task", "follow_up"],
+  next_step: ["next_steps", "next_step", "next_action", "task", "follow_up"],
   next_step_due_at: ["due_date", "follow_up_date", "next_step_due_at", "next_step_due"],
   lead_notes: ["notes", "lead_notes", "comments"]
 };
@@ -321,6 +321,8 @@ const state = {
   importPayloads: [],
   importErrors: [],
   importFileName: "",
+  selectedLeadIds: new Set(),
+  leadFocusMode: false,
   message: "",
   messageTone: "",
   profileOpen: false,
@@ -854,6 +856,8 @@ async function loadRows() {
   state.tasks = queries[4].data || [];
   state.activities = queries[5].data || [];
   composeSalesRows();
+  const liveLeadIds = new Set(state.rows.map((row) => row.id));
+  state.selectedLeadIds = new Set([...state.selectedLeadIds].filter((id) => liveLeadIds.has(id)));
 }
 
 async function loadReps() {
@@ -1418,6 +1422,17 @@ function renderFilters(options = {}) {
   `;
 }
 
+function renderLeadFilters() {
+  return `
+    <div class="sales-lead-filter-row">
+      <label class="sales-search">
+        ${icon("search")}
+        <input id="salesPageSearch" type="search" value="${esc(state.search)}" placeholder="Search prospects..." />
+      </label>
+    </div>
+  `;
+}
+
 function renderStageTabs() {
   return `
     <div class="sales-tabs" role="tablist" aria-label="Pipeline stages">
@@ -1433,26 +1448,42 @@ function renderStageTabs() {
 
 function renderLeadsPage() {
   const rows = baseFilteredRows();
-  const selected = selectRecord(rows);
-  const idealFits = state.rows.filter((row) => Number(row.opportunity_score || 0) >= 75).length;
+  if (state.leadFocusMode) return renderLeadFocusMode(rows);
+  const selectedCount = state.selectedLeadIds.size;
+  const visibleSelectedCount = rows.filter((row) => state.selectedLeadIds.has(row.id)).length;
+  const allVisibleSelected = Boolean(rows.length && visibleSelectedCount === rows.length);
   return `
-    <section class="sales-metric-grid">
-      ${metricCard("Open Prospects", number(state.rows.filter((row) => !["active", "lost"].includes(stageFor(row))).length), "still being worked", "users", "green")}
-      ${metricCard("Ideal Fits", number(idealFits), "75+ opportunity score", "trophy", "green")}
-      ${metricCard("Contacted", number(rowsByStage("contacted").length), "follow-up started", "phone", "cyan")}
-      ${metricCard("Pricing Fit", number(rowsByStage("quote_sent").length), "$0.25/sq ft confirmed", "check", "yellow")}
-      ${metricCard("Walkthroughs", number(rowsByStage("walkthrough").length), "site visits scheduled", "calendar", "blue")}
-      ${metricCard("Management Review", number(rowsByStage("contract_out").length), "ready to close", "clipboard-check", "violet")}
-      ${metricCard("Won", number(rowsByStage("active").length), "active clients", "trophy", "green")}
+    <section class="sales-leads-start">
+      <button class="sales-focus-start-button" type="button" data-enter-lead-focus ${rows.length ? "" : "disabled"}>
+        <span>${icon("check")}</span>
+        <strong>Let's Get To Work</strong>
+        <small>${rows.length ? `${number(rows.length)} prospect${rows.length === 1 ? "" : "s"} in this view` : "Upload prospects to begin"}</small>
+      </button>
     </section>
-    <section class="sales-table-layout">
-      <article class="sales-panel">
-        ${renderFilters({ placeholder: "Search prospects, contacts, companies..." })}
+    <section class="sales-leads-layout">
+      <article class="sales-panel sales-leads-panel">
+        <div class="sales-panel-header">
+          <div>
+            <h2>Prospect List</h2>
+            <p>Name, address, phone, stage, and next steps.</p>
+          </div>
+          <div class="sales-row-actions">
+            <button class="sales-secondary-button" type="button" data-open-import>${icon("upload")}Upload</button>
+            <button class="sales-secondary-button" type="button" data-open-lead>${icon("plus")}Add Lead</button>
+            <button class="sales-danger-button" type="button" data-delete-selected-leads ${selectedCount ? "" : "disabled"}>${icon("x")}Delete Selected</button>
+          </div>
+        </div>
+        ${renderLeadFilters()}
         ${renderStageTabs()}
+        <div class="sales-bulk-toolbar">
+          <label>
+            <input type="checkbox" data-lead-select-all ${allVisibleSelected ? "checked" : ""} ${rows.length ? "" : "disabled"} />
+            <span>Select all visible</span>
+          </label>
+          <strong>${number(selectedCount)} selected</strong>
+        </div>
         ${renderLeadTable(rows)}
-        ${renderQualificationWorksheet(selected)}
       </article>
-      ${renderLeadDetail(selected)}
     </section>
   `;
 }
@@ -1461,39 +1492,97 @@ function renderLeadTable(rows) {
   if (!rows.length) return emptyState("No prospects found", "Upload a prospect list or create a new prospect.");
   return `
     <div class="sales-table-wrap">
-      <table class="sales-table">
+      <table class="sales-table sales-leads-table">
         <thead>
           <tr>
-            <th>Property</th>
-            <th>Contact</th>
-            <th>Units</th>
+            <th></th>
+            <th>Name</th>
+            <th>Address</th>
+            <th>Phone Number</th>
             <th>Stage</th>
-            <th>Owner</th>
-            <th>Next Step</th>
-            <th>Value</th>
+            <th>Next Steps</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
           ${rows.map((row) => `
-            <tr class="${row.id === state.selectedId ? "active" : ""}" data-select-record="${esc(row.id)}">
-              <td><strong>${esc(recordTitle(row))}</strong><small>${esc(recordAddress(row))}</small></td>
-              <td><strong>${esc(recordContact(row))}</strong><small>${esc(row.contact_email || row.contact_phone || "")}</small></td>
-              <td>${recordUnits(row) ? number(recordUnits(row)) : "Not set"}</td>
+            <tr class="${row.id === state.selectedId ? "active" : ""}">
+              <td>
+                <input type="checkbox" data-lead-select="${esc(row.id)}" aria-label="Select ${esc(recordTitle(row))}" ${state.selectedLeadIds.has(row.id) ? "checked" : ""} />
+              </td>
+              <td><strong>${esc(recordTitle(row))}</strong></td>
+              <td>${esc(recordAddress(row) || "No address saved")}</td>
+              <td>${esc(row.contact_phone || "No phone saved")}</td>
               <td>
                 <select class="sales-filter" data-inline-stage="${esc(row.id)}" aria-label="Update stage">
                   ${stageDefs.map((stage) => `<option value="${stage.id}" ${stageFor(row) === stage.id ? "selected" : ""}>${esc(stage.label)}</option>`).join("")}
                 </select>
               </td>
-              <td>${esc(ownerName(row))}</td>
               <td><strong>${esc(row.next_step || "No next step")}</strong><small>${esc(formatDateTime(taskDue(row), { empty: "" }))}</small></td>
-              <td>${money(recordValue(row), true)}</td>
-              <td><button class="sales-secondary-button" type="button" data-open-lead="${esc(row.id)}">${icon("more")}</button></td>
+              <td>
+                <div class="sales-row-actions compact">
+                  <button class="sales-secondary-button" type="button" data-select-record="${esc(row.id)}" data-enter-lead-focus>${icon("check")}Focus</button>
+                  <button class="sales-secondary-button" type="button" data-open-lead="${esc(row.id)}">${icon("more")}Edit</button>
+                </div>
+              </td>
             </tr>
           `).join("")}
         </tbody>
       </table>
     </div>
+  `;
+}
+
+function renderLeadFocusMode(rows) {
+  const row = selectRecord(rows);
+  if (!row) {
+    return `
+      <section class="sales-panel sales-empty">
+        <div>
+          <strong>No prospects in this view</strong>
+          <p>Upload prospects or clear filters to start focus mode.</p>
+        </div>
+        <button class="sales-secondary-button" type="button" data-exit-lead-focus>${icon("left")}Back To Leads</button>
+      </section>
+    `;
+  }
+  const index = rows.findIndex((item) => item.id === row.id);
+  const position = index >= 0 ? index + 1 : 1;
+  const phoneHref = contactPhoneHref(row);
+  return `
+    <section class="sales-lead-focus-shell">
+      <article class="sales-panel sales-lead-focus-card">
+        <header class="sales-focus-header">
+          <div>
+            <span class="sales-status-pill ${esc(stageFor(row))}">${esc(stageLabel(stageFor(row)))}</span>
+            <h2>${esc(recordTitle(row))}</h2>
+            <p>${number(position)} of ${number(rows.length)} prospects in this view</p>
+          </div>
+          <button class="sales-secondary-button" type="button" data-exit-lead-focus>${icon("x")}Exit Focus</button>
+        </header>
+        <form data-focus-lead-form data-record-id="${esc(row.id)}">
+          <div class="sales-focus-grid">
+            ${field("property_name", "Name", recordTitle(row), "text", true)}
+            ${field("contact_phone", "Phone Number", row.contact_phone || "")}
+            ${field("address", "Address", row.address || "", "text", false, "span-two")}
+            ${selectField("pipeline_stage", "Stage", stageDefs.map((stage) => [stage.id, stage.label]), stageFor(row))}
+            ${selectField("task_status", "Follow-up Status", taskStatuses.map((status) => [status, titleCase(status)]), taskStatus(row))}
+            ${field("next_step_due_at", "Next Step Due", toDateTimeLocal(taskDue(row)), "datetime-local")}
+            ${textAreaField("next_step", "Next Steps", row.next_step || "", "span-two")}
+            ${textAreaField("lead_notes", "Notes", row.lead_notes || row.default_scope || "", "span-two")}
+          </div>
+          <footer class="sales-focus-footer">
+            <p class="sales-message" data-modal-message></p>
+            <div class="sales-row-actions">
+              <button class="sales-secondary-button" type="button" data-focus-prev ${rows.length <= 1 ? "disabled" : ""}>${icon("left")}Previous</button>
+              ${phoneHref ? `<a class="sales-secondary-button" href="${esc(phoneHref)}">${icon("phone")}Call</a>` : `<button class="sales-secondary-button" type="button" disabled>${icon("phone")}Call</button>`}
+              <button class="sales-primary-button" type="submit">${icon("check")}Save Progress</button>
+              <button class="sales-secondary-button" type="button" data-focus-next ${rows.length <= 1 ? "disabled" : ""}>Next${icon("chevron")}</button>
+            </div>
+          </footer>
+        </form>
+      </article>
+    </section>
   `;
 }
 
@@ -2306,23 +2395,12 @@ function renderLeadModal(row) {
     <form data-lead-form data-record-id="${esc(row?.id || "")}">
       <div class="sales-modal-body">
         <div class="sales-form-grid">
-          ${field("property_name", "Property / Lead Name", row ? recordTitle(row) : "", "text", true)}
-          ${field("company_name", "Management Company", row?.company_name || "")}
-          ${field("contact_name", "Contact Name", row?.contact_name || "")}
-          ${field("contact_email", "Contact Email", row?.contact_email || "", "email")}
-          ${field("contact_phone", "Contact Phone", row?.contact_phone || "")}
+          ${field("property_name", "Name", row ? recordTitle(row) : "", "text", true)}
+          ${field("contact_phone", "Phone Number", row?.contact_phone || "")}
           ${field("address", "Address", row?.address || "", "text", false, "span-two")}
-          ${field("sales_city", "City", row?.sales_city || "")}
-          ${field("sales_state", "State", row?.sales_state || "")}
-          ${selectField("pipeline_stage", "Pipeline Stage", stageDefs.map((stage) => [stage.id, stage.label]), stageFor(row))}
-          ${selectField("sales_owner_id", "Owner", repOptions(), row?.sales_owner_id || "")}
-          ${field("property_class", "Property Class", row?.property_class || "")}
-          ${field("prospect_unit_count", "Approx. Unit Count", row?.prospect_unit_count || "", "number")}
-          ${field("lead_value", "Pipeline Value", row?.lead_value || row?.quote_amount || "", "number")}
-          ${field("lead_source", "Lead Source", row?.lead_source || "")}
+          ${selectField("pipeline_stage", "Stage", stageDefs.map((stage) => [stage.id, stage.label]), stageFor(row))}
           ${field("next_step", "Next Step", row?.next_step || "", "text", false, "span-two")}
           ${field("next_step_due_at", "Next Step Due", toDateTimeLocal(taskDue(row)), "datetime-local")}
-          ${selectField("task_priority", "Priority", priorities.map((priority) => [priority, titleCase(priority)]), row?.task_priority || "medium")}
           ${textAreaField("lead_notes", "Notes", row?.lead_notes || row?.default_scope || "", "span-two")}
         </div>
       </div>
@@ -2402,7 +2480,7 @@ function renderImportModal() {
       <label class="sales-import-dropzone">
         ${icon("upload")}
         <strong>Upload a CSV or Excel prospect list</strong>
-        <small>Supported columns include property, company, contact, email, phone, address, city, state, units, source, stage, pricing fit, next step, and notes.</small>
+        <small>Use columns for name, address, phone number, stage, and next steps.</small>
         <input id="salesImportFile" type="file" accept=".csv,.tsv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
       </label>
       <p class="sales-template-link">
@@ -2526,34 +2604,46 @@ function ownerPayload(ownerId) {
 async function handleLeadForm(form) {
   const values = readForm(form);
   const id = form.dataset.recordId || "";
-  const owner = ownerPayload(values.sales_owner_id);
   const propertyName = values.property_name?.trim();
-  if (!propertyName) return setInlineFormMessage(form, "Property / lead name is required.", "error");
+  if (!propertyName) return setInlineFormMessage(form, "Lead name is required.", "error");
 
   const payload = {
     property_name: propertyName,
     name: propertyName,
-    company_name: values.company_name?.trim() || "",
-    contact_name: values.contact_name?.trim() || "",
-    contact_email: values.contact_email?.trim() || "",
     contact_phone: values.contact_phone?.trim() || "",
     address: values.address?.trim() || "",
-    sales_city: values.sales_city?.trim() || "",
-    sales_state: values.sales_state?.trim() || "",
     pipeline_stage: values.pipeline_stage || "new_leads",
-    ...owner,
-    property_class: values.property_class?.trim() || "",
-    prospect_unit_count: cleanInt(values.prospect_unit_count),
-    lead_value: cleanNumber(values.lead_value),
-    lead_source: values.lead_source?.trim() || "",
     next_step: values.next_step?.trim() || "",
     next_step_due_at: fromDateTimeLocal(values.next_step_due_at),
-    task_priority: values.task_priority || "medium",
+    lead_notes: values.lead_notes?.trim() || "",
+    default_scope: values.lead_notes?.trim() || ""
+  };
+  if (!id) Object.assign(payload, ownerPayload(state.user?.id || ""));
+
+  await persistForm(form, id, payload, id ? "Prospect updated." : "Prospect created.");
+}
+
+async function handleLeadFocusForm(form) {
+  const values = readForm(form);
+  const id = form.dataset.recordId || "";
+  const propertyName = values.property_name?.trim();
+  if (!id) return setInlineFormMessage(form, "Choose a lead before saving.", "error");
+  if (!propertyName) return setInlineFormMessage(form, "Lead name is required.", "error");
+
+  const payload = {
+    property_name: propertyName,
+    name: propertyName,
+    contact_phone: values.contact_phone?.trim() || "",
+    address: values.address?.trim() || "",
+    pipeline_stage: values.pipeline_stage || "new_leads",
+    task_status: values.task_status || "open",
+    next_step: values.next_step?.trim() || "",
+    next_step_due_at: fromDateTimeLocal(values.next_step_due_at),
     lead_notes: values.lead_notes?.trim() || "",
     default_scope: values.lead_notes?.trim() || ""
   };
 
-  await persistForm(form, id, payload, id ? "Prospect updated." : "Prospect created.");
+  await persistForm(form, id, payload, "Lead progress saved.");
 }
 
 async function handleWalkthroughForm(form) {
@@ -2802,28 +2892,17 @@ function stageFromUpload(value) {
 
 function payloadFromUpload(row, rowNumber) {
   const propertyName = valueFrom(row, "property_name") || valueFrom(row, "company_name") || valueFrom(row, "contact_name") || valueFrom(row, "contact_email");
-  if (!propertyName) return { error: `Row ${rowNumber}: missing property, company, contact, or email.` };
+  if (!propertyName) return { error: `Row ${rowNumber}: missing lead name.` };
 
   const leadNotes = valueFrom(row, "lead_notes");
   return {
     payload: {
       property_name: propertyName,
       name: propertyName,
-      company_name: valueFrom(row, "company_name"),
-      contact_name: valueFrom(row, "contact_name"),
-      contact_email: valueFrom(row, "contact_email"),
       contact_phone: valueFrom(row, "contact_phone"),
       address: valueFrom(row, "address"),
-      sales_city: valueFrom(row, "sales_city"),
-      sales_state: valueFrom(row, "sales_state"),
-      sales_county: valueFrom(row, "sales_county"),
-      property_class: valueFrom(row, "property_class"),
-      prospect_unit_count: cleanInt(valueFrom(row, "prospect_unit_count")),
-      average_turns_per_month: valueFrom(row, "average_turns_per_month"),
       lead_source: valueFrom(row, "lead_source") || "Imported",
-      lead_value: cleanNumber(valueFrom(row, "lead_value")),
       pipeline_stage: stageFromUpload(valueFrom(row, "pipeline_stage")),
-      budget_range: valueFrom(row, "budget_range"),
       next_step: valueFrom(row, "next_step"),
       next_step_due_at: fromDateTimeLocal(valueFrom(row, "next_step_due_at")) || dateOnlyIso(valueFrom(row, "next_step_due_at")),
       lead_notes: leadNotes,
@@ -2936,6 +3015,51 @@ async function logSalesTouch(id, text) {
   }
 }
 
+function moveLeadFocus(direction) {
+  const rows = baseFilteredRows();
+  if (!rows.length) return;
+  const currentIndex = rows.findIndex((row) => row.id === state.selectedId);
+  const nextIndex = currentIndex >= 0 ? (currentIndex + direction + rows.length) % rows.length : 0;
+  state.selectedId = rows[nextIndex].id;
+  render();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+async function deleteSelectedLeads() {
+  const ids = [...state.selectedLeadIds].filter(Boolean);
+  if (!ids.length || !supabase) return;
+  const confirmed = window.confirm(`Delete ${ids.length} selected lead${ids.length === 1 ? "" : "s"} and attached sales follow-ups?`);
+  if (!confirmed) return;
+
+  state.message = `Deleting ${number(ids.length)} selected lead${ids.length === 1 ? "" : "s"}...`;
+  state.messageTone = "";
+  render();
+
+  try {
+    const childDeletes = [
+      SALES_TABLES.activities,
+      SALES_TABLES.tasks,
+      SALES_TABLES.walkthroughs,
+      SALES_TABLES.quotes,
+      SALES_TABLES.contracts
+    ];
+    for (const tableName of childDeletes) {
+      const result = await supabase.from(tableName).delete().in("lead_id", ids);
+      if (result.error) throw result.error;
+    }
+
+    const result = await supabase.from(SALES_TABLES.leads).delete().in("id", ids);
+    if (result.error) throw result.error;
+
+    if (ids.includes(state.selectedId)) state.selectedId = null;
+    state.selectedLeadIds.clear();
+    await refreshData(false);
+    setMessage(`Deleted ${number(ids.length)} selected lead${ids.length === 1 ? "" : "s"}.`, "success");
+  } catch (error) {
+    setMessage(`Unable to delete selected leads: ${error.message}`, "error");
+  }
+}
+
 function setFilter(type, value) {
   if (type === "owner") state.ownerFilter = value;
   if (type === "stage") state.stageFilter = value;
@@ -2971,6 +3095,36 @@ function bindEvents() {
     if (target.closest("[data-sales-logout]")) {
       await supabase?.auth.signOut();
       window.location.href = "index.html";
+      return;
+    }
+
+    const enterLeadFocus = target.closest("[data-enter-lead-focus]");
+    if (enterLeadFocus) {
+      state.selectedId = enterLeadFocus.dataset.selectRecord || state.selectedId;
+      state.leadFocusMode = true;
+      render();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+
+    if (target.closest("[data-exit-lead-focus]")) {
+      state.leadFocusMode = false;
+      render();
+      return;
+    }
+
+    if (target.closest("[data-focus-prev]")) {
+      moveLeadFocus(-1);
+      return;
+    }
+
+    if (target.closest("[data-focus-next]")) {
+      moveLeadFocus(1);
+      return;
+    }
+
+    if (target.closest("[data-delete-selected-leads]")) {
+      await deleteSelectedLeads();
       return;
     }
 
@@ -3111,6 +3265,22 @@ function bindEvents() {
 
     if (event.target?.matches("[data-set-stage-filter]")) setFilter("stage", event.target.dataset.setStageFilter);
 
+    if (event.target?.matches("[data-lead-select]")) {
+      const id = event.target.dataset.leadSelect;
+      if (event.target.checked) state.selectedLeadIds.add(id);
+      else state.selectedLeadIds.delete(id);
+      render();
+      return;
+    }
+
+    if (event.target?.matches("[data-lead-select-all]")) {
+      const visibleIds = baseFilteredRows().map((row) => row.id);
+      if (event.target.checked) visibleIds.forEach((id) => state.selectedLeadIds.add(id));
+      else visibleIds.forEach((id) => state.selectedLeadIds.delete(id));
+      render();
+      return;
+    }
+
     if (event.target?.matches("[data-inline-stage]")) {
       await updateStage(event.target.dataset.inlineStage, event.target.value);
     }
@@ -3130,6 +3300,9 @@ function bindEvents() {
     if (form.matches("[data-lead-form]")) {
       event.preventDefault();
       await handleLeadForm(form);
+    } else if (form.matches("[data-focus-lead-form]")) {
+      event.preventDefault();
+      await handleLeadFocusForm(form);
     } else if (form.matches("[data-walkthrough-form]")) {
       event.preventDefault();
       await handleWalkthroughForm(form);
