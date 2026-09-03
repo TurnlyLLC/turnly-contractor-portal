@@ -328,6 +328,7 @@ const state = {
   profileOpen: false,
   loading: true
 };
+let focusSavePromise = null;
 
 function icon(name) {
   return `<svg class="sales-icon" viewBox="0 0 24 24" aria-hidden="true">${iconPaths[name] || iconPaths.dashboard}</svg>`;
@@ -1577,10 +1578,9 @@ function renderLeadFocusMode(rows) {
             </section>
           </div>
           <footer class="sales-focus-footer">
-            <p class="sales-message" data-modal-message></p>
+            <p class="sales-autosave-status" data-autosave-status>Autosaves as you work.</p>
             <div class="sales-row-actions">
               <button class="sales-secondary-button" type="button" data-focus-prev ${rows.length <= 1 ? "disabled" : ""}>${icon("left")}Previous</button>
-              <button class="sales-primary-button" type="submit">${icon("check")}Save Progress</button>
               <button class="sales-secondary-button" type="button" data-focus-next ${rows.length <= 1 ? "disabled" : ""}>Next${icon("chevron")}</button>
             </div>
           </footer>
@@ -2320,11 +2320,11 @@ function renderTaskTable(rows) {
 }
 
 function renderTaskDetail(row) {
-  if (!row) return `<aside class="sales-detail-card">${emptyState("Select a task", "Task details will appear here.")}</aside>`;
+  if (!row) return `<aside class="sales-detail-card sales-task-detail-card">${emptyState("Select a task", "Task details will appear here.")}</aside>`;
   const phoneHref = contactPhoneHref(row);
   const emailHref = contactEmailHref(row);
   return `
-    <aside class="sales-detail-card">
+    <aside class="sales-detail-card sales-task-detail-card">
       <section class="sales-detail-hero">
         <span class="sales-status-pill ${esc(taskStatus(row))}">${esc(titleCase(taskStatus(row)))}</span>
         <h2>${esc(recommendedTaskAction(row))}</h2>
@@ -2628,25 +2628,69 @@ async function handleLeadForm(form) {
 }
 
 async function handleLeadFocusForm(form) {
-  const values = readForm(form);
-  const id = form.dataset.recordId || "";
-  const row = recordById(id);
-  const note = values.focus_note?.trim();
-  if (!id) return setInlineFormMessage(form, "Choose a lead before saving.", "error");
+  await autosaveFocusLead({ includeNote: true });
+}
 
-  const payload = {
-    pipeline_stage: values.pipeline_stage || "new_leads",
-    task_status: values.task_status || "open",
-    task_type: row?.task_type || "Sales follow-up"
-  };
-  if (note) {
-    const existingNotes = row?.lead_notes || row?.default_scope || "";
-    const stampedNote = `${new Date().toLocaleString()}: ${note}`;
-    payload.lead_notes = existingNotes ? `${existingNotes}\n\n${stampedNote}` : stampedNote;
-    payload.default_scope = payload.lead_notes;
+function setFocusSaveStatus(text, tone = "") {
+  const status = document.querySelector("[data-autosave-status]");
+  if (!status) return;
+  status.textContent = text;
+  status.className = `sales-autosave-status ${tone}`.trim();
+}
+
+function updateFocusRowLocally(id, payload) {
+  const row = recordById(id);
+  if (row) Object.assign(row, payload);
+  const lead = state.leads.find((item) => item.id === id);
+  if (lead) Object.assign(lead, payload);
+}
+
+async function autosaveFocusLead(options = {}) {
+  const form = document.querySelector("[data-focus-lead-form]");
+  if (!form) return true;
+  if (focusSavePromise) {
+    await focusSavePromise;
+    return true;
   }
 
-  await persistForm(form, id, payload, "Lead progress saved.");
+  focusSavePromise = (async () => {
+    const values = readForm(form);
+    const id = form.dataset.recordId || "";
+    const row = recordById(id);
+    const noteField = form.querySelector('textarea[name="focus_note"]');
+    const note = options.includeNote ? values.focus_note?.trim() : "";
+    if (!id) return false;
+
+    const payload = {
+      pipeline_stage: values.pipeline_stage || "new_leads",
+      task_status: values.task_status || "open",
+      task_type: row?.task_type || "Sales follow-up"
+    };
+    if (note) {
+      const existingNotes = row?.lead_notes || row?.default_scope || "";
+      const stampedNote = `${new Date().toLocaleString()}: ${note}`;
+      payload.lead_notes = existingNotes ? `${existingNotes}\n\n${stampedNote}` : stampedNote;
+      payload.default_scope = payload.lead_notes;
+    }
+
+    try {
+      setFocusSaveStatus("Saving...");
+      await saveRecord(id, payload, "");
+      updateFocusRowLocally(id, payload);
+      if (noteField && note) noteField.value = "";
+      setFocusSaveStatus("Saved.", "success");
+      return true;
+    } catch (error) {
+      setFocusSaveStatus(`Unable to autosave: ${error.message}`, "error");
+      return false;
+    }
+  })();
+
+  try {
+    return await focusSavePromise;
+  } finally {
+    focusSavePromise = null;
+  }
 }
 
 async function handleWalkthroughForm(form) {
@@ -3018,7 +3062,9 @@ async function logSalesTouch(id, text) {
   }
 }
 
-function moveLeadFocus(direction) {
+async function moveLeadFocus(direction) {
+  const saved = await autosaveFocusLead({ includeNote: true });
+  if (!saved) return;
   const rows = baseFilteredRows();
   if (!rows.length) return;
   const currentIndex = rows.findIndex((row) => row.id === state.selectedId);
@@ -3096,6 +3142,7 @@ function bindEvents() {
     }
 
     if (target.closest("[data-sales-logout]")) {
+      await autosaveFocusLead({ includeNote: true });
       await supabase?.auth.signOut();
       window.location.href = "index.html";
       return;
@@ -3111,18 +3158,19 @@ function bindEvents() {
     }
 
     if (target.closest("[data-exit-lead-focus]")) {
+      await autosaveFocusLead({ includeNote: true });
       state.leadFocusMode = false;
       render();
       return;
     }
 
     if (target.closest("[data-focus-prev]")) {
-      moveLeadFocus(-1);
+      await moveLeadFocus(-1);
       return;
     }
 
     if (target.closest("[data-focus-next]")) {
-      moveLeadFocus(1);
+      await moveLeadFocus(1);
       return;
     }
 
@@ -3149,6 +3197,7 @@ function bindEvents() {
 
     const openLead = target.closest("[data-open-lead]");
     if (openLead) {
+      await autosaveFocusLead({ includeNote: true });
       state.modal = { type: "lead", id: openLead.dataset.openLead || "" };
       render();
       return;
@@ -3156,6 +3205,7 @@ function bindEvents() {
 
     const select = target.closest("[data-select-record]");
     if (select) {
+      await autosaveFocusLead({ includeNote: true });
       state.selectedId = select.dataset.selectRecord;
       render();
       return;
@@ -3163,6 +3213,7 @@ function bindEvents() {
 
     const openWalkthrough = target.closest("[data-open-walkthrough]");
     if (openWalkthrough) {
+      await autosaveFocusLead({ includeNote: true });
       state.modal = { type: "walkthrough", id: openWalkthrough.dataset.openWalkthrough || "" };
       render();
       return;
@@ -3177,6 +3228,7 @@ function bindEvents() {
 
     const openTask = target.closest("[data-open-task]");
     if (openTask) {
+      await autosaveFocusLead({ includeNote: true });
       state.modal = { type: "task", id: openTask.dataset.openTask || "" };
       render();
       return;
@@ -3259,9 +3311,18 @@ function bindEvents() {
       window.clearTimeout(bindEvents.searchTimer);
       bindEvents.searchTimer = window.setTimeout(render, 180);
     }
+
+    if (event.target?.matches('[data-focus-lead-form] textarea[name="focus_note"]')) {
+      setFocusSaveStatus(event.target.value.trim() ? "Note will save when you move on." : "Autosaves as you work.");
+    }
   });
 
   document.addEventListener("change", async (event) => {
+    if (event.target?.matches("[data-focus-lead-form] select")) {
+      await autosaveFocusLead();
+      return;
+    }
+
     if (event.target?.matches("[data-filter-owner]")) setFilter("owner", event.target.value);
     if (event.target?.matches("[data-filter-stage]")) setFilter("stage", event.target.value);
     if (event.target?.matches("[data-filter-status]")) setFilter("status", event.target.value);
@@ -3318,6 +3379,12 @@ function bindEvents() {
     } else if (form.matches("[data-qualification-form]")) {
       event.preventDefault();
       await handleQualificationForm(form);
+    }
+  });
+
+  document.addEventListener("focusout", async (event) => {
+    if (event.target?.matches('[data-focus-lead-form] textarea[name="focus_note"]')) {
+      await autosaveFocusLead({ includeNote: true });
     }
   });
 

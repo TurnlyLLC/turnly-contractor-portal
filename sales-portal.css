@@ -478,6 +478,10 @@ body.sales-portal-body a {
   align-items: start;
 }
 
+.sales-task-layout {
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+}
+
 .sales-panel,
 .sales-metric-card,
 .sales-empty,
@@ -1209,13 +1213,29 @@ button.sales-activity-row:hover {
   border-top: 1px solid rgba(148, 163, 184, 0.13);
 }
 
-.sales-task-layout .sales-detail-card {
+.sales-autosave-status {
+  min-height: 20px;
+  margin: 0;
+  color: var(--sales-muted);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.sales-autosave-status.success {
+  color: #7ef0ba;
+}
+
+.sales-autosave-status.error {
+  color: #ff9ca5;
+}
+
+.sales-task-layout .sales-task-detail-card {
   position: sticky;
-  top: auto;
-  bottom: 18px;
-  max-height: calc(100vh - 36px);
+  top: 92px;
+  max-height: calc(100vh - 112px);
   overflow-y: auto;
   overscroll-behavior: contain;
+  z-index: 2;
 }
 
 .sales-status-pill {
@@ -2103,6 +2123,109 @@ button.sales-activity-row:hover {
   line-height: 1.45;
 }
 
+@media (max-width: 1700px) and (min-width: 981px) {
+  .sales-task-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+    gap: 12px;
+  }
+
+  .sales-task-toolbar {
+    grid-template-columns: minmax(220px, 1fr) repeat(3, minmax(112px, 1fr));
+  }
+
+  .sales-task-toolbar .sales-primary-button {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .sales-task-select {
+    grid-template-columns: 1fr;
+  }
+
+  .sales-task-item {
+    overflow: hidden;
+    padding: 12px;
+  }
+
+  .sales-task-actions {
+    justify-content: flex-start;
+  }
+
+  .sales-task-actions .sales-primary-button,
+  .sales-task-actions .sales-secondary-button {
+    flex: 1 1 108px;
+    min-width: 0;
+    padding: 0 8px;
+    white-space: nowrap;
+  }
+
+  .sales-task-actions .sales-primary-button span,
+  .sales-task-actions .sales-secondary-button span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .sales-task-layout .sales-task-detail-card {
+    top: 82px;
+    max-height: calc(100vh - 96px);
+    padding: 14px;
+  }
+
+  .sales-task-layout .sales-task-detail-card .sales-detail-hero {
+    min-height: 100px;
+    padding: 13px;
+  }
+
+  .sales-task-layout .sales-task-detail-card .sales-detail-hero h2 {
+    font-size: 19px;
+  }
+
+  .sales-task-layout .sales-task-detail-card .sales-detail-grid {
+    gap: 8px;
+  }
+
+  .sales-task-layout .sales-task-detail-card .sales-detail-stat,
+  .sales-task-layout .sales-task-detail-card .sales-qualification-block {
+    padding: 10px;
+  }
+}
+
+@media (max-height: 820px) and (min-width: 981px) {
+  .sales-lead-focus-card {
+    padding: 18px;
+  }
+
+  .sales-focus-start-button {
+    min-height: 128px;
+  }
+
+  .sales-focus-heading h2 {
+    font-size: clamp(30px, 4vw, 52px);
+  }
+
+  .sales-focus-heading p {
+    margin-top: 8px;
+    font-size: 17px;
+  }
+
+  .sales-focus-info-box {
+    min-height: 148px;
+    padding: 17px;
+  }
+
+  .sales-focus-info-box.phone strong {
+    font-size: clamp(25px, 3.2vw, 42px);
+  }
+
+  .sales-focus-info-box.notes {
+    min-height: 164px;
+  }
+
+  .sales-focus-info-box.notes textarea {
+    min-height: 96px;
+  }
+}
+
 @media (max-width: 1460px) {
   .sales-topbar {
     grid-template-columns: 1fr;
@@ -2125,13 +2248,14 @@ button.sales-activity-row:hover {
   }
 
   .sales-task-layout {
-    grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+    grid-template-columns: minmax(0, 1fr) minmax(250px, 320px);
   }
 
-  .sales-task-layout .sales-detail-card {
+  .sales-task-layout .sales-task-detail-card {
     position: sticky;
-    top: auto;
-    bottom: 18px;
+    top: 82px;
+    bottom: auto;
+    max-height: calc(100vh - 96px);
   }
 }
 
@@ -2209,7 +2333,7 @@ button.sales-activity-row:hover {
     grid-template-columns: 1fr;
   }
 
-  .sales-task-layout .sales-detail-card {
+  .sales-task-layout .sales-task-detail-card {
     position: static;
     max-height: none;
     overflow: visible;
