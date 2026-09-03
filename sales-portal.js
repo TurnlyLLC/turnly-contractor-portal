@@ -6,7 +6,8 @@ const SALES_TABLES = {
   quotes: "sales_quotes",
   contracts: "sales_contracts",
   tasks: "sales_tasks",
-  activities: "sales_activities"
+  activities: "sales_activities",
+  availability: "sales_walkthrough_availability"
 };
 const PROFILES_TABLE = "profiles";
 const XLSX_URL = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
@@ -48,6 +49,25 @@ const stageDefs = [
   { id: "lost", label: "Lost", tone: "red" }
 ];
 
+const focusStageDefs = [
+  { id: "contacted", label: "Contacted", detail: "A real contact attempt happened." },
+  { id: "pricing_confirmed", label: "Pricing Confirmed", detail: "$0.25/sq ft has been discussed." },
+  { id: "walkthrough_set", label: "Walkthrough Set", detail: "A walkthrough window is selected." },
+  { id: "follow_up_needed", label: "Follow Up Needed", detail: "Keep this prospect in the work queue." }
+];
+const focusFollowUpStatuses = [
+  ["open", "Needed"],
+  ["in_progress", "In Progress"],
+  ["completed", "Completed"]
+];
+const focusQuestionDefs = [
+  { id: "decision_maker", label: "Are you talking to the decision maker?" },
+  { id: "cleaning_crew", label: "Do they currently have a cleaning crew in place?" },
+  { id: "wants_quote", label: "Would they like a quote from another cleaning crew?" },
+  { id: "price_acceptable", label: "Is the quoted price of $0.25 / sq ft acceptable?" },
+  { id: "wants_quality_walkthrough", label: "Would they like an in-person walkthrough demonstration of our quality control processes?" }
+];
+const FOCUS_STATE_PREFIX = "TURNLY_FOCUS_STATE:";
 const walkthroughStatuses = ["scheduled", "confirmed", "rescheduled", "completed", "cancelled"];
 const quoteStatuses = ["draft", "sent", "viewed", "accepted", "declined", "expired"];
 const taskStatuses = ["open", "in_progress", "pending", "completed"];
@@ -309,6 +329,7 @@ const state = {
   contracts: [],
   tasks: [],
   activities: [],
+  walkthroughAvailability: [],
   reps: [],
   selectedId: null,
   search: "",
@@ -377,6 +398,7 @@ function formatDate(value, options = {}) {
   const date = dateValue(value);
   if (!date) return options.empty || "Not set";
   return date.toLocaleDateString(undefined, {
+    weekday: options.weekday,
     month: options.month || "short",
     day: options.day || "numeric",
     year: options.year || "numeric"
@@ -513,6 +535,85 @@ function parseActivity(row) {
   return [];
 }
 
+function splitQualificationNotes(value) {
+  const raw = String(value || "");
+  let focusState = {};
+  const visible = raw
+    .split(/\r?\n/)
+    .filter((line) => {
+      if (!line.startsWith(FOCUS_STATE_PREFIX)) return true;
+      try {
+        focusState = JSON.parse(line.slice(FOCUS_STATE_PREFIX.length)) || {};
+      } catch {
+        focusState = {};
+      }
+      return false;
+    })
+    .join("\n")
+    .trim();
+  return { visible, focusState };
+}
+
+function qualificationNotesText(row) {
+  return splitQualificationNotes(row?.qualification_notes || "").visible;
+}
+
+function mergeQualificationNotes(visibleText, focusState) {
+  const cleanText = String(visibleText || "").trim();
+  const hasFocusState = Boolean(focusState && Object.keys(focusState).length);
+  const stateLine = hasFocusState ? `${FOCUS_STATE_PREFIX}${JSON.stringify(focusState)}` : "";
+  return [cleanText, stateLine].filter(Boolean).join("\n");
+}
+
+function focusStateFor(row) {
+  const parsed = splitQualificationNotes(row?.qualification_notes || "").focusState || {};
+  const stage = stageFor(row);
+  const storedStages = parsed.stages || {};
+  const storedQuestions = parsed.questions || {};
+  const stages = {
+    contacted: storedStages.contacted ?? stage !== "new_leads",
+    pricing_confirmed: storedStages.pricing_confirmed ?? pricingFitConfirmed(row),
+    walkthrough_set: storedStages.walkthrough_set ?? Boolean(walkthroughAt(row) || ["walkthrough", "contract_out", "active"].includes(stage)),
+    follow_up_needed: storedStages.follow_up_needed ?? Boolean(row?.next_step || row?.task_due_at || ["in_progress", "pending"].includes(taskStatus(row)))
+  };
+  const questions = {
+    decision_maker: storedQuestions.decision_maker || yesNoFromDecisionMaker(row?.decision_maker_status),
+    cleaning_crew: storedQuestions.cleaning_crew || yesNoFromText(row?.current_vendor),
+    wants_quote: storedQuestions.wants_quote || "",
+    price_acceptable: storedQuestions.price_acceptable || (pricingFitConfirmed(row) ? "yes" : yesNoFromPriceFit(row?.budget_range)),
+    wants_quality_walkthrough: storedQuestions.wants_quality_walkthrough || yesNoFromText(row?.walkthrough_type?.includes("Quality") ? "yes" : "")
+  };
+  const followUpStatus = parsed.follow_up_status || taskStatus(row);
+  return {
+    stages,
+    questions,
+    follow_up_status: focusFollowUpStatuses.some(([status]) => status === followUpStatus) ? followUpStatus : "open",
+    walkthrough_window: parsed.walkthrough_window || ""
+  };
+}
+
+function yesNoFromDecisionMaker(value) {
+  const normalized = normalize(value);
+  if (normalized === "confirmed" || normalized === "yes") return "yes";
+  if (normalized === "not_confirmed" || normalized === "no") return "no";
+  return "";
+}
+
+function yesNoFromText(value) {
+  const normalized = normalize(value);
+  if (["yes", "true", "confirmed"].includes(normalized)) return "yes";
+  if (["no", "false", "not_confirmed"].includes(normalized)) return "no";
+  return "";
+}
+
+function yesNoFromPriceFit(value) {
+  const normalized = normalize(value);
+  if (!normalized) return "";
+  if (normalized.includes("not") || normalized.includes("no") || normalized.includes("declined")) return "no";
+  if (normalized.includes("confirmed") || normalized.includes("acceptable") || normalized.includes("accepted")) return "yes";
+  return "";
+}
+
 function stageFor(row) {
   const stage = normalize(row?.pipeline_stage || "new_leads");
   return stageDefs.some((item) => item.id === stage) ? stage : "new_leads";
@@ -582,6 +683,10 @@ function initials(name) {
 function roleLabel() {
   if (state.profile?.role === "admin") return "Sales Admin";
   return "Sales Team";
+}
+
+function isSalesAdmin() {
+  return normalize(state.profile?.role || state.user?.user_metadata?.role) === "admin";
 }
 
 function setMessage(text, tone = "") {
@@ -838,6 +943,22 @@ async function requireSalesAccess() {
   return true;
 }
 
+async function loadWalkthroughAvailability() {
+  try {
+    const { data, error } = await supabase
+      .from(SALES_TABLES.availability)
+      .select("*")
+      .gte("starts_at", new Date().toISOString())
+      .order("starts_at", { ascending: true })
+      .limit(200);
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.warn("Walkthrough availability unavailable, using default windows.", error);
+    return [];
+  }
+}
+
 async function loadRows() {
   const queries = await Promise.all([
     supabase.from(SALES_TABLES.leads).select("*").order("last_activity_at", { ascending: false }).limit(2000),
@@ -856,6 +977,7 @@ async function loadRows() {
   state.contracts = queries[3].data || [];
   state.tasks = queries[4].data || [];
   state.activities = queries[5].data || [];
+  state.walkthroughAvailability = await loadWalkthroughAvailability();
   composeSalesRows();
   const liveLeadIds = new Set(state.rows.map((row) => row.id));
   state.selectedLeadIds = new Set([...state.selectedLeadIds].filter((id) => liveLeadIds.has(id)));
@@ -1534,6 +1656,155 @@ function renderLeadTable(rows) {
   `;
 }
 
+function renderFocusStageChecklist(row) {
+  const focusState = focusStateFor(row);
+  return `
+    <section class="sales-focus-info-box sales-focus-stage-box">
+      <span>Stage Checklist</span>
+      <div class="sales-focus-check-grid">
+        ${focusStageDefs.map((stage) => `
+          <label class="sales-focus-check-card">
+            <input type="checkbox" name="focus_stage" value="${esc(stage.id)}" ${focusState.stages[stage.id] ? "checked" : ""} />
+            <span class="sales-focus-checkmark">${icon("check")}</span>
+            <strong>${esc(stage.label)}</strong>
+            <small>${esc(stage.detail)}</small>
+          </label>
+        `).join("")}
+      </div>
+      <label class="sales-field sales-follow-up-status ${focusState.stages.follow_up_needed ? "" : "is-hidden"}" data-follow-up-status-wrap>
+        Follow-up Status
+        <select name="focus_follow_up_status">
+          ${focusFollowUpStatuses.map(([value, label]) => `<option value="${esc(value)}" ${focusState.follow_up_status === value ? "selected" : ""}>${esc(label)}</option>`).join("")}
+        </select>
+      </label>
+    </section>
+  `;
+}
+
+function renderFocusQuestionList(row) {
+  const focusState = focusStateFor(row);
+  return `
+    <section class="sales-focus-info-box sales-focus-question-box">
+      <span>Qualification Questions</span>
+      <div class="sales-focus-question-list">
+        ${focusQuestionDefs.map((question) => {
+          const selected = focusState.questions[question.id] || "";
+          const labelId = `focus-question-${question.id}`;
+          return `
+            <div class="sales-focus-question" role="group" aria-labelledby="${esc(labelId)}">
+              <p id="${esc(labelId)}">${esc(question.label)}</p>
+              <div class="sales-yesno-group">
+                ${["yes", "no"].map((value) => `
+                  <label>
+                    <input type="radio" name="focus_${esc(question.id)}" value="${esc(value)}" ${selected === value ? "checked" : ""} />
+                    <span>${esc(titleCase(value))}</span>
+                  </label>
+                `).join("")}
+              </div>
+            </div>
+          `;
+        }).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function addHoursIso(value, hours) {
+  const date = dateValue(value) || new Date();
+  date.setHours(date.getHours() + hours);
+  return date.toISOString();
+}
+
+function defaultWalkthroughWindows() {
+  const windows = [];
+  const cursor = new Date();
+  cursor.setHours(0, 0, 0, 0);
+  cursor.setDate(cursor.getDate() + 1);
+  while (windows.length < 10) {
+    const day = cursor.getDay();
+    if (day !== 0 && day !== 6) {
+      [10, 14].forEach((hour) => {
+        if (windows.length >= 10) return;
+        const start = new Date(cursor);
+        start.setHours(hour, 0, 0, 0);
+        const end = new Date(start);
+        end.setHours(end.getHours() + 1);
+        windows.push({
+          id: `default-${start.toISOString()}`,
+          starts_at: start.toISOString(),
+          ends_at: end.toISOString(),
+          label: hour < 12 ? "Morning walkthrough" : "Afternoon walkthrough"
+        });
+      });
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return windows;
+}
+
+function walkthroughWindowValue(slot) {
+  return `${slot.starts_at || ""}|${slot.ends_at || ""}|${slot.id || ""}`;
+}
+
+function parseWalkthroughWindowValue(value) {
+  const [startsAt, endsAt, slotId] = String(value || "").split("|");
+  if (!dateValue(startsAt)) return null;
+  return {
+    starts_at: dateValue(startsAt).toISOString(),
+    ends_at: dateValue(endsAt)?.toISOString() || addHoursIso(startsAt, 1),
+    slot_id: slotId || ""
+  };
+}
+
+function walkthroughWindowOptions(row) {
+  const now = new Date();
+  const adminWindows = (state.walkthroughAvailability || [])
+    .filter((slot) => normalize(slot.status || "open") === "open")
+    .filter((slot) => dateValue(slot.starts_at) && dateValue(slot.starts_at) >= now)
+    .map((slot) => ({
+      id: slot.id,
+      starts_at: slot.starts_at,
+      ends_at: slot.ends_at || addHoursIso(slot.starts_at, 1),
+      label: slot.label || slot.window_label || "Available walkthrough"
+    }));
+  const options = adminWindows.length ? adminWindows : defaultWalkthroughWindows();
+  const currentStart = walkthroughAt(row);
+  if (currentStart && !options.some((slot) => slot.starts_at === currentStart)) {
+    options.unshift({
+      id: "current",
+      starts_at: currentStart,
+      ends_at: row?.walkthrough_end_at || addHoursIso(currentStart, 1),
+      label: "Currently selected"
+    });
+  }
+  return options.slice(0, 10);
+}
+
+function renderFocusWalkthroughWindows(row) {
+  const selectedStart = walkthroughAt(row);
+  const options = walkthroughWindowOptions(row);
+  return `
+    <section class="sales-focus-info-box sales-focus-window-box">
+      <span>Walkthrough Availability</span>
+      <div class="sales-walkthrough-window-grid">
+        ${options.map((slot) => {
+          const start = dateValue(slot.starts_at);
+          const end = dateValue(slot.ends_at);
+          const checked = selectedStart && slot.starts_at === selectedStart;
+          return `
+            <label class="sales-walkthrough-window-card">
+              <input type="radio" name="walkthrough_window" value="${esc(walkthroughWindowValue(slot))}" ${checked ? "checked" : ""} />
+              <strong>${esc(formatDate(slot.starts_at, { weekday: "short", month: "short", day: "numeric", year: "numeric" }))}</strong>
+              <small>${esc(start && end ? `${formatTime(start)} - ${formatTime(end)}` : "Time TBD")}</small>
+              <span>${esc(slot.label || "Available")}</span>
+            </label>
+          `;
+        }).join("")}
+      </div>
+    </section>
+  `;
+}
+
 function renderLeadFocusMode(rows) {
   const row = selectRecord(rows);
   if (!row) {
@@ -1569,10 +1840,9 @@ function renderLeadFocusMode(rows) {
               <strong>${esc(row.contact_phone || "No phone saved")}</strong>
               ${phoneHref ? `<a class="sales-primary-button" href="${esc(phoneHref)}">${icon("phone")}Call Lead</a>` : `<button class="sales-primary-button" type="button" disabled>${icon("phone")}No Phone Saved</button>`}
             </section>
-            <section class="sales-focus-info-box controls">
-              ${selectField("pipeline_stage", "Stage", stageDefs.map((stage) => [stage.id, stage.label]), stageFor(row))}
-              ${selectField("task_status", "Follow-up Status", taskStatuses.map((status) => [status, titleCase(status)]), taskStatus(row))}
-            </section>
+            ${renderFocusStageChecklist(row)}
+            ${renderFocusQuestionList(row)}
+            ${renderFocusWalkthroughWindows(row)}
             <section class="sales-focus-info-box notes">
               ${textAreaField("focus_note", "Notes", "", "span-two")}
             </section>
@@ -1628,7 +1898,7 @@ function renderQualificationWorksheet(row) {
         </section>
         <section class="sales-qualification-block span-two">
           <span>Notes / Summary</span>
-          ${textAreaField("qualification_notes", "Qualification Notes", row.qualification_notes || row.lead_notes || "", "span-two")}
+          ${textAreaField("qualification_notes", "Qualification Notes", qualificationNotesText(row) || row.lead_notes || "", "span-two")}
         </section>
       </div>
     </form>
@@ -1671,7 +1941,7 @@ function renderLeadDetail(row) {
         <div class="sales-score-ring" style="--score:${Math.max(0, Math.min(100, score || 0))}%"><strong>${score || "--"}</strong></div>
         <div class="sales-score-copy">
           <strong>${score >= 75 ? "High Opportunity" : score >= 45 ? "Developing Opportunity" : "Needs Qualification"}</strong>
-          <p>${esc(row.qualification_notes || row.lead_notes || "Capture fit, decision maker, timing, $0.25/sq ft acceptance, and service needs.")}</p>
+          <p>${esc(qualificationNotesText(row) || row.lead_notes || "Capture fit, decision maker, timing, $0.25/sq ft acceptance, and service needs.")}</p>
         </div>
       </div>
       <div class="sales-detail-grid">
@@ -1719,12 +1989,63 @@ function renderWalkthroughsPage() {
       ${metricCard("This Week", number(thisWeekRows(rows, "walkthrough_at").length), "scheduled this week", "calendar", "cyan")}
       ${metricCard("Pricing Fit", number(rowsByStage("quote_sent").length), "$0.25/sq ft confirmed", "check", "green")}
     </section>
+    ${renderWalkthroughAvailabilityAdmin()}
     <section class="sales-workspace">
       <article class="sales-panel">
         ${renderFilters({ placeholder: "Search walkthroughs...", statuses: walkthroughStatuses })}
         ${renderCalendar(rows)}
       </article>
       ${renderWalkthroughDetail(selected)}
+    </section>
+  `;
+}
+
+function availabilityStatusOptions(selected = "open") {
+  return ["open", "booked", "held", "closed", "cancelled"]
+    .map((status) => `<option value="${esc(status)}" ${normalize(selected) === status ? "selected" : ""}>${esc(titleCase(status))}</option>`)
+    .join("");
+}
+
+function renderWalkthroughAvailabilityAdmin() {
+  if (!isSalesAdmin()) return "";
+  const slots = (state.walkthroughAvailability || [])
+    .slice()
+    .sort((a, b) => sortableTime(a.starts_at) - sortableTime(b.starts_at))
+    .slice(0, 10);
+  const tomorrow = toDateInput(addDays(new Date(), 1));
+  return `
+    <section class="sales-panel sales-availability-admin">
+      <div class="sales-panel-header">
+        <div>
+          <h2>Walkthrough Availability</h2>
+          <p>Set the days and times that sales reps can choose in focus mode.</p>
+        </div>
+      </div>
+      <form class="sales-availability-form" data-availability-form>
+        ${field("availability_date", "Date", tomorrow, "date", true)}
+        ${field("availability_start_time", "Start", "10:00", "time", true)}
+        ${field("availability_end_time", "End", "11:00", "time", true)}
+        ${field("availability_label", "Window Label", "Quality walkthrough", "text")}
+        <button class="sales-primary-button" type="submit">${icon("plus")}Add Window</button>
+      </form>
+      <div class="sales-availability-list">
+        ${slots.length ? slots.map((slot) => {
+          const start = dateValue(slot.starts_at);
+          const end = dateValue(slot.ends_at);
+          return `
+            <article class="sales-availability-slot">
+              <div>
+                <strong>${esc(formatDate(slot.starts_at, { weekday: "short" }))}</strong>
+                <small>${esc(start && end ? `${formatTime(start)} - ${formatTime(end)}` : "Time TBD")} · ${esc(slot.label || "Available walkthrough")}</small>
+              </div>
+              <select class="sales-filter" data-availability-status="${esc(slot.id)}" aria-label="Update availability status">
+                ${availabilityStatusOptions(slot.status || "open")}
+              </select>
+              <button class="sales-danger-button" type="button" data-delete-availability="${esc(slot.id)}">${icon("x")}Remove</button>
+            </article>
+          `;
+        }).join("") : `<p class="sales-record-subtitle">No admin-set availability windows yet.</p>`}
+      </div>
     </section>
   `;
 }
@@ -2081,7 +2402,12 @@ function taskRows() {
 function pricingFitConfirmed(row) {
   const stage = stageFor(row);
   const fitText = normalize(row?.budget_range || "");
-  if (["no", "not_ok", "not_accepted", "not_confirmed", "needs_confirmation", "pending", "unknown", "declined", "too_high", "does_not_work"].includes(fitText)) return false;
+  if (["no", "not_ok", "not_accepted", "not_acceptable", "not_confirmed", "needs_confirmation", "pending", "unknown", "declined", "too_high", "does_not_work"].includes(fitText) ||
+    fitText.includes("not") ||
+    fitText.includes("declined") ||
+    fitText.includes("too_high")) {
+    return false;
+  }
   return ["quote_sent", "walkthrough", "contract_out", "active"].includes(stage) ||
     fitText.includes("confirmed") ||
     fitText.includes("accepted") ||
@@ -2649,23 +2975,76 @@ async function autosaveFocusLead(options = {}) {
   const form = document.querySelector("[data-focus-lead-form]");
   if (!form) return true;
   if (focusSavePromise) {
-    await focusSavePromise;
-    return true;
+    return focusSavePromise;
   }
 
   focusSavePromise = (async () => {
-    const values = readForm(form);
+    const formData = new FormData(form);
+    const values = Object.fromEntries(formData.entries());
     const id = form.dataset.recordId || "";
     const row = recordById(id);
     const noteField = form.querySelector('textarea[name="focus_note"]');
     const note = options.includeNote ? values.focus_note?.trim() : "";
     if (!id) return false;
 
-    const payload = {
-      pipeline_stage: values.pipeline_stage || "new_leads",
-      task_status: values.task_status || "open",
-      task_type: row?.task_type || "Sales follow-up"
+    const previousFocusState = focusStateFor(row);
+    const stageSet = new Set(formData.getAll("focus_stage"));
+    const windowChoice = parseWalkthroughWindowValue(values.walkthrough_window);
+    const questions = Object.fromEntries(
+      focusQuestionDefs.map((question) => [question.id, values[`focus_${question.id}`] || ""])
+    );
+    if (questions.price_acceptable === "yes") stageSet.add("pricing_confirmed");
+    if (windowChoice) stageSet.add("walkthrough_set");
+
+    const pipelineStage = stageSet.has("walkthrough_set")
+      ? "walkthrough"
+      : stageSet.has("pricing_confirmed")
+        ? "quote_sent"
+        : stageSet.has("contacted")
+          ? "contacted"
+          : "new_leads";
+
+    const focusState = {
+      stages: focusStageDefs.reduce((acc, stage) => {
+        acc[stage.id] = stageSet.has(stage.id);
+        return acc;
+      }, {}),
+      questions,
+      follow_up_status: values.focus_follow_up_status || "open",
+      walkthrough_window: values.walkthrough_window || previousFocusState.walkthrough_window || ""
     };
+
+    const payload = {
+      pipeline_stage: pipelineStage,
+      qualification_notes: mergeQualificationNotes(qualificationNotesText(row), focusState),
+      decision_maker_status: questions.decision_maker === "yes" ? "confirmed" : questions.decision_maker === "no" ? "not_confirmed" : row?.decision_maker_status || "",
+      current_vendor: questions.cleaning_crew === "yes" ? "Yes" : questions.cleaning_crew === "no" ? "No" : row?.current_vendor || ""
+    };
+
+    if (stageSet.has("pricing_confirmed") || questions.price_acceptable === "yes") {
+      payload.budget_range = "Confirmed at $0.25/sq ft";
+    } else if (questions.price_acceptable === "no") {
+      payload.budget_range = "Not acceptable at $0.25/sq ft";
+    } else if (pricingFitConfirmed(row)) {
+      payload.budget_range = "Needs confirmation";
+    }
+
+    if (stageSet.has("follow_up_needed") || previousFocusState.stages.follow_up_needed || row?.next_step || row?.task_due_at) {
+      payload.task_type = row?.task_type || "Sales follow-up";
+      payload.task_status = stageSet.has("follow_up_needed") ? values.focus_follow_up_status || "open" : "completed";
+      payload.next_step = stageSet.has("follow_up_needed") ? row?.next_step || "Follow up needed" : "";
+    }
+
+    if (windowChoice) {
+      payload.walkthrough_at = windowChoice.starts_at;
+      payload.walkthrough_end_at = windowChoice.ends_at;
+      payload.walkthrough_status = "scheduled";
+      payload.walkthrough_type = questions.wants_quality_walkthrough === "yes"
+        ? "Quality Control Walkthrough Demo"
+        : row?.walkthrough_type || "Property Walkthrough";
+      payload.walkthrough_location = row?.walkthrough_location || row?.address || "";
+    }
+
     if (note) {
       const existingNotes = row?.lead_notes || row?.default_scope || "";
       const stampedNote = `${new Date().toLocaleString()}: ${note}`;
@@ -2760,6 +3139,9 @@ async function handleQualificationForm(form) {
   const values = readForm(form);
   const id = form.dataset.recordId || "";
   if (!id) return setMessage("Select a prospect before saving qualification.", "error");
+  const row = recordById(id);
+  const focusState = focusStateFor(row);
+  const visibleNotes = values.qualification_notes?.trim() || "";
 
   const payload = {
     property_class: values.property_class || "",
@@ -2772,8 +3154,8 @@ async function handleQualificationForm(form) {
     opportunity_score: cleanInt(values.opportunity_score),
     service_needs: new FormData(form).getAll("service_needs"),
     sales_pain_points: new FormData(form).getAll("sales_pain_points"),
-    qualification_notes: values.qualification_notes?.trim() || "",
-    lead_notes: values.qualification_notes?.trim() || values.lead_notes || ""
+    qualification_notes: mergeQualificationNotes(visibleNotes, focusState),
+    lead_notes: visibleNotes || values.lead_notes || ""
   };
 
   try {
@@ -3062,6 +3444,77 @@ async function logSalesTouch(id, text) {
   }
 }
 
+async function handleAvailabilityForm(form) {
+  const values = readForm(form);
+  const start = combineDateTime(values.availability_date, values.availability_start_time, "10:00");
+  const end = combineDateTime(values.availability_date, values.availability_end_time, "11:00");
+  if (!start || !end) return setMessage("Choose a valid walkthrough date and time.", "error");
+  if (dateValue(end) <= dateValue(start)) return setMessage("The end time must be after the start time.", "error");
+
+  try {
+    const { error } = await supabase
+      .from(SALES_TABLES.availability)
+      .insert([{
+        created_by: state.user?.id || null,
+        starts_at: start,
+        ends_at: end,
+        label: values.availability_label?.trim() || "Available walkthrough",
+        status: "open"
+      }]);
+    if (error) throw error;
+    await refreshData(false);
+    setMessage("Walkthrough availability window added.", "success");
+  } catch (error) {
+    setMessage(`Unable to add availability: ${error.message}`, "error");
+  }
+}
+
+async function updateAvailabilityStatus(id, status) {
+  if (!id) return;
+  try {
+    const { error } = await supabase
+      .from(SALES_TABLES.availability)
+      .update({ status: status || "open" })
+      .eq("id", id);
+    if (error) throw error;
+    await refreshData(false);
+    setMessage("Availability status updated.", "success");
+  } catch (error) {
+    setMessage(`Unable to update availability: ${error.message}`, "error");
+  }
+}
+
+async function deleteAvailabilitySlot(id) {
+  if (!id) return;
+  const confirmed = window.confirm("Remove this walkthrough availability window?");
+  if (!confirmed) return;
+  try {
+    const { error } = await supabase
+      .from(SALES_TABLES.availability)
+      .delete()
+      .eq("id", id);
+    if (error) throw error;
+    await refreshData(false);
+    setMessage("Walkthrough availability window removed.", "success");
+  } catch (error) {
+    setMessage(`Unable to remove availability: ${error.message}`, "error");
+  }
+}
+
+function syncFocusConditionalUi(form, source = null) {
+  if (!form) return;
+  if (source?.name === "walkthrough_window") {
+    const walkthroughCheckbox = form.querySelector('input[name="focus_stage"][value="walkthrough_set"]');
+    if (walkthroughCheckbox) walkthroughCheckbox.checked = true;
+    const qualityChoice = form.querySelector('input[name="focus_wants_quality_walkthrough"]:checked');
+    const qualityYes = form.querySelector('input[name="focus_wants_quality_walkthrough"][value="yes"]');
+    if (!qualityChoice && qualityYes) qualityYes.checked = true;
+  }
+  const followUpChecked = Boolean(form.querySelector('input[name="focus_stage"][value="follow_up_needed"]')?.checked);
+  const followUpWrap = form.querySelector("[data-follow-up-status-wrap]");
+  if (followUpWrap) followUpWrap.classList.toggle("is-hidden", !followUpChecked);
+}
+
 async function moveLeadFocus(direction) {
   const saved = await autosaveFocusLead({ includeNote: true });
   if (!saved) return;
@@ -3176,6 +3629,12 @@ function bindEvents() {
 
     if (target.closest("[data-delete-selected-leads]")) {
       await deleteSelectedLeads();
+      return;
+    }
+
+    const deleteAvailability = target.closest("[data-delete-availability]");
+    if (deleteAvailability) {
+      await deleteAvailabilitySlot(deleteAvailability.dataset.deleteAvailability);
       return;
     }
 
@@ -3318,7 +3777,8 @@ function bindEvents() {
   });
 
   document.addEventListener("change", async (event) => {
-    if (event.target?.matches("[data-focus-lead-form] select")) {
+    if (event.target?.matches('[data-focus-lead-form] input[type="checkbox"], [data-focus-lead-form] input[type="radio"], [data-focus-lead-form] select')) {
+      syncFocusConditionalUi(event.target.closest("[data-focus-lead-form]"), event.target);
       await autosaveFocusLead();
       return;
     }
@@ -3347,6 +3807,11 @@ function bindEvents() {
 
     if (event.target?.matches("[data-inline-stage]")) {
       await updateStage(event.target.dataset.inlineStage, event.target.value);
+    }
+
+    if (event.target?.matches("[data-availability-status]")) {
+      await updateAvailabilityStatus(event.target.dataset.availabilityStatus, event.target.value);
+      return;
     }
 
     if (event.target?.id === "salesImportFile") {
@@ -3379,6 +3844,9 @@ function bindEvents() {
     } else if (form.matches("[data-qualification-form]")) {
       event.preventDefault();
       await handleQualificationForm(form);
+    } else if (form.matches("[data-availability-form]")) {
+      event.preventDefault();
+      await handleAvailabilityForm(form);
     }
   });
 

@@ -1192,6 +1192,224 @@ button.sales-activity-row:hover {
   font-size: 17px;
 }
 
+.sales-focus-stage-box,
+.sales-focus-question-box,
+.sales-focus-window-box {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+}
+
+.sales-focus-question-box,
+.sales-focus-window-box {
+  grid-column: 1 / -1;
+  min-height: 0;
+}
+
+.sales-focus-check-grid,
+.sales-walkthrough-window-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(178px, 1fr));
+  gap: 10px;
+}
+
+.sales-focus-check-card,
+.sales-walkthrough-window-card {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  min-height: 106px;
+  padding: 14px 14px 14px 48px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: var(--sales-radius);
+  background: rgba(6, 17, 29, 0.62);
+  color: #f5fbff;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.sales-focus-check-card:hover,
+.sales-walkthrough-window-card:hover {
+  border-color: rgba(22, 217, 137, 0.48);
+  transform: translateY(-1px);
+}
+
+.sales-focus-check-card:has(input:checked),
+.sales-walkthrough-window-card:has(input:checked) {
+  border-color: rgba(22, 217, 137, 0.72);
+  background: linear-gradient(135deg, rgba(22, 217, 137, 0.17), rgba(20, 213, 207, 0.08));
+}
+
+.sales-focus-check-card input,
+.sales-walkthrough-window-card input,
+.sales-yesno-group input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.sales-focus-checkmark {
+  position: absolute;
+  left: 14px;
+  top: 16px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 7px;
+  color: transparent;
+  background: rgba(3, 12, 22, 0.68);
+}
+
+.sales-focus-checkmark .sales-icon {
+  width: 15px;
+  height: 15px;
+}
+
+.sales-focus-check-card input:checked + .sales-focus-checkmark {
+  border-color: rgba(22, 217, 137, 0.86);
+  background: var(--sales-green);
+  color: #05111b;
+}
+
+.sales-focus-check-card strong,
+.sales-walkthrough-window-card strong {
+  color: #fff;
+  font-size: 15px;
+}
+
+.sales-focus-check-card small,
+.sales-walkthrough-window-card small,
+.sales-walkthrough-window-card span {
+  color: #9fb0c2;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.sales-follow-up-status {
+  margin-top: 2px;
+}
+
+.sales-follow-up-status.is-hidden {
+  display: none;
+}
+
+.sales-focus-question-list {
+  display: grid;
+  gap: 10px;
+}
+
+.sales-focus-question {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: var(--sales-radius);
+  background: rgba(6, 17, 29, 0.52);
+}
+
+.sales-focus-question p {
+  margin: 0;
+  color: #f4f9ff;
+  font-size: 14px;
+  font-weight: 850;
+  line-height: 1.35;
+}
+
+.sales-yesno-group {
+  display: inline-flex;
+  gap: 7px;
+}
+
+.sales-yesno-group label {
+  position: relative;
+  display: inline-grid;
+  min-width: 72px;
+  min-height: 38px;
+  cursor: pointer;
+}
+
+.sales-yesno-group span {
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: var(--sales-radius);
+  background: rgba(10, 24, 38, 0.72);
+  color: #dce7f4;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.sales-yesno-group input:checked + span {
+  border-color: rgba(22, 217, 137, 0.78);
+  background: rgba(22, 217, 137, 0.18);
+  color: #90f5c6;
+}
+
+.sales-walkthrough-window-card {
+  min-height: 96px;
+  padding: 14px;
+}
+
+.sales-availability-admin {
+  display: grid;
+  gap: 14px;
+}
+
+.sales-availability-form {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(130px, 1fr)) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.sales-availability-form .sales-primary-button {
+  min-height: 46px;
+  white-space: nowrap;
+}
+
+.sales-availability-list {
+  display: grid;
+  gap: 8px;
+}
+
+.sales-availability-slot {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(130px, 160px) auto;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  padding: 11px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: var(--sales-radius);
+  background: rgba(6, 17, 29, 0.52);
+}
+
+.sales-availability-slot strong,
+.sales-availability-slot small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sales-availability-slot strong {
+  color: #fff;
+  font-size: 14px;
+}
+
+.sales-availability-slot small {
+  margin-top: 3px;
+  color: var(--sales-muted);
+  font-size: 12px;
+}
+
 .sales-focus-info-box.notes {
   grid-column: 1 / -1;
   min-height: 230px;
@@ -2188,6 +2406,14 @@ button.sales-activity-row:hover {
   .sales-task-layout .sales-task-detail-card .sales-qualification-block {
     padding: 10px;
   }
+
+  .sales-availability-form {
+    grid-template-columns: repeat(2, minmax(130px, 1fr)) auto;
+  }
+
+  .sales-focus-question {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-height: 820px) and (min-width: 981px) {
@@ -2324,6 +2550,8 @@ button.sales-activity-row:hover {
 
   .sales-filter-bar,
   .sales-task-toolbar,
+  .sales-availability-form,
+  .sales-availability-slot,
   .sales-three-column,
   .sales-qualification-grid,
   .sales-task-flow-strip,
