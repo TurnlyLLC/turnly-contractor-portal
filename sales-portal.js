@@ -1687,12 +1687,15 @@ function renderFocusQuestionList(row) {
     <section class="sales-focus-info-box sales-focus-question-box">
       <span>Qualification Questions</span>
       <div class="sales-focus-question-list">
-        ${focusQuestionDefs.map((question) => {
+        ${focusQuestionDefs.map((question, index) => {
           const selected = focusState.questions[question.id] || "";
           const labelId = `focus-question-${question.id}`;
           return `
             <div class="sales-focus-question" role="group" aria-labelledby="${esc(labelId)}">
-              <p id="${esc(labelId)}">${esc(question.label)}</p>
+              <div class="sales-focus-question-copy">
+                <span class="sales-focus-question-number">${number(index + 1)}</span>
+                <p id="${esc(labelId)}">${esc(question.label)}</p>
+              </div>
               <div class="sales-yesno-group">
                 ${["yes", "no"].map((value) => `
                   <label>
@@ -1805,6 +1808,18 @@ function renderFocusWalkthroughWindows(row) {
   `;
 }
 
+function renderFocusNavigation(rows, placement = "") {
+  const disabled = rows.length <= 1 ? "disabled" : "";
+  const placementClass = placement ? ` sales-focus-nav-${placement}` : "";
+  return `
+    <nav class="sales-focus-nav${placementClass}" aria-label="Prospect focus navigation">
+      <button class="sales-secondary-button" type="button" data-focus-prev ${disabled}>${icon("left")}Back</button>
+      <button class="sales-secondary-button" type="button" data-focus-next ${disabled}>Next${icon("chevron")}</button>
+      <button class="sales-secondary-button" type="button" data-exit-lead-focus>${icon("left")}Return To List</button>
+    </nav>
+  `;
+}
+
 function renderLeadFocusMode(rows) {
   const row = selectRecord(rows);
   if (!row) {
@@ -1831,7 +1846,7 @@ function renderLeadFocusMode(rows) {
             <p>${esc(recordAddress(row) || "No address saved")}</p>
             <small>${number(position)} of ${number(rows.length)} prospects in this view</small>
           </div>
-          <button class="sales-secondary-button" type="button" data-exit-lead-focus>${icon("x")}Exit Focus</button>
+          ${renderFocusNavigation(rows, "top")}
         </header>
         <form data-focus-lead-form data-record-id="${esc(row.id)}">
           <div class="sales-focus-board">
@@ -1849,10 +1864,7 @@ function renderLeadFocusMode(rows) {
           </div>
           <footer class="sales-focus-footer">
             <p class="sales-autosave-status" data-autosave-status>Autosaves as you work.</p>
-            <div class="sales-row-actions">
-              <button class="sales-secondary-button" type="button" data-focus-prev ${rows.length <= 1 ? "disabled" : ""}>${icon("left")}Previous</button>
-              <button class="sales-secondary-button" type="button" data-focus-next ${rows.length <= 1 ? "disabled" : ""}>Next${icon("chevron")}</button>
-            </div>
+            ${renderFocusNavigation(rows, "bottom")}
           </footer>
         </form>
       </article>
