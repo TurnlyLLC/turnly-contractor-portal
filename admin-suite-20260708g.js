@@ -33,10 +33,12 @@ const navSections = [
   {
     title: "Sales",
     links: [
-      { key: "leads", label: "Leads", href: "leads.html", icon: "triangle" },
+      { key: "sales-overview", label: "Sales Dashboard", href: "sales-overview.html", icon: "layout-grid" },
+      { key: "leads", label: "Leads", href: "leads.html", icon: "users" },
       { key: "walkthroughs", label: "Walkthroughs", href: "walkthroughs.html", icon: "calendar-days" },
+      { key: "sales-tasks", label: "Tasks & Follow-ups", href: "sales-follow-ups.html", icon: "clipboard-list" },
       { key: "quotes", label: "Quotes", href: "quotes.html", icon: "badge-dollar" },
-      { key: "contracts-pending", label: "Contracts Pending", href: "contracts-pending.html", icon: "file-signature" }
+      { key: "contracts-pending", label: "Contracts", href: "contracts-pending.html", icon: "file-signature" }
     ]
   },
   {
@@ -549,7 +551,24 @@ const internalMessageState = {
   error: false
 };
 
+function renderAdminSalesMount() {
+  return `
+    <section class="panel">
+      <div class="empty-state">
+        ${icon("refresh")}
+        <h3>Loading sales workspace</h3>
+        <p>Pulling sales pipeline records from Supabase.</p>
+      </div>
+    </section>
+  `;
+}
+
 const pages = {
+  "sales-overview": {
+    title: "Sales Dashboard",
+    subtitle: "Monitor prospect intake, team follow-ups, walkthroughs, and conversion progress.",
+    render: renderAdminSalesMount
+  },
   "dashboard": {
     title: "Dashboard",
     subtitle: "Your operational overview and actionable items",
@@ -569,26 +588,27 @@ const pages = {
   "leads": {
     title: "Leads",
     subtitle: "Track and manage new business opportunities",
-    action: { label: "Add Lead", icon: "plus" },
-    render: renderLeads
+    render: renderAdminSalesMount
   },
   "walkthroughs": {
     title: "Walkthroughs",
     subtitle: "Schedule and manage property walkthroughs",
-    action: { label: "Schedule Walkthrough", icon: "plus" },
-    render: renderWalkthroughs
+    render: renderAdminSalesMount
   },
   "quotes": {
     title: "Quotes",
     subtitle: "Create, send, and manage quotes for potential clients",
-    action: { label: "New Quote", icon: "plus" },
-    render: renderQuotes
+    render: renderAdminSalesMount
   },
   "contracts-pending": {
-    title: "Contracts Pending",
-    subtitle: "Track contracts that have been sent and are awaiting signature",
-    action: { label: "Export", icon: "download", tone: "secondary" },
-    render: renderContractsPending
+    title: "Contracts",
+    subtitle: "Track pending and signed sales contracts",
+    render: renderAdminSalesMount
+  },
+  "sales-tasks": {
+    title: "Tasks & Follow-ups",
+    subtitle: "Manage outreach, pricing confirmation, walkthrough handoffs, and sales follow-up work.",
+    render: renderAdminSalesMount
   },
   "contracts": {
     title: "Contracts",

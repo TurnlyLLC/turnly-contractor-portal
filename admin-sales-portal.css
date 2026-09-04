@@ -416,7 +416,9 @@
 .admin-sales-status.confirmed,
 .admin-sales-status.completed,
 .admin-sales-status.accepted,
-.admin-sales-status.active {
+.admin-sales-status.signed,
+.admin-sales-status.active,
+.admin-sales-status.won {
   background: rgba(22, 217, 137, 0.17);
   color: #7df0b7;
 }
@@ -832,6 +834,244 @@
   min-height: 340px;
 }
 
+.admin-sales-dashboard-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr) minmax(280px, 0.65fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.admin-sales-link {
+  color: var(--admin-sales-green);
+  font-size: 13px;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.admin-sales-line-chart {
+  display: block;
+  width: 100%;
+  min-height: 245px;
+}
+
+.admin-sales-grid-line {
+  stroke: rgba(148, 163, 184, 0.16);
+}
+
+.admin-sales-chart-line {
+  fill: none;
+  stroke: var(--admin-sales-green);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 4;
+}
+
+.admin-sales-chart-point {
+  fill: var(--admin-sales-green);
+  stroke: #06111d;
+  stroke-width: 4;
+}
+
+.admin-sales-axis-label {
+  fill: var(--admin-sales-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.admin-sales-funnel,
+.admin-sales-mini-list,
+.admin-sales-work-queue,
+.admin-sales-task-list {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-sales-funnel-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.8fr) minmax(120px, 1fr) 52px;
+  gap: 10px;
+  align-items: center;
+}
+
+.admin-sales-funnel-row span,
+.admin-sales-mini-row span,
+.admin-sales-work-row > div,
+.admin-sales-task-select > div {
+  min-width: 0;
+}
+
+.admin-sales-funnel-row strong,
+.admin-sales-funnel-row small,
+.admin-sales-mini-row strong,
+.admin-sales-mini-row small {
+  display: block;
+}
+
+.admin-sales-funnel-row small,
+.admin-sales-mini-row small,
+.admin-sales-work-row small,
+.admin-sales-task-select small,
+.admin-sales-task-select p {
+  color: var(--admin-sales-muted);
+}
+
+.admin-sales-funnel-track {
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.admin-sales-funnel-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--admin-sales-green);
+}
+
+.admin-sales-funnel-track i.contacted,
+.admin-sales-funnel-track i.walkthrough {
+  background: var(--admin-sales-blue);
+}
+
+.admin-sales-funnel-track i.quote_sent {
+  background: var(--admin-sales-yellow);
+}
+
+.admin-sales-funnel-track i.contract_out {
+  background: var(--admin-sales-violet);
+}
+
+.admin-sales-funnel-track i.lost {
+  background: var(--admin-sales-red);
+}
+
+.admin-sales-mini-row,
+.admin-sales-work-row,
+.admin-sales-task-item {
+  border: 1px solid var(--admin-sales-line);
+  border-radius: var(--admin-sales-radius);
+  background: rgba(9, 22, 35, 0.66);
+}
+
+.admin-sales-mini-row {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 12px;
+  color: var(--admin-sales-ink);
+  text-align: left;
+  text-decoration: none;
+}
+
+button.admin-sales-mini-row {
+  width: 100%;
+  border: 1px solid var(--admin-sales-line);
+  cursor: pointer;
+}
+
+.admin-sales-dot {
+  display: block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--admin-sales-green);
+}
+
+.admin-sales-dot.contacted,
+.admin-sales-dot.walkthrough {
+  background: var(--admin-sales-blue);
+}
+
+.admin-sales-dot.quote_sent {
+  background: var(--admin-sales-yellow);
+}
+
+.admin-sales-dot.contract_out {
+  background: var(--admin-sales-violet);
+}
+
+.admin-sales-dot.lost {
+  background: var(--admin-sales-red);
+}
+
+.admin-sales-work-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(200px, 0.55fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 13px;
+}
+
+.admin-sales-work-row strong,
+.admin-sales-task-select strong {
+  display: block;
+  color: #fff;
+}
+
+.admin-sales-task-item {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.admin-sales-task-item.active {
+  border-color: rgba(22, 217, 137, 0.55);
+  background: linear-gradient(135deg, rgba(22, 217, 137, 0.16), rgba(9, 22, 35, 0.72));
+}
+
+.admin-sales-task-select {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(280px, 0.9fr);
+  gap: 14px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--admin-sales-ink);
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+
+.admin-sales-task-select p {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.admin-sales-task-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.admin-sales-task-meta span {
+  border: 1px solid var(--admin-sales-line);
+  border-radius: var(--admin-sales-radius);
+  background: rgba(10, 24, 38, 0.72);
+  padding: 10px;
+}
+
+.admin-sales-task-meta b {
+  display: block;
+  margin-bottom: 4px;
+  color: #91a6bd;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.admin-sales-task-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.admin-sales-task-detail {
+  align-self: start;
+}
+
 body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-host {
   --admin-sales-panel: #ffffff;
   --admin-sales-panel-strong: #f8fbff;
@@ -914,10 +1154,33 @@ body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-modal-backdro
   background: rgba(15, 23, 42, 0.45);
 }
 
+body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-mini-row,
+body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-work-row,
+body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-task-item,
+body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-task-meta span {
+  background: #ffffff;
+  color: #061321;
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-work-row strong,
+body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-task-select strong,
+body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-mini-row strong {
+  color: #061321;
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-grid-line {
+  stroke: rgba(82, 103, 127, 0.18);
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-chart-point {
+  stroke: #ffffff;
+}
+
 @media (max-width: 1180px) {
   .admin-sales-workspace,
   .admin-sales-table-layout,
-  .admin-sales-two-column {
+  .admin-sales-two-column,
+  .admin-sales-dashboard-layout {
     grid-template-columns: 1fr;
   }
 
@@ -962,5 +1225,15 @@ body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-modal-backdro
   .admin-sales-week-grid,
   .admin-sales-month-grid {
     grid-template-columns: repeat(7, minmax(120px, 1fr));
+  }
+
+  .admin-sales-work-row,
+  .admin-sales-task-select,
+  .admin-sales-funnel-row {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-sales-task-actions {
+    justify-content: stretch;
   }
 }

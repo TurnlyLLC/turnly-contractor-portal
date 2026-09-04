@@ -870,6 +870,9 @@ async function saveRecord(id, payload, activityText = "") {
       savedLead = state.leads.find((row) => row.id === leadId) || null;
     }
   } else {
+    if (!isSalesAdmin()) {
+      throw new Error("Only admins can create new sales leads.");
+    }
     const result = await supabase
       .from(SALES_TABLES.leads)
       .insert([{ ...leadPayload, created_by: state.user?.id || null }])
@@ -1084,9 +1087,11 @@ function renderTopbar() {
           ${icon("bell")}
           <span class="sales-badge">${number(openTasks().length)}</span>
         </button>
-        <button class="sales-primary-button sales-upload-prospects-button" type="button" data-open-import>
-          ${icon("upload")}<span>Upload Prospects</span>
-        </button>
+        ${isSalesAdmin() ? `
+          <button class="sales-primary-button sales-upload-prospects-button" type="button" data-open-import>
+            ${icon("upload")}<span>Upload Prospects</span>
+          </button>
+        ` : ""}
         <div class="sales-profile">
           <button class="sales-profile-button" type="button" data-profile-toggle aria-expanded="${state.profileOpen ? "true" : "false"}">
             <span class="sales-avatar">${esc(initials(currentName()))}</span>
@@ -1227,7 +1232,7 @@ function renderDashboardPage() {
             <h2>Leads Trend</h2>
             <p>New prospects added by month.</p>
           </div>
-          <button class="sales-secondary-button" type="button" data-open-import>${icon("upload")}Import</button>
+          ${isSalesAdmin() ? `<button class="sales-secondary-button" type="button" data-open-import>${icon("upload")}Import</button>` : ""}
         </div>
         ${renderMonthlyLineChart()}
       </article>
@@ -1472,7 +1477,12 @@ function renderProspectWorkQueue(limit = 8) {
     })
     .slice(0, limit);
 
-  if (!rows.length) return emptyState("No open prospects", "Upload a prospect list or create a new lead to start the queue.");
+  if (!rows.length) {
+    return emptyState(
+      "No open prospects",
+      isSalesAdmin() ? "Upload a prospect list or create a new lead to start the queue." : "No prospects are ready for your queue yet."
+    );
+  }
 
   return `
     <div class="sales-work-queue">
@@ -1540,7 +1550,7 @@ function renderFilters(options = {}) {
       <select class="sales-filter" data-filter-owner>${ownerOptions}</select>
       <select class="sales-filter" data-filter-stage>${stageOptions}</select>
       ${options.statuses ? `<select class="sales-filter" data-filter-status>${statusOptions}</select>` : `<span></span>`}
-      <button class="sales-primary-button" type="button" data-open-lead>${icon("plus")}New Prospect</button>
+      ${isSalesAdmin() ? `<button class="sales-primary-button" type="button" data-open-lead>${icon("plus")}New Prospect</button>` : ""}
     </div>
   `;
 }
@@ -1572,6 +1582,7 @@ function renderStageTabs() {
 function renderLeadsPage() {
   const rows = baseFilteredRows();
   if (state.leadFocusMode) return renderLeadFocusMode(rows);
+  const canManageLeads = isSalesAdmin();
   const selectedCount = state.selectedLeadIds.size;
   const visibleSelectedCount = rows.filter((row) => state.selectedLeadIds.has(row.id)).length;
   const allVisibleSelected = Boolean(rows.length && visibleSelectedCount === rows.length);
@@ -1580,7 +1591,7 @@ function renderLeadsPage() {
       <button class="sales-focus-start-button" type="button" data-enter-lead-focus ${rows.length ? "" : "disabled"}>
         <span>${icon("check")}</span>
         <strong>Let's Get To Work</strong>
-        <small>${rows.length ? `${number(rows.length)} prospect${rows.length === 1 ? "" : "s"} in this view` : "Upload prospects to begin"}</small>
+        <small>${rows.length ? `${number(rows.length)} prospect${rows.length === 1 ? "" : "s"} in this view` : canManageLeads ? "Upload prospects to begin" : "No prospects are available yet"}</small>
       </button>
     </section>
     <section class="sales-leads-layout">
@@ -1590,21 +1601,21 @@ function renderLeadsPage() {
             <h2>Prospect List</h2>
             <p>Name, address, phone, stage, and next steps.</p>
           </div>
-          <div class="sales-row-actions">
+          ${canManageLeads ? `<div class="sales-row-actions">
             <button class="sales-secondary-button" type="button" data-open-import>${icon("upload")}Upload</button>
             <button class="sales-secondary-button" type="button" data-open-lead>${icon("plus")}Add Lead</button>
             <button class="sales-danger-button" type="button" data-delete-selected-leads ${selectedCount ? "" : "disabled"}>${icon("x")}Delete Selected</button>
-          </div>
+          </div>` : ""}
         </div>
         ${renderLeadFilters()}
         ${renderStageTabs()}
-        <div class="sales-bulk-toolbar">
+        ${canManageLeads ? `<div class="sales-bulk-toolbar">
           <label>
             <input type="checkbox" data-lead-select-all ${allVisibleSelected ? "checked" : ""} ${rows.length ? "" : "disabled"} />
             <span>Select all visible</span>
           </label>
           <strong>${number(selectedCount)} selected</strong>
-        </div>
+        </div>` : ""}
         ${renderLeadTable(rows)}
       </article>
     </section>
@@ -1612,13 +1623,19 @@ function renderLeadsPage() {
 }
 
 function renderLeadTable(rows) {
-  if (!rows.length) return emptyState("No prospects found", "Upload a prospect list or create a new prospect.");
+  const canManageLeads = isSalesAdmin();
+  if (!rows.length) {
+    return emptyState(
+      "No prospects found",
+      canManageLeads ? "Upload a prospect list or create a new prospect." : "No prospects match this view yet."
+    );
+  }
   return `
     <div class="sales-table-wrap">
       <table class="sales-table sales-leads-table">
         <thead>
           <tr>
-            <th></th>
+            ${canManageLeads ? "<th></th>" : ""}
             <th>Name</th>
             <th>Address</th>
             <th>Phone Number</th>
@@ -1630,9 +1647,9 @@ function renderLeadTable(rows) {
         <tbody>
           ${rows.map((row) => `
             <tr class="${row.id === state.selectedId ? "active" : ""}">
-              <td>
+              ${canManageLeads ? `<td>
                 <input type="checkbox" data-lead-select="${esc(row.id)}" aria-label="Select ${esc(recordTitle(row))}" ${state.selectedLeadIds.has(row.id) ? "checked" : ""} />
-              </td>
+              </td>` : ""}
               <td><strong>${esc(recordTitle(row))}</strong></td>
               <td>${esc(recordAddress(row) || "No address saved")}</td>
               <td>${esc(row.contact_phone || "No phone saved")}</td>
@@ -2948,6 +2965,7 @@ async function handleLeadForm(form) {
   const id = form.dataset.recordId || "";
   const propertyName = values.property_name?.trim();
   if (!propertyName) return setInlineFormMessage(form, "Lead name is required.", "error");
+  if (!id && !isSalesAdmin()) return setInlineFormMessage(form, "Only admins can create new sales leads.", "error");
 
   const payload = {
     property_name: propertyName,
@@ -3381,6 +3399,10 @@ async function handleImportFile(file) {
 }
 
 async function runImport() {
+  if (!isSalesAdmin()) {
+    setMessage("Only admins can import prospects.", "error");
+    return;
+  }
   if (!state.importPayloads.length || !supabase) return;
   state.message = `Importing ${number(state.importPayloads.length)} prospects...`;
   state.messageTone = "";
@@ -3540,6 +3562,10 @@ async function moveLeadFocus(direction) {
 }
 
 async function deleteSelectedLeads() {
+  if (!isSalesAdmin()) {
+    setMessage("Only admins can delete sales leads.", "error");
+    return;
+  }
   const ids = [...state.selectedLeadIds].filter(Boolean);
   if (!ids.length || !supabase) return;
   const confirmed = window.confirm(`Delete ${ids.length} selected lead${ids.length === 1 ? "" : "s"} and attached sales follow-ups?`);
@@ -3640,6 +3666,10 @@ function bindEvents() {
     }
 
     if (target.closest("[data-delete-selected-leads]")) {
+      if (!isSalesAdmin()) {
+        setMessage("Only admins can delete sales leads.", "error");
+        return;
+      }
       await deleteSelectedLeads();
       return;
     }
@@ -3651,6 +3681,10 @@ function bindEvents() {
     }
 
     if (target.closest("[data-open-import]")) {
+      if (!isSalesAdmin()) {
+        setMessage("Only admins can import prospects.", "error");
+        return;
+      }
       state.modal = { type: "import" };
       state.importPayloads = [];
       state.importErrors = [];
@@ -3669,6 +3703,10 @@ function bindEvents() {
     const openLead = target.closest("[data-open-lead]");
     if (openLead) {
       await autosaveFocusLead({ includeNote: true });
+      if (!openLead.dataset.openLead && !isSalesAdmin()) {
+        setMessage("Only admins can create new sales leads.", "error");
+        return;
+      }
       state.modal = { type: "lead", id: openLead.dataset.openLead || "" };
       render();
       return;
@@ -3802,6 +3840,7 @@ function bindEvents() {
     if (event.target?.matches("[data-set-stage-filter]")) setFilter("stage", event.target.dataset.setStageFilter);
 
     if (event.target?.matches("[data-lead-select]")) {
+      if (!isSalesAdmin()) return;
       const id = event.target.dataset.leadSelect;
       if (event.target.checked) state.selectedLeadIds.add(id);
       else state.selectedLeadIds.delete(id);
@@ -3810,6 +3849,7 @@ function bindEvents() {
     }
 
     if (event.target?.matches("[data-lead-select-all]")) {
+      if (!isSalesAdmin()) return;
       const visibleIds = baseFilteredRows().map((row) => row.id);
       if (event.target.checked) visibleIds.forEach((id) => state.selectedLeadIds.add(id));
       else visibleIds.forEach((id) => state.selectedLeadIds.delete(id));

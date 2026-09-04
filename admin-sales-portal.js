@@ -11,9 +11,13 @@ const TABLES = {
 };
 
 const XLSX_URL = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
-const ADMIN_SALES_PAGES = new Set(["leads", "walkthroughs", "quotes", "contracts-pending"]);
+const ADMIN_SALES_PAGES = new Set(["sales-overview", "leads", "walkthroughs", "sales-tasks", "quotes", "contracts-pending"]);
 
 const pageCopy = {
+  "sales-overview": {
+    title: "Sales Dashboard",
+    subtitle: "See the same prospect pipeline your sales team works from, with admin controls for intake and closing."
+  },
   leads: {
     title: "Sales Leads",
     subtitle: "Import, qualify, delete, and manage the same prospect records your sales team works from."
@@ -26,9 +30,13 @@ const pageCopy = {
     title: "Quotes",
     subtitle: "Track pricing conversations and move accepted quotes into contract follow-up."
   },
+  "sales-tasks": {
+    title: "Tasks & Follow-ups",
+    subtitle: "Work the sales team follow-up queue, confirm pricing fit, and schedule walkthroughs."
+  },
   "contracts-pending": {
-    title: "Contracts Pending",
-    subtitle: "Review pending agreements and close qualified properties into active accounts."
+    title: "Contracts",
+    subtitle: "Follow pending and signed contracts after management walkthroughs."
   }
 };
 
@@ -44,9 +52,19 @@ const stageDefs = [
 
 const walkthroughStatuses = ["scheduled", "confirmed", "rescheduled", "completed", "cancelled"];
 const quoteStatuses = ["draft", "sent", "viewed", "accepted", "declined", "expired"];
-const contractStatuses = ["pending", "sent", "signed", "active", "lost"];
+const taskStatuses = ["open", "in_progress", "pending", "completed"];
+const contractStatuses = ["pending", "sent", "signed", "active"];
 const availabilityStatuses = ["open", "booked", "held", "closed", "cancelled"];
 const priorities = ["low", "medium", "high"];
+const salesTaskTypes = [
+  "Call decision maker",
+  "Confirm $0.25/sq ft",
+  "Follow up on pricing fit",
+  "Schedule walkthrough",
+  "Prepare management handoff",
+  "Follow up after walkthrough",
+  "No-answer follow-up"
+];
 
 const fieldAliases = {
   property_name: ["property_name", "property", "lead", "lead_name", "name", "business_name", "company", "company_name"],
@@ -429,17 +447,39 @@ function quoteRows() {
   ));
 }
 
+function contractStatus(row = {}) {
+  const status = normalize(row.contract_status);
+  if (status === "won") return "signed";
+  if (status) return status;
+  const stage = stageFor(row);
+  if (stage === "active") return "signed";
+  if (stage === "contract_out") return "pending";
+  return "";
+}
+
+function contractStatusLabel(row = {}) {
+  const status = contractStatus(row);
+  if (status === "sent") return "Sent";
+  if (status === "signed") return "Signed";
+  if (status === "active") return "Active";
+  return "Pending";
+}
+
 function contractRows() {
-  return filteredRows(state.rows.filter((row) =>
-    Boolean(row.contract_record_id || row.contract_status) ||
-    ["contract_out", "active"].includes(stageFor(row))
-  ));
+  return filteredRows(state.rows.filter((row) => {
+    const status = contractStatus(row);
+    if (status === "lost") return false;
+    return Boolean(row.contract_record_id || row.contract_status) ||
+      ["contract_out", "active"].includes(stageFor(row)) ||
+      ["pending", "sent", "signed", "active"].includes(status);
+  }));
 }
 
 function statusForPage(row) {
   if (state.page === "walkthroughs") return normalize(row.walkthrough_status || "scheduled");
   if (state.page === "quotes") return quoteStatus(row);
-  if (state.page === "contracts-pending") return normalize(row.contract_status || stageFor(row));
+  if (state.page === "sales-tasks") return taskStatus(row);
+  if (state.page === "contracts-pending") return contractStatus(row);
   return stageFor(row);
 }
 
@@ -485,6 +525,95 @@ function thisWeekRows(rows, dateField) {
     const date = dateValue(row[dateField]);
     return date && date >= start && date <= end;
   });
+}
+
+function rowsByStage(stage) {
+  return state.rows.filter((row) => stageFor(row) === stage);
+}
+
+function dateInRange(value, start, end) {
+  const date = dateValue(value);
+  return Boolean(date && date >= start && date <= end);
+}
+
+function taskStatus(row) {
+  return normalize(row?.task_status || "open");
+}
+
+function openTasks() {
+  return state.rows.filter((row) => row.next_step || taskDue(row) || row.task_type)
+    .filter((row) => taskStatus(row) !== "completed");
+}
+
+function taskRows() {
+  return filteredRows(state.rows.filter((row) =>
+    row.next_step ||
+    taskDue(row) ||
+    row.task_status ||
+    row.task_type ||
+    !["active", "lost"].includes(stageFor(row))
+  ));
+}
+
+function pricingFitConfirmed(row) {
+  const stage = stageFor(row);
+  const fitText = normalize(row?.budget_range || "");
+  if (["no", "not_ok", "not_accepted", "not_acceptable", "not_confirmed", "needs_confirmation", "pending", "unknown", "declined", "too_high", "does_not_work"].includes(fitText) ||
+    fitText.includes("not") ||
+    fitText.includes("declined") ||
+    fitText.includes("too_high")) {
+    return false;
+  }
+  return ["quote_sent", "walkthrough", "contract_out", "active"].includes(stage) ||
+    fitText.includes("confirmed") ||
+    fitText.includes("accepted") ||
+    fitText.includes("works") ||
+    fitText === "yes" ||
+    fitText === "ok";
+}
+
+function pricingFitText(row) {
+  if (pricingFitConfirmed(row)) return row?.budget_range || "Confirmed at $0.25/sq ft";
+  return row?.budget_range || "Needs confirmation";
+}
+
+function taskDueMeta(row) {
+  const status = taskStatus(row);
+  const due = dateValue(taskDue(row));
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const endToday = new Date(today);
+  endToday.setHours(23, 59, 59, 999);
+  if (status === "completed") return { label: "Completed", tone: "completed", rank: 4 };
+  if (!due) return { label: "No due date", tone: "low", rank: 3 };
+  if (due < today) return { label: "Overdue", tone: "high", rank: 0 };
+  if (due <= endToday) return { label: "Due Today", tone: "open", rank: 1 };
+  return { label: formatDateTime(due), tone: "low", rank: 2 };
+}
+
+function recommendedTaskAction(row) {
+  if (taskStatus(row) === "completed") return "Review completed follow-up";
+  const savedTask = row?.task_type || row?.next_step;
+  if (savedTask) return savedTask;
+  const stage = stageFor(row);
+  if (stage === "new_leads") return "Call decision maker";
+  if (!pricingFitConfirmed(row)) return "Confirm $0.25/sq ft";
+  if (!walkthroughAt(row) && !["walkthrough", "contract_out", "active", "lost"].includes(stage)) return "Schedule walkthrough";
+  if (stage === "walkthrough") return "Prepare management walkthrough";
+  if (stage === "contract_out") return "Management is closing";
+  return "Follow up";
+}
+
+function contactPhoneHref(row) {
+  const phone = String(row?.contact_phone || "").replace(/[^\d+]/g, "");
+  return phone ? `tel:${phone}` : "";
+}
+
+function contactEmailHref(row) {
+  const email = String(row?.contact_email || "").trim();
+  if (!email) return "";
+  const subject = encodeURIComponent(`Turnly walkthrough for ${recordTitle(row)}`);
+  return `mailto:${email}?subject=${subject}`;
 }
 
 async function selectRows(table, orderColumn, ascending = false, limit = 2000) {
@@ -599,6 +728,12 @@ function render() {
 }
 
 function renderPageActions() {
+  if (state.page === "sales-overview") {
+    return `
+      <button class="admin-sales-secondary" type="button" data-admin-sales-open="import">${icon("upload")}Import Leads</button>
+      <a class="admin-sales-primary" href="leads.html">${icon("users")}Open Leads</a>
+    `;
+  }
   if (state.page === "leads") {
     return `
       <button class="admin-sales-secondary" type="button" data-admin-sales-open="import">${icon("upload")}Import Leads</button>
@@ -611,8 +746,11 @@ function renderPageActions() {
   if (state.page === "quotes") {
     return `<button class="admin-sales-primary" type="button" data-admin-sales-open="quote">${icon("file")}New Quote</button>`;
   }
+  if (state.page === "sales-tasks") {
+    return `<button class="admin-sales-primary" type="button" data-admin-sales-open="task">${icon("clipboard")}Add Follow-up</button>`;
+  }
   if (state.page === "contracts-pending") {
-    return `<button class="admin-sales-primary" type="button" data-admin-sales-open="contract">${icon("clipboard")}Add Contract Follow-up</button>`;
+    return `<button class="admin-sales-primary" type="button" data-admin-sales-open="contract">${icon("clipboard")}Add Contract</button>`;
   }
   return "";
 }
@@ -628,7 +766,9 @@ function renderLoading() {
 }
 
 function renderPage() {
+  if (state.page === "sales-overview") return renderDashboardPage();
   if (state.page === "walkthroughs") return renderWalkthroughsPage();
+  if (state.page === "sales-tasks") return renderTasksPage();
   if (state.page === "quotes") return renderQuotesPage();
   if (state.page === "contracts-pending") return renderContractsPage();
   return renderLeadsPage();
@@ -657,6 +797,360 @@ function renderLeadMetrics() {
       ${metricCard("Won", number(state.rows.filter((row) => stageFor(row) === "active").length), "active accounts", "check")}
       ${metricCard("Needs Follow-up", number(state.rows.filter((row) => !["active", "lost"].includes(stageFor(row))).length), "open opportunities", "clipboard", "violet")}
     </section>
+  `;
+}
+
+function renderDashboardPage() {
+  const total = state.rows.length;
+  const newThisWeek = thisWeekRows(state.rows, "created_at").length;
+  const pricingConfirmed = rowsByStage("quote_sent").length;
+  const walkthroughsSet = state.rows.filter((row) => Boolean(walkthroughAt(row)) || stageFor(row) === "walkthrough").length;
+  const managementReview = rowsByStage("contract_out").length;
+  const won = rowsByStage("active").length;
+  const closed = won + rowsByStage("lost").length;
+  const winRate = closed ? Math.round((won / closed) * 1000) / 10 : 0;
+
+  return `
+    <section class="admin-sales-metrics">
+      ${metricCard("Total Prospects", number(total), `${number(rowsByStage("new_leads").length)} new prospects`, "users")}
+      ${metricCard("New This Week", number(newThisWeek), "created this week", "plus")}
+      ${metricCard("Pricing Confirmed", number(pricingConfirmed), "$0.25/sq ft accepted", "dollar", "yellow")}
+      ${metricCard("Walkthroughs Set", number(walkthroughsSet), "ready for management", "calendar", "cyan")}
+      ${metricCard("Management Review", number(managementReview), "handoff stage", "clipboard", "violet")}
+      ${metricCard("Win Rate", `${winRate}%`, `${number(won)} won opportunities`, "check")}
+    </section>
+
+    <section class="admin-sales-dashboard-layout">
+      <article class="admin-sales-panel">
+        <div class="admin-sales-panel-header">
+          <div>
+            <h2>Lead Trend</h2>
+            <p>New prospects added over the last six months.</p>
+          </div>
+          <button class="admin-sales-secondary" type="button" data-admin-sales-open="import">${icon("upload")}Import</button>
+        </div>
+        ${renderMonthlyLeadChart()}
+      </article>
+      <article class="admin-sales-panel">
+        <div class="admin-sales-panel-header">
+          <div>
+            <h2>Qualification Funnel</h2>
+            <p>Prospects by sales stage.</p>
+          </div>
+        </div>
+        ${renderPipelineFunnel()}
+      </article>
+      <article class="admin-sales-panel">
+        <div class="admin-sales-panel-header">
+          <div>
+            <h2>Upcoming Walkthroughs</h2>
+            <p>Scheduled management walkthrough windows.</p>
+          </div>
+          <a class="admin-sales-link" href="walkthroughs.html">View All</a>
+        </div>
+        ${renderUpcomingWalkthroughs(6)}
+      </article>
+    </section>
+
+    <section class="admin-sales-two-column">
+      <article class="admin-sales-panel">
+        <div class="admin-sales-panel-header">
+          <div>
+            <h2>Prospect Work Queue</h2>
+            <p>Open leads the sales team should work next.</p>
+          </div>
+          <a class="admin-sales-link" href="sales-follow-ups.html">Open Tasks</a>
+        </div>
+        ${renderProspectWorkQueue()}
+      </article>
+      <article class="admin-sales-panel">
+        <div class="admin-sales-panel-header">
+          <div>
+            <h2>Recent Activity</h2>
+            <p>Latest changes across the sales tables.</p>
+          </div>
+        </div>
+        ${renderRecentActivity()}
+      </article>
+    </section>
+  `;
+}
+
+function renderMonthlyLeadChart() {
+  const months = [];
+  const cursor = new Date();
+  cursor.setDate(1);
+  cursor.setHours(0, 0, 0, 0);
+  for (let index = 5; index >= 0; index -= 1) {
+    const date = addMonths(cursor, -index);
+    months.push({
+      key: `${date.getFullYear()}-${date.getMonth()}`,
+      label: date.toLocaleDateString(undefined, { month: "short", year: "2-digit" }),
+      count: 0
+    });
+  }
+  state.rows.forEach((row) => {
+    const created = dateValue(row.created_at);
+    if (!created) return;
+    const bucket = months.find((month) => month.key === `${created.getFullYear()}-${created.getMonth()}`);
+    if (bucket) bucket.count += 1;
+  });
+  const max = Math.max(1, ...months.map((month) => month.count));
+  const points = months.map((month, index) => {
+    const x = 42 + (index * (616 / Math.max(1, months.length - 1)));
+    const y = 232 - ((month.count / max) * 176);
+    return { ...month, x, y };
+  });
+  const pointString = points.map((point) => `${point.x},${point.y}`).join(" ");
+  return `
+    <svg class="admin-sales-line-chart" viewBox="0 0 700 275" role="img" aria-label="Monthly lead trend">
+      <line class="admin-sales-grid-line" x1="42" x2="658" y1="55" y2="55"></line>
+      <line class="admin-sales-grid-line" x1="42" x2="658" y1="115" y2="115"></line>
+      <line class="admin-sales-grid-line" x1="42" x2="658" y1="175" y2="175"></line>
+      <line class="admin-sales-grid-line" x1="42" x2="658" y1="235" y2="235"></line>
+      <polyline class="admin-sales-chart-line" points="${pointString}"></polyline>
+      ${points.map((point) => `
+        <g>
+          <circle class="admin-sales-chart-point" cx="${point.x}" cy="${point.y}" r="5"></circle>
+          <text class="admin-sales-axis-label" x="${point.x}" y="${point.y - 13}" text-anchor="middle">${number(point.count)}</text>
+          <text class="admin-sales-axis-label" x="${point.x}" y="260" text-anchor="middle">${esc(point.label)}</text>
+        </g>
+      `).join("")}
+    </svg>
+  `;
+}
+
+function renderPipelineFunnel() {
+  const stages = stageDefs.map(([id, label]) => ({ id, label, count: rowsByStage(id).length }));
+  const max = Math.max(1, ...stages.map((stage) => stage.count));
+  const total = Math.max(1, state.rows.length);
+  return `
+    <div class="admin-sales-funnel">
+      ${stages.map((stage) => {
+        const percent = Math.round((stage.count / total) * 1000) / 10;
+        const width = stage.count ? Math.max(7, Math.round((stage.count / max) * 100)) : 0;
+        return `
+          <div class="admin-sales-funnel-row">
+            <span><strong>${esc(stage.label)}</strong><small>${number(stage.count)} prospects</small></span>
+            <div class="admin-sales-funnel-track"><i class="${esc(stage.id)}" style="width:${width}%"></i></div>
+            <b>${percent}%</b>
+          </div>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function renderUpcomingWalkthroughs(limit = 6) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const rows = state.rows
+    .filter((row) => {
+      const date = dateValue(walkthroughAt(row));
+      return date && date >= today;
+    })
+    .sort((a, b) => dateValue(walkthroughAt(a)) - dateValue(walkthroughAt(b)))
+    .slice(0, limit);
+
+  if (!rows.length) return emptyState("No walkthroughs scheduled", "Add availability and schedule qualified prospects.");
+  return `
+    <div class="admin-sales-mini-list">
+      ${rows.map((row) => `
+        <a class="admin-sales-mini-row" href="walkthroughs.html#${esc(row.id)}">
+          <i class="admin-sales-dot walkthrough"></i>
+          <span>
+            <strong>${esc(recordTitle(row))}</strong>
+            <small>${esc(formatDateTime(walkthroughAt(row)))} with ${esc(row.walkthrough_assigned_to || ownerName(row))}</small>
+          </span>
+        </a>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderRecentActivity(limit = 6) {
+  const activityRows = state.activities
+    .slice()
+    .sort((a, b) => latestMs(b.created_at) - latestMs(a.created_at))
+    .slice(0, limit);
+  const rows = activityRows.length
+    ? activityRows.map((activity) => ({ activity, row: rowById(activity.lead_id) })).filter((item) => item.row)
+    : state.rows
+      .slice()
+      .sort((a, b) => latestMs(b.last_activity_at, b.updated_at, b.created_at) - latestMs(a.last_activity_at, a.updated_at, a.created_at))
+      .slice(0, limit)
+      .map((row) => ({ row, activity: null }));
+
+  if (!rows.length) return emptyState("No sales activity yet", "Imported leads and follow-ups will appear here.");
+  return `
+    <div class="admin-sales-mini-list">
+      ${rows.map(({ row, activity }) => `
+        <button class="admin-sales-mini-row" type="button" data-admin-sales-select-record="${esc(row.id)}">
+          <i class="admin-sales-dot ${esc(stageFor(row))}"></i>
+          <span>
+            <strong>${esc(activity?.activity_text || stageLabel(stageFor(row)))}</strong>
+            <small>${esc(recordTitle(row))} - ${esc(formatDateTime(activity?.created_at || row.last_activity_at || row.updated_at || row.created_at))}</small>
+          </span>
+        </button>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderProspectWorkQueue(limit = 8) {
+  const rows = state.rows
+    .filter((row) => !["active", "lost"].includes(stageFor(row)))
+    .sort((a, b) => {
+      const aDue = dateValue(taskDue(a)) || dateValue(walkthroughAt(a)) || dateValue(a.last_activity_at) || dateValue(a.created_at);
+      const bDue = dateValue(taskDue(b)) || dateValue(walkthroughAt(b)) || dateValue(b.last_activity_at) || dateValue(b.created_at);
+      return (aDue?.getTime() || 0) - (bDue?.getTime() || 0);
+    })
+    .slice(0, limit);
+
+  if (!rows.length) return emptyState("No open prospects", "Import leads to start the sales queue.");
+  return `
+    <div class="admin-sales-work-queue">
+      ${rows.map((row) => `
+        <article class="admin-sales-work-row">
+          <div>
+            <span class="admin-sales-status ${esc(stageFor(row))}">${esc(stageLabel(stageFor(row)))}</span>
+            <strong>${esc(recordTitle(row))}</strong>
+            <small>${esc(recordContact(row))} - ${esc(taskDue(row) ? formatDateTime(taskDue(row)) : "No due date")}</small>
+          </div>
+          <div>
+            <strong>${esc(pricingFitText(row))}</strong>
+            <small>${esc(recommendedTaskAction(row))}</small>
+          </div>
+          <button class="admin-sales-secondary" type="button" data-admin-sales-open="task" data-id="${esc(row.id)}">${icon("clipboard")}Follow Up</button>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderTasksPage() {
+  const rows = taskRows().sort((a, b) => {
+    const aMeta = taskDueMeta(a);
+    const bMeta = taskDueMeta(b);
+    const aDue = dateValue(taskDue(a))?.getTime() || Number.MAX_SAFE_INTEGER;
+    const bDue = dateValue(taskDue(b))?.getTime() || Number.MAX_SAFE_INTEGER;
+    return aMeta.rank - bMeta.rank || aDue - bDue;
+  });
+  const selected = selectRecord(rows);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const endToday = new Date(today);
+  endToday.setHours(23, 59, 59, 999);
+  const openRows = rows.filter((row) => taskStatus(row) !== "completed");
+  const dueToday = openRows.filter((row) => dateInRange(taskDue(row), today, endToday));
+  const overdue = openRows.filter((row) => {
+    const due = dateValue(taskDue(row));
+    return due && due < today;
+  });
+  const pricingFollowUps = openRows.filter((row) => !pricingFitConfirmed(row) && ["new_leads", "contacted"].includes(stageFor(row)));
+  const walkthroughsToSchedule = openRows.filter((row) => pricingFitConfirmed(row) && !walkthroughAt(row) && !["walkthrough", "contract_out", "active", "lost"].includes(stageFor(row)));
+
+  return `
+    <section class="admin-sales-metrics">
+      ${metricCard("Due Today", number(dueToday.length), "calls and follow-ups", "calendar", "blue")}
+      ${metricCard("Overdue", number(overdue.length), "past due", "clock", "red")}
+      ${metricCard("Pricing Follow-ups", number(pricingFollowUps.length), "confirm the $0.25/sq ft fit", "dollar", "yellow")}
+      ${metricCard("Walkthroughs To Schedule", number(walkthroughsToSchedule.length), "ready for management", "calendar", "cyan")}
+      ${metricCard("Completed This Week", number(thisWeekRows(rows.filter((row) => taskStatus(row) === "completed"), "last_activity_at").length), "closed tasks", "check")}
+      ${metricCard("High Priority", number(openRows.filter((row) => normalize(row.task_priority) === "high").length), "important next moves", "clipboard", "violet")}
+    </section>
+    <section class="admin-sales-table-layout admin-sales-task-layout">
+      <article class="admin-sales-panel">
+        <div class="admin-sales-panel-header">
+          <div>
+            <h2>Daily Sales Work Queue</h2>
+            <p>Contact, confirm price fit, and schedule walkthroughs.</p>
+          </div>
+          <button class="admin-sales-secondary" type="button" data-admin-sales-refresh>${icon("refresh")}Refresh</button>
+        </div>
+        ${renderGenericFilters("Search follow-ups...", taskStatuses)}
+        ${renderTaskList(rows)}
+      </article>
+      ${renderTaskDetail(selected)}
+    </section>
+  `;
+}
+
+function renderTaskList(rows) {
+  if (!rows.length) return emptyState("No follow-ups found", "Create a next step from any lead.");
+  return `
+    <div class="admin-sales-task-list">
+      ${rows.map((row) => {
+        const due = taskDueMeta(row);
+        const phoneHref = contactPhoneHref(row);
+        const emailHref = contactEmailHref(row);
+        return `
+          <article class="admin-sales-task-item ${row.id === state.selectedId ? "active" : ""}">
+            <button class="admin-sales-task-select" type="button" data-admin-sales-select-record="${esc(row.id)}">
+              <div>
+                <span class="admin-sales-status ${esc(due.tone)}">${esc(due.label)}</span>
+                <strong>${esc(recommendedTaskAction(row))}</strong>
+                <small>${esc(recordTitle(row))} - ${esc(recordContact(row))}</small>
+              </div>
+              <div class="admin-sales-task-meta">
+                <span><b>Stage</b>${esc(stageLabel(stageFor(row)))}</span>
+                <span><b>Price Fit</b>${esc(pricingFitText(row))}</span>
+                <span><b>Priority</b>${esc(titleCase(row.task_priority || "medium"))}</span>
+                <span><b>Owner</b>${esc(ownerName(row))}</span>
+              </div>
+              <p>${esc(row.next_step || row.lead_notes || "No next step saved yet.")}</p>
+            </button>
+            <div class="admin-sales-task-actions">
+              ${phoneHref ? `<a class="admin-sales-secondary" href="${esc(phoneHref)}">${icon("phone")}Call</a>` : ""}
+              ${emailHref ? `<a class="admin-sales-secondary" href="${esc(emailHref)}">${icon("mail")}Email</a>` : ""}
+              ${pricingFitConfirmed(row) ? "" : `<button class="admin-sales-secondary" type="button" data-admin-sales-update-stage="${esc(row.id)}" data-stage="quote_sent">${icon("check")}Confirm Fit</button>`}
+              <button class="admin-sales-secondary" type="button" data-admin-sales-open="walkthrough" data-id="${esc(row.id)}">${icon("calendar")}Walkthrough</button>
+              <button class="admin-sales-primary" type="button" data-admin-sales-update-task="${esc(row.id)}" data-status="completed">${icon("check")}Done</button>
+            </div>
+          </article>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function renderTaskDetail(row) {
+  if (!row) return detailEmpty("Select a follow-up", "Task details will appear here.");
+  const phoneHref = contactPhoneHref(row);
+  const emailHref = contactEmailHref(row);
+  return `
+    <aside class="admin-sales-detail admin-sales-task-detail">
+      <section class="admin-sales-detail-hero">
+        <span class="admin-sales-status ${esc(taskStatus(row))}">${esc(titleCase(taskStatus(row)))}</span>
+        <h2>${esc(recommendedTaskAction(row))}</h2>
+        <p>${esc(recordTitle(row))}</p>
+      </section>
+      <div class="admin-sales-detail-grid">
+        <div class="admin-sales-detail-stat"><span>Due Date</span><strong>${esc(formatDateTime(taskDue(row)))}</strong></div>
+        <div class="admin-sales-detail-stat"><span>Priority</span><strong>${esc(titleCase(row.task_priority || "medium"))}</strong></div>
+        <div class="admin-sales-detail-stat"><span>Contact</span><strong>${esc(recordContact(row))}</strong></div>
+        <div class="admin-sales-detail-stat"><span>Owner</span><strong>${esc(ownerName(row))}</strong></div>
+        <div class="admin-sales-detail-stat"><span>Stage</span><strong>${esc(stageLabel(stageFor(row)))}</strong></div>
+        <div class="admin-sales-detail-stat"><span>Price Fit</span><strong>${esc(pricingFitText(row))}</strong></div>
+      </div>
+      <div class="admin-sales-info-block">
+        <span>Recommended Next Move</span>
+        <strong>${esc(recommendedTaskAction(row))}</strong>
+      </div>
+      <div class="admin-sales-info-block">
+        <span>Next Step / Notes</span>
+        <strong>${esc(row.next_step || row.lead_notes || "No task notes saved.")}</strong>
+      </div>
+      <div class="admin-sales-action-stack">
+        <button class="admin-sales-primary" type="button" data-admin-sales-update-task="${esc(row.id)}" data-status="completed">${icon("check")}Mark Complete</button>
+        ${phoneHref ? `<a class="admin-sales-secondary" href="${esc(phoneHref)}">${icon("phone")}Call Now</a>` : ""}
+        ${emailHref ? `<a class="admin-sales-secondary" href="${esc(emailHref)}">${icon("mail")}Send Email</a>` : ""}
+        ${pricingFitConfirmed(row) ? "" : `<button class="admin-sales-secondary" type="button" data-admin-sales-update-stage="${esc(row.id)}" data-stage="quote_sent">${icon("check")}Confirm $0.25/Sq Ft</button>`}
+        <button class="admin-sales-secondary" type="button" data-admin-sales-open="walkthrough" data-id="${esc(row.id)}">${icon("calendar")}Schedule Walkthrough</button>
+        <button class="admin-sales-secondary" type="button" data-admin-sales-open="task" data-id="${esc(row.id)}">${icon("clipboard")}Edit Follow-up</button>
+        <button class="admin-sales-secondary" type="button" data-admin-sales-open="lead" data-id="${esc(row.id)}">${icon("users")}Open Prospect</button>
+      </div>
+    </aside>
   `;
 }
 
@@ -1126,14 +1620,16 @@ function renderQuoteDetail(row) {
 function renderContractsPage() {
   const rows = contractRows();
   const selected = selectRecord(rows);
+  const pendingRows = rows.filter((row) => ["pending", "sent"].includes(contractStatus(row)));
+  const signedRows = rows.filter((row) => ["signed", "active"].includes(contractStatus(row)));
   return `
     <section class="admin-sales-metrics">
-      ${metricCard("Pending", number(rows.filter((row) => stageFor(row) === "contract_out" || normalize(row.contract_status) === "pending").length), "waiting on signature", "clipboard", "violet")}
-      ${metricCard("Won Accounts", number(state.rows.filter((row) => stageFor(row) === "active").length), "signed contracts", "check")}
+      ${metricCard("Pending", number(pendingRows.length), "waiting on signature", "clipboard", "violet")}
+      ${metricCard("Signed", number(signedRows.length), "approved contracts", "check")}
       ${metricCard("Contract Value", money(rows.reduce((sum, row) => sum + recordValue(row), 0), true), "pipeline value", "dollar")}
       ${metricCard("Due This Week", number(thisWeekRows(rows, "contract_due_at").length), "follow-ups due", "calendar", "yellow")}
       ${metricCard("Avg. Units", number(Math.round(rows.reduce((sum, row) => sum + recordUnits(row), 0) / Math.max(1, rows.length))), "per contract", "building", "blue")}
-      ${metricCard("Lost", number(state.rows.filter((row) => stageFor(row) === "lost").length), "closed lost", "x", "red")}
+      ${metricCard("Active Accounts", number(state.rows.filter((row) => stageFor(row) === "active").length), "won opportunities", "building", "cyan")}
     </section>
     <section class="admin-sales-table-layout">
       <article class="admin-sales-panel">
@@ -1146,7 +1642,7 @@ function renderContractsPage() {
 }
 
 function renderContractTable(rows) {
-  if (!rows.length) return emptyState("No pending contracts", "Move accepted quotes into the contract queue.");
+  if (!rows.length) return emptyState("No contracts found", "Move accepted walkthroughs into the contract queue.");
   return `
     <div class="admin-sales-table-wrap">
       <table class="admin-sales-table">
@@ -1170,7 +1666,7 @@ function renderContractTable(rows) {
               <td>${esc(recordPhone(row))}</td>
               <td>${money(row.contract_value || row.quote_amount || recordValue(row), true)}</td>
               <td>${esc(formatDate(row.contract_due_at || taskDue(row)))}</td>
-              <td><span class="admin-sales-status ${esc(normalize(row.contract_status || stageFor(row)))}">${esc(titleCase(row.contract_status || stageLabel(stageFor(row))))}</span></td>
+              <td><span class="admin-sales-status ${esc(contractStatus(row))}">${esc(contractStatusLabel(row))}</span></td>
               <td>${esc(ownerName(row))}</td>
               <td><button class="admin-sales-secondary" type="button" data-admin-sales-open="contract" data-id="${esc(row.id)}">${icon("clipboard")}Edit</button></td>
             </tr>
@@ -1186,7 +1682,7 @@ function renderContractDetail(row) {
   return `
     <aside class="admin-sales-detail">
       <section class="admin-sales-detail-hero">
-        <span class="admin-sales-status ${esc(normalize(row.contract_status || stageFor(row)))}">${esc(titleCase(row.contract_status || stageLabel(stageFor(row))))}</span>
+        <span class="admin-sales-status ${esc(contractStatus(row))}">${esc(contractStatusLabel(row))}</span>
         <h2>${esc(recordTitle(row))}</h2>
         <p>${esc(recordCompany(row))}</p>
       </section>
@@ -1228,6 +1724,7 @@ function renderModal() {
   if (state.modal.type === "import") return renderImportModal();
   if (state.modal.type === "walkthrough") return renderWalkthroughModal(rowById(state.modal.id));
   if (state.modal.type === "quote") return renderQuoteModal(rowById(state.modal.id));
+  if (state.modal.type === "task") return renderTaskModal(rowById(state.modal.id));
   if (state.modal.type === "contract") return renderContractModal(rowById(state.modal.id));
   return renderLeadModal(rowById(state.modal.id));
 }
@@ -1386,6 +1883,29 @@ function renderContractModal(row) {
     </form>
   `;
   return modalShell(row ? "Edit Contract" : "Add Contract Follow-up", "Contracts", body, "", false);
+}
+
+function renderTaskModal(row) {
+  const leadId = row?.id || "";
+  const currentTask = row?.task_type || row?.next_step || salesTaskTypes[0];
+  const taskTypeOptions = Array.from(new Set([currentTask, ...salesTaskTypes].filter(Boolean)))
+    .map((item) => [item, item]);
+  const body = `
+    <form data-admin-sales-task-form data-related-id="${esc(row?.task_record_id || "")}">
+      <div class="admin-sales-modal-body">
+        <div class="admin-sales-form-grid">
+          ${selectField("lead_id", "Lead", leadOptions(leadId), leadId, true, "wide")}
+          ${selectField("task_type", "Task Type", taskTypeOptions, currentTask)}
+          ${selectField("task_status", "Status", taskStatuses.map((status) => [status, titleCase(status)]), row?.task_status || "open")}
+          ${selectField("task_priority", "Priority", priorities.map((priority) => [priority, titleCase(priority)]), row?.task_priority || "medium")}
+          ${field("task_due_at", "Due Date", toDateTimeLocal(taskDue(row)), "datetime-local")}
+          ${textField("next_step", "Next Step / Notes", row?.next_step || "")}
+        </div>
+      </div>
+      ${modalFooter("Save Follow-up")}
+    </form>
+  `;
+  return modalShell(row ? "Edit Follow-up" : "New Follow-up", "Tasks", body, "", false);
 }
 
 function renderImportModal() {
@@ -1615,6 +2135,45 @@ async function saveContract(form) {
   }
 }
 
+async function saveTask(form) {
+  if (state.saving) return;
+  state.saving = true;
+  showModalMessage(form, "Saving follow-up...");
+  const values = valuesFromForm(form);
+  const leadId = values.lead_id;
+  const row = rowById(leadId);
+  const relatedId = form.dataset.relatedId && row?.task_record_id === form.dataset.relatedId ? form.dataset.relatedId : "";
+  const dueAt = values.task_due_at ? new Date(values.task_due_at).toISOString() : null;
+  const payload = compactPayload({
+    lead_id: leadId,
+    task_type: values.task_type || "Follow-up",
+    task_status: normalize(values.task_status) || "open",
+    task_priority: normalize(values.task_priority) || "medium",
+    task_due_at: dueAt,
+    next_step: values.next_step || ""
+  });
+  try {
+    if (!leadId) throw new Error("Choose a lead before saving.");
+    const result = relatedId
+      ? await supabase.from(TABLES.tasks).update(payload).eq("id", relatedId)
+      : await supabase.from(TABLES.tasks).insert({ ...payload, created_by: state.user?.id || null });
+    if (result.error) throw result.error;
+    await supabase.from(TABLES.leads)
+      .update({
+        next_step: payload.next_step || payload.task_type || row?.next_step || "",
+        next_step_due_at: dueAt,
+        last_activity_at: new Date().toISOString()
+      })
+      .eq("id", leadId);
+    state.modal = null;
+    await loadData(false);
+  } catch (error) {
+    showModalMessage(form, `Unable to save follow-up: ${error.message}`, "error");
+  } finally {
+    state.saving = false;
+  }
+}
+
 async function saveAvailability(form) {
   if (state.saving) return;
   state.saving = true;
@@ -1690,6 +2249,28 @@ async function updateContractStatus(id, status) {
   if (result.error) throw result.error;
   await supabase.from(TABLES.leads)
     .update({ pipeline_stage: ["signed", "active"].includes(normalized) ? "active" : "contract_out", last_activity_at: new Date().toISOString() })
+    .eq("id", id);
+  await loadData(false);
+}
+
+async function updateTaskStatus(id, status) {
+  const row = rowById(id);
+  if (!row) return;
+  const normalized = normalize(status) || "open";
+  const payload = {
+    lead_id: id,
+    task_type: row.task_type || recommendedTaskAction(row),
+    task_status: normalized,
+    task_priority: row.task_priority || "medium",
+    task_due_at: taskDue(row),
+    next_step: row.next_step || ""
+  };
+  const result = row.task_record_id
+    ? await supabase.from(TABLES.tasks).update(payload).eq("id", row.task_record_id)
+    : await supabase.from(TABLES.tasks).insert({ ...payload, created_by: state.user?.id || null });
+  if (result.error) throw result.error;
+  await supabase.from(TABLES.leads)
+    .update({ last_activity_at: new Date().toISOString() })
     .eq("id", id);
   await loadData(false);
 }
@@ -2056,6 +2637,18 @@ async function handleClick(event) {
     return;
   }
 
+  const updateTask = target.closest("[data-admin-sales-update-task]");
+  if (updateTask) {
+    try {
+      await updateTaskStatus(updateTask.dataset.adminSalesUpdateTask, updateTask.dataset.status);
+    } catch (error) {
+      state.message = `Unable to update follow-up: ${error.message}`;
+      state.messageTone = "error";
+      render();
+    }
+    return;
+  }
+
   const deleteAvailabilityButton = target.closest("[data-admin-sales-delete-availability]");
   if (deleteAvailabilityButton) {
     await deleteAvailability(deleteAvailabilityButton.dataset.adminSalesDeleteAvailability);
@@ -2139,6 +2732,10 @@ async function handleSubmit(event) {
     event.preventDefault();
     await saveContract(form);
   }
+  if (form.matches("[data-admin-sales-task-form]")) {
+    event.preventDefault();
+    await saveTask(form);
+  }
   if (form.matches("[data-admin-sales-availability-form]")) {
     event.preventDefault();
     await saveAvailability(form);
@@ -2187,6 +2784,8 @@ function mountWhenReady(attempt = 0) {
     return;
   }
   state.root = root;
+  const hashId = window.location.hash.replace("#", "");
+  if (hashId) state.selectedId = hashId;
   bindEvents();
   void loadData(true);
 }
