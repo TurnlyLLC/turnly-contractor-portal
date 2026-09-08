@@ -1880,26 +1880,67 @@ function walkthroughWindowOptions(row) {
   return options.slice(0, 10);
 }
 
+function groupWalkthroughWindows(slots) {
+  const groups = new Map();
+  slots.forEach((slot) => {
+    const start = dateValue(slot.starts_at);
+    if (!start) return;
+    const key = toDateInput(start);
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        date: start,
+        slots: [],
+        openCount: 0,
+        firstStart: start,
+        lastEnd: dateValue(slot.ends_at) || start
+      });
+    }
+    const group = groups.get(key);
+    const end = dateValue(slot.ends_at) || dateValue(addHoursIso(slot.starts_at, 1)) || start;
+    group.slots.push(slot);
+    if (normalize(slot.status || "open") === "open" || String(slot.id || "").startsWith("default-")) group.openCount += 1;
+    if (start < group.firstStart) group.firstStart = start;
+    if (end > group.lastEnd) group.lastEnd = end;
+  });
+  return Array.from(groups.values()).map((group) => ({
+    ...group,
+    slots: group.slots.sort((a, b) => dateValue(a.starts_at) - dateValue(b.starts_at))
+  })).sort((a, b) => a.date - b.date);
+}
+
 function renderFocusWalkthroughWindows(row) {
   const selectedStart = walkthroughAt(row);
-  const options = walkthroughWindowOptions(row);
+  const groups = groupWalkthroughWindows(walkthroughWindowOptions(row));
   return `
     <section class="sales-focus-info-box sales-focus-window-box">
       <span>Walkthrough Availability</span>
-      <div class="sales-walkthrough-window-grid">
-        ${options.map((slot) => {
-          const start = dateValue(slot.starts_at);
-          const end = dateValue(slot.ends_at);
-          const checked = selectedStart && slot.starts_at === selectedStart;
-          return `
-            <label class="sales-walkthrough-window-card">
-              <input type="radio" name="walkthrough_window" value="${esc(walkthroughWindowValue(slot))}" ${checked ? "checked" : ""} />
-              <strong>${esc(formatDate(slot.starts_at, { weekday: "short", month: "short", day: "numeric", year: "numeric" }))}</strong>
-              <small>${esc(start && end ? `${formatTime(start)} - ${formatTime(end)}` : "Time TBD")}</small>
-              <span>${esc(slot.label || "Available")}</span>
-            </label>
-          `;
-        }).join("")}
+      <div class="sales-walkthrough-date-grid">
+        ${groups.map((group) => `
+          <article class="sales-walkthrough-date-card">
+            <header>
+              <div>
+                <h3>${esc(formatDate(group.date, { weekday: "short", month: "short", day: "numeric", year: "numeric" }))}</h3>
+                <p>${esc(formatTime(group.firstStart))} - ${esc(formatTime(group.lastEnd))}</p>
+              </div>
+              <span class="sales-availability-count">${esc(number(group.openCount))} slot${group.openCount === 1 ? "" : "s"}</span>
+            </header>
+            <div class="sales-walkthrough-time-grid">
+              ${group.slots.map((slot) => {
+                const start = dateValue(slot.starts_at);
+                const end = dateValue(slot.ends_at);
+                const checked = selectedStart && slot.starts_at === selectedStart;
+                return `
+                  <label class="sales-walkthrough-time-card">
+                    <input type="radio" name="walkthrough_window" value="${esc(walkthroughWindowValue(slot))}" ${checked ? "checked" : ""} />
+                    <strong>${esc(start && end ? `${formatTime(start)} - ${formatTime(end)}` : "Time TBD")}</strong>
+                    <span>${esc(slot.label || "Available walkthrough")}</span>
+                  </label>
+                `;
+              }).join("")}
+            </div>
+          </article>
+        `).join("")}
       </div>
     </section>
   `;
@@ -2117,10 +2158,10 @@ function availabilityStatusOptions(selected = "open") {
 
 function renderWalkthroughAvailabilityAdmin() {
   if (!isSalesAdmin()) return "";
-  const slots = (state.walkthroughAvailability || [])
+  const groups = groupWalkthroughWindows((state.walkthroughAvailability || [])
     .slice()
     .sort((a, b) => sortableTime(a.starts_at) - sortableTime(b.starts_at))
-    .slice(0, 10);
+    .slice(0, 24));
   const tomorrow = toDateInput(addDays(new Date(), 1));
   return `
     <section class="sales-panel sales-availability-admin">
@@ -2138,22 +2179,35 @@ function renderWalkthroughAvailabilityAdmin() {
         <button class="sales-primary-button" type="submit">${icon("plus")}Add Window</button>
       </form>
       <div class="sales-availability-list">
-        ${slots.length ? slots.map((slot) => {
-          const start = dateValue(slot.starts_at);
-          const end = dateValue(slot.ends_at);
-          return `
-            <article class="sales-availability-slot">
+        ${groups.length ? groups.map((group) => `
+          <article class="sales-availability-card">
+            <header>
               <div>
-                <strong>${esc(formatDate(slot.starts_at, { weekday: "short" }))}</strong>
-                <small>${esc(start && end ? `${formatTime(start)} - ${formatTime(end)}` : "Time TBD")} · ${esc(slot.label || "Available walkthrough")}</small>
+                <h3>${esc(formatDate(group.date, { weekday: "short", month: "short", day: "numeric", year: "numeric" }))}</h3>
+                <p>${esc(formatTime(group.firstStart))} - ${esc(formatTime(group.lastEnd))}</p>
               </div>
-              <select class="sales-filter" data-availability-status="${esc(slot.id)}" aria-label="Update availability status">
-                ${availabilityStatusOptions(slot.status || "open")}
-              </select>
-              <button class="sales-danger-button" type="button" data-delete-availability="${esc(slot.id)}">${icon("x")}Remove</button>
-            </article>
-          `;
-        }).join("") : `<p class="sales-record-subtitle">No admin-set availability windows yet.</p>`}
+              <span class="sales-availability-count">${esc(number(group.openCount))} open</span>
+            </header>
+            <div class="sales-availability-slots">
+              ${group.slots.map((slot) => {
+                const start = dateValue(slot.starts_at);
+                const end = dateValue(slot.ends_at);
+                return `
+                  <article class="sales-availability-slot">
+                    <div>
+                      <strong>${esc(start && end ? `${formatTime(start)} - ${formatTime(end)}` : "Time TBD")}</strong>
+                      <small>${esc(slot.label || "Available walkthrough")}</small>
+                    </div>
+                    <select class="sales-filter" data-availability-status="${esc(slot.id)}" aria-label="Update availability status">
+                      ${availabilityStatusOptions(slot.status || "open")}
+                    </select>
+                    <button class="sales-danger-button" type="button" data-delete-availability="${esc(slot.id)}">${icon("x")}Remove</button>
+                  </article>
+                `;
+              }).join("")}
+            </div>
+          </article>
+        `).join("") : `<p class="sales-record-subtitle">No admin-set availability windows yet.</p>`}
       </div>
     </section>
   `;

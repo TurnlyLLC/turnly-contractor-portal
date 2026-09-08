@@ -302,6 +302,35 @@ function hourlyAvailabilitySlots(date, startTime, endTime) {
   return slots;
 }
 
+function groupAvailabilitySlots(slots) {
+  const groups = new Map();
+  slots.forEach((slot) => {
+    const start = dateValue(slot.starts_at);
+    if (!start) return;
+    const key = toDateInput(start);
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        date: start,
+        firstStart: start,
+        lastEnd: dateValue(slot.ends_at) || start,
+        openCount: 0,
+        slots: []
+      });
+    }
+    const group = groups.get(key);
+    const end = dateValue(slot.ends_at) || start;
+    group.slots.push(slot);
+    if (normalize(slot.status || "open") === "open") group.openCount += 1;
+    if (start < group.firstStart) group.firstStart = start;
+    if (end > group.lastEnd) group.lastEnd = end;
+  });
+  return Array.from(groups.values()).map((group) => ({
+    ...group,
+    slots: group.slots.sort((a, b) => latestMs(a.starts_at) - latestMs(b.starts_at))
+  })).sort((a, b) => a.date - b.date);
+}
+
 function startOfWeek(value = new Date()) {
   const date = new Date(value);
   date.setHours(0, 0, 0, 0);
@@ -1448,10 +1477,10 @@ function renderWalkthroughsPage() {
 }
 
 function renderAvailabilityPanel() {
-  const slots = state.availability
+  const groups = groupAvailabilitySlots(state.availability
     .slice()
     .sort((a, b) => latestMs(a.starts_at) - latestMs(b.starts_at))
-    .slice(0, 14);
+    .slice(0, 28));
   const tomorrow = toDateInput(addDays(new Date(), 1));
   return `
     <section class="admin-sales-panel">
@@ -1469,22 +1498,35 @@ function renderAvailabilityPanel() {
         <button class="admin-sales-primary" type="submit">${icon("plus")}Add Hourly Slots</button>
       </form>
       <div class="admin-sales-availability-list">
-        ${slots.length ? slots.map((slot) => {
-          const start = dateValue(slot.starts_at);
-          const end = dateValue(slot.ends_at);
-          return `
-            <article class="admin-sales-availability-slot">
+        ${groups.length ? groups.map((group) => `
+          <article class="admin-sales-availability-card">
+            <header>
               <div>
-                <strong>${esc(formatDate(slot.starts_at, { weekday: "short" }))}</strong>
-                <small>${esc(start && end ? `${formatTime(start)} - ${formatTime(end)}` : "Time TBD")} - ${esc(slot.label || "Available walkthrough")}</small>
+                <h3>${esc(formatDate(group.date, { weekday: "short", month: "short", day: "numeric", year: "numeric" }))}</h3>
+                <p>${esc(formatTime(group.firstStart))} - ${esc(formatTime(group.lastEnd))}</p>
               </div>
-              <select class="admin-sales-filter" data-admin-sales-availability-status="${esc(slot.id)}">
-                ${availabilityStatuses.map((status) => `<option value="${esc(status)}" ${normalize(slot.status || "open") === status ? "selected" : ""}>${esc(titleCase(status))}</option>`).join("")}
-              </select>
-              <button class="admin-sales-danger" type="button" data-admin-sales-delete-availability="${esc(slot.id)}">${icon("x")}Remove</button>
-            </article>
-          `;
-        }).join("") : `<p class="admin-sales-record-subtitle">No admin availability windows are set yet.</p>`}
+              <span>${esc(number(group.openCount))} open slot${group.openCount === 1 ? "" : "s"}</span>
+            </header>
+            <div class="admin-sales-availability-slots">
+              ${group.slots.map((slot) => {
+                const start = dateValue(slot.starts_at);
+                const end = dateValue(slot.ends_at);
+                return `
+                  <article class="admin-sales-availability-slot">
+                    <div>
+                      <strong>${esc(start && end ? `${formatTime(start)} - ${formatTime(end)}` : "Time TBD")}</strong>
+                      <small>${esc(slot.label || "Available walkthrough")}</small>
+                    </div>
+                    <select class="admin-sales-filter" data-admin-sales-availability-status="${esc(slot.id)}">
+                      ${availabilityStatuses.map((status) => `<option value="${esc(status)}" ${normalize(slot.status || "open") === status ? "selected" : ""}>${esc(titleCase(status))}</option>`).join("")}
+                    </select>
+                    <button class="admin-sales-danger" type="button" data-admin-sales-delete-availability="${esc(slot.id)}">${icon("x")}Remove</button>
+                  </article>
+                `;
+              }).join("")}
+            </div>
+          </article>
+        `).join("") : `<p class="admin-sales-record-subtitle">No admin availability windows are set yet.</p>`}
       </div>
     </section>
   `;

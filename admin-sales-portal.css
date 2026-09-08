@@ -758,18 +758,72 @@
 }
 
 .admin-sales-availability-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  gap: 14px;
   margin-top: 14px;
+}
+
+.admin-sales-availability-card {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--admin-sales-line);
+  border-radius: var(--admin-sales-radius);
+  background: rgba(9, 22, 35, 0.72);
+  padding: 14px;
+}
+
+.admin-sales-availability-card header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-sales-availability-card h3,
+.admin-sales-availability-card p {
+  margin: 0;
+}
+
+.admin-sales-availability-card h3 {
+  color: #f7fbff;
+  font-size: 16px;
+}
+
+.admin-sales-availability-card p {
+  margin-top: 4px;
+  color: var(--admin-sales-muted);
+  font-size: 13px;
+}
+
+.admin-sales-availability-card header > span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid rgba(22, 217, 137, 0.30);
+  border-radius: 999px;
+  background: rgba(22, 217, 137, 0.12);
+  color: #91f5c7;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.admin-sales-availability-slots {
+  display: grid;
+  gap: 8px;
 }
 
 .admin-sales-availability-slot {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(130px, 160px) auto;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 145px) auto;
+  gap: 8px;
   align-items: center;
-  border: 1px solid var(--admin-sales-line);
+  border: 1px solid rgba(148, 163, 184, 0.12);
   border-radius: var(--admin-sales-radius);
-  background: rgba(9, 22, 35, 0.72);
-  padding: 12px;
+  background: rgba(3, 12, 22, 0.34);
+  padding: 10px;
 }
 
 .admin-sales-availability-slot strong,
@@ -1207,9 +1261,19 @@ body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-question-bloc
 body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-question-row,
 body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-calendar-nav button,
 body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-segmented button,
+body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-availability-card,
 body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-availability-slot {
   background: #ffffff;
   color: #061321;
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-availability-card h3 {
+  color: #061321;
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-availability-card header > span {
+  background: rgba(0, 191, 150, 0.12);
+  color: #006b58;
 }
 
 body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-question-block > span,
@@ -1322,6 +1386,7 @@ body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-chart-point {
   .admin-sales-filter-bar,
   .admin-sales-form-grid,
   .admin-sales-availability-form,
+  .admin-sales-availability-list,
   .admin-sales-availability-slot,
   .admin-sales-detail-grid {
     grid-template-columns: 1fr;
