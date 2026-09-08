@@ -458,6 +458,7 @@
 .admin-sales-detail {
   position: sticky;
   top: 86px;
+  align-self: start;
   display: grid;
   gap: 14px;
   max-height: calc(100vh - 104px);
@@ -489,6 +490,10 @@
   gap: 10px;
 }
 
+.admin-sales-detail-grid.compact {
+  grid-template-columns: 1fr;
+}
+
 .admin-sales-detail-stat,
 .admin-sales-info-block {
   border: 1px solid var(--admin-sales-line);
@@ -517,6 +522,10 @@
 .admin-sales-action-stack {
   display: grid;
   gap: 10px;
+}
+
+.admin-sales-action-stack.bottom {
+  margin-top: 2px;
 }
 
 .admin-sales-question-block {

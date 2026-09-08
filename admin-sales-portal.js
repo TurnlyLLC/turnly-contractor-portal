@@ -281,6 +281,27 @@ function combineDateTime(date, time, fallback = "10:00") {
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 }
 
+function hourlyAvailabilitySlots(date, startTime, endTime) {
+  const startsAt = dateValue(combineDateTime(date, startTime, "10:00"));
+  const endsAt = dateValue(combineDateTime(date, endTime, "11:00"));
+  if (!startsAt || !endsAt) throw new Error("Choose a date, start time, and end time.");
+  if (endsAt <= startsAt) throw new Error("End time must be after start time.");
+  const slots = [];
+  const cursor = new Date(startsAt);
+  while (cursor < endsAt) {
+    const next = new Date(cursor);
+    next.setHours(next.getHours() + 1);
+    if (next > endsAt) break;
+    slots.push({
+      starts_at: cursor.toISOString(),
+      ends_at: next.toISOString()
+    });
+    cursor.setTime(next.getTime());
+  }
+  if (!slots.length) throw new Error("Choose a range of at least one hour.");
+  return slots;
+}
+
 function startOfWeek(value = new Date()) {
   const date = new Date(value);
   date.setHours(0, 0, 0, 0);
@@ -1203,44 +1224,73 @@ function renderTaskList(rows) {
   `;
 }
 
-function renderTaskDetail(row) {
-  if (!row) return detailEmpty("Select a follow-up", "Task details will appear here.");
-  const phoneHref = contactPhoneHref(row);
-  const emailHref = contactEmailHref(row);
+function renderProspectQuestionBlock(row) {
+  const questions = focusStateFor(row).questions;
   return `
-    <aside class="admin-sales-detail admin-sales-task-detail">
+    <div class="admin-sales-question-block">
+      <span>Sales Qualification</span>
+      <div>
+        ${focusQuestionDefs.map((question) => `
+          <article class="admin-sales-question-row ${esc(questions[question.id] || "unanswered")}">
+            <p>${esc(question.label)}</p>
+            <strong>${esc(yesNoLabel(questions[question.id]))}</strong>
+          </article>
+        `).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function renderProspectDetail(row, options = {}) {
+  if (!row) return detailEmpty(options.emptyTitle || "Select a lead", options.emptyText || "Lead details will appear here.");
+  const visibleQualificationNotes = qualificationNotesText(row);
+  const status = options.statusClass || stageFor(row);
+  const statusLabel = options.statusLabel || stageLabel(stageFor(row));
+  return `
+    <aside class="admin-sales-detail ${esc(options.className || "")}">
       <section class="admin-sales-detail-hero">
-        <span class="admin-sales-status ${esc(taskStatus(row))}">${esc(titleCase(taskStatus(row)))}</span>
-        <h2>${esc(recommendedTaskAction(row))}</h2>
-        <p>${esc(recordTitle(row))}</p>
+        <span class="admin-sales-status ${esc(status)}">${esc(statusLabel)}</span>
+        <h2>${esc(recordTitle(row))}</h2>
+        <p>${esc(recordAddress(row) || "No address saved")}</p>
       </section>
-      <div class="admin-sales-detail-grid">
-        <div class="admin-sales-detail-stat"><span>Due Date</span><strong>${esc(formatDateTime(taskDue(row)))}</strong></div>
-        <div class="admin-sales-detail-stat"><span>Priority</span><strong>${esc(titleCase(row.task_priority || "medium"))}</strong></div>
-        <div class="admin-sales-detail-stat"><span>Contact</span><strong>${esc(recordContact(row))}</strong></div>
-        <div class="admin-sales-detail-stat"><span>Owner</span><strong>${esc(ownerName(row))}</strong></div>
+      <div class="admin-sales-detail-grid compact">
+        <div class="admin-sales-detail-stat"><span>Phone</span><strong>${esc(recordPhone(row))}</strong></div>
         <div class="admin-sales-detail-stat"><span>Stage</span><strong>${esc(stageLabel(stageFor(row)))}</strong></div>
-        <div class="admin-sales-detail-stat"><span>Price Fit</span><strong>${esc(pricingFitText(row))}</strong></div>
+        <div class="admin-sales-detail-stat"><span>Email</span><strong>${esc(row.contact_email || "No email saved")}</strong></div>
+        <div class="admin-sales-detail-stat"><span>Next Steps</span><strong>${esc(row.next_step || recommendedTaskAction(row) || "No next step")}</strong></div>
+      </div>
+      ${renderProspectQuestionBlock(row)}
+      <div class="admin-sales-info-block">
+        <span>Notes</span>
+        <strong>${esc(row.lead_notes || "No notes saved.")}</strong>
       </div>
       <div class="admin-sales-info-block">
-        <span>Recommended Next Move</span>
-        <strong>${esc(recommendedTaskAction(row))}</strong>
+        <span>Qualification Notes</span>
+        <strong>${esc(visibleQualificationNotes || "No qualification notes saved.")}</strong>
       </div>
       <div class="admin-sales-info-block">
-        <span>Next Step / Notes</span>
-        <strong>${esc(row.next_step || row.lead_notes || "No task notes saved.")}</strong>
+        <span>Pain Points</span>
+        <strong>${esc(listText(row.sales_pain_points))}</strong>
       </div>
-      <div class="admin-sales-action-stack">
-        <button class="admin-sales-primary" type="button" data-admin-sales-update-task="${esc(row.id)}" data-status="completed">${icon("check")}Mark Complete</button>
-        ${phoneHref ? `<a class="admin-sales-secondary" href="${esc(phoneHref)}">${icon("phone")}Call Now</a>` : ""}
-        ${emailHref ? `<a class="admin-sales-secondary" href="${esc(emailHref)}">${icon("mail")}Send Email</a>` : ""}
-        ${pricingFitConfirmed(row) ? "" : `<button class="admin-sales-secondary" type="button" data-admin-sales-update-stage="${esc(row.id)}" data-stage="quote_sent">${icon("check")}Confirm $0.25/Sq Ft</button>`}
+      <div class="admin-sales-info-block">
+        <span>Default Scope</span>
+        <strong>${esc(row.default_scope || row.default_service_type || "No default scope saved.")}</strong>
+      </div>
+      <div class="admin-sales-action-stack bottom">
+        <button class="admin-sales-primary" type="button" data-admin-sales-open="lead" data-id="${esc(row.id)}">${icon("file")}Edit Lead</button>
         <button class="admin-sales-secondary" type="button" data-admin-sales-open="walkthrough" data-id="${esc(row.id)}">${icon("calendar")}Schedule Walkthrough</button>
-        <button class="admin-sales-secondary" type="button" data-admin-sales-open="task" data-id="${esc(row.id)}">${icon("clipboard")}Edit Follow-up</button>
-        <button class="admin-sales-secondary" type="button" data-admin-sales-open="lead" data-id="${esc(row.id)}">${icon("users")}Open Prospect</button>
+        <button class="admin-sales-secondary" type="button" data-admin-sales-open="quote" data-id="${esc(row.id)}">${icon("dollar")}Create Quote</button>
       </div>
     </aside>
   `;
+}
+
+function renderTaskDetail(row) {
+  return renderProspectDetail(row, {
+    emptyTitle: "Select a follow-up",
+    emptyText: "Task details will appear here.",
+    className: "admin-sales-task-detail"
+  });
 }
 
 function renderLeadsPage() {
@@ -1364,77 +1414,10 @@ function renderLeadTable(rows) {
 }
 
 function renderLeadDetail(row) {
-  if (!row) return detailEmpty("Select a lead", "Lead details will appear here.");
-  const questions = focusStateFor(row).questions;
-  const visibleQualificationNotes = qualificationNotesText(row);
-  return `
-    <aside class="admin-sales-detail">
-      <section class="admin-sales-detail-hero">
-        <span class="admin-sales-status ${esc(stageFor(row))}">${esc(stageLabel(stageFor(row)))}</span>
-        <h2>${esc(recordTitle(row))}</h2>
-        <p>${esc(recordAddress(row) || "No address saved")}</p>
-      </section>
-      <div class="admin-sales-detail-grid">
-        <div class="admin-sales-detail-stat"><span>Property Name</span><strong>${esc(recordTitle(row))}</strong></div>
-        <div class="admin-sales-detail-stat"><span>Company</span><strong>${esc(recordCompany(row))}</strong></div>
-        <div class="admin-sales-detail-stat"><span>Address</span><strong>${esc(recordAddress(row) || "No address saved")}</strong></div>
-        <div class="admin-sales-detail-stat"><span>City / State</span><strong>${esc([row.sales_city, row.sales_state].filter(Boolean).join(", ") || "Not set")}</strong></div>
-        <div class="admin-sales-detail-stat"><span>County</span><strong>${esc(row.sales_county || "Not set")}</strong></div>
-        <div class="admin-sales-detail-stat"><span>Website</span><strong>${esc(row.sales_website || "Not set")}</strong></div>
-        <div class="admin-sales-detail-stat"><span>Property Class</span><strong>${esc(row.property_class || "Not set")}</strong></div>
-        <div class="admin-sales-detail-stat"><span>Contact</span><strong>${esc(recordContact(row))}</strong></div>
-        <div class="admin-sales-detail-stat"><span>Phone</span><strong>${esc(recordPhone(row))}</strong></div>
-        <div class="admin-sales-detail-stat"><span>Email</span><strong>${esc(row.contact_email || "No email saved")}</strong></div>
-        <div class="admin-sales-detail-stat"><span>Stage</span><strong>${esc(stageLabel(stageFor(row)))}</strong></div>
-        <div class="admin-sales-detail-stat"><span>Owner</span><strong>${esc(ownerName(row))}</strong></div>
-        <div class="admin-sales-detail-stat"><span>Units</span><strong>${esc(recordUnits(row) ? number(recordUnits(row)) : "Not set")}</strong></div>
-        <div class="admin-sales-detail-stat"><span>Avg. Turns / Month</span><strong>${esc(row.average_turns_per_month || "Not set")}</strong></div>
-        <div class="admin-sales-detail-stat"><span>Opportunity Score</span><strong>${esc(row.opportunity_score ? `${row.opportunity_score}/100` : "Not scored")}</strong></div>
-        <div class="admin-sales-detail-stat"><span>Current Vendor</span><strong>${esc(row.current_vendor || "Not set")}</strong></div>
-        <div class="admin-sales-detail-stat"><span>Price Fit</span><strong>${esc(pricingFitText(row))}</strong></div>
-        <div class="admin-sales-detail-stat"><span>Desired Start</span><strong>${esc(formatDate(row.desired_start_date))}</strong></div>
-        <div class="admin-sales-detail-stat"><span>Walkthrough</span><strong>${esc(formatDateTime(walkthroughAt(row)))}</strong></div>
-        <div class="admin-sales-detail-stat"><span>Source</span><strong>${esc(row.lead_source || "Not set")}</strong></div>
-        <div class="admin-sales-detail-stat"><span>Next Step</span><strong>${esc(row.next_step || "No next step")}</strong></div>
-      </div>
-      <div class="admin-sales-question-block">
-        <span>Sales Qualification</span>
-        <div>
-          ${focusQuestionDefs.map((question) => `
-            <article class="admin-sales-question-row ${esc(questions[question.id] || "unanswered")}">
-              <p>${esc(question.label)}</p>
-              <strong>${esc(yesNoLabel(questions[question.id]))}</strong>
-            </article>
-          `).join("")}
-        </div>
-      </div>
-      <div class="admin-sales-info-block">
-        <span>Lead Notes</span>
-        <strong>${esc(row.lead_notes || "No lead notes saved.")}</strong>
-      </div>
-      <div class="admin-sales-info-block">
-        <span>Qualification Notes</span>
-        <strong>${esc(visibleQualificationNotes || "No qualification notes saved.")}</strong>
-      </div>
-      <div class="admin-sales-info-block">
-        <span>Service Needs</span>
-        <strong>${esc(listText(row.service_needs))}</strong>
-      </div>
-      <div class="admin-sales-info-block">
-        <span>Pain Points</span>
-        <strong>${esc(listText(row.sales_pain_points))}</strong>
-      </div>
-      <div class="admin-sales-info-block">
-        <span>Default Scope</span>
-        <strong>${esc(row.default_scope || row.default_service_type || "No default scope saved.")}</strong>
-      </div>
-      <div class="admin-sales-action-stack">
-        <button class="admin-sales-primary" type="button" data-admin-sales-open="lead" data-id="${esc(row.id)}">${icon("file")}Edit Lead</button>
-        <button class="admin-sales-secondary" type="button" data-admin-sales-open="walkthrough" data-id="${esc(row.id)}">${icon("calendar")}Schedule Walkthrough</button>
-        <button class="admin-sales-secondary" type="button" data-admin-sales-open="quote" data-id="${esc(row.id)}">${icon("dollar")}Create Quote</button>
-      </div>
-    </aside>
-  `;
+  return renderProspectDetail(row, {
+    emptyTitle: "Select a lead",
+    emptyText: "Lead details will appear here."
+  });
 }
 
 function renderWalkthroughsPage() {
@@ -1480,10 +1463,10 @@ function renderAvailabilityPanel() {
       </div>
       <form class="admin-sales-availability-form" data-admin-sales-availability-form>
         ${pickerField("availability_date", "Date", tomorrow, "date", true)}
-        ${pickerField("availability_start_time", "Start", "10:00", "time", true, "", 'step="3600"')}
-        ${pickerField("availability_end_time", "End", "11:00", "time", true, "", 'step="3600"')}
-        ${field("availability_label", "Window Label", "Quality walkthrough", "text")}
-        <button class="admin-sales-primary" type="submit">${icon("plus")}Add Window</button>
+        ${pickerField("availability_start_time", "Start Time", "10:00", "time", true, "", 'step="3600"')}
+        ${pickerField("availability_end_time", "End Time", "17:00", "time", true, "", 'step="3600"')}
+        ${field("availability_label", "Slot Label", "Quality walkthrough", "text")}
+        <button class="admin-sales-primary" type="submit">${icon("plus")}Add Hourly Slots</button>
       </form>
       <div class="admin-sales-availability-list">
         ${slots.length ? slots.map((slot) => {
@@ -2323,20 +2306,20 @@ async function saveAvailability(form) {
   if (state.saving) return;
   state.saving = true;
   const values = valuesFromForm(form);
-  const startsAt = combineDateTime(values.availability_date, values.availability_start_time, "10:00");
-  const endsAt = combineDateTime(values.availability_date, values.availability_end_time, "11:00");
   try {
-    if (!startsAt || !endsAt) throw new Error("Choose a date, start time, and end time.");
-    if (dateValue(endsAt) <= dateValue(startsAt)) throw new Error("End time must be after start time.");
-    const { error } = await supabase.from(TABLES.availability).insert({
-      starts_at: startsAt,
-      ends_at: endsAt,
-      label: values.availability_label || "Available walkthrough",
+    const slots = hourlyAvailabilitySlots(values.availability_date, values.availability_start_time, values.availability_end_time);
+    const label = values.availability_label || "Available walkthrough";
+    const { error } = await supabase.from(TABLES.availability).insert(slots.map((slot) => ({
+      ...slot,
+      label,
       status: "open",
       created_by: state.user?.id || null
-    });
+    })));
     if (error) throw error;
     await loadData(false);
+    state.message = `Added ${number(slots.length)} walkthrough slot${slots.length === 1 ? "" : "s"}.`;
+    state.messageTone = "success";
+    render();
   } catch (error) {
     state.message = `Unable to add availability: ${error.message}`;
     state.messageTone = "error";

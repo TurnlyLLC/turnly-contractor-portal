@@ -4,7 +4,8 @@ export const adminPreviewUserOptionsStorageKey = "turnlyAdminPreviewUserOptions:
 export const adminPreviewPortalOptions = [
   { value: "admin", label: "Admin", href: "admin.html" },
   { value: "contractor", label: "Contractor", href: "contractor-desktop.html" },
-  { value: "property_manager", label: "Property Manager", href: "property-manager.html" }
+  { value: "property_manager", label: "Property Manager", href: "property-manager.html" },
+  { value: "sales", label: "Sales", href: "sales.html" }
 ];
 
 export const adminPreviewPropertyOptions = [
@@ -41,7 +42,8 @@ export const adminPreviewUserOptions = [
   { value: "current_admin", label: "Current Admin", aliases: ["admin", "turnly admin"], roles: ["admin"] },
   { value: "amelia", label: "Amelia Coupe", aliases: ["amelia", "amelia coupe"], roles: ["contractor"] },
   { value: "shekinah", label: "Shekinah Thorne", aliases: ["shekinah", "shekinah thorne"], roles: ["contractor"] },
-  { value: "ryan_coupe", label: "Ryan Coupe", aliases: ["ryan coupe", "ryan matthew coupe"], roles: ["property_manager"] }
+  { value: "ryan_coupe", label: "Ryan Coupe", aliases: ["ryan coupe", "ryan matthew coupe"], roles: ["property_manager"] },
+  { value: "ryan_sales", label: "Ryan (sales)", aliases: ["ryan sales", "ryan (sales)", "ryan coupe sales"], roles: ["sales"] }
 ];
 
 export function normalizePreviewToken(value) {
@@ -137,6 +139,7 @@ function adminPreviewRoleForProfile(profile = {}) {
   if (isAdminRoleValue(role)) return "admin";
   if (role === "contractor") return "contractor";
   if (role === "property_manager" || role === "propertymanager") return "property_manager";
+  if (role === "sales" || role === "sales_team") return "sales";
   if (profile?.property_manager_property_id || profile?.requested_property_name) return "property_manager";
   if (profile?.contractor_approved !== undefined && profile?.contractor_approved !== null) return "contractor";
   return "";
@@ -180,7 +183,7 @@ function mergeAdminPreviewUserOptions(...optionGroups) {
       return true;
     })
     .sort((a, b) => {
-      const roleOrder = { admin: 0, contractor: 1, property_manager: 2 };
+      const roleOrder = { admin: 0, contractor: 1, property_manager: 2, sales: 3 };
       const roleDelta = (roleOrder[adminPreviewPortalRole(a.roles?.[0])] ?? 9) - (roleOrder[adminPreviewPortalRole(b.roles?.[0])] ?? 9);
       return roleDelta || a.label.localeCompare(b.label);
     });
@@ -376,6 +379,7 @@ function profileMatchesRole(profile, targetRole) {
   const role = normalizePreviewToken(profile?.role);
   if (targetRole === "admin") return isAdminRoleValue(role);
   if (targetRole === "property_manager") return role === "property_manager" || Boolean(profile?.property_manager_property_id || profile?.requested_property_name);
+  if (targetRole === "sales") return role === "sales" || role === "sales_team";
   return role === normalizePreviewToken(targetRole);
 }
 

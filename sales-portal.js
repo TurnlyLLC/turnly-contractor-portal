@@ -1,4 +1,9 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+import {
+  buildPreviewEffectiveUser,
+  resolvePreviewProfile,
+  verifyAdminPreviewSession
+} from "./admin-preview-context.js?v=20260908-sales-preview";
 
 const SALES_TABLES = {
   leads: "sales_leads",
@@ -936,13 +941,26 @@ async function requireSalesAccess() {
     .eq("id", data.user.id)
     .maybeSingle();
 
-  const role = normalize(profile?.role || data.user.user_metadata?.role);
+  let effectiveProfile = profile || null;
+  const previewSession = await verifyAdminPreviewSession(supabase, data.user);
+  if (previewSession?.preview?.portal === "sales") {
+    const previewProfile = await resolvePreviewProfile(supabase, previewSession.preview, "sales");
+    if (previewProfile) {
+      effectiveProfile = {
+        ...previewProfile,
+        role: normalize(previewProfile.role) === "sales_team" ? "sales_team" : "sales"
+      };
+      state.user = buildPreviewEffectiveUser(effectiveProfile, data.user, effectiveProfile.role);
+    }
+  }
+
+  const role = normalize(effectiveProfile?.role || state.user.user_metadata?.role);
   if (!allowedRoles.has(role)) {
     window.location.href = "index.html";
     return false;
   }
 
-  state.profile = profile || { role };
+  state.profile = effectiveProfile || { role };
   return true;
 }
 
