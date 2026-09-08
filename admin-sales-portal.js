@@ -65,6 +65,14 @@ const salesTaskTypes = [
   "Follow up after walkthrough",
   "No-answer follow-up"
 ];
+const focusQuestionDefs = [
+  { id: "decision_maker", label: "Are you talking to the decision maker?" },
+  { id: "cleaning_crew", label: "Do they currently have a cleaning crew in place?" },
+  { id: "wants_quote", label: "Would they like a quote from another cleaning crew?" },
+  { id: "price_acceptable", label: "Is the quoted price of $0.25 / sq ft acceptable?" },
+  { id: "wants_quality_walkthrough", label: "Would they like an in-person walkthrough demonstration of our quality control processes?" }
+];
+const FOCUS_STATE_PREFIX = "TURNLY_FOCUS_STATE:";
 
 const fieldAliases = {
   property_name: ["property_name", "property", "lead", "lead_name", "name", "business_name", "company", "company_name"],
@@ -421,6 +429,22 @@ function recordValue(row) {
   return Number(row?.contract_value || row?.quote_amount || row?.lead_value || 0);
 }
 
+function listText(value, fallback = "None saved") {
+  if (Array.isArray(value)) return value.length ? value.join(", ") : fallback;
+  if (typeof value === "string") {
+    const text = value.trim();
+    if (!text) return fallback;
+    try {
+      const parsed = JSON.parse(text);
+      if (Array.isArray(parsed)) return parsed.length ? parsed.join(", ") : fallback;
+    } catch {
+      return text;
+    }
+    return text;
+  }
+  return fallback;
+}
+
 function walkthroughAt(row) {
   return row?.walkthrough_at || (stageFor(row) === "walkthrough" ? row?.next_step_due_at : null);
 }
@@ -575,6 +599,71 @@ function pricingFitConfirmed(row) {
 function pricingFitText(row) {
   if (pricingFitConfirmed(row)) return row?.budget_range || "Confirmed at $0.25/sq ft";
   return row?.budget_range || "Needs confirmation";
+}
+
+function splitQualificationNotes(value) {
+  const raw = String(value || "");
+  let focusState = {};
+  const visible = raw
+    .split(/\r?\n/)
+    .filter((line) => {
+      if (!line.startsWith(FOCUS_STATE_PREFIX)) return true;
+      try {
+        focusState = JSON.parse(line.slice(FOCUS_STATE_PREFIX.length)) || {};
+      } catch {
+        focusState = {};
+      }
+      return false;
+    })
+    .join("\n")
+    .trim();
+  return { visible, focusState };
+}
+
+function qualificationNotesText(row) {
+  return splitQualificationNotes(row?.qualification_notes || "").visible;
+}
+
+function yesNoFromDecisionMaker(value) {
+  const normalized = normalize(value);
+  if (normalized === "confirmed" || normalized === "yes") return "yes";
+  if (normalized === "not_confirmed" || normalized === "no") return "no";
+  return "";
+}
+
+function yesNoFromText(value) {
+  const normalized = normalize(value);
+  if (["yes", "true", "confirmed"].includes(normalized)) return "yes";
+  if (["no", "false", "not_confirmed"].includes(normalized)) return "no";
+  return "";
+}
+
+function yesNoFromPriceFit(value) {
+  const normalized = normalize(value);
+  if (!normalized) return "";
+  if (normalized.includes("not") || normalized.includes("no") || normalized.includes("declined")) return "no";
+  if (normalized.includes("confirmed") || normalized.includes("acceptable") || normalized.includes("accepted")) return "yes";
+  return "";
+}
+
+function focusStateFor(row) {
+  const parsed = splitQualificationNotes(row?.qualification_notes || "").focusState || {};
+  const storedQuestions = parsed.questions || {};
+  return {
+    questions: {
+      decision_maker: storedQuestions.decision_maker || yesNoFromDecisionMaker(row?.decision_maker_status),
+      cleaning_crew: storedQuestions.cleaning_crew || yesNoFromText(row?.current_vendor),
+      wants_quote: storedQuestions.wants_quote || "",
+      price_acceptable: storedQuestions.price_acceptable || (pricingFitConfirmed(row) ? "yes" : yesNoFromPriceFit(row?.budget_range)),
+      wants_quality_walkthrough: storedQuestions.wants_quality_walkthrough || yesNoFromText(row?.walkthrough_type?.includes("Quality") ? "yes" : "")
+    }
+  };
+}
+
+function yesNoLabel(value) {
+  if (value === "yes") return "Yes";
+  if (value === "no") return "No";
+  return "Not answered";
 }
 
 function taskDueMeta(row) {
@@ -1249,7 +1338,7 @@ function renderLeadTable(rows) {
         </thead>
         <tbody>
           ${rows.map((row) => `
-            <tr class="${row.id === state.selectedId ? "active" : ""}">
+            <tr class="${row.id === state.selectedId ? "active" : ""}" data-admin-sales-select-record="${esc(row.id)}">
               <td><input type="checkbox" data-admin-sales-select-lead="${esc(row.id)}" ${state.selectedLeadIds.has(row.id) ? "checked" : ""} /></td>
               <td><strong>${esc(recordTitle(row))}</strong><small>${esc(recordContact(row))}</small></td>
               <td>${esc(recordAddress(row) || "No address saved")}</td>
@@ -1263,7 +1352,6 @@ function renderLeadTable(rows) {
               <td>${esc(ownerName(row))}</td>
               <td>
                 <div class="admin-sales-row-actions">
-                  <button class="admin-sales-secondary" type="button" data-admin-sales-select-record="${esc(row.id)}">${icon("list")}Details</button>
                   <button class="admin-sales-primary" type="button" data-admin-sales-open="lead" data-id="${esc(row.id)}">${icon("file")}Edit</button>
                 </div>
               </td>
@@ -1277,6 +1365,8 @@ function renderLeadTable(rows) {
 
 function renderLeadDetail(row) {
   if (!row) return detailEmpty("Select a lead", "Lead details will appear here.");
+  const questions = focusStateFor(row).questions;
+  const visibleQualificationNotes = qualificationNotesText(row);
   return `
     <aside class="admin-sales-detail">
       <section class="admin-sales-detail-hero">
@@ -1285,14 +1375,58 @@ function renderLeadDetail(row) {
         <p>${esc(recordAddress(row) || "No address saved")}</p>
       </section>
       <div class="admin-sales-detail-grid">
+        <div class="admin-sales-detail-stat"><span>Property Name</span><strong>${esc(recordTitle(row))}</strong></div>
+        <div class="admin-sales-detail-stat"><span>Company</span><strong>${esc(recordCompany(row))}</strong></div>
+        <div class="admin-sales-detail-stat"><span>Address</span><strong>${esc(recordAddress(row) || "No address saved")}</strong></div>
+        <div class="admin-sales-detail-stat"><span>City / State</span><strong>${esc([row.sales_city, row.sales_state].filter(Boolean).join(", ") || "Not set")}</strong></div>
+        <div class="admin-sales-detail-stat"><span>County</span><strong>${esc(row.sales_county || "Not set")}</strong></div>
+        <div class="admin-sales-detail-stat"><span>Website</span><strong>${esc(row.sales_website || "Not set")}</strong></div>
+        <div class="admin-sales-detail-stat"><span>Property Class</span><strong>${esc(row.property_class || "Not set")}</strong></div>
         <div class="admin-sales-detail-stat"><span>Contact</span><strong>${esc(recordContact(row))}</strong></div>
         <div class="admin-sales-detail-stat"><span>Phone</span><strong>${esc(recordPhone(row))}</strong></div>
+        <div class="admin-sales-detail-stat"><span>Email</span><strong>${esc(row.contact_email || "No email saved")}</strong></div>
+        <div class="admin-sales-detail-stat"><span>Stage</span><strong>${esc(stageLabel(stageFor(row)))}</strong></div>
         <div class="admin-sales-detail-stat"><span>Owner</span><strong>${esc(ownerName(row))}</strong></div>
+        <div class="admin-sales-detail-stat"><span>Units</span><strong>${esc(recordUnits(row) ? number(recordUnits(row)) : "Not set")}</strong></div>
+        <div class="admin-sales-detail-stat"><span>Avg. Turns / Month</span><strong>${esc(row.average_turns_per_month || "Not set")}</strong></div>
+        <div class="admin-sales-detail-stat"><span>Opportunity Score</span><strong>${esc(row.opportunity_score ? `${row.opportunity_score}/100` : "Not scored")}</strong></div>
+        <div class="admin-sales-detail-stat"><span>Current Vendor</span><strong>${esc(row.current_vendor || "Not set")}</strong></div>
+        <div class="admin-sales-detail-stat"><span>Price Fit</span><strong>${esc(pricingFitText(row))}</strong></div>
+        <div class="admin-sales-detail-stat"><span>Desired Start</span><strong>${esc(formatDate(row.desired_start_date))}</strong></div>
+        <div class="admin-sales-detail-stat"><span>Walkthrough</span><strong>${esc(formatDateTime(walkthroughAt(row)))}</strong></div>
+        <div class="admin-sales-detail-stat"><span>Source</span><strong>${esc(row.lead_source || "Not set")}</strong></div>
         <div class="admin-sales-detail-stat"><span>Next Step</span><strong>${esc(row.next_step || "No next step")}</strong></div>
+      </div>
+      <div class="admin-sales-question-block">
+        <span>Sales Qualification</span>
+        <div>
+          ${focusQuestionDefs.map((question) => `
+            <article class="admin-sales-question-row ${esc(questions[question.id] || "unanswered")}">
+              <p>${esc(question.label)}</p>
+              <strong>${esc(yesNoLabel(questions[question.id]))}</strong>
+            </article>
+          `).join("")}
+        </div>
       </div>
       <div class="admin-sales-info-block">
         <span>Lead Notes</span>
         <strong>${esc(row.lead_notes || "No lead notes saved.")}</strong>
+      </div>
+      <div class="admin-sales-info-block">
+        <span>Qualification Notes</span>
+        <strong>${esc(visibleQualificationNotes || "No qualification notes saved.")}</strong>
+      </div>
+      <div class="admin-sales-info-block">
+        <span>Service Needs</span>
+        <strong>${esc(listText(row.service_needs))}</strong>
+      </div>
+      <div class="admin-sales-info-block">
+        <span>Pain Points</span>
+        <strong>${esc(listText(row.sales_pain_points))}</strong>
+      </div>
+      <div class="admin-sales-info-block">
+        <span>Default Scope</span>
+        <strong>${esc(row.default_scope || row.default_service_type || "No default scope saved.")}</strong>
       </div>
       <div class="admin-sales-action-stack">
         <button class="admin-sales-primary" type="button" data-admin-sales-open="lead" data-id="${esc(row.id)}">${icon("file")}Edit Lead</button>
@@ -1345,9 +1479,9 @@ function renderAvailabilityPanel() {
         </div>
       </div>
       <form class="admin-sales-availability-form" data-admin-sales-availability-form>
-        ${field("availability_date", "Date", tomorrow, "date", true)}
-        ${field("availability_start_time", "Start", "10:00", "time", true)}
-        ${field("availability_end_time", "End", "11:00", "time", true)}
+        ${pickerField("availability_date", "Date", tomorrow, "date", true)}
+        ${pickerField("availability_start_time", "Start", "10:00", "time", true, "", 'step="3600"')}
+        ${pickerField("availability_end_time", "End", "11:00", "time", true, "", 'step="3600"')}
         ${field("availability_label", "Window Label", "Quality walkthrough", "text")}
         <button class="admin-sales-primary" type="submit">${icon("plus")}Add Window</button>
       </form>
@@ -1494,6 +1628,7 @@ function renderDayCalendar(rows) {
           <div class="admin-sales-row-actions">
             <button class="admin-sales-secondary" type="button" data-admin-sales-select-record="${esc(row.id)}">${icon("list")}Details</button>
             <button class="admin-sales-primary" type="button" data-admin-sales-open="walkthrough" data-id="${esc(row.id)}">${icon("calendar")}Edit</button>
+            ${row.walkthrough_record_id ? `<button class="admin-sales-danger" type="button" data-admin-sales-delete-walkthrough="${esc(row.id)}">${icon("x")}Delete</button>` : ""}
           </div>
         </article>
       `).join("")}
@@ -1524,6 +1659,7 @@ function renderWalkthroughDetail(row) {
         <button class="admin-sales-primary" type="button" data-admin-sales-open="walkthrough" data-id="${esc(row.id)}">${icon("calendar")}Edit Walkthrough</button>
         <button class="admin-sales-secondary" type="button" data-admin-sales-open="quote" data-id="${esc(row.id)}">${icon("file")}Create Quote</button>
         <button class="admin-sales-secondary" type="button" data-admin-sales-update-stage="${esc(row.id)}" data-stage="quote_sent">${icon("dollar")}Move to Pricing Confirmed</button>
+        ${row.walkthrough_record_id ? `<button class="admin-sales-danger" type="button" data-admin-sales-delete-walkthrough="${esc(row.id)}">${icon("x")}Delete Walkthrough</button>` : ""}
       </div>
     </aside>
   `;
@@ -1769,6 +1905,15 @@ function field(name, label, value = "", type = "text", required = false, classNa
   `;
 }
 
+function pickerField(name, label, value = "", type = "date", required = false, className = "", attrs = "") {
+  return `
+    <label class="admin-sales-field admin-sales-picker-field ${esc(className)}" data-admin-sales-picker-wrap>
+      <span>${esc(label)}</span>
+      <input name="${esc(name)}" type="${esc(type)}" value="${esc(value)}" ${required ? "required" : ""} ${attrs} data-admin-sales-picker />
+    </label>
+  `;
+}
+
 function textField(name, label, value = "", className = "wide") {
   return `
     <label class="admin-sales-field ${esc(className)}">
@@ -1831,9 +1976,9 @@ function renderWalkthroughModal(row) {
       <div class="admin-sales-modal-body">
         <div class="admin-sales-form-grid">
           ${selectField("lead_id", "Lead", leadOptions(leadId), leadId, true, "wide")}
-          ${field("walkthrough_at_date", "Date", toDateInput(walkthroughAt(row)), "date", true)}
-          ${field("walkthrough_at_time", "Start Time", toTimeInput(walkthroughAt(row)) || "10:00", "time")}
-          ${field("walkthrough_end_time", toDateInput(row?.walkthrough_end_at) && toTimeInput(row?.walkthrough_end_at) ? "End Time" : "End Time", toTimeInput(row?.walkthrough_end_at) || "11:00", "time")}
+          ${pickerField("walkthrough_at_date", "Date", toDateInput(walkthroughAt(row)), "date", true)}
+          ${pickerField("walkthrough_at_time", "Start Time", toTimeInput(walkthroughAt(row)) || "10:00", "time", false, "", 'step="3600"')}
+          ${pickerField("walkthrough_end_time", "End Time", toTimeInput(row?.walkthrough_end_at) || "11:00", "time", false, "", 'step="3600"')}
           ${selectField("walkthrough_status", "Status", walkthroughStatuses.map((status) => [status, titleCase(status)]), row?.walkthrough_status || "scheduled")}
           ${selectField("walkthrough_assigned_to_id", "Assigned To", repOptions(row?.walkthrough_assigned_to_id || "").map(([value, label]) => [value, label]), row?.walkthrough_assigned_to_id || "")}
           ${field("walkthrough_location", "Location", row?.walkthrough_location || row?.address || "", "text", false, "wide")}
@@ -2314,6 +2459,36 @@ async function deleteAvailability(id) {
   await loadData(false);
 }
 
+async function deleteWalkthrough(id) {
+  const row = rowById(id);
+  if (!row?.walkthrough_record_id) return;
+  const confirmed = window.confirm(`Delete the walkthrough for ${recordTitle(row)}? The lead will stay in the sales pipeline.`);
+  if (!confirmed) return;
+  state.message = "Deleting walkthrough...";
+  state.messageTone = "";
+  render();
+  try {
+    const { error } = await supabase.from(TABLES.walkthroughs).delete().eq("id", row.walkthrough_record_id);
+    if (error) throw error;
+    const fallbackStage = pricingFitConfirmed(row) ? "quote_sent" : "contacted";
+    const { error: leadError } = await supabase.from(TABLES.leads)
+      .update({
+        pipeline_stage: stageFor(row) === "walkthrough" ? fallbackStage : stageFor(row),
+        last_activity_at: new Date().toISOString()
+      })
+      .eq("id", id);
+    if (leadError) throw leadError;
+    state.selectedId = id;
+    state.message = "Walkthrough deleted.";
+    state.messageTone = "success";
+    await loadData(false);
+  } catch (error) {
+    state.message = `Unable to delete walkthrough: ${error.message}`;
+    state.messageTone = "error";
+    render();
+  }
+}
+
 function normalizeStage(value) {
   const normalized = normalize(value);
   return stageAliases[normalized] || (stageDefs.some(([stage]) => stage === normalized) ? normalized : "new_leads");
@@ -2514,6 +2689,21 @@ function moveCalendar(direction) {
 
 async function handleClick(event) {
   const target = event.target;
+  const pickerWrap = target.closest("[data-admin-sales-picker-wrap]");
+  if (pickerWrap) {
+    const input = pickerWrap.querySelector("[data-admin-sales-picker]");
+    if (input) {
+      input.focus();
+      if (typeof input.showPicker === "function") {
+        try {
+          input.showPicker();
+        } catch {
+          // Some browsers only allow the native picker on direct input activation.
+        }
+      }
+    }
+  }
+
   const close = target.closest("[data-admin-sales-close]");
   if (close) {
     state.modal = null;
@@ -2566,7 +2756,8 @@ async function handleClick(event) {
   }
 
   const record = target.closest("[data-admin-sales-select-record]");
-  if (record) {
+  const nestedControl = target.closest("button, a, input, select, textarea, label");
+  if (record && (!nestedControl || nestedControl === record)) {
     state.selectedId = record.dataset.adminSalesSelectRecord || "";
     render();
     return;
@@ -2652,6 +2843,12 @@ async function handleClick(event) {
   const deleteAvailabilityButton = target.closest("[data-admin-sales-delete-availability]");
   if (deleteAvailabilityButton) {
     await deleteAvailability(deleteAvailabilityButton.dataset.adminSalesDeleteAvailability);
+    return;
+  }
+
+  const deleteWalkthroughButton = target.closest("[data-admin-sales-delete-walkthrough]");
+  if (deleteWalkthroughButton) {
+    await deleteWalkthrough(deleteWalkthroughButton.dataset.adminSalesDeleteWalkthrough);
     return;
   }
 

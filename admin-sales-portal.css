@@ -379,6 +379,10 @@
   background: rgba(22, 217, 137, 0.08);
 }
 
+.admin-sales-table tbody tr[data-admin-sales-select-record] {
+  cursor: pointer;
+}
+
 .admin-sales-table strong {
   display: block;
   color: #fff;
@@ -456,6 +460,9 @@
   top: 86px;
   display: grid;
   gap: 14px;
+  max-height: calc(100vh - 104px);
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .admin-sales-detail-hero {
@@ -510,6 +517,71 @@
 .admin-sales-action-stack {
   display: grid;
   gap: 10px;
+}
+
+.admin-sales-question-block {
+  border: 1px solid var(--admin-sales-line);
+  border-radius: var(--admin-sales-radius);
+  background: rgba(10, 24, 38, 0.78);
+  padding: 12px;
+}
+
+.admin-sales-question-block > span {
+  display: block;
+  margin-bottom: 10px;
+  color: #91a6bd;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.admin-sales-question-block > div {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-sales-question-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid var(--admin-sales-line);
+  border-radius: var(--admin-sales-radius);
+  background: rgba(5, 16, 28, 0.52);
+  padding: 10px;
+}
+
+.admin-sales-question-row p {
+  margin: 0;
+  color: var(--admin-sales-muted);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.admin-sales-question-row strong {
+  min-width: 94px;
+  border-radius: 999px;
+  padding: 7px 9px;
+  background: rgba(148, 163, 184, 0.12);
+  color: #c4cfdd;
+  font-size: 12px;
+  text-align: center;
+}
+
+.admin-sales-question-row.yes strong {
+  background: rgba(22, 217, 137, 0.16);
+  color: #7df0b7;
+}
+
+.admin-sales-question-row.no strong {
+  background: rgba(255, 92, 106, 0.14);
+  color: #ff9aa4;
+}
+
+.admin-sales-picker-field,
+.admin-sales-picker-field input {
+  cursor: pointer;
 }
 
 .admin-sales-empty {
@@ -1122,11 +1194,33 @@ body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-bulk-toolbar,
 body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-detail-hero,
 body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-detail-stat,
 body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-info-block,
+body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-question-block,
+body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-question-row,
 body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-calendar-nav button,
 body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-segmented button,
 body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-availability-slot {
   background: #ffffff;
   color: #061321;
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-question-block > span,
+body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-question-row p {
+  color: #52677f;
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-question-row strong {
+  background: #eef4fa;
+  color: #36506c;
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-question-row.yes strong {
+  background: rgba(0, 214, 163, 0.14);
+  color: #047857;
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-question-row.no strong {
+  background: rgba(255, 92, 106, 0.12);
+  color: #b91c1c;
 }
 
 body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-table tbody tr:hover,
@@ -1186,6 +1280,8 @@ body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-chart-point {
 
   .admin-sales-detail {
     position: static;
+    max-height: none;
+    overflow: visible;
   }
 
   .admin-sales-filter-bar {
