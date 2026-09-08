@@ -10,6 +10,7 @@ const pageRole = document.body.dataset.authRole || "contractor";
 const pageHome = document.body.dataset.authHome || "contractor.html";
 const pageLabel = document.body.dataset.authLabel || "Portal";
 const isPropertyManagerPortal = pageRole === "property_manager";
+const isUnifiedPortal = pageRole === "portal";
 const loginForm = document.getElementById("loginForm");
 const signupForm = document.getElementById("signupForm");
 const resetPasswordForm = document.getElementById("resetPasswordForm");
@@ -29,6 +30,7 @@ const portalByRole = {
 function portalForRole(role, fallback = pageHome) {
   const normalizedRole = normalizeRole(role);
   if (normalizedRole === "contractor") return contractorHomeForBrowser();
+  if (normalizedRole === "portal") return fallback && fallback !== "index.html" ? fallback : contractorHomeForBrowser();
   return portalByRole[normalizedRole] || fallback || contractorHomeForBrowser();
 }
 
@@ -411,13 +413,14 @@ showMode("login");
 
 async function routeAuthenticatedUser(user, fallbackRole = pageRole) {
   let profile = await getProfile(user.id);
-  const propertyManagerLogin = isPropertyManagerPortal && hasPropertyManagerSignal(user, profile);
+  const propertyManagerLogin = hasPropertyManagerSignal(user, profile);
   if (propertyManagerLogin) {
     profile = await repairPropertyManagerProfile(user, profile);
   }
+  const safeFallbackRole = isUnifiedPortal ? "" : fallbackRole;
   const role = propertyManagerLogin
     ? "property_manager"
-    : normalizeRole(profile?.role || user.user_metadata?.role || fallbackRole);
+    : normalizeRole(profile?.role || user.user_metadata?.role || safeFallbackRole);
 
   if (requiresPasswordChange(user)) {
     showMessage("Choose a new password to continue...");

@@ -155,7 +155,7 @@ async function requireAdmin() {
   const user = userData.user;
 
   if (!user) {
-    window.location.href = 'login.html';
+    window.location.href = 'index.html';
     return null;
   }
 
@@ -166,7 +166,7 @@ async function requireAdmin() {
     .maybeSingle();
 
   if (error || data?.role !== 'admin') {
-    window.location.href = data?.role === 'contractor' ? 'contractor.html' : 'login.html';
+    window.location.href = data?.role === 'contractor' ? 'contractor.html' : 'index.html';
     return null;
   }
 
@@ -650,7 +650,7 @@ async function init() {
   });
   els.logout?.addEventListener('click', async () => {
     await supabase.auth.signOut();
-    window.location.href = 'login.html';
+    window.location.href = 'index.html';
   });
   wireDragAndDrop();
 }

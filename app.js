@@ -134,7 +134,7 @@ async function requireLogin() {
   const user = await getCurrentUser();
 
   if (!user) {
-    window.location.href = "login.html";
+    window.location.href = "index.html";
     return null;
   }
 
@@ -842,7 +842,7 @@ if (contractorDashboard || contractorAssignments || myAssignments) {
     const profile = await getProfile(user.id);
 
     if (!profile) {
-      window.location.href = "login.html";
+      window.location.href = "index.html";
     } else if (profile.role === "admin") {
       window.location.href = "admin.html";
     } else {

@@ -1,8 +1,16 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 import {
+  adminPreviewPortalOptions,
+  adminPreviewPropertyOptions,
+  adminPreviewSummary,
+  adminPreviewTargetUrl,
+  adminPreviewUsersForPortal,
   buildPreviewEffectiveUser,
+  clearAdminPreviewContext,
+  readAdminPreviewContext,
   resolvePreviewProfile,
-  verifyAdminPreviewSession
+  verifyAdminPreviewSession,
+  writeAdminPreviewContext
 } from "./admin-preview-context.js?v=20260908-sales-preview";
 
 const SALES_TABLES = {
@@ -352,7 +360,8 @@ const state = {
   message: "",
   messageTone: "",
   profileOpen: false,
-  loading: true
+  loading: true,
+  adminPreview: null
 };
 let focusSavePromise = null;
 
@@ -930,7 +939,7 @@ async function requireSalesAccess() {
 
   const { data, error } = await supabase.auth.getUser();
   if (error || !data?.user) {
-    window.location.href = "sales-login.html";
+    window.location.href = "index.html";
     return false;
   }
 
@@ -943,6 +952,7 @@ async function requireSalesAccess() {
 
   let effectiveProfile = profile || null;
   const previewSession = await verifyAdminPreviewSession(supabase, data.user);
+  state.adminPreview = previewSession?.preview?.portal === "sales" ? previewSession.preview : null;
   if (previewSession?.preview?.portal === "sales") {
     const previewProfile = await resolvePreviewProfile(supabase, previewSession.preview, "sales");
     if (previewProfile) {
@@ -1084,6 +1094,57 @@ function renderSidebar() {
   `;
 }
 
+function renderSalesPreviewSelect(label, field, options, selectedValue) {
+  return `
+    <label class="sales-preview-field">
+      <span>${esc(label)}</span>
+      <select data-sales-preview-field="${esc(field)}">
+        ${options.map((option) => `<option value="${esc(option.value)}" ${option.value === selectedValue ? "selected" : ""}>${esc(option.label)}</option>`).join("")}
+      </select>
+    </label>
+  `;
+}
+
+function renderSalesPreviewSwitcher() {
+  if (!state.adminPreview) return "";
+  const preview = readAdminPreviewContext();
+  const userOptions = adminPreviewUsersForPortal(preview.portal);
+  return `
+    <section class="sales-preview-switcher" aria-label="Admin portal preview selector">
+      <div class="sales-preview-summary">
+        <strong>Portal Preview</strong>
+        <small>${esc(adminPreviewSummary(preview))}</small>
+      </div>
+      <div class="sales-preview-controls">
+        ${renderSalesPreviewSelect("View", "portal", adminPreviewPortalOptions, preview.portal)}
+        ${renderSalesPreviewSelect("Property / Contract", "property", adminPreviewPropertyOptions, preview.property)}
+        ${renderSalesPreviewSelect("User", "user", userOptions, preview.user)}
+      </div>
+      <div class="sales-preview-actions">
+        <button class="sales-primary-button" type="button" data-sales-preview-open>${icon("chevron")}Open View</button>
+        <button class="sales-secondary-button" type="button" data-sales-preview-clear>Back To Admin</button>
+      </div>
+    </section>
+  `;
+}
+
+function updateSalesPreviewFromControls() {
+  const current = readAdminPreviewContext();
+  const previousPortal = current.portal;
+  document.querySelectorAll("[data-sales-preview-field]").forEach((field) => {
+    current[field.dataset.salesPreviewField] = field.value;
+  });
+  if (current.portal !== previousPortal) {
+    const firstUser = adminPreviewUsersForPortal(current.portal)[0];
+    current.user = firstUser?.value || "";
+    current.userLabel = firstUser?.label || "";
+  } else {
+    const selectedUser = adminPreviewUsersForPortal(current.portal).find((option) => option.value === current.user);
+    if (selectedUser) current.userLabel = selectedUser.label;
+  }
+  return writeAdminPreviewContext(current);
+}
+
 function renderTopbar() {
   const page = pageTitle();
   return `
@@ -1093,6 +1154,7 @@ function renderTopbar() {
         <p>${esc(page.subtitle)}</p>
       </div>
       <div class="sales-top-actions">
+        ${renderSalesPreviewSwitcher()}
         <label class="sales-search" aria-label="Search sales records">
           ${icon("search")}
           <input id="salesGlobalSearch" type="search" value="${esc(state.search)}" placeholder="Search leads, clients, properties..." />
@@ -3638,8 +3700,43 @@ function changeCalendar(direction) {
 }
 
 function bindEvents() {
+  document.addEventListener("pointerdown", (event) => {
+    const option = event.target?.closest?.(".sales-yesno-group label");
+    const radio = option?.querySelector?.('input[type="radio"]');
+    if (radio) radio.dataset.wasChecked = radio.checked ? "true" : "false";
+  });
+
   document.addEventListener("click", async (event) => {
     const target = event.target;
+    const previewField = target.closest?.("[data-sales-preview-field]");
+    if (previewField) return;
+
+    const previewOpen = target.closest?.("[data-sales-preview-open]");
+    if (previewOpen) {
+      const context = updateSalesPreviewFromControls();
+      window.location.href = adminPreviewTargetUrl(context);
+      return;
+    }
+
+    const previewClear = target.closest?.("[data-sales-preview-clear]");
+    if (previewClear) {
+      clearAdminPreviewContext();
+      window.location.href = "admin.html";
+      return;
+    }
+
+    const yesNoOption = target.closest?.(".sales-yesno-group label");
+    const yesNoRadio = yesNoOption?.querySelector?.('input[type="radio"]');
+    if (yesNoRadio?.dataset.wasChecked === "true") {
+      event.preventDefault();
+      yesNoRadio.checked = false;
+      yesNoRadio.dataset.wasChecked = "false";
+      const form = yesNoRadio.closest("[data-focus-lead-form]");
+      syncFocusConditionalUi(form, yesNoRadio);
+      await autosaveFocusLead();
+      return;
+    }
+
     if (target.closest("[data-profile-toggle]")) {
       state.profileOpen = !state.profileOpen;
       render();
@@ -3845,6 +3942,12 @@ function bindEvents() {
   });
 
   document.addEventListener("change", async (event) => {
+    if (event.target?.matches("[data-sales-preview-field]")) {
+      updateSalesPreviewFromControls();
+      render();
+      return;
+    }
+
     if (event.target?.matches('[data-focus-lead-form] input[type="checkbox"], [data-focus-lead-form] input[type="radio"], [data-focus-lead-form] select')) {
       syncFocusConditionalUi(event.target.closest("[data-focus-lead-form]"), event.target);
       await autosaveFocusLead();

@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Turnly" />
-  <title>Turnly Portal</title>
+  <title>Turnly Portal Login</title>
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="icon" href="/favicon.ico?v=20260624t" sizes="any" />
   <link rel="shortcut icon" href="/favicon.ico?v=20260624t" />
@@ -16,50 +16,62 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png?v=20260624t" />
   <link rel="apple-touch-icon" href="/icons/turnly-icon-192.png" />
   <link rel="stylesheet" href="style.css" />
-  <link rel="stylesheet" href="portal-public.css?v=20260803-logo-wordmark" />
-  <style>
-    .portal-entry-main {
-      min-height: 100vh;
-      align-content: center;
-      padding: 40px 0;
-    }
-
-    .portal-choice-grid {
-      width: min(100%, 980px);
-      justify-self: center;
-    }
-  </style>
+  <link rel="stylesheet" href="portal-public.css?v=20260908-unified-login" />
+  <link rel="stylesheet" href="portal-auth-overrides.css?v=20260722d" />
 </head>
-<body class="public-portal-body">
-  <main class="public-shell portal-entry-main">
-    <section class="portal-choice-grid" aria-label="Portal choices">
-      <a class="portal-choice-card contractor" href="contractor-login.html">
-        <span class="choice-icon">C</span>
-        <small>Contractor Portal</small>
-        <strong>Access assignments, claimed jobs, and field work.</strong>
-        <em>Continue as Contractor</em>
+<body class="public-portal-body" data-auth-role="portal" data-auth-home="index.html" data-auth-label="Turnly">
+  <div class="public-shell">
+    <header class="public-nav">
+      <a class="public-brand" href="index.html" aria-label="Turnly home">
+        <span class="public-brand-mark">T</span>
+        <span>
+          <strong>TURNLY</strong>
+          <small>Portal Access</small>
+        </span>
       </a>
 
-      <a class="portal-choice-card property-manager" href="property-manager-login.html">
-        <span class="choice-icon">P</span>
-        <small>Property Manager Portal</small>
-        <strong>View properties, service history, reports, and feedback.</strong>
-        <em>Continue as Property Manager</em>
-      </a>
+      <nav class="public-nav-actions" aria-label="Turnly legal links">
+        <a href="/privacy-policy.html">Privacy Policy</a>
+        <a href="/terms-and-conditions.html">Terms</a>
+      </nav>
+    </header>
 
-      <a class="portal-choice-card sales" href="sales-login.html">
-        <span class="choice-icon">S</span>
-        <small>Sales Portal</small>
-        <strong>Import prospects, schedule walkthroughs, and manage quotes.</strong>
-        <em>Continue as Sales Team</em>
-      </a>
-    </section>
-    <footer class="portal-legal-footer" aria-label="Turnly legal links">
-      <a href="/privacy-policy.html">Privacy Policy</a>
-      <a href="/terms-and-conditions.html">Terms and Conditions</a>
-    </footer>
-  </main>
-  <script src="auth-recovery-router.js?v=20260722d"></script>
+    <main class="role-auth-layout unified-auth-layout">
+      <section class="role-auth-intro">
+        <p class="public-kicker">Welcome To Turnly</p>
+        <h1>One login for every Turnly workspace.</h1>
+        <p>
+          Sign in once and Turnly will send you to the right portal for your account:
+          admin, contractor, property manager, or sales.
+        </p>
+      </section>
+
+      <section class="role-auth-card" aria-label="Turnly authentication">
+        <form id="loginForm" class="public-form auth-panel active" data-auth-panel="login">
+          <div class="public-form-grid">
+            <label class="span-two">
+              Email
+              <input type="email" id="loginEmail" autocomplete="email" required />
+            </label>
+            <label class="span-two">
+              Password
+              <input type="password" id="loginPassword" autocomplete="current-password" required />
+            </label>
+          </div>
+          <button class="public-btn primary full" type="submit">Log In</button>
+          <div class="auth-helper-row">
+            <a class="auth-text-action" href="reset-password.html">Forgot your password?</a>
+          </div>
+        </form>
+
+        <p id="authMessage" class="signup-message" aria-live="polite"></p>
+      </section>
+    </main>
+  </div>
+
+  <script src="env.js"></script>
+  <script src="auth-recovery-router.js?v=20260722e"></script>
   <script type="module" src="pwa-register.js?v=20260708a"></script>
+  <script type="module" src="portal-auth.js?v=20260908-unified-login-role-route"></script>
 </body>
 </html>

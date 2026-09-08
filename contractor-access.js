@@ -183,7 +183,7 @@ async function renderPasswordChangeRequired(user) {
 }
 
 async function loadContractorPortal() {
-  await import("./contractor-portal.js?v=20260804-contractor-access-scope");
+  await import("./contractor-portal.js?v=20260908-unified-login");
   await import("./contractor-job-flow-mobile.js?v=20260807-contractor-feedback");
 }
 
@@ -226,7 +226,7 @@ if (!supabase) {
   const user = userData?.user || null;
 
   if (!user) {
-    window.location.href = "contractor-login.html";
+    window.location.href = "index.html";
   } else {
     const profile = await getProfile(user.id);
     const metadataRole = normalizeToken(user.user_metadata?.role);
@@ -235,7 +235,7 @@ if (!supabase) {
       : normalizeRole(profile?.role || user.user_metadata?.role);
 
     if (!profile) {
-      window.location.href = "contractor-login.html";
+      window.location.href = "index.html";
     } else if (role === "property_manager") {
       window.location.href = "property-manager.html";
     } else if (role !== "contractor") {

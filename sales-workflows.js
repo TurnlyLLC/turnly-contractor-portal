@@ -511,7 +511,7 @@ async function requireAdmin() {
   currentUser = userData?.user || null;
 
   if (!currentUser) {
-    window.location.href = "login.html";
+    window.location.href = "index.html";
     return;
   }
 
@@ -537,7 +537,7 @@ function bindEvents() {
   });
   $("logoutBtn")?.addEventListener("click", async () => {
     if (supabase) await supabase.auth.signOut();
-    window.location.href = "login.html";
+    window.location.href = "index.html";
   });
 
   document.addEventListener("click", async (event) => {

@@ -2233,7 +2233,7 @@ async function loadData() {
   const authUser = userData?.user || null;
   state.user = authUser;
   if (!authUser) {
-    window.location.href = "contractor-login.html";
+    window.location.href = "index.html";
     return;
   }
 

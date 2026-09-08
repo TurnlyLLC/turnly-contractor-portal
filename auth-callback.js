@@ -59,9 +59,7 @@ function normalizeRole(role) {
 }
 
 function loginFallback() {
-  return preferredPortal === "property_manager"
-    ? "property-manager-login.html"
-    : "contractor-login.html";
+  return "index.html";
 }
 
 function portalForRole(role) {

@@ -1357,7 +1357,7 @@ async function requireManagerAccess() {
   const user = userData?.user || null;
 
   if (!user) {
-    window.location.href = "property-manager-login.html";
+    window.location.href = "index.html";
     return;
   }
 
@@ -1384,7 +1384,7 @@ async function requireManagerAccess() {
     if (normalizeRole(user.user_metadata?.role) === "property_manager") {
       profile = await repairPropertyManagerProfile(user, {});
     } else {
-      window.location.href = "property-manager-login.html";
+      window.location.href = "index.html";
       return;
     }
   } else if (hasPropertyManagerSignal(user, profile) && normalizeRole(profile.role) !== "property_manager") {
