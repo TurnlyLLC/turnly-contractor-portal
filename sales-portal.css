@@ -68,8 +68,7 @@ body.sales-portal-body a {
 }
 
 .sales-sidebar {
-  position: sticky;
-  top: 0;
+  position: relative;
   height: 100vh;
   display: grid;
   grid-template-rows: auto auto 1fr auto;
