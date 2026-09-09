@@ -652,16 +652,11 @@ body.modal-open {
   body.admin-command-body .command-nav {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 8px;
-    overflow-x: auto;
+    overflow-x: visible;
     margin: 0 -2px;
     padding: 0 2px 6px;
-    scrollbar-width: none;
-  }
-
-  body.admin-command-body .command-nav::-webkit-scrollbar,
-  body.sales-portal-body .sales-nav::-webkit-scrollbar {
-    display: none;
   }
 
   body.admin-command-body .command-nav p {
@@ -866,10 +861,10 @@ body.modal-open {
 
   body.sales-portal-body .sales-nav {
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
-    overflow-x: auto;
+    overflow-x: visible;
     padding: 0 0 6px;
-    scrollbar-width: none;
   }
 
   body.sales-portal-body .sales-nav p,
