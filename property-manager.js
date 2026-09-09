@@ -98,6 +98,11 @@ const pmIconPaths = {
   bell: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
   "chevron-down": '<path d="m6 9 6 6 6-6"/>',
   "chevron-right": '<path d="m9 18 6-6-6-6"/>',
+  building: '<path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/><path d="M9 9h1"/><path d="M9 13h1"/><path d="M9 17h1"/>',
+  calendar: '<path d="M8 2v4"/><path d="M16 2v4"/><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  image: '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10.5" r="1.5"/><path d="m21 15-5-5L5 19"/>',
   home: '<path d="m3 11 9-8 9 8"/><path d="M5 10v11h14V10"/><path d="M9 21v-7h6v7"/>',
   plus: '<path d="M12 5v14"/><path d="M5 12h14"/>',
   search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
@@ -2053,14 +2058,21 @@ function renderCurrentView() {
 }
 
 function statCard(label, value, caption, tone = "green", view = "") {
+  const key = normalizeToken(label);
+  const icon = key.includes("unit") ? "building"
+    : key.includes("progress") ? "clock"
+    : key.includes("upcoming") ? "calendar"
+    : key.includes("completed") || key.includes("ready") ? "check"
+    : "calendar";
   return `
     <article class="panel-card pm-stat-card ${esc(tone)}">
+      <span class="pm-stat-icon" aria-hidden="true">${pmIcon(icon)}</span>
       <div>
         <small>${esc(label)}</small>
         <strong>${esc(value)}</strong>
         <em>${esc(caption)}</em>
       </div>
-      ${view ? `<button class="pm-link-button" type="button" data-pm-view-button="${esc(view)}">View</button>` : ""}
+      ${view ? `<button class="pm-link-button" type="button" data-pm-view-button="${esc(view)}">View ${pmIcon("chevron-right")}</button>` : ""}
     </article>
   `;
 }
@@ -2069,7 +2081,8 @@ function renderNewTurnRequestButton(label = "+ New Turn Request") {
   if (!hasLinkedProperty()) {
     return `<button class="secondary-command-btn pm-compact-btn" type="button" disabled>Property Link Pending</button>`;
   }
-  return `<button class="new-btn pm-compact-btn" type="button" data-manager-request-toggle>${esc(label)}</button>`;
+  const showArrow = !label.trim().startsWith("+");
+  return `<button class="new-btn pm-compact-btn" type="button" data-manager-request-toggle><span>${esc(label)}</span>${showArrow ? pmIcon("chevron-right", "pm-button-arrow") : ""}</button>`;
 }
 
 function overviewWeekRows(limit = 7) {
@@ -2107,6 +2120,7 @@ function renderOverviewHero(metrics, delta) {
         <div class="pm-experience-copy">
           <p class="pm-eyebrow">Property Operations</p>
           <h2>${esc(propertyTitle())}</h2>
+          <p>Streamlined turn management for a better resident experience.</p>
           <div class="pm-experience-actions">
             ${renderNewTurnRequestButton("Request Turn")}
             <button class="secondary-command-btn pm-compact-btn" type="button" data-pm-view-button="schedule">View Schedule</button>
@@ -2146,8 +2160,11 @@ function renderOverviewHeroMedia(video, row = null) {
 function renderOverviewFocusPanel(metrics, next) {
   return `
     <aside class="pm-overview-focus-card ${scheduleGuideTargetClass("overview-next")}" aria-label="Current property focus">
-      <div class="pm-focus-next">
-        <span>Next Turn</span>
+      <div class="pm-focus-next ${next ? "" : "is-empty"}">
+        <div class="pm-focus-next-head">
+          <span>Next Turn</span>
+          <i aria-hidden="true">${pmIcon("calendar")}</i>
+        </div>
         <strong>${esc(next ? (assignmentUnit(next) ? `Unit ${assignmentUnit(next)}` : assignmentTitle(next)) : "No upcoming turn")}</strong>
         <small>${esc(next ? formatWindow(next) : "Scheduled turns will appear here after Turnly confirms them.")}</small>
         ${next?.id ? `<button class="pm-row-action" type="button" data-manager-view-assignment="${esc(next.id)}">View details</button>` : ""}

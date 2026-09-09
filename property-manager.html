@@ -8,23 +8,40 @@
   <link rel="shortcut icon" href="/favicon.ico?v=20260624t" />
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=20260624t" />
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png?v=20260624t" />
-  <link rel="stylesheet" href="style.css?v=20260909-sidebar-no-scroll-limits" />
-  <link rel="stylesheet" href="admin-dashboard.css?v=20260909-sidebar-no-scroll-limits" />
+  <link rel="stylesheet" href="style.css?v=20260909-pm-neon-polish" />
+  <link rel="stylesheet" href="admin-dashboard.css?v=20260909-pm-neon-polish" />
 </head>
 <body class="admin-command-body" data-portal-role="property-manager">
   <main class="admin-command">
     <aside class="command-sidebar">
-      <div class="command-brand">
-        <div class="brand-mark">T</div>
-        <span>TURNLY</span>
+      <div class="command-brand pm-command-brand">
+        <span class="brand-mark pm-brand-image" aria-hidden="true"></span>
+        <span class="pm-brand-word">Turnly</span>
       </div>
 
       <nav class="command-nav" aria-label="Property manager navigation">
-        <a class="nav-link active" href="#overview" data-pm-view="overview">Overview</a>
-        <a class="nav-link" href="#turn-requests" data-pm-view="turn-requests">Turn Requests</a>
-        <a class="nav-link" href="#schedule" data-pm-view="schedule">Schedule</a>
-        <a class="nav-link" href="#messages" data-pm-view="messages">Messages</a>
+        <a class="nav-link active" href="#overview" data-pm-view="overview">
+          <span class="pm-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m3 11 9-8 9 8"/><path d="M5 10v11h14V10"/><path d="M9 21v-7h6v7"/></svg></span>
+          <span class="pm-nav-label">Overview</span>
+        </a>
+        <a class="nav-link" href="#turn-requests" data-pm-view="turn-requests">
+          <span class="pm-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 2v4"/><path d="M16 2v4"/><rect x="4" y="4" width="16" height="18" rx="2"/><path d="M8 11h8"/><path d="M8 15h5"/></svg></span>
+          <span class="pm-nav-label">Turn Requests</span>
+        </a>
+        <a class="nav-link" href="#schedule" data-pm-view="schedule">
+          <span class="pm-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 2v4"/><path d="M16 2v4"/><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg></span>
+          <span class="pm-nav-label">Schedule</span>
+        </a>
+        <a class="nav-link" href="#messages" data-pm-view="messages">
+          <span class="pm-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/><path d="M8 9h8"/><path d="M8 13h5"/></svg></span>
+          <span class="pm-nav-label">Messages</span>
+        </a>
       </nav>
+
+      <div class="pm-sidebar-trust" aria-hidden="true">
+        <span></span>
+        <strong>Trusted<br />Portal Access</strong>
+      </div>
     </aside>
 
     <section class="command-main wip-main">
@@ -44,6 +61,6 @@
   </main>
 
   <script src="env.js"></script>
-  <script type="module" src="property-manager.js?v=20260831-live-preview-users"></script>
+  <script type="module" src="property-manager.js?v=20260909-pm-neon-polish"></script>
 </body>
 </html>
