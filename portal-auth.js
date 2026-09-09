@@ -156,8 +156,15 @@ function propertyManagerAccessNote(requestedPropertyName = "") {
 function setFormLoading(form, isLoading, loadingText, readyText) {
   const button = form?.querySelector("button[type='submit']");
   if (!button) return;
+  if (!button.dataset.readyHtml) button.dataset.readyHtml = button.innerHTML;
   button.disabled = isLoading;
-  button.textContent = isLoading ? loadingText : readyText;
+  if (isLoading) {
+    button.textContent = loadingText;
+  } else if (button.dataset.readyHtml) {
+    button.innerHTML = button.dataset.readyHtml;
+  } else {
+    button.textContent = readyText;
+  }
 }
 
 function metadataFlag(value) {
@@ -221,7 +228,7 @@ async function clearForcedPasswordFlag(changedAt) {
 }
 
 async function renderPasswordChangeRequired(user, role) {
-  const card = document.querySelector(".role-auth-card");
+  const card = document.querySelector(".role-auth-card, .portal-signin-card");
   if (!card) return false;
   injectForcedPasswordStyles();
   const portalName = roleName(role);

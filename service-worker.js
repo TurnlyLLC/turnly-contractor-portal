@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-contractor-pwa-v20260908-unified-login";
+const CACHE_NAME = "turnly-contractor-pwa-v20260909-portal-access-refresh";
 
 const PRECACHE_URLS = [
   "/",
@@ -60,6 +60,7 @@ const PRECACHE_URLS = [
   "/sales-portal.css",
   "/sales-portal.js",
   "/sales-prospect-template.csv",
+  "/assets/portal-login-background.png",
   "/assets/vetra-forest-hills-front-office.jpg",
   "/assets/property-manager-operations-hero.jpg",
   "/favicon.ico",

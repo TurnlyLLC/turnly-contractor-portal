@@ -16,62 +16,161 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png?v=20260624t" />
   <link rel="apple-touch-icon" href="/icons/turnly-icon-192.png" />
   <link rel="stylesheet" href="style.css?v=20260909-sidebar-no-scroll-limits" />
-  <link rel="stylesheet" href="portal-public.css?v=20260908-unified-login" />
+  <link rel="stylesheet" href="portal-public.css?v=20260909-portal-access-refresh" />
   <link rel="stylesheet" href="portal-auth-overrides.css?v=20260722d" />
 </head>
-<body class="public-portal-body" data-auth-role="portal" data-auth-home="index.html" data-auth-label="Turnly">
-  <div class="public-shell">
-    <header class="public-nav">
-      <a class="public-brand" href="index.html" aria-label="Turnly home">
-        <span class="public-brand-mark">T</span>
+<body class="public-portal-body portal-access-body" data-auth-role="portal" data-auth-home="index.html" data-auth-label="Turnly">
+  <div class="portal-access-shell">
+    <header class="portal-access-header">
+      <a class="portal-access-brand" href="index.html" aria-label="Turnly home">
+        <span class="portal-access-logo" aria-hidden="true"></span>
         <span>
-          <strong>TURNLY</strong>
+          <strong>Turnly</strong>
           <small>Portal Access</small>
         </span>
       </a>
+    </header>
 
-      <nav class="public-nav-actions" aria-label="Turnly legal links">
+    <main class="portal-access-main">
+      <section class="portal-access-copy" aria-label="Turnly portal overview">
+        <p class="portal-access-kicker">Simple. Secure. Connected.</p>
+        <h1>Welcome to <span>Turnly.</span></h1>
+        <p class="portal-access-lede">
+          Your one place for everything. Access the tools, updates, and information you need anytime, anywhere.
+        </p>
+
+        <div class="portal-access-rule" aria-hidden="true"></div>
+
+        <div class="portal-access-benefits">
+          <div class="portal-access-benefit">
+            <span aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M12 3l7 3v5c0 4.6-2.9 8.6-7 10-4.1-1.4-7-5.4-7-10V6l7-3z" />
+                <path d="M12 8v8" />
+                <path d="M9 12h6" />
+              </svg>
+            </span>
+            <div>
+              <strong>Secure account access</strong>
+              <small>Your information stays protected</small>
+            </div>
+          </div>
+
+          <div class="portal-access-benefit">
+            <span aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M18 8a6 6 0 10-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9z" />
+                <path d="M10 21h4" />
+              </svg>
+            </span>
+            <div>
+              <strong>Real-time updates</strong>
+              <small>Stay informed and up to date</small>
+            </div>
+          </div>
+
+          <div class="portal-access-benefit">
+            <span aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M4 5h16v11H8l-4 4V5z" />
+                <path d="M8 9h8" />
+                <path d="M8 13h5" />
+              </svg>
+            </span>
+            <div>
+              <strong>Streamlined communication</strong>
+              <small>Everything you need in one place</small>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="portal-signin-card" aria-label="Turnly authentication">
+        <div class="portal-signin-heading">
+          <h2>Welcome back</h2>
+          <p>Sign in to access your Turnly portal.</p>
+        </div>
+
+        <form id="loginForm" class="portal-login-form auth-panel active" data-auth-panel="login">
+          <label>
+            <span>Email</span>
+            <span class="portal-input-wrap">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M4 6h16v12H4z" />
+                <path d="M4 7l8 6 8-6" />
+              </svg>
+              <input type="email" id="loginEmail" autocomplete="email" placeholder="you@company.com" required />
+            </span>
+          </label>
+
+          <label>
+            <span>Password</span>
+            <span class="portal-input-wrap">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <rect x="5" y="10" width="14" height="10" rx="2" />
+                <path d="M8 10V7a4 4 0 018 0v3" />
+              </svg>
+              <input type="password" id="loginPassword" autocomplete="current-password" placeholder="Enter your password" required />
+              <button class="portal-password-toggle" type="button" aria-label="Show password" data-password-toggle>
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+              </button>
+            </span>
+          </label>
+
+          <div class="portal-login-options">
+            <label class="portal-remember">
+              <input type="checkbox" id="rememberPortalLogin" checked />
+              <span>Remember me</span>
+            </label>
+            <a href="reset-password.html">Forgot password?</a>
+          </div>
+
+          <button class="portal-signin-button" type="submit">
+            <span>Sign In</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M5 12h14" />
+              <path d="M13 5l7 7-7 7" />
+            </svg>
+          </button>
+        </form>
+
+        <p id="authMessage" class="signup-message portal-auth-message" aria-live="polite"></p>
+
+        <div class="portal-signin-divider" aria-hidden="true"></div>
+
+        <div class="portal-support-row">
+          <span aria-hidden="true">?</span>
+          <p>Need help? <a href="mailto:support@turnlypros.com">Contact support.</a></p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="portal-access-footer">
+      <span>Trusted portal access</span>
+      <i aria-hidden="true"></i>
+      <nav aria-label="Turnly legal links">
         <a href="/privacy-policy.html">Privacy Policy</a>
         <a href="/terms-and-conditions.html">Terms</a>
       </nav>
-    </header>
-
-    <main class="role-auth-layout unified-auth-layout">
-      <section class="role-auth-intro">
-        <p class="public-kicker">Welcome To Turnly</p>
-        <h1>One login for every Turnly workspace.</h1>
-        <p>
-          Sign in once and Turnly will send you to the right portal for your account:
-          admin, contractor, property manager, or sales.
-        </p>
-      </section>
-
-      <section class="role-auth-card" aria-label="Turnly authentication">
-        <form id="loginForm" class="public-form auth-panel active" data-auth-panel="login">
-          <div class="public-form-grid">
-            <label class="span-two">
-              Email
-              <input type="email" id="loginEmail" autocomplete="email" required />
-            </label>
-            <label class="span-two">
-              Password
-              <input type="password" id="loginPassword" autocomplete="current-password" required />
-            </label>
-          </div>
-          <button class="public-btn primary full" type="submit">Log In</button>
-          <div class="auth-helper-row">
-            <a class="auth-text-action" href="reset-password.html">Forgot your password?</a>
-          </div>
-        </form>
-
-        <p id="authMessage" class="signup-message" aria-live="polite"></p>
-      </section>
-    </main>
+    </footer>
   </div>
 
   <script src="env.js"></script>
   <script src="auth-recovery-router.js?v=20260722e"></script>
   <script type="module" src="pwa-register.js?v=20260708a"></script>
-  <script type="module" src="portal-auth.js?v=20260908-unified-login-role-route"></script>
+  <script type="module" src="portal-auth.js?v=20260909-portal-access-refresh"></script>
+  <script>
+    document.querySelector("[data-password-toggle]")?.addEventListener("click", (event) => {
+      const button = event.currentTarget;
+      const input = document.getElementById("loginPassword");
+      if (!input) return;
+      const isVisible = input.type === "text";
+      input.type = isVisible ? "password" : "text";
+      button.setAttribute("aria-label", isVisible ? "Show password" : "Hide password");
+    });
+  </script>
 </body>
 </html>
