@@ -766,6 +766,8 @@ function panel(title, body, options = {}) {
   const subtitle = options.subtitle ? `<p>${options.rawSubtitle ? options.subtitle : esc(options.subtitle)}</p>` : "";
   const action = options.action ? actionLink(options.action.label, options.action.icon, options.action.href, options.action.tone) : "";
   const panelKey = options.key || title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const panelIconName = options.icon || (options.key ? getCommandWidget(options.key)?.icon : "");
+  const panelIcon = panelIconName ? `<span class="panel-title-icon">${icon(panelIconName)}</span>` : "";
   const menu = options.menu ? `
     <div class="widget-menu-wrap">
       <button class="ghost-icon-btn" type="button" aria-label="${esc(title)} options" aria-expanded="false" data-widget-menu-toggle="${esc(panelKey)}">${icon("more")}</button>
@@ -779,9 +781,12 @@ function panel(title, body, options = {}) {
   return `
     <section class="suite-panel ${options.className || ""}">
       <div class="panel-head">
-        <div>
-          <h2>${esc(title)}</h2>
-          ${subtitle}
+        <div class="panel-title-row">
+          ${panelIcon}
+          <div class="panel-title-copy">
+            <h2>${esc(title)}</h2>
+            ${subtitle}
+          </div>
         </div>
         <div class="panel-actions">${action}${menu}</div>
       </div>
@@ -10498,8 +10503,8 @@ function renderSidebar(activeKey) {
   return `
     <aside class="suite-sidebar">
       <a class="suite-brand" href="admin.html" aria-label="Turnly admin">
-        <span class="brand-mark">T</span>
-        <strong>TURNLY</strong>
+        <span class="brand-mark" aria-hidden="true"></span>
+        <strong>Turnly</strong>
       </a>
       <nav class="suite-nav" aria-label="Admin navigation">
         ${navSections.map((section) => {
