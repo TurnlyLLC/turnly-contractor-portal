@@ -157,9 +157,24 @@ function esc(value) {
 }
 
 const cpIconPaths = {
+  bell: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
+  briefcase: '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><path d="M2 13h20"/>',
+  calendar: '<path d="M8 2v4"/><path d="M16 2v4"/><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/>',
+  chart: '<path d="M3 3v18h18"/><path d="M8 17V9"/><path d="M13 17V5"/><path d="M18 17v-6"/>',
+  "credit-card": '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>',
   "chevron-down": '<path d="m6 9 6 6 6-6"/>',
   "chevron-right": '<path d="m9 18 6-6-6-6"/>',
+  clipboard: '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>',
+  document: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/>',
+  "dollar-sign": '<path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7H14a3.5 3.5 0 0 1 0 7H6"/>',
+  home: '<path d="m3 11 9-8 9 8"/><path d="M5 10v11h14V10"/><path d="M9 21v-7h6v7"/>',
+  "message-circle": '<path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8Z"/>',
+  plus: '<path d="M12 5v14"/><path d="M5 12h14"/>',
+  search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
   shield: '<path d="M20 13c0 5-3.5 7.5-8 9-4.5-1.5-8-4-8-9V5l8-3 8 3v8Z"/><path d="m9 12 2 2 4-4"/>',
+  star: '<path d="m12 2 3.09 6.26L22 9.27l-5 4.87L18.18 21 12 17.77 5.82 21 7 14.14l-5-4.87 6.91-1.01L12 2Z"/>',
+  tool: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a6 6 0 0 1-7.9 7.9l-6.1 6.1a2.1 2.1 0 0 1-3-3l6.1-6.1a6 6 0 0 1 7.9-7.9l-3.8 3.8Z"/>',
+  video: '<path d="m22 8-6 4 6 4V8Z"/><rect x="2" y="6" width="14" height="12" rx="2"/>',
   users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
   x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'
 };
@@ -213,6 +228,32 @@ function dashboardThemeToggle() {
       ${dashboardThemeToggleContent(theme)}
     </button>
   `;
+}
+
+function navIcon(key) {
+  const icons = {
+    dashboard: "home",
+    "my-jobs": "clipboard",
+    schedule: "calendar",
+    resources: "document",
+    messages: "message-circle",
+    documents: "document",
+    payments: "credit-card",
+    performance: "chart",
+    "job-board": "briefcase",
+    "video-library": "video"
+  };
+  return icons[key] || "briefcase";
+}
+
+function metricIcon(label, fallback = "briefcase") {
+  const key = normalizeToken(label);
+  if (key.includes("today") || key.includes("week") || key.includes("start")) return "calendar";
+  if (key.includes("active") || key.includes("progress")) return "tool";
+  if (key.includes("open") || key.includes("job")) return "briefcase";
+  if (key.includes("pay") || key.includes("earning") || key.includes("days") || key.includes("payout")) return "dollar-sign";
+  if (key.includes("completion") || key.includes("quality") || key.includes("time") || key.includes("rate")) return "chart";
+  return fallback;
 }
 
 function updateDashboardThemeToggle() {
@@ -860,12 +901,15 @@ function availabilityPersistenceLabel() {
 }
 
 function metric(label, value, subtext, icon) {
+  const iconName = cpIconPaths[icon] ? icon : metricIcon(label);
   return `
     <article class="cp-metric">
-      <span class="cp-metric-icon">${esc(icon)}</span>
-      <strong>${esc(value)}</strong>
-      <p>${esc(label)}</p>
-      <small class="cp-muted">${esc(subtext)}</small>
+      <span class="cp-metric-icon">${cpIcon(iconName)}</span>
+      <div>
+        <p>${esc(label)}</p>
+        <strong>${esc(value)}</strong>
+        <small class="cp-muted">${esc(subtext)}</small>
+      </div>
     </article>
   `;
 }
@@ -1007,32 +1051,56 @@ function sidebar() {
   return `
     <aside class="cp-sidebar">
       <a class="cp-brand" href="${esc(contractorRoute("dashboard", contractorSurface))}" aria-label="Turnly contractor dashboard">
-        <span class="cp-brand-mark">T</span>
-        <span>TURNLY</span>
+        <span class="cp-brand-mark" aria-hidden="true"></span>
+        <span>Turnly</span>
       </a>
       <nav class="cp-nav" aria-label="Contractor navigation">
         <p class="cp-nav-title">Contractor Portal</p>
         ${navItems.map(([key, label, href]) => `
           <a class="cp-nav-link ${key === pageKey ? "active" : ""}" href="${esc(href)}">
-            <span>${esc(label)}</span>
+            <span class="cp-nav-icon">${cpIcon(navIcon(key))}</span>
+            <span class="cp-nav-label">${esc(label)}</span>
             ${cpNavBadge(key)}
           </a>
         `).join("")}
       </nav>
-      <section class="cp-support">
-        <small>Need help?</small>
-        <strong>Turnly Ops Center</strong>
-        <small>ops@turnlypros.com</small>
-      </section>
-      <div class="cp-legal-links" aria-label="Turnly legal links">
-        <a href="/privacy-policy.html" target="_blank" rel="noopener">Privacy Policy</a>
-        <a href="/terms-and-conditions.html" target="_blank" rel="noopener">Terms</a>
+      <div class="cp-sidebar-trust" aria-hidden="true">
+        <span></span>
+        <strong>Trusted<br />Portal Access</strong>
       </div>
-      <section class="cp-profile-wrap">
+      <section class="cp-support">
+        <small>Turnly Ops Center</small>
+        <strong>ops@turnlypros.com</strong>
+      </section>
+      <section class="cp-profile-wrap cp-sidebar-profile">
         ${profileAccountTrigger("cpProfileMenu")}
         ${profileAccountMenu("cpProfileMenu")}
       </section>
     </aside>
+  `;
+}
+
+function contractorTopbar() {
+  const unread = cpUnreadMessageCount();
+  return `
+    <header class="cp-portal-toolbar">
+      <div class="cp-toolbar-spacer"></div>
+      ${renderContractorAdminPreviewSwitcher()}
+      <label class="cp-search cp-toolbar-search">
+        ${cpIcon("search")}
+        <input id="cpGlobalSearch" type="search" placeholder="Search anything..." value="${esc(state.filters.search)}" />
+        <kbd>K</kbd>
+      </label>
+      ${dashboardThemeToggle()}
+      <a class="cp-top-icon" href="${esc(contractorRoute("messages", contractorSurface))}" aria-label="${esc(unread)} unread messages">
+        ${cpIcon("bell")}
+        <span ${unread ? "" : "hidden"}>${esc(unread > 99 ? "99+" : String(unread))}</span>
+      </a>
+      <section class="cp-profile-wrap cp-toolbar-profile">
+        ${profileAccountTrigger("cpToolbarProfileMenu")}
+        ${profileAccountMenu("cpToolbarProfileMenu")}
+      </section>
+    </header>
   `;
 }
 
@@ -1076,7 +1144,7 @@ function renderShell() {
     <main class="cp-shell">
       ${sidebar()}
       <section class="cp-main" id="${pageKey === "dashboard" ? "contractorDashboard" : "contractorPortalMain"}">
-        ${renderContractorAdminPreviewSwitcher()}
+        ${contractorSurface === "desktop" ? contractorTopbar() : renderContractorAdminPreviewSwitcher()}
         ${renderPage()}
       </section>
       ${jobDetailDrawer()}
@@ -1234,7 +1302,7 @@ function renderDashboardHeroJob(item, isCompact = false) {
         <p class="cp-panel-kicker">Next Job</p>
         <h2>No active jobs</h2>
         <p class="cp-muted">Claim a job from the board when you are ready for more work.</p>
-        <a class="cp-action" href="${esc(contractorRoute("job-board", contractorSurface))}">Open Job Board</a>
+        <a class="cp-action" href="${esc(contractorRoute("job-board", contractorSurface))}">${cpIcon("calendar")} Open Job Board</a>
       </article>
     `;
   }
@@ -1304,7 +1372,6 @@ function renderDesktopDashboard() {
   const today = todayAssignments();
   const week = currentWeekAssignments();
   const nextJob = dashboardNextAssignment();
-  const accepted = acceptedAssignments();
   const boardRows = filteredOpenAssignments();
   const preferred = boardRows.filter(isPreferredOffer);
   const available = boardRows.filter((item) => !isPreferredOffer(item));
@@ -1314,7 +1381,6 @@ function renderDesktopDashboard() {
         <div class="cp-desktop-hero-copy">
           <div class="cp-desktop-hero-topline">
             <p class="cp-panel-kicker">Contractor Operations</p>
-            ${dashboardThemeToggle()}
           </div>
           <h1>${esc(dashboardGreeting())}, ${esc(firstName())}</h1>
           <p>Review your active work, claim open jobs, and keep today's route moving from one dashboard.</p>
@@ -1339,23 +1405,22 @@ function renderDesktopDashboard() {
         <div class="cp-stack">
           ${panel("This Week's Work", renderDashboardWeekAgenda(week), {
             kicker: "Sunday - Saturday",
-            action: `<a class="cp-ghost-action" href="${esc(contractorRoute("schedule", contractorSurface))}">Open Schedule</a>`
+            action: `<a class="cp-ghost-action" href="${esc(contractorRoute("schedule", contractorSurface))}">${cpIcon("calendar")} Open Schedule</a>`
           })}
-          ${panel("Accepted Jobs", renderHomeJobList(accepted, "mine", "No accepted jobs yet.", 5), {
-            kicker: "Your Work",
-            action: `<a class="cp-ghost-action" href="${esc(contractorRoute("my-jobs", contractorSurface))}">View All</a>`
+          ${panel("Recent Messages", emptyState("No new messages."), {
+            kicker: "Recent Messages",
+            action: `<a class="cp-ghost-action" href="${esc(contractorRoute("messages", contractorSurface))}">${cpIcon("message-circle")} View Messages</a>`
           })}
         </div>
         <div class="cp-stack">
           ${panel("Preferred Jobs", renderHomeJobList(preferred, "open", "No preferred jobs right now.", 3), {
             kicker: "Offered First",
-            action: `<a class="cp-ghost-action" href="${esc(contractorRoute("job-board", contractorSurface))}">Board</a>`
+            action: `<a class="cp-ghost-action" href="${esc(contractorRoute("job-board", contractorSurface))}">${cpIcon("calendar")} Board</a>`
           })}
-          ${panel("Available Jobs", renderHomeJobList(available, "open", "No available jobs right now.", 3), {
+          ${panel("Job Board", renderHomeJobList(available, "open", "No available jobs right now.", 3), {
             kicker: "Job Board",
-            action: `<a class="cp-ghost-action" href="${esc(contractorRoute("job-board", contractorSurface))}">Claim Work</a>`
+            action: `<a class="cp-ghost-action" href="${esc(contractorRoute("job-board", contractorSurface))}">${cpIcon("plus")} Claim Work</a>`
           })}
-          ${panel("Pay Snapshot", renderDashboardPaySnapshot())}
         </div>
       </section>
     </section>

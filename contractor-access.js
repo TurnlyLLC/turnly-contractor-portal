@@ -183,7 +183,7 @@ async function renderPasswordChangeRequired(user) {
 }
 
 async function loadContractorPortal() {
-  await import("./contractor-portal.js?v=20260908-unified-login");
+  await import("./contractor-portal.js?v=20260909-contractor-neon-dashboard");
   await import("./contractor-job-flow-mobile.js?v=20260807-contractor-feedback");
 }
 

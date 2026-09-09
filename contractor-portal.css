@@ -2639,3 +2639,538 @@
     width: auto;
   }
 }
+
+/* Contractor desktop neon portal refresh. */
+.contractor-desktop-body {
+  background:
+    radial-gradient(1000px 900px at -18% 76%, rgba(0, 238, 255, 0.28), transparent 48%),
+    radial-gradient(900px 700px at 72% -20%, rgba(15, 192, 181, 0.12), transparent 52%),
+    linear-gradient(135deg, #03101b 0%, #061522 48%, #020a12 100%);
+  color: #f8fbff;
+}
+
+.contractor-desktop-body::before {
+  content: "";
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: 240px;
+  pointer-events: none;
+  background:
+    radial-gradient(220px 420px at -34px 68%, rgba(0, 255, 235, 0.28), transparent 70%),
+    radial-gradient(360px 700px at -84px 60%, transparent 45%, rgba(15, 255, 235, 0.46) 45.2%, transparent 46.2%),
+    radial-gradient(420px 820px at -108px 58%, transparent 49%, rgba(15, 255, 235, 0.23) 49.2%, transparent 50.4%);
+  opacity: 0.85;
+  z-index: 0;
+}
+
+.contractor-desktop-body .cp-shell {
+  grid-template-columns: 210px minmax(0, 1fr);
+  position: relative;
+  z-index: 1;
+}
+
+.contractor-desktop-body .cp-sidebar {
+  background: linear-gradient(180deg, rgba(2, 14, 24, 0.94), rgba(1, 9, 17, 0.98));
+  border-right-color: rgba(0, 238, 255, 0.24);
+  gap: 28px;
+  min-height: 100vh;
+  overflow: visible;
+  padding: 22px 14px 26px;
+}
+
+.contractor-desktop-body .cp-brand {
+  gap: 10px;
+  letter-spacing: 0;
+  padding: 0 8px 16px;
+}
+
+.contractor-desktop-body .cp-brand-mark {
+  background: transparent url("/icons/turnly-icon-192.png") center / contain no-repeat;
+  height: 38px;
+  width: 38px;
+}
+
+.contractor-desktop-body .cp-brand > span:last-child {
+  color: #f8fbff;
+  font-size: 26px;
+  font-weight: 900;
+  text-transform: none;
+}
+
+.contractor-desktop-body .cp-nav {
+  gap: 12px;
+}
+
+.contractor-desktop-body .cp-nav-title {
+  color: #b8c8e3;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  margin: 0 10px 4px;
+}
+
+.contractor-desktop-body .cp-nav-link {
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: #d9e8f8;
+  gap: 16px;
+  justify-content: flex-start;
+  min-height: 50px;
+  padding: 0 16px;
+}
+
+.contractor-desktop-body .cp-nav-link:hover,
+.contractor-desktop-body .cp-nav-link.active {
+  background: linear-gradient(90deg, rgba(0, 255, 219, 0.18), rgba(0, 255, 219, 0.08));
+  border-color: rgba(0, 255, 235, 0.78);
+  box-shadow: 0 0 24px rgba(0, 255, 235, 0.34), inset 0 0 28px rgba(0, 255, 235, 0.08);
+  color: #f8fbff;
+}
+
+.contractor-desktop-body .cp-nav-link.active {
+  box-shadow: 0 0 26px rgba(0, 255, 235, 0.45), inset 0 0 30px rgba(0, 255, 235, 0.12);
+}
+
+.contractor-desktop-body .cp-nav-icon {
+  align-items: center;
+  display: inline-flex;
+  flex: 0 0 23px;
+  justify-content: center;
+}
+
+.contractor-desktop-body .cp-nav-icon .suite-icon,
+.contractor-desktop-body .cp-nav-icon svg {
+  height: 23px;
+  width: 23px;
+}
+
+.contractor-desktop-body .cp-nav-label {
+  flex: 1 1 auto;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.contractor-desktop-body .cp-sidebar-trust {
+  display: grid;
+  gap: 10px;
+  margin-top: auto;
+  padding: 0 22px 20px;
+}
+
+.contractor-desktop-body .cp-sidebar-trust span {
+  width: 58px;
+  height: 2px;
+  background: #13f3ee;
+}
+
+.contractor-desktop-body .cp-sidebar-trust strong {
+  color: #d9dcff;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+.contractor-desktop-body .cp-support,
+.contractor-desktop-body .cp-sidebar-profile {
+  display: none;
+}
+
+.contractor-desktop-body .cp-main {
+  gap: 14px;
+  max-width: none;
+  min-width: 0;
+  padding: 18px 22px 22px;
+}
+
+.contractor-desktop-body .cp-portal-toolbar {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.contractor-desktop-body .cp-toolbar-spacer {
+  flex: 1 1 auto;
+}
+
+.contractor-desktop-body .cp-portal-toolbar .admin-preview-wrap,
+.contractor-desktop-body .cp-toolbar-profile {
+  position: relative;
+}
+
+.contractor-desktop-body .cp-portal-toolbar .admin-preview-trigger,
+.contractor-desktop-body .cp-toolbar-search,
+.contractor-desktop-body .cp-theme-toggle,
+.contractor-desktop-body .cp-top-icon,
+.contractor-desktop-body .cp-toolbar-profile .cp-profile {
+  background: rgba(6, 22, 36, 0.82);
+  border: 1px solid rgba(91, 166, 214, 0.34);
+  border-radius: 8px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  color: #dceaff;
+  min-height: 42px;
+}
+
+.contractor-desktop-body .cp-portal-toolbar .admin-preview-trigger {
+  min-width: 300px;
+  padding: 7px 12px;
+}
+
+.contractor-desktop-body .cp-toolbar-search {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  padding: 0 12px;
+  width: min(294px, 24vw);
+}
+
+.contractor-desktop-body .cp-toolbar-search .suite-icon,
+.contractor-desktop-body .cp-toolbar-search svg {
+  color: #bdd3f2;
+  height: 18px;
+  width: 18px;
+}
+
+.contractor-desktop-body .cp-toolbar-search input {
+  color: #dceaff;
+  font-size: 14px;
+  padding: 0 10px;
+}
+
+.contractor-desktop-body .cp-toolbar-search kbd {
+  background: rgba(187, 209, 232, 0.12);
+  border-radius: 4px;
+  color: #bdd3f2;
+  font-size: 10px;
+  font-weight: 900;
+  padding: 2px 7px;
+}
+
+.contractor-desktop-body .cp-top-icon {
+  align-items: center;
+  display: inline-flex;
+  height: 42px;
+  justify-content: center;
+  position: relative;
+  text-decoration: none;
+  width: 42px;
+}
+
+.contractor-desktop-body .cp-top-icon svg {
+  height: 19px;
+  width: 19px;
+}
+
+.contractor-desktop-body .cp-top-icon span {
+  align-items: center;
+  background: #08df9d;
+  border-radius: 999px;
+  color: #02131c;
+  display: inline-flex;
+  font-size: 10px;
+  font-weight: 950;
+  height: 18px;
+  justify-content: center;
+  min-width: 18px;
+  padding: 0 5px;
+  position: absolute;
+  right: -5px;
+  top: -7px;
+}
+
+.contractor-desktop-body .cp-toolbar-profile .cp-profile {
+  min-width: 164px;
+  padding: 5px 10px;
+}
+
+.contractor-desktop-body .cp-toolbar-profile .cp-profile-avatar {
+  border-color: #13f3ee;
+}
+
+.contractor-desktop-body .cp-toolbar-profile .cp-profile-menu {
+  bottom: auto;
+  left: auto;
+  min-width: 180px;
+  right: 0;
+  top: calc(100% + 9px);
+}
+
+.contractor-desktop-body .cp-desktop-dashboard {
+  gap: 14px;
+}
+
+.contractor-desktop-body .cp-desktop-hero {
+  align-items: center;
+  background:
+    linear-gradient(90deg, rgba(1, 12, 23, 0.87), rgba(2, 16, 29, 0.58) 48%, rgba(2, 16, 29, 0.72)),
+    url("/assets/vetra-forest-hills-front-office.jpg") center / cover no-repeat;
+  border-color: rgba(0, 255, 235, 0.88);
+  box-shadow: inset 0 0 70px rgba(0, 0, 0, 0.34), 0 18px 52px rgba(0, 0, 0, 0.24);
+  grid-template-columns: minmax(0, 1fr) minmax(350px, 0.38fr);
+  min-height: 324px;
+  padding: 40px;
+}
+
+.contractor-desktop-body .cp-desktop-hero-copy {
+  gap: 16px;
+  max-width: 760px;
+}
+
+.contractor-desktop-body .cp-desktop-hero-copy h1 {
+  color: #ffffff;
+  font-size: clamp(42px, 4vw, 58px);
+  line-height: 1.02;
+  text-shadow: 0 12px 28px rgba(0, 0, 0, 0.42);
+}
+
+.contractor-desktop-body .cp-desktop-hero-copy p:not(.cp-panel-kicker) {
+  color: #d5e4ff;
+  font-size: 20px;
+  max-width: 670px;
+}
+
+.contractor-desktop-body .cp-panel-kicker {
+  color: #13f3ee;
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: 0.28em;
+}
+
+.contractor-desktop-body .cp-action,
+.contractor-desktop-body .cp-ghost-action {
+  align-items: center;
+  border-radius: 8px;
+  display: inline-flex;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 22px;
+}
+
+.contractor-desktop-body .cp-action {
+  background: linear-gradient(90deg, #13f3ee, #0be49e);
+  box-shadow: 0 16px 36px rgba(0, 238, 200, 0.24);
+  color: #02131c;
+}
+
+.contractor-desktop-body .cp-ghost-action {
+  background: rgba(6, 22, 36, 0.66);
+  border-color: rgba(0, 255, 235, 0.62);
+  color: #f8fbff;
+}
+
+.contractor-desktop-body .cp-desktop-next-card,
+.contractor-desktop-body .cp-panel,
+.contractor-desktop-body .cp-metric,
+.contractor-desktop-body .cp-home-job-card,
+.contractor-desktop-body .cp-dashboard-agenda-row {
+  background: linear-gradient(145deg, rgba(10, 30, 47, 0.78), rgba(2, 17, 29, 0.72));
+  border: 1px solid rgba(0, 238, 255, 0.48);
+  border-radius: 8px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 18px 44px rgba(0, 0, 0, 0.2);
+}
+
+.contractor-desktop-body .cp-desktop-next-card {
+  align-self: center;
+  margin-left: auto;
+  max-width: 460px;
+  padding: 22px;
+}
+
+.contractor-desktop-body .cp-dashboard-stat-grid {
+  grid-template-columns: repeat(5, minmax(170px, 1fr));
+}
+
+.contractor-desktop-body .cp-metric {
+  align-items: center;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: 50px minmax(0, 1fr);
+  min-height: 118px;
+  padding: 16px;
+}
+
+.contractor-desktop-body .cp-metric-icon {
+  background: rgba(0, 255, 235, 0.08);
+  border: 1px solid rgba(0, 255, 235, 0.5);
+  border-radius: 8px;
+  color: #13f3ee;
+  font-size: 0;
+  height: 50px;
+  width: 50px;
+}
+
+.contractor-desktop-body .cp-metric-icon svg {
+  height: 26px;
+  width: 26px;
+}
+
+.contractor-desktop-body .cp-metric p {
+  color: #c7d6ed;
+  margin: 0 0 5px;
+}
+
+.contractor-desktop-body .cp-metric strong {
+  color: #ffffff;
+  display: block;
+  font-size: 28px;
+  margin-bottom: 4px;
+}
+
+.contractor-desktop-body .cp-desktop-workbench {
+  grid-template-columns: minmax(0, 1.08fr) minmax(360px, 0.58fr);
+}
+
+.contractor-desktop-body .cp-panel {
+  overflow: hidden;
+}
+
+.contractor-desktop-body .cp-panel-header {
+  align-items: center;
+}
+
+.contractor-desktop-body .cp-empty {
+  border: 1px dashed rgba(0, 238, 255, 0.38);
+  border-radius: 8px;
+  min-height: 126px;
+}
+
+.contractor-desktop-body .cp-empty .cp-empty-icon {
+  background: transparent;
+  border: 0;
+  color: #a9cafa;
+  font-size: 34px;
+}
+
+.contractor-desktop-body .cp-home-job-card {
+  min-height: 104px;
+}
+
+.contractor-desktop-body .cp-home-job-card strong,
+.contractor-desktop-body .cp-dashboard-agenda-row strong {
+  color: #ffffff;
+}
+
+.contractor-desktop-body .cp-muted,
+.contractor-desktop-body .cp-home-job-main small,
+.contractor-desktop-body .cp-home-job-meta span,
+.contractor-desktop-body .cp-dashboard-agenda-row small {
+  color: #bad0ec;
+}
+
+.contractor-desktop-body[data-dashboard-theme="light"] {
+  background:
+    radial-gradient(1000px 900px at -18% 76%, rgba(0, 173, 180, 0.16), transparent 48%),
+    linear-gradient(135deg, #f7fbff 0%, #eef7fb 50%, #f9fcff 100%);
+  color: #061b2d;
+}
+
+.contractor-desktop-body[data-dashboard-theme="light"] .cp-sidebar {
+  background: linear-gradient(180deg, rgba(247, 252, 255, 0.96), rgba(232, 244, 249, 0.98));
+  border-right-color: rgba(0, 148, 170, 0.22);
+}
+
+.contractor-desktop-body[data-dashboard-theme="light"] .cp-brand > span:last-child,
+.contractor-desktop-body[data-dashboard-theme="light"] .cp-nav-link,
+.contractor-desktop-body[data-dashboard-theme="light"] .cp-nav-title,
+.contractor-desktop-body[data-dashboard-theme="light"] .cp-sidebar-trust strong {
+  color: #08243a;
+}
+
+.contractor-desktop-body[data-dashboard-theme="light"] .cp-nav-link:hover,
+.contractor-desktop-body[data-dashboard-theme="light"] .cp-nav-link.active {
+  background: linear-gradient(90deg, rgba(0, 198, 184, 0.14), rgba(0, 198, 184, 0.05));
+  color: #041b20;
+}
+
+.contractor-desktop-body[data-dashboard-theme="light"] .cp-portal-toolbar .admin-preview-trigger,
+.contractor-desktop-body[data-dashboard-theme="light"] .cp-toolbar-search,
+.contractor-desktop-body[data-dashboard-theme="light"] .cp-theme-toggle,
+.contractor-desktop-body[data-dashboard-theme="light"] .cp-top-icon,
+.contractor-desktop-body[data-dashboard-theme="light"] .cp-toolbar-profile .cp-profile,
+.contractor-desktop-body[data-dashboard-theme="light"] .cp-desktop-next-card,
+.contractor-desktop-body[data-dashboard-theme="light"] .cp-panel,
+.contractor-desktop-body[data-dashboard-theme="light"] .cp-metric,
+.contractor-desktop-body[data-dashboard-theme="light"] .cp-home-job-card,
+.contractor-desktop-body[data-dashboard-theme="light"] .cp-dashboard-agenda-row {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(239, 248, 252, 0.92));
+  border-color: rgba(0, 142, 167, 0.24);
+  color: #061b2d;
+  box-shadow: 0 16px 38px rgba(21, 50, 74, 0.1);
+}
+
+.contractor-desktop-body[data-dashboard-theme="light"] .cp-toolbar-search input,
+.contractor-desktop-body[data-dashboard-theme="light"] .cp-toolbar-search kbd,
+.contractor-desktop-body[data-dashboard-theme="light"] .cp-metric p,
+.contractor-desktop-body[data-dashboard-theme="light"] .cp-muted,
+.contractor-desktop-body[data-dashboard-theme="light"] .cp-home-job-main small,
+.contractor-desktop-body[data-dashboard-theme="light"] .cp-home-job-meta span,
+.contractor-desktop-body[data-dashboard-theme="light"] .cp-dashboard-agenda-row small {
+  color: #52677c;
+}
+
+.contractor-desktop-body[data-dashboard-theme="light"] .cp-desktop-hero-copy h1,
+.contractor-desktop-body[data-dashboard-theme="light"] .cp-desktop-next-card h2,
+.contractor-desktop-body[data-dashboard-theme="light"] .cp-panel h2,
+.contractor-desktop-body[data-dashboard-theme="light"] .cp-panel h3,
+.contractor-desktop-body[data-dashboard-theme="light"] .cp-metric strong,
+.contractor-desktop-body[data-dashboard-theme="light"] .cp-home-job-card strong,
+.contractor-desktop-body[data-dashboard-theme="light"] .cp-dashboard-agenda-row strong {
+  color: #061b2d;
+}
+
+.contractor-desktop-body[data-dashboard-theme="light"] .cp-desktop-hero {
+  background:
+    linear-gradient(90deg, rgba(247, 252, 255, 0.9), rgba(239, 249, 252, 0.62) 48%, rgba(239, 249, 252, 0.78)),
+    url("/assets/vetra-forest-hills-front-office.jpg") center / cover no-repeat;
+}
+
+@media (max-width: 1260px) {
+  .contractor-desktop-body .cp-shell {
+    grid-template-columns: 190px minmax(0, 1fr);
+  }
+
+  .contractor-desktop-body .cp-portal-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .contractor-desktop-body .cp-toolbar-spacer {
+    display: none;
+  }
+
+  .contractor-desktop-body .cp-dashboard-stat-grid {
+    grid-template-columns: repeat(3, minmax(170px, 1fr));
+  }
+
+  .contractor-desktop-body .cp-desktop-hero,
+  .contractor-desktop-body .cp-desktop-workbench {
+    grid-template-columns: 1fr;
+  }
+
+  .contractor-desktop-body .cp-desktop-next-card {
+    margin-left: 0;
+    max-width: none;
+  }
+}
+
+@media (max-width: 920px) {
+  .contractor-desktop-body .cp-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .contractor-desktop-body .cp-sidebar {
+    display: none;
+  }
+
+  .contractor-desktop-body .cp-main {
+    padding: 14px;
+  }
+
+  .contractor-desktop-body .cp-portal-toolbar {
+    display: none;
+  }
+
+  .contractor-desktop-body .cp-mobile-nav {
+    display: flex;
+  }
+}
