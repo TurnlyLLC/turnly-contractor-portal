@@ -1607,8 +1607,7 @@ body.admin-command-body[data-portal-role="property-manager"] .command-sidebar {
   max-height: 100vh;
   overflow-y: auto;
   padding: 10px 8px 18px;
-  position: sticky;
-  top: 0;
+  position: relative;
 }
 
 body.admin-command-body[data-portal-role="property-manager"] .command-brand {

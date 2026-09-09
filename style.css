@@ -633,9 +633,8 @@ body.modal-open {
   }
 
   body.admin-command-body .command-sidebar {
-    position: sticky;
-    top: 0;
-    z-index: 50;
+    position: relative;
+    z-index: 1;
     height: auto;
     border-right: 0;
     border-bottom: 1px solid var(--admin-border);
@@ -840,9 +839,8 @@ body.modal-open {
   }
 
   body.sales-portal-body .sales-sidebar {
-    position: sticky;
-    top: 0;
-    z-index: 50;
+    position: relative;
+    z-index: 1;
     height: auto;
     display: grid;
     gap: 12px;

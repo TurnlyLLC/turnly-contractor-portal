@@ -215,8 +215,7 @@ a {
   min-height: 100vh;
   overflow-y: auto;
   padding: 8px 8px 16px;
-  position: sticky;
-  top: 0;
+  position: relative;
 }
 
 .suite-brand {
@@ -5800,8 +5799,7 @@ a {
     height: 100vh;
     max-height: 100vh;
     min-height: 100vh;
-    position: sticky;
-    top: 0;
+    position: relative;
   }
 
   .suite-brand {
