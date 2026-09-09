@@ -913,6 +913,79 @@
   grid-column: 1 / -1;
 }
 
+.admin-sales-quote-builder {
+  background: rgba(11, 24, 37, 0.72);
+  border: 1px solid var(--admin-sales-line);
+  border-radius: var(--admin-sales-radius);
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 14px;
+}
+
+.admin-sales-quote-builder-head,
+.admin-sales-quote-preview-bar {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.admin-sales-quote-builder-head > div:first-child {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.admin-sales-quote-builder-head span {
+  color: var(--admin-sales-cyan);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.admin-sales-quote-builder-head strong {
+  color: var(--admin-sales-ink);
+  font-size: 15px;
+}
+
+.admin-sales-quote-builder > p {
+  color: var(--admin-sales-muted);
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.admin-sales-quote-preview {
+  border: 1px solid var(--admin-sales-line);
+  border-radius: var(--admin-sales-radius);
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+}
+
+.admin-sales-quote-preview[hidden] {
+  display: none;
+}
+
+.admin-sales-quote-preview-bar small {
+  color: var(--admin-sales-muted);
+  font-size: 12px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-sales-quote-preview iframe {
+  background: #f8fafc;
+  border: 0;
+  border-radius: calc(var(--admin-sales-radius) - 2px);
+  min-height: min(58vh, 620px);
+  width: 100%;
+}
+
 .admin-sales-import-dropzone {
   display: grid;
   justify-items: center;
@@ -1224,6 +1297,8 @@ body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-metric,
 body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-detail,
 body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-empty,
 body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-card,
+body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-quote-builder,
+body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-quote-preview,
 body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-import-dropzone {
   background: linear-gradient(145deg, #ffffff, #f8fbff);
   box-shadow: 0 18px 55px rgba(15, 23, 42, 0.06);
@@ -1241,6 +1316,7 @@ body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-table strong,
 body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-detail-stat strong,
 body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-info-block strong,
 body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-empty strong,
+body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-quote-builder-head strong,
 body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-card h3 {
   color: #061321;
 }
@@ -1385,10 +1461,14 @@ body.turnly-admin-suite[data-dashboard-theme="light"] .admin-sales-chart-point {
 
   .admin-sales-filter-bar,
   .admin-sales-form-grid,
+  .admin-sales-quote-builder-head,
+  .admin-sales-quote-preview-bar,
   .admin-sales-availability-form,
   .admin-sales-availability-list,
   .admin-sales-availability-slot,
   .admin-sales-detail-grid {
+    align-items: stretch;
+    display: grid;
     grid-template-columns: 1fr;
   }
 

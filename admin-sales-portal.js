@@ -11,6 +11,8 @@ const TABLES = {
 };
 
 const XLSX_URL = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+const PDF_LIB_URL = "/assets/vendor/pdf-lib.min.js?v=20260909-quote-pdf";
+const QUOTE_TEMPLATE_URL = "/assets/turnly-quote-proposal-template.pdf?v=20260909-quote-template";
 const ADMIN_SALES_PAGES = new Set(["sales-overview", "leads", "walkthroughs", "sales-tasks", "quotes", "contracts-pending"]);
 
 const pageCopy = {
@@ -174,6 +176,10 @@ const state = {
 };
 
 let xlsxPromise = null;
+let pdfLibPromise = null;
+let quotePreviewUrl = "";
+let quotePreviewBlob = null;
+let quotePreviewFileName = "";
 let searchRenderTimer = null;
 
 function esc(value) {
@@ -753,6 +759,182 @@ function contactEmailHref(row) {
   if (!email) return "";
   const subject = encodeURIComponent(`Turnly walkthrough for ${recordTitle(row)}`);
   return `mailto:${email}?subject=${subject}`;
+}
+
+function loadPdfLib() {
+  if (window.PDFLib?.PDFDocument) return Promise.resolve(window.PDFLib);
+  if (pdfLibPromise) return pdfLibPromise;
+  pdfLibPromise = new Promise((resolve, reject) => {
+    const existing = document.querySelector("script[data-turnly-pdf-lib]");
+    if (existing) {
+      existing.addEventListener("load", () => resolve(window.PDFLib), { once: true });
+      existing.addEventListener("error", () => reject(new Error("Unable to load PDF tools.")), { once: true });
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = PDF_LIB_URL;
+    script.async = true;
+    script.dataset.turnlyPdfLib = "true";
+    script.addEventListener("load", () => {
+      if (window.PDFLib?.PDFDocument) resolve(window.PDFLib);
+      else reject(new Error("PDF tools loaded without the expected API."));
+    }, { once: true });
+    script.addEventListener("error", () => reject(new Error("Unable to load PDF tools.")), { once: true });
+    document.head.appendChild(script);
+  });
+  return pdfLibPromise;
+}
+
+function quoteDateLabel(value = new Date()) {
+  const date = dateValue(value) || new Date();
+  return date.toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" });
+}
+
+function quotePropertyAddress(row) {
+  return recordAddress(row).replace(/\s+-\s+/g, ", ");
+}
+
+function quoteSafeFileName(row) {
+  const title = recordTitle(row).replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "") || "Turnly-Quote";
+  return `${title}-Quote-Proposal.pdf`;
+}
+
+function quotePdfFieldValues(row, values = {}) {
+  return {
+    property_name: recordTitle(row),
+    contact_property_manager: recordContact(row),
+    quote_date: quoteDateLabel(values.quote_sent_at || new Date()),
+    property_address: quotePropertyAddress(row)
+  };
+}
+
+function quoteEmailSubject(row) {
+  return `Turnly quote proposal for ${recordTitle(row)}`;
+}
+
+function quoteEmailBody(row, values = {}) {
+  const firstName = String(recordContact(row) || "").split(/\s+/)[0];
+  const greeting = firstName && firstName !== "No" ? `Hi ${firstName},` : "Hi,";
+  const amount = Number(values.quote_amount || row?.quote_amount || row?.lead_value || 0);
+  return [
+    greeting,
+    "",
+    `Attached is the Turnly quote proposal for ${recordTitle(row)}.`,
+    ...(amount ? ["", `Quote amount: ${money(amount, true)}`] : []),
+    "",
+    "Please reply with any questions, or let us know if you would like us to move forward.",
+    "",
+    "Thank you,",
+    "Turnly"
+  ].join("\n");
+}
+
+function quoteMailtoHref(row, values = {}) {
+  const email = String(row?.contact_email || "").trim();
+  if (!email) return "";
+  const subject = encodeURIComponent(quoteEmailSubject(row));
+  const body = encodeURIComponent(quoteEmailBody(row, values));
+  return `mailto:${email}?subject=${subject}&body=${body}`;
+}
+
+function resetQuotePreview() {
+  if (quotePreviewUrl) URL.revokeObjectURL(quotePreviewUrl);
+  quotePreviewUrl = "";
+  quotePreviewBlob = null;
+  quotePreviewFileName = "";
+}
+
+function syncQuoteFormFromLead(form, options = {}) {
+  if (!form) return null;
+  const values = valuesFromForm(form);
+  const row = rowById(values.lead_id);
+  if (!row) return null;
+  const amountInput = form.querySelector("[name='quote_amount']");
+  if (amountInput && (options.force || !amountInput.value) && (row.quote_amount || row.lead_value)) {
+    amountInput.value = row.quote_amount || row.lead_value || "";
+  }
+  const sentInput = form.querySelector("[name='quote_sent_at']");
+  if (sentInput && !sentInput.value) sentInput.value = toDateTimeLocal(new Date());
+  return row;
+}
+
+function renderQuotePreviewFrame(form, row) {
+  const panel = form.querySelector("[data-admin-sales-quote-preview-panel]");
+  const iframe = form.querySelector("[data-admin-sales-quote-preview-frame]");
+  const download = form.querySelector("[data-admin-sales-quote-download]");
+  const details = form.querySelector("[data-admin-sales-quote-preview-details]");
+  if (!panel || !iframe || !download) return;
+  iframe.src = quotePreviewUrl;
+  download.href = quotePreviewUrl;
+  download.download = quotePreviewFileName;
+  if (details) {
+    details.textContent = [
+      recordTitle(row),
+      recordContact(row),
+      quotePropertyAddress(row),
+      quoteDateLabel()
+    ].filter(Boolean).join(" | ");
+  }
+  panel.hidden = false;
+}
+
+async function generateQuotePreview(form) {
+  const values = valuesFromForm(form);
+  const row = rowById(values.lead_id);
+  if (!row) throw new Error("Choose a lead before generating the quote preview.");
+  showModalMessage(form, "Generating quote preview...");
+  const { PDFDocument, StandardFonts } = await loadPdfLib();
+  const response = await fetch(QUOTE_TEMPLATE_URL, { cache: "no-store" });
+  if (!response.ok) throw new Error("Unable to load the Turnly quote template.");
+  const pdfDoc = await PDFDocument.load(await response.arrayBuffer());
+  const pdfForm = pdfDoc.getForm();
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const fieldValues = quotePdfFieldValues(row, values);
+  Object.entries(fieldValues).forEach(([name, value]) => {
+    pdfForm.getTextField(name).setText(String(value || ""));
+  });
+  pdfForm.updateFieldAppearances(font);
+  const bytes = await pdfDoc.save();
+  resetQuotePreview();
+  quotePreviewBlob = new Blob([bytes], { type: "application/pdf" });
+  quotePreviewFileName = quoteSafeFileName(row);
+  quotePreviewUrl = URL.createObjectURL(quotePreviewBlob);
+  renderQuotePreviewFrame(form, row);
+  showModalMessage(form, "Quote preview generated.", "success");
+  return { row, values, blob: quotePreviewBlob, fileName: quotePreviewFileName };
+}
+
+async function emailQuotePreview(form) {
+  let values = valuesFromForm(form);
+  let row = rowById(values.lead_id);
+  if (!quotePreviewBlob || !quotePreviewUrl || !row) {
+    const generated = await generateQuotePreview(form);
+    row = generated.row;
+    values = generated.values;
+  }
+  if (!row || !quotePreviewBlob) throw new Error("Generate a quote preview before emailing it.");
+  const file = typeof File === "function"
+    ? new File([quotePreviewBlob], quotePreviewFileName, { type: "application/pdf" })
+    : null;
+  const shareData = file ? {
+    title: quoteEmailSubject(row),
+    text: quoteEmailBody(row, values),
+    files: [file]
+  } : null;
+  if (shareData && navigator.canShare?.(shareData)) {
+    await navigator.share(shareData);
+    showModalMessage(form, "Quote attached to the share draft.", "success");
+    return;
+  }
+  const download = form.querySelector("[data-admin-sales-quote-download]");
+  download?.click();
+  const href = quoteMailtoHref(row, values);
+  if (href) {
+    window.location.href = href;
+    showModalMessage(form, "Quote downloaded and email draft opened. Attach the downloaded PDF if your mail app did not include it.", "success");
+  } else {
+    showModalMessage(form, "Quote downloaded. Add a contact email to open a ready-to-send draft.", "error");
+  }
 }
 
 async function selectRows(table, orderColumn, ascending = false, limit = 2000) {
@@ -2029,6 +2211,26 @@ function renderQuoteModal(row) {
           ${field("quote_expires_at", "Expiration Date", toDateInput(row?.quote_expires_at), "date")}
           ${textField("quote_notes", "Quote Notes", row?.quote_notes || "")}
         </div>
+        <section class="admin-sales-quote-builder">
+          <div class="admin-sales-quote-builder-head">
+            <div>
+              <span>Quote PDF</span>
+              <strong>Generate the proposal from the selected lead</strong>
+            </div>
+            <div class="admin-sales-row-actions">
+              <button class="admin-sales-secondary" type="button" data-admin-sales-generate-quote-pdf>${icon("file")}Generate Preview</button>
+              <button class="admin-sales-primary" type="button" data-admin-sales-email-quote-pdf>${icon("mail")}Email Quote</button>
+            </div>
+          </div>
+          <p>The preview fills the Turnly quote form with property name, property manager/contact, quote date, and property address from Supabase.</p>
+          <div class="admin-sales-quote-preview" data-admin-sales-quote-preview-panel hidden>
+            <div class="admin-sales-quote-preview-bar">
+              <small data-admin-sales-quote-preview-details></small>
+              <a class="admin-sales-secondary" href="#" data-admin-sales-quote-download>${icon("file")}Download PDF</a>
+            </div>
+            <iframe title="Turnly quote preview" data-admin-sales-quote-preview-frame></iframe>
+          </div>
+        </section>
       </div>
       ${modalFooter("Save Quote")}
     </form>
@@ -2731,6 +2933,7 @@ async function handleClick(event) {
 
   const close = target.closest("[data-admin-sales-close]");
   if (close) {
+    resetQuotePreview();
     state.modal = null;
     state.importPayloads = [];
     state.importErrors = [];
@@ -2744,8 +2947,33 @@ async function handleClick(event) {
     const type = open.dataset.adminSalesOpen || "lead";
     const explicitId = open.hasAttribute("data-id") ? open.dataset.id || "" : "";
     const fallbackId = type === "lead" || type === "import" ? "" : state.selectedId || "";
+    resetQuotePreview();
     state.modal = { type, id: explicitId || fallbackId };
     render();
+    return;
+  }
+
+  const generateQuote = target.closest("[data-admin-sales-generate-quote-pdf]");
+  if (generateQuote) {
+    const form = generateQuote.closest("[data-admin-sales-quote-form]");
+    try {
+      syncQuoteFormFromLead(form);
+      await generateQuotePreview(form);
+    } catch (error) {
+      showModalMessage(form, `Unable to generate quote: ${error.message}`, "error");
+    }
+    return;
+  }
+
+  const emailQuote = target.closest("[data-admin-sales-email-quote-pdf]");
+  if (emailQuote) {
+    const form = emailQuote.closest("[data-admin-sales-quote-form]");
+    try {
+      syncQuoteFormFromLead(form);
+      await emailQuotePreview(form);
+    } catch (error) {
+      showModalMessage(form, `Unable to prepare email: ${error.message}`, "error");
+    }
     return;
   }
 
@@ -2902,6 +3130,15 @@ async function handleChange(event) {
       }
     }
     render();
+    return;
+  }
+  if (target.matches("[data-admin-sales-quote-form] select[name='lead_id']")) {
+    const form = target.closest("[data-admin-sales-quote-form]");
+    resetQuotePreview();
+    syncQuoteFormFromLead(form, { force: true });
+    const panel = form?.querySelector("[data-admin-sales-quote-preview-panel]");
+    if (panel) panel.hidden = true;
+    showModalMessage(form, "Lead details loaded. Generate a preview when ready.");
     return;
   }
   if (target.matches("[data-admin-sales-select-lead]")) {
