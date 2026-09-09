@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-contractor-pwa-v20260909-admin-command-style";
+const CACHE_NAME = "turnly-contractor-pwa-v20260909-admin-laptop-fit";
 
 const PRECACHE_URLS = [
   "/",
