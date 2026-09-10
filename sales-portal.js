@@ -365,6 +365,70 @@ const state = {
 };
 let focusSavePromise = null;
 
+function ensureSidebarLayoutLock() {
+  if (!document.head) return;
+  let style = document.getElementById("sales-sidebar-layout-lock");
+  if (!style) {
+    style = document.createElement("style");
+    style.id = "sales-sidebar-layout-lock";
+    style.textContent = `
+body.sales-portal-body .sales-app {
+  grid-template-columns: clamp(190px, 16vw, 236px) minmax(0, 1fr) !important;
+  position: relative !important;
+  z-index: 1 !important;
+}
+body.sales-portal-body .sales-sidebar {
+  align-content: start !important;
+  align-self: stretch !important;
+  display: grid !important;
+  gap: 20px !important;
+  grid-template-rows: max-content max-content max-content max-content !important;
+  height: auto !important;
+  min-height: 100vh !important;
+  overflow: visible !important;
+  padding: 22px 14px 18px !important;
+  position: relative !important;
+  top: auto !important;
+}
+body.sales-portal-body .sales-side-kicker {
+  align-self: start !important;
+  margin: 2px 12px 0 !important;
+}
+body.sales-portal-body .sales-nav {
+  align-content: start !important;
+  display: grid !important;
+  gap: 8px !important;
+  grid-template-columns: 1fr !important;
+  margin: 0 !important;
+  max-height: none !important;
+  opacity: 1 !important;
+  overflow: visible !important;
+  padding-right: 2px !important;
+  visibility: visible !important;
+}
+body.sales-portal-body .sales-nav-link {
+  display: flex !important;
+  min-height: 46px !important;
+  visibility: visible !important;
+}
+@media (max-width: 980px) {
+  body.sales-portal-body .sales-app {
+    grid-template-columns: 1fr !important;
+  }
+  body.sales-portal-body .sales-sidebar {
+    height: auto !important;
+    min-height: 0 !important;
+    grid-template-rows: auto auto auto !important;
+    padding-bottom: 14px !important;
+  }
+  body.sales-portal-body .sales-nav {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)) !important;
+  }
+}`;
+  }
+  document.head.appendChild(style);
+}
+
 function icon(name) {
   return `<svg class="sales-icon" viewBox="0 0 24 24" aria-hidden="true">${iconPaths[name] || iconPaths.dashboard}</svg>`;
 }
@@ -1054,6 +1118,7 @@ function pageTitle() {
 
 function render() {
   if (!app) return;
+  ensureSidebarLayoutLock();
   app.innerHTML = `
     <main class="sales-app">
       ${renderSidebar()}
@@ -1067,6 +1132,7 @@ function render() {
       ${renderModal()}
     </main>
   `;
+  requestAnimationFrame(ensureSidebarLayoutLock);
 }
 
 function renderSidebar() {

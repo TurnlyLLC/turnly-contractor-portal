@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-contractor-pwa-v20260910-sales-background-clean";
+const CACHE_NAME = "turnly-contractor-pwa-v20260910-sales-sidebar-lock";
 
 const PRECACHE_URLS = [
   "/",
