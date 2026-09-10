@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-contractor-pwa-v20260910-sales-background-onlynav-fit";
+const CACHE_NAME = "turnly-contractor-pwa-v20260910-sales-background-clean";
 
 const PRECACHE_URLS = [
   "/",
@@ -57,7 +57,7 @@ const PRECACHE_URLS = [
   "/sales-quotes.html",
   "/sales-contracts.html",
   "/sales-tasks.html",
-  "/sales-portal.css",
+  "/sales-portal-20260910a.css",
   "/sales-portal.js",
   "/admin-sales-portal.css",
   "/admin-sales-portal.js",
@@ -114,6 +114,7 @@ function isAdminRuntimeAsset(request) {
     || pathname === "/contractor-portal.css"
     || pathname === "/portal-public.css"
     || pathname === "/sales-portal.css"
+    || pathname === "/sales-portal-20260910a.css"
     || pathname === "/sales-portal.js"
     || pathname === "/admin-sales-portal.css"
     || pathname === "/admin-sales-portal.js"
