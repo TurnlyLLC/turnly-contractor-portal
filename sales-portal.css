@@ -41,6 +41,33 @@ body.sales-portal-body {
   color: var(--sales-ink);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   overflow-x: hidden;
+  position: relative;
+}
+
+body.sales-portal-body::before,
+body.sales-portal-body::after {
+  content: "";
+  pointer-events: none;
+  position: fixed;
+  z-index: 0;
+}
+
+body.sales-portal-body::before {
+  background:
+    linear-gradient(110deg, transparent 0 32%, rgba(0, 240, 223, 0.12) 33%, transparent 34% 100%),
+    linear-gradient(18deg, transparent 0 72%, rgba(59, 183, 255, 0.1) 73%, transparent 74% 100%);
+  inset: 0;
+}
+
+body.sales-portal-body::after {
+  border: 1px solid rgba(0, 240, 223, 0.18);
+  border-radius: 50%;
+  bottom: -560px;
+  box-shadow: 0 0 92px rgba(0, 240, 223, 0.1);
+  height: 980px;
+  right: -230px;
+  transform: rotate(-12deg);
+  width: 1120px;
 }
 
 body.sales-portal-body button,
@@ -60,41 +87,35 @@ body.sales-portal-body a {
 
 .sales-app {
   display: grid;
-  grid-template-columns: 224px minmax(0, 1fr);
+  grid-template-columns: clamp(190px, 16vw, 236px) minmax(0, 1fr);
   width: 100%;
   max-width: 100vw;
   min-height: 100vh;
   overflow-x: hidden;
+  position: relative;
+  z-index: 1;
 }
 
 .sales-sidebar {
-  align-self: start;
-  position: sticky;
-  top: 0;
+  position: relative;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
-  gap: 16px;
-  width: 100%;
-  min-width: 0;
-  height: 100vh;
-  overflow: hidden;
-  padding: 18px 12px 16px;
+  grid-template-rows: auto auto auto auto;
+  gap: 20px;
+  padding: 22px 14px 18px;
   border-right: 1px solid var(--sales-line);
-  background: linear-gradient(180deg, rgba(3, 12, 22, 0.96), rgba(4, 16, 27, 0.92));
+  background:
+    linear-gradient(180deg, rgba(2, 20, 34, 0.98), rgba(1, 10, 20, 0.98)),
+    var(--sales-bg-deep);
+  box-shadow: 12px 0 38px rgba(0, 5, 16, 0.24);
 }
 
 .sales-brand {
   display: flex;
   align-items: center;
   gap: 3px;
-  min-width: 0;
   padding: 3px 7px 14px;
   color: #fff;
   text-decoration: none;
-}
-
-.sales-brand > span:last-child {
-  min-width: 0;
 }
 
 .sales-brand-mark {
@@ -112,9 +133,6 @@ body.sales-portal-body a {
   font-size: 25px;
   letter-spacing: 0.05em;
   line-height: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .sales-brand small {
@@ -124,10 +142,7 @@ body.sales-portal-body a {
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.14em;
-  overflow: hidden;
-  text-overflow: ellipsis;
   text-transform: uppercase;
-  white-space: nowrap;
 }
 
 .sales-side-kicker,
@@ -144,10 +159,7 @@ body.sales-portal-body a {
   display: grid;
   align-content: start;
   gap: 8px;
-  min-height: 0;
-  overflow-y: auto;
   padding-right: 2px;
-  scrollbar-width: thin;
 }
 
 .sales-nav-link {
@@ -155,21 +167,12 @@ body.sales-portal-body a {
   display: flex;
   align-items: center;
   gap: 14px;
-  width: 100%;
-  min-width: 0;
   min-height: 46px;
   padding: 0 14px;
   border-radius: var(--sales-radius);
   color: #d8e3ef;
   text-decoration: none;
   transition: background 160ms ease, color 160ms ease, transform 160ms ease;
-}
-
-.sales-nav-link span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .sales-nav-link::before {
@@ -198,7 +201,6 @@ body.sales-portal-body a {
 }
 
 .sales-icon {
-  flex: 0 0 19px;
   width: 19px;
   height: 19px;
   fill: none;
@@ -211,23 +213,14 @@ body.sales-portal-body a {
 .sales-sidebar-footer {
   display: grid;
   gap: 10px;
-  min-width: 0;
 }
 
 .sales-collapse-note {
   display: flex;
   align-items: center;
   gap: 9px;
-  min-width: 0;
   color: #c7d3e1;
   font-size: 13px;
-}
-
-.sales-collapse-note span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .sales-main {
@@ -2703,40 +2696,6 @@ button.sales-activity-row:hover {
 }
 
 @media (max-width: 1460px) {
-  .sales-app {
-    grid-template-columns: 210px minmax(0, 1fr);
-  }
-
-  .sales-sidebar {
-    gap: 13px;
-    padding: 16px 10px 14px;
-  }
-
-  .sales-brand {
-    padding: 2px 6px 11px;
-  }
-
-  .sales-brand-mark {
-    height: 34px;
-    width: 34px;
-  }
-
-  .sales-brand strong {
-    font-size: 22px;
-  }
-
-  .sales-nav-link {
-    gap: 10px;
-    min-height: 40px;
-    padding: 0 11px;
-  }
-
-  .sales-side-kicker,
-  .sales-nav-heading {
-    margin-left: 10px;
-    margin-right: 10px;
-  }
-
   .sales-topbar {
     grid-template-columns: 1fr;
   }
@@ -2770,26 +2729,6 @@ button.sales-activity-row:hover {
 }
 
 @media (max-width: 1240px) {
-  .sales-app {
-    grid-template-columns: 198px minmax(0, 1fr);
-  }
-
-  .sales-brand strong {
-    font-size: 20px;
-  }
-
-  .sales-brand small {
-    font-size: 9px;
-    letter-spacing: 0.1em;
-  }
-
-  .sales-nav-link {
-    font-size: 13px;
-    gap: 9px;
-    min-height: 38px;
-    padding: 0 10px;
-  }
-
   .sales-topbar {
     grid-template-columns: 1fr;
   }
@@ -2821,13 +2760,11 @@ button.sales-activity-row:hover {
   }
 
   .sales-sidebar {
-    align-self: auto;
     position: relative;
     inset: auto;
     width: auto;
     height: auto;
     grid-template-rows: auto auto auto;
-    overflow: visible;
     padding-bottom: 14px;
   }
 
@@ -2838,7 +2775,6 @@ button.sales-activity-row:hover {
   .sales-nav {
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     max-height: none;
-    overflow: visible;
   }
 
   .sales-preview-controls {
