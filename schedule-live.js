@@ -910,12 +910,34 @@ function renderScheduleAssignmentVideoList(videos = []) {
 }
 
 function renderScheduleAssignmentVideoPreviews(videos = []) {
-  const videoForPhase = (phase) => videos.find((video) => token(video.video_phase || "") === phase);
+  const assigned = new Set();
+  const explicitVideoForPhase = (phase) => videos.find((video) => scheduleVideoPreviewPhase(video) === phase);
+  const beforeVideo = explicitVideoForPhase("before") || videos.find((video) => video.signedUrl);
+  if (beforeVideo) assigned.add(beforeVideo.id || beforeVideo.signedUrl || beforeVideo.storage_path || beforeVideo.file_name);
+  const afterVideo = explicitVideoForPhase("after") || videos.find((video) => {
+    const key = video.id || video.signedUrl || video.storage_path || video.file_name;
+    return video.signedUrl && !assigned.has(key);
+  });
+  const previewVideos = { before: beforeVideo, after: afterVideo };
   return `
     <div class="schedule-video-preview-grid" aria-label="Before and after video previews">
-      ${["before", "after"].map((phase) => renderScheduleAssignmentVideoPreviewCard(phase, videoForPhase(phase))).join("")}
+      ${["before", "after"].map((phase) => renderScheduleAssignmentVideoPreviewCard(phase, previewVideos[phase])).join("")}
     </div>
   `;
+}
+
+function scheduleVideoPreviewPhase(video) {
+  const parts = [
+    video?.video_phase,
+    video?.title,
+    video?.label,
+    video?.file_name,
+    video?.room_name,
+    Array.isArray(video?.tags) ? video.tags.join(" ") : video?.tags
+  ].map((value) => token(value || "")).filter(Boolean);
+  if (parts.some((part) => part === "before" || part.startsWith("before-") || part.endsWith("-before") || part.includes("-before-"))) return "before";
+  if (parts.some((part) => part === "after" || part.startsWith("after-") || part.endsWith("-after") || part.includes("-after-"))) return "after";
+  return "";
 }
 
 function renderScheduleAssignmentVideoPreviewCard(phase, video) {
