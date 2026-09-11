@@ -369,6 +369,7 @@ const state = {
   adminPreview: null
 };
 let focusSavePromise = null;
+let focusSaveQueuedOptions = null;
 let quotePreviewUrl = "";
 let quotePreviewBlob = null;
 let quotePreviewFileName = "";
@@ -3399,6 +3400,9 @@ async function autosaveFocusLead(options = {}) {
   const form = document.querySelector("[data-focus-lead-form]");
   if (!form) return true;
   if (focusSavePromise) {
+    focusSaveQueuedOptions = {
+      includeNote: Boolean(focusSaveQueuedOptions?.includeNote || options.includeNote)
+    };
     return focusSavePromise;
   }
 
@@ -3437,7 +3441,7 @@ async function autosaveFocusLead(options = {}) {
       }, {}),
       questions,
       follow_up_status: values.focus_follow_up_status || "open",
-      walkthrough_window: values.walkthrough_window || previousFocusState.walkthrough_window || "",
+      walkthrough_window: values.walkthrough_window || "",
       qualification_outcome: qualificationOutcome,
       qualification_detail: qualificationDetail
     };
@@ -3447,16 +3451,16 @@ async function autosaveFocusLead(options = {}) {
       qualification_notes: mergeQualificationNotes(qualificationNotesText(row), focusState),
       contact_name: values.contact_name?.trim() || "",
       contact_email: values.contact_email?.trim() || "",
-      decision_maker_status: questions.decision_maker === "yes" ? "confirmed" : questions.decision_maker === "no" ? "not_confirmed" : row?.decision_maker_status || "",
-      current_vendor: questions.cleaning_crew === "yes" ? "Yes" : questions.cleaning_crew === "no" ? "No" : row?.current_vendor || ""
+      decision_maker_status: questions.decision_maker === "yes" ? "confirmed" : questions.decision_maker === "no" ? "not_confirmed" : "",
+      current_vendor: questions.cleaning_crew === "yes" ? "Yes" : questions.cleaning_crew === "no" ? "No" : ""
     };
 
     if (stageSet.has("pricing_confirmed") || questions.price_acceptable === "yes") {
       payload.budget_range = "Confirmed at $0.25/sq ft";
     } else if (questions.price_acceptable === "no") {
       payload.budget_range = "Not acceptable at $0.25/sq ft";
-    } else if (pricingFitConfirmed(row)) {
-      payload.budget_range = "Needs confirmation";
+    } else {
+      payload.budget_range = "";
     }
 
     if (stageSet.has("follow_up_needed") || previousFocusState.stages.follow_up_needed || row?.next_step || row?.task_due_at) {
@@ -3473,6 +3477,10 @@ async function autosaveFocusLead(options = {}) {
         ? "Quality Control Walkthrough Demo"
         : row?.walkthrough_type || "Property Walkthrough";
       payload.walkthrough_location = row?.walkthrough_location || row?.address || "";
+    } else {
+      payload.walkthrough_at = null;
+      payload.walkthrough_end_at = null;
+      payload.walkthrough_status = "";
     }
 
     if (note) {
@@ -3499,6 +3507,13 @@ async function autosaveFocusLead(options = {}) {
     return await focusSavePromise;
   } finally {
     focusSavePromise = null;
+    if (focusSaveQueuedOptions) {
+      const queuedOptions = focusSaveQueuedOptions;
+      focusSaveQueuedOptions = null;
+      window.setTimeout(() => {
+        autosaveFocusLead(queuedOptions);
+      }, 0);
+    }
   }
 }
 
@@ -3937,7 +3952,7 @@ async function deleteAvailabilitySlot(id) {
 
 function syncFocusConditionalUi(form, source = null) {
   if (!form) return;
-  if (source?.name === "walkthrough_window") {
+  if (source?.name === "walkthrough_window" && source.checked) {
     const walkthroughCheckbox = form.querySelector('input[name="focus_stage"][value="walkthrough_set"]');
     if (walkthroughCheckbox) walkthroughCheckbox.checked = true;
     const qualityChoice = form.querySelector('input[name="focus_wants_quality_walkthrough"]:checked');
@@ -3945,6 +3960,10 @@ function syncFocusConditionalUi(form, source = null) {
     if (!qualityChoice && qualityYes) qualityYes.checked = true;
     const schedulePopover = form.querySelector("[data-schedule-walkthrough-popover]");
     if (schedulePopover) schedulePopover.hidden = true;
+  } else if (source?.name === "walkthrough_window") {
+    const hasWindowChoice = Boolean(form.querySelector('input[name="walkthrough_window"]:checked'));
+    const walkthroughCheckbox = form.querySelector('input[name="focus_stage"][value="walkthrough_set"]');
+    if (!hasWindowChoice && walkthroughCheckbox) walkthroughCheckbox.checked = false;
   }
   const followUpChecked = Boolean(form.querySelector('input[name="focus_stage"][value="follow_up_needed"]')?.checked);
   const followUpWrap = form.querySelector("[data-follow-up-status-wrap]");
@@ -4032,7 +4051,7 @@ function changeCalendar(direction) {
 
 function bindEvents() {
   document.addEventListener("pointerdown", (event) => {
-    const option = event.target?.closest?.(".sales-yesno-group label");
+    const option = event.target?.closest?.("[data-focus-lead-form] label");
     const radio = option?.querySelector?.('input[type="radio"]');
     if (radio) radio.dataset.wasChecked = radio.checked ? "true" : "false";
   });
@@ -4056,14 +4075,14 @@ function bindEvents() {
       return;
     }
 
-    const yesNoOption = target.closest?.(".sales-yesno-group label");
-    const yesNoRadio = yesNoOption?.querySelector?.('input[type="radio"]');
-    if (yesNoRadio?.dataset.wasChecked === "true") {
+    const focusRadioOption = target.closest?.("[data-focus-lead-form] label");
+    const focusRadio = focusRadioOption?.querySelector?.('input[type="radio"]');
+    if (focusRadio?.dataset.wasChecked === "true") {
       event.preventDefault();
-      yesNoRadio.checked = false;
-      yesNoRadio.dataset.wasChecked = "false";
-      const form = yesNoRadio.closest("[data-focus-lead-form]");
-      syncFocusConditionalUi(form, yesNoRadio);
+      focusRadio.checked = false;
+      focusRadio.dataset.wasChecked = "false";
+      const form = focusRadio.closest("[data-focus-lead-form]");
+      syncFocusConditionalUi(form, focusRadio);
       await autosaveFocusLead();
       return;
     }

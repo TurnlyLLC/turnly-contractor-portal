@@ -968,7 +968,7 @@ function renderScheduleAssignmentVideoPreviewCard(phase, video) {
         ${playableUrl ? `<a class="secondary-action" href="${escapeHtml(playableUrl)}" target="_blank" rel="noreferrer"><span>Open</span></a>` : ""}
       </header>
       ${playableUrl
-        ? `<video controls preload="metadata" playsinline><source src="${escapeHtml(playableUrl)}" ${video.mime_type ? `type="${escapeHtml(video.mime_type)}"` : ""} />Your browser cannot preview this video.</video>`
+        ? `<video controls preload="metadata" playsinline src="${escapeHtml(playableUrl)}">Your browser cannot preview this video. <a href="${escapeHtml(playableUrl)}" target="_blank" rel="noreferrer">Open the video</a>.</video>`
         : `<div class="schedule-video-preview-empty">Preview unavailable for this file.</div>`}
     </article>
   `;

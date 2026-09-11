@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-contractor-pwa-v20260911-schedule-video-url-fallback";
+const CACHE_NAME = "turnly-contractor-pwa-v20260911-focus-unselect-video-direct";
 
 const PRECACHE_URLS = [
   "/",
