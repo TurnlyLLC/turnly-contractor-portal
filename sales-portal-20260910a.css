@@ -2961,6 +2961,75 @@ button.sales-activity-row:hover {
   }
 }
 
+.sales-quote-builder {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+  padding: 14px;
+  border: 1px solid var(--sales-line);
+  border-radius: var(--sales-radius);
+  background: rgba(7, 21, 36, 0.58);
+}
+
+.sales-quote-builder-head,
+.sales-quote-preview-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.sales-quote-builder-head > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.sales-quote-builder-head span {
+  color: var(--sales-cyan);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sales-quote-builder-head strong {
+  color: var(--sales-ink);
+  font-size: 16px;
+}
+
+.sales-quote-builder > p {
+  margin: 0;
+  color: var(--sales-muted);
+  line-height: 1.45;
+}
+
+.sales-quote-preview {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--sales-line);
+  border-radius: var(--sales-radius);
+  background: rgba(3, 12, 22, 0.58);
+}
+
+.sales-quote-preview[hidden] {
+  display: none;
+}
+
+.sales-quote-preview-bar small {
+  color: var(--sales-muted);
+  font-weight: 800;
+}
+
+.sales-quote-preview iframe {
+  width: 100%;
+  min-height: min(62vh, 620px);
+  border: 0;
+  border-radius: calc(var(--sales-radius) - 2px);
+  background: #fff;
+}
+
 body.sales-portal-body .sales-app {
   grid-template-columns: clamp(190px, 16vw, 236px) minmax(0, 1fr) !important;
   position: relative !important;

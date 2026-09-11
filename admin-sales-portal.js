@@ -1,4 +1,10 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+import {
+  createQuoteEmailDraft,
+  generateTurnlyQuotePdf,
+  quoteDraftFileName,
+  quoteSenderEmail
+} from "./quote-proposal-tools.js?v=20260911-quote-draft";
 
 const TABLES = {
   leads: "sales_leads",
@@ -11,8 +17,6 @@ const TABLES = {
 };
 
 const XLSX_URL = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
-const PDF_LIB_URL = "/assets/vendor/pdf-lib.min.js?v=20260909-quote-pdf";
-const QUOTE_TEMPLATE_URL = "/assets/turnly-quote-proposal-template.pdf?v=20260909-quote-template";
 const ADMIN_SALES_PAGES = new Set(["sales-overview", "leads", "walkthroughs", "sales-tasks", "quotes", "contracts-pending"]);
 
 const pageCopy = {
@@ -176,7 +180,6 @@ const state = {
 };
 
 let xlsxPromise = null;
-let pdfLibPromise = null;
 let quotePreviewUrl = "";
 let quotePreviewBlob = null;
 let quotePreviewFileName = "";
@@ -761,30 +764,6 @@ function contactEmailHref(row) {
   return `mailto:${email}?subject=${subject}`;
 }
 
-function loadPdfLib() {
-  if (window.PDFLib?.PDFDocument) return Promise.resolve(window.PDFLib);
-  if (pdfLibPromise) return pdfLibPromise;
-  pdfLibPromise = new Promise((resolve, reject) => {
-    const existing = document.querySelector("script[data-turnly-pdf-lib]");
-    if (existing) {
-      existing.addEventListener("load", () => resolve(window.PDFLib), { once: true });
-      existing.addEventListener("error", () => reject(new Error("Unable to load PDF tools.")), { once: true });
-      return;
-    }
-    const script = document.createElement("script");
-    script.src = PDF_LIB_URL;
-    script.async = true;
-    script.dataset.turnlyPdfLib = "true";
-    script.addEventListener("load", () => {
-      if (window.PDFLib?.PDFDocument) resolve(window.PDFLib);
-      else reject(new Error("PDF tools loaded without the expected API."));
-    }, { once: true });
-    script.addEventListener("error", () => reject(new Error("Unable to load PDF tools.")), { once: true });
-    document.head.appendChild(script);
-  });
-  return pdfLibPromise;
-}
-
 function quoteDateLabel(value = new Date()) {
   const date = dateValue(value) || new Date();
   return date.toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" });
@@ -825,16 +804,9 @@ function quoteEmailBody(row, values = {}) {
     "Please reply with any questions, or let us know if you would like us to move forward.",
     "",
     "Thank you,",
-    "Turnly"
+    "Turnly Sales",
+    quoteSenderEmail()
   ].join("\n");
-}
-
-function quoteMailtoHref(row, values = {}) {
-  const email = String(row?.contact_email || "").trim();
-  if (!email) return "";
-  const subject = encodeURIComponent(quoteEmailSubject(row));
-  const body = encodeURIComponent(quoteEmailBody(row, values));
-  return `mailto:${email}?subject=${subject}&body=${body}`;
 }
 
 function resetQuotePreview() {
@@ -883,21 +855,13 @@ async function generateQuotePreview(form) {
   const row = rowById(values.lead_id);
   if (!row) throw new Error("Choose a lead before generating the quote preview.");
   showModalMessage(form, "Generating quote preview...");
-  const { PDFDocument, StandardFonts } = await loadPdfLib();
-  const response = await fetch(QUOTE_TEMPLATE_URL, { cache: "no-store" });
-  if (!response.ok) throw new Error("Unable to load the Turnly quote template.");
-  const pdfDoc = await PDFDocument.load(await response.arrayBuffer());
-  const pdfForm = pdfDoc.getForm();
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const fieldValues = quotePdfFieldValues(row, values);
-  Object.entries(fieldValues).forEach(([name, value]) => {
-    pdfForm.getTextField(name).setText(String(value || ""));
+  const generated = await generateTurnlyQuotePdf({
+    fieldValues: quotePdfFieldValues(row, values),
+    fileName: quoteSafeFileName(row)
   });
-  pdfForm.updateFieldAppearances(font);
-  const bytes = await pdfDoc.save();
   resetQuotePreview();
-  quotePreviewBlob = new Blob([bytes], { type: "application/pdf" });
-  quotePreviewFileName = quoteSafeFileName(row);
+  quotePreviewBlob = generated.blob;
+  quotePreviewFileName = generated.fileName;
   quotePreviewUrl = URL.createObjectURL(quotePreviewBlob);
   renderQuotePreviewFrame(form, row);
   showModalMessage(form, "Quote preview generated.", "success");
@@ -913,28 +877,34 @@ async function emailQuotePreview(form) {
     values = generated.values;
   }
   if (!row || !quotePreviewBlob) throw new Error("Generate a quote preview before emailing it.");
-  const file = typeof File === "function"
-    ? new File([quotePreviewBlob], quotePreviewFileName, { type: "application/pdf" })
-    : null;
-  const shareData = file ? {
-    title: quoteEmailSubject(row),
-    text: quoteEmailBody(row, values),
-    files: [file]
-  } : null;
-  if (shareData && navigator.canShare?.(shareData)) {
-    await navigator.share(shareData);
-    showModalMessage(form, "Quote attached to the share draft.", "success");
-    return;
-  }
-  const download = form.querySelector("[data-admin-sales-quote-download]");
-  download?.click();
-  const href = quoteMailtoHref(row, values);
-  if (href) {
-    window.location.href = href;
-    showModalMessage(form, "Quote downloaded and email draft opened. Attach the downloaded PDF if your mail app did not include it.", "success");
-  } else {
-    showModalMessage(form, "Quote downloaded. Add a contact email to open a ready-to-send draft.", "error");
-  }
+  await createQuoteEmailDraft({
+    toEmail: row.contact_email,
+    toName: recordContact(row),
+    subject: quoteEmailSubject(row),
+    body: quoteEmailBody(row, values),
+    pdfBlob: quotePreviewBlob,
+    pdfFileName: quotePreviewFileName,
+    draftFileName: quoteDraftFileName(quotePreviewFileName)
+  });
+  showModalMessage(form, `Email draft created with the PDF attached. Open the draft and send it from ${quoteSenderEmail()}.`, "success");
+}
+
+async function emailQuoteForRow(row) {
+  if (!row) throw new Error("Select a quote before sending it.");
+  const generated = await generateTurnlyQuotePdf({
+    fieldValues: quotePdfFieldValues(row, row),
+    fileName: quoteSafeFileName(row)
+  });
+  await createQuoteEmailDraft({
+    toEmail: row.contact_email,
+    toName: recordContact(row),
+    subject: quoteEmailSubject(row),
+    body: quoteEmailBody(row, row),
+    pdfBlob: generated.blob,
+    pdfFileName: generated.fileName,
+    draftFileName: quoteDraftFileName(generated.fileName)
+  });
+  return generated;
 }
 
 async function selectRows(table, orderColumn, ascending = false, limit = 2000) {
@@ -1952,7 +1922,7 @@ function renderQuoteDetail(row) {
       </div>
       <div class="admin-sales-action-stack">
         <button class="admin-sales-primary" type="button" data-admin-sales-open="quote" data-id="${esc(row.id)}">${icon("file")}Edit Quote</button>
-        <button class="admin-sales-secondary" type="button" data-admin-sales-update-quote="${esc(row.id)}" data-status="sent">${icon("mail")}Mark Sent</button>
+        <button class="admin-sales-secondary" type="button" data-admin-sales-send-quote="${esc(row.id)}">${icon("mail")}Send Quote</button>
         <button class="admin-sales-secondary" type="button" data-admin-sales-update-quote="${esc(row.id)}" data-status="accepted">${icon("check")}Mark Accepted</button>
         <button class="admin-sales-secondary" type="button" data-admin-sales-update-stage="${esc(row.id)}" data-stage="contract_out">${icon("clipboard")}Move to Contracts</button>
       </div>
@@ -2219,10 +2189,10 @@ function renderQuoteModal(row) {
             </div>
             <div class="admin-sales-row-actions">
               <button class="admin-sales-secondary" type="button" data-admin-sales-generate-quote-pdf>${icon("file")}Generate Preview</button>
-              <button class="admin-sales-primary" type="button" data-admin-sales-email-quote-pdf>${icon("mail")}Email Quote</button>
+              <button class="admin-sales-primary" type="button" data-admin-sales-email-quote-pdf>${icon("mail")}Send Quote</button>
             </div>
           </div>
-          <p>The preview fills the Turnly quote form with property name, property manager/contact, quote date, and property address from Supabase.</p>
+          <p>The preview fills the Turnly quote form with property name, property manager/contact, quote date, and property address from Supabase. Send Quote creates an attached email draft from ${esc(quoteSenderEmail())}.</p>
           <div class="admin-sales-quote-preview" data-admin-sales-quote-preview-panel hidden>
             <div class="admin-sales-quote-preview-bar">
               <small data-admin-sales-quote-preview-details></small>
@@ -2973,6 +2943,25 @@ async function handleClick(event) {
       await emailQuotePreview(form);
     } catch (error) {
       showModalMessage(form, `Unable to prepare email: ${error.message}`, "error");
+    }
+    return;
+  }
+
+  const sendQuote = target.closest("[data-admin-sales-send-quote]");
+  if (sendQuote) {
+    const rowId = sendQuote.dataset.adminSalesSendQuote;
+    try {
+      state.message = "Preparing quote email draft...";
+      render();
+      const row = rowById(rowId);
+      await emailQuoteForRow(row);
+      state.message = `Quote email draft created. Open it and send from ${quoteSenderEmail()}.`;
+      state.messageTone = "success";
+      render();
+    } catch (error) {
+      state.message = `Unable to prepare quote email: ${error.message}`;
+      state.messageTone = "error";
+      render();
     }
     return;
   }
