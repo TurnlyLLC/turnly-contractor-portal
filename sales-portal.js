@@ -86,6 +86,7 @@ const focusQuestionDefs = [
   { id: "wants_quality_walkthrough", label: "Would they like an in-person walkthrough demonstration of our quality control processes?" }
 ];
 const FOCUS_STATE_PREFIX = "TURNLY_FOCUS_STATE:";
+const FOCUS_STATE_VERSION = "20260911-yes-only-conditionals";
 const walkthroughStatuses = ["scheduled", "confirmed", "rescheduled", "completed", "cancelled"];
 const quoteStatuses = ["draft", "sent", "viewed", "accepted", "declined", "expired"];
 const taskStatuses = ["open", "in_progress", "pending", "completed"];
@@ -654,9 +655,10 @@ function mergeQualificationNotes(visibleText, focusState) {
 
 function focusStateFor(row) {
   const parsed = splitQualificationNotes(row?.qualification_notes || "").focusState || {};
+  const useSavedFocusState = parsed.version === FOCUS_STATE_VERSION;
   const stage = stageFor(row);
-  const storedStages = parsed.stages || {};
-  const storedQuestions = parsed.questions || {};
+  const storedStages = useSavedFocusState ? parsed.stages || {} : {};
+  const storedQuestions = useSavedFocusState ? parsed.questions || {} : {};
   const stages = {
     contacted: storedStages.contacted ?? stage !== "new_leads",
     pricing_confirmed: storedStages.pricing_confirmed ?? pricingFitConfirmed(row),
@@ -670,15 +672,15 @@ function focusStateFor(row) {
     price_acceptable: storedQuestions.price_acceptable || "",
     wants_quality_walkthrough: storedQuestions.wants_quality_walkthrough || ""
   };
-  const followUpStatus = parsed.follow_up_status || taskStatus(row);
+  const followUpStatus = useSavedFocusState ? parsed.follow_up_status || taskStatus(row) : taskStatus(row);
   return {
     stages,
     questions,
     follow_up_status: focusFollowUpStatuses.some(([status]) => status === followUpStatus) ? followUpStatus : "open",
-    walkthrough_window: parsed.walkthrough_window || "",
-    qualification_outcome: parsed.qualification_outcome || "",
-    qualification_detail: parsed.qualification_detail || "",
-    current_cleaning_quote_price: parsed.current_cleaning_quote_price || ""
+    walkthrough_window: useSavedFocusState ? parsed.walkthrough_window || "" : "",
+    qualification_outcome: useSavedFocusState ? parsed.qualification_outcome || "" : "",
+    qualification_detail: useSavedFocusState ? parsed.qualification_detail || "" : "",
+    current_cleaning_quote_price: useSavedFocusState ? parsed.current_cleaning_quote_price || "" : ""
   };
 }
 
@@ -3456,6 +3458,7 @@ async function autosaveFocusLead(options = {}) {
           : "new_leads";
 
     const focusState = {
+      version: FOCUS_STATE_VERSION,
       stages: focusStageDefs.reduce((acc, stage) => {
         acc[stage.id] = stageSet.has(stage.id);
         return acc;
