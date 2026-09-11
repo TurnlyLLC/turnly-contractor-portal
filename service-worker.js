@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-contractor-pwa-v20260911-focus-unselect-video-direct";
+const CACHE_NAME = "turnly-contractor-pwa-v20260911-focus-all-leads-clear-walkthrough";
 
 const PRECACHE_URLS = [
   "/",

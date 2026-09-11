@@ -1314,6 +1314,10 @@ function baseFilteredRows(rows = state.rows) {
   });
 }
 
+function leadFocusRows() {
+  return state.rows.slice();
+}
+
 function statusForCurrentPage(row) {
   if (state.page === "walkthroughs") return normalize(row.walkthrough_status || "scheduled");
   if (state.page === "quotes") return quoteStatus(row);
@@ -1738,17 +1742,18 @@ function renderStageTabs() {
 
 function renderLeadsPage() {
   const rows = baseFilteredRows();
-  if (state.leadFocusMode) return renderLeadFocusMode(rows);
+  const focusRows = leadFocusRows();
+  if (state.leadFocusMode) return renderLeadFocusMode(focusRows);
   const canManageLeads = isSalesAdmin();
   const selectedCount = state.selectedLeadIds.size;
   const visibleSelectedCount = rows.filter((row) => state.selectedLeadIds.has(row.id)).length;
   const allVisibleSelected = Boolean(rows.length && visibleSelectedCount === rows.length);
   return `
     <section class="sales-leads-start">
-      <button class="sales-focus-start-button" type="button" data-enter-lead-focus ${rows.length ? "" : "disabled"}>
+      <button class="sales-focus-start-button" type="button" data-enter-lead-focus ${focusRows.length ? "" : "disabled"}>
         <span>${icon("check")}</span>
         <strong>Let's Get To Work</strong>
-        <small>${rows.length ? `${number(rows.length)} prospect${rows.length === 1 ? "" : "s"} in this view` : canManageLeads ? "Upload prospects to begin" : "No prospects are available yet"}</small>
+        <small>${focusRows.length ? `${number(focusRows.length)} total prospect${focusRows.length === 1 ? "" : "s"}` : canManageLeads ? "Upload prospects to begin" : "No prospects are available yet"}</small>
       </button>
     </section>
     <section class="sales-leads-layout">
@@ -3477,10 +3482,10 @@ async function autosaveFocusLead(options = {}) {
         ? "Quality Control Walkthrough Demo"
         : row?.walkthrough_type || "Property Walkthrough";
       payload.walkthrough_location = row?.walkthrough_location || row?.address || "";
-    } else {
+    } else if (row?.walkthrough_at || previousFocusState.walkthrough_window) {
       payload.walkthrough_at = null;
       payload.walkthrough_end_at = null;
-      payload.walkthrough_status = "";
+      payload.walkthrough_status = "cancelled";
     }
 
     if (note) {
@@ -3982,7 +3987,7 @@ function syncFocusConditionalUi(form, source = null) {
 async function moveLeadFocus(direction) {
   const saved = await autosaveFocusLead({ includeNote: true });
   if (!saved) return;
-  const rows = baseFilteredRows();
+  const rows = leadFocusRows();
   if (!rows.length) return;
   const currentIndex = rows.findIndex((row) => row.id === state.selectedId);
   const nextIndex = currentIndex >= 0 ? (currentIndex + direction + rows.length) % rows.length : 0;
