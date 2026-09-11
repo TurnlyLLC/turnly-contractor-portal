@@ -1268,22 +1268,38 @@ button.sales-activity-row:hover {
   display: grid;
   align-content: space-between;
   gap: 18px;
+  border-color: rgba(20, 213, 207, 0.30);
+  background: linear-gradient(145deg, rgba(8, 31, 49, 0.96), rgba(5, 18, 32, 0.86));
 }
 
 .sales-focus-contact-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
 }
 
 .sales-focus-contact-grid .sales-field {
   display: grid;
-  gap: 7px;
-  color: #8fa1b6;
+  gap: 9px;
+  color: #b9d8ee;
+  font-size: 13px;
+  letter-spacing: 0.06em;
 }
 
 .sales-focus-contact-grid input {
-  min-height: 44px;
+  min-height: 58px;
+  padding: 0 16px;
+  border-color: rgba(20, 213, 207, 0.42);
+  background: rgba(1, 12, 23, 0.76);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 850;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 0 1px rgba(20, 213, 207, 0.06);
+}
+
+.sales-focus-contact-grid input:focus {
+  border-color: rgba(20, 213, 207, 0.86);
+  box-shadow: 0 0 0 4px rgba(20, 213, 207, 0.16);
 }
 
 .sales-focus-info-box.phone strong {
@@ -1499,12 +1515,32 @@ button.sales-activity-row:hover {
   position: relative;
   display: grid;
   gap: 5px;
-  min-height: 92px;
-  padding: 14px 14px 14px 18px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  min-height: 104px;
+  padding: 16px 16px 16px 20px;
+  border: 1px solid transparent;
   border-radius: var(--sales-radius);
-  background: rgba(3, 12, 22, 0.48);
   cursor: pointer;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease, filter 160ms ease;
+}
+
+.sales-focus-outcome-card:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+}
+
+.sales-focus-outcome-card.met {
+  border-color: rgba(22, 217, 137, 0.42);
+  background: linear-gradient(145deg, rgba(22, 217, 137, 0.28), rgba(8, 71, 52, 0.48));
+}
+
+.sales-focus-outcome-card.partial {
+  border-color: rgba(250, 204, 21, 0.48);
+  background: linear-gradient(145deg, rgba(250, 204, 21, 0.30), rgba(88, 69, 7, 0.50));
+}
+
+.sales-focus-outcome-card.no {
+  border-color: rgba(248, 113, 113, 0.52);
+  background: linear-gradient(145deg, rgba(248, 113, 113, 0.30), rgba(93, 20, 32, 0.52));
 }
 
 .sales-focus-outcome-card input {
@@ -1515,28 +1551,28 @@ button.sales-activity-row:hover {
 
 .sales-focus-outcome-card strong {
   color: #f8fbff;
-  font-size: 15px;
+  font-size: 16px;
 }
 
 .sales-focus-outcome-card small {
-  color: var(--sales-muted);
-  font-size: 12px;
+  color: rgba(244, 249, 255, 0.78);
+  font-size: 13px;
   font-weight: 850;
 }
 
 .sales-focus-outcome-card.met:has(input:checked) {
-  border-color: rgba(22, 217, 137, 0.78);
-  background: rgba(22, 217, 137, 0.18);
+  border-color: rgba(22, 217, 137, 0.98);
+  box-shadow: 0 0 0 4px rgba(22, 217, 137, 0.20), 0 16px 36px rgba(22, 217, 137, 0.18);
 }
 
 .sales-focus-outcome-card.partial:has(input:checked) {
-  border-color: rgba(250, 204, 21, 0.80);
-  background: rgba(250, 204, 21, 0.14);
+  border-color: rgba(250, 204, 21, 0.98);
+  box-shadow: 0 0 0 4px rgba(250, 204, 21, 0.20), 0 16px 36px rgba(250, 204, 21, 0.16);
 }
 
 .sales-focus-outcome-card.no:has(input:checked) {
-  border-color: rgba(248, 113, 113, 0.82);
-  background: rgba(248, 113, 113, 0.14);
+  border-color: rgba(248, 113, 113, 0.98);
+  box-shadow: 0 0 0 4px rgba(248, 113, 113, 0.20), 0 16px 36px rgba(248, 113, 113, 0.16);
 }
 
 .sales-focus-outcome-detail {
@@ -2837,7 +2873,7 @@ button.sales-activity-row:hover {
   }
 
   .sales-focus-info-box.phone strong {
-    font-size: clamp(25px, 3.2vw, 42px);
+    font-size: clamp(18px, 4.5vw, 26px);
   }
 
   .sales-focus-info-box.notes {
