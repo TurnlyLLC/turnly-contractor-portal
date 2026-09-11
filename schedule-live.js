@@ -885,7 +885,7 @@ function renderScheduleAssignmentVideoList(videos = []) {
   if (!videos.length) {
     return `<div class="schedule-video-empty">No before or after videos are attached yet.</div>`;
   }
-  return videos.map((video) => {
+  const chips = videos.map((video) => {
     const phase = scheduleVideoPhaseLabel(video.video_phase);
     const meta = [
       video.file_name || "Video file",
@@ -903,6 +903,51 @@ function renderScheduleAssignmentVideoList(videos = []) {
       </article>
     `;
   }).join("");
+  return `
+    ${renderScheduleAssignmentVideoPreviews(videos)}
+    <div class="schedule-video-chip-list">${chips}</div>
+  `;
+}
+
+function renderScheduleAssignmentVideoPreviews(videos = []) {
+  const videoForPhase = (phase) => videos.find((video) => token(video.video_phase || "") === phase);
+  return `
+    <div class="schedule-video-preview-grid" aria-label="Before and after video previews">
+      ${["before", "after"].map((phase) => renderScheduleAssignmentVideoPreviewCard(phase, videoForPhase(phase))).join("")}
+    </div>
+  `;
+}
+
+function renderScheduleAssignmentVideoPreviewCard(phase, video) {
+  const label = scheduleVideoPhaseLabel(phase);
+  if (!video) {
+    return `
+      <article class="schedule-video-preview-card is-empty">
+        <span>${escapeHtml(label)}</span>
+        <div class="schedule-video-preview-empty">No ${escapeHtml(label.toLowerCase())} attached yet.</div>
+      </article>
+    `;
+  }
+  const title = video.title || video.label || video.file_name || label;
+  const meta = [
+    video.file_name || "",
+    formatShortDate(video.created_at || video.recorded_at)
+  ].filter(Boolean).join(" - ");
+  return `
+    <article class="schedule-video-preview-card">
+      <header>
+        <div>
+          <span>${escapeHtml(label)}</span>
+          <strong>${escapeHtml(title)}</strong>
+          ${meta ? `<small>${escapeHtml(meta)}</small>` : ""}
+        </div>
+        ${video.signedUrl ? `<a class="secondary-action" href="${escapeHtml(video.signedUrl)}" target="_blank" rel="noreferrer"><span>Open</span></a>` : ""}
+      </header>
+      ${video.signedUrl
+        ? `<video controls preload="metadata" playsinline><source src="${escapeHtml(video.signedUrl)}" ${video.mime_type ? `type="${escapeHtml(video.mime_type)}"` : ""} />Your browser cannot preview this video.</video>`
+        : `<div class="schedule-video-preview-empty">Preview unavailable for this file.</div>`}
+    </article>
+  `;
 }
 
 function updateScheduleVideoFileLabel(input) {
@@ -1447,6 +1492,13 @@ function injectScheduleStyles() {
       <style id="scheduleLiveActionStyles">
         .schedule-assignment-actions{display:flex;justify-content:flex-end;margin-top:14px}.schedule-assignment-actions .primary-action{min-width:150px}.schedule-assignment-danger-zone{align-items:center;background:rgba(255,91,104,.06);border:1px solid rgba(255,91,104,.24);border-radius:8px;display:flex;gap:16px;justify-content:space-between;margin-top:16px;padding:14px}.schedule-assignment-danger-zone strong{color:#fff;display:block;font-size:13px}.schedule-assignment-danger-zone p{color:var(--suite-soft);font-size:12px;margin:4px 0 0}.schedule-assignment-danger-zone .danger-btn{border-color:rgba(255,91,104,.7);color:var(--suite-red);min-width:150px}.schedule-assignment-danger-zone .danger-btn:disabled{cursor:wait;opacity:.58}@media(max-width:620px){.schedule-assignment-actions{display:grid}.schedule-assignment-danger-zone{align-items:stretch;flex-direction:column}.schedule-assignment-danger-zone .danger-btn{width:100%}}
         .schedule-assignment-video-panel{background:rgba(0,214,163,.055);border:1px solid rgba(0,214,163,.22);border-radius:8px;display:grid;gap:14px;margin-top:16px;padding:14px}.schedule-video-head{align-items:start;display:flex;gap:12px;justify-content:space-between}.schedule-video-head span{color:var(--suite-green);font-size:11px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}.schedule-video-head strong{color:var(--suite-text);display:block;font-size:15px;margin-top:3px}.schedule-video-head small{color:var(--suite-soft);display:block;font-size:12px;margin-top:4px}.schedule-video-count{background:rgba(0,214,163,.12);border:1px solid rgba(0,214,163,.24);border-radius:999px;padding:5px 9px;white-space:nowrap}.schedule-video-list{display:grid;gap:8px}.schedule-video-empty{border:1px dashed var(--suite-border-soft);border-radius:8px;color:var(--suite-soft);font-size:12px;padding:12px}.schedule-video-chip{align-items:center;background:rgba(4,14,25,.46);border:1px solid var(--suite-border-soft);border-radius:8px;display:flex;gap:12px;justify-content:space-between;padding:10px 12px}.schedule-video-chip div{min-width:0}.schedule-video-chip span{color:var(--suite-green);display:block;font-size:10px;font-weight:900;text-transform:uppercase}.schedule-video-chip strong{color:var(--suite-text);display:block;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.schedule-video-chip small{color:var(--suite-soft);font-size:11px}.schedule-video-chip .secondary-action{min-height:30px;min-width:70px}.schedule-video-upload-form{display:grid;gap:12px}.schedule-video-upload-grid{display:grid;gap:10px;grid-template-columns:repeat(2,minmax(0,1fr))}.schedule-video-upload-card{background:rgba(255,255,255,.035);border:1px solid var(--suite-border-soft);border-radius:8px;cursor:pointer;display:grid;gap:4px;padding:12px}.schedule-video-upload-card span{color:var(--suite-soft);font-size:11px;font-weight:900;text-transform:uppercase}.schedule-video-upload-card strong{color:var(--suite-text);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.schedule-video-upload-card small{color:var(--suite-soft);font-size:11px}.schedule-video-upload-card input{margin-top:6px;width:100%}.schedule-video-notes-field{grid-column:1/-1}.schedule-video-upload-actions{align-items:center;display:flex;gap:12px;justify-content:space-between}.schedule-video-message{color:var(--suite-soft);font-size:12px;margin:0}.schedule-video-message.error{color:var(--suite-red)}.schedule-video-upload-actions .primary-action{min-width:140px}@media(max-width:720px){.schedule-video-head,.schedule-video-chip,.schedule-video-upload-actions{align-items:stretch;flex-direction:column}.schedule-video-upload-grid{grid-template-columns:1fr}.schedule-video-upload-actions .primary-action{width:100%}}
+      </style>
+    `);
+  }
+  if (!document.getElementById("scheduleLiveVideoPreviewStyles")) {
+    document.head.insertAdjacentHTML("beforeend", `
+      <style id="scheduleLiveVideoPreviewStyles">
+        .schedule-video-preview-grid{display:grid;gap:12px;grid-template-columns:repeat(2,minmax(0,1fr))}.schedule-video-preview-card{background:rgba(2,10,18,.56);border:1px solid rgba(124,151,176,.18);border-radius:8px;display:grid;gap:10px;min-width:0;padding:12px}.schedule-video-preview-card header{align-items:start;display:flex;gap:10px;justify-content:space-between;min-width:0}.schedule-video-preview-card header>div{min-width:0}.schedule-video-preview-card span{color:var(--suite-green);display:block;font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}.schedule-video-preview-card strong{color:var(--suite-text);display:block;font-size:13px;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.schedule-video-preview-card small{color:var(--suite-soft);display:block;font-size:11px;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.schedule-video-preview-card video{aspect-ratio:16/9;background:#020913;border:1px solid rgba(124,151,176,.16);border-radius:7px;display:block;width:100%}.schedule-video-preview-card.is-empty{align-content:start}.schedule-video-preview-empty{align-items:center;aspect-ratio:16/9;background:rgba(255,255,255,.035);border:1px dashed var(--suite-border-soft);border-radius:7px;color:var(--suite-soft);display:grid;font-size:12px;justify-items:center;padding:12px;text-align:center}.schedule-video-chip-list{display:grid;gap:8px}@media(max-width:820px){.schedule-video-preview-grid{grid-template-columns:1fr}.schedule-video-preview-card header{align-items:stretch;flex-direction:column}}
       </style>
     `);
   }
