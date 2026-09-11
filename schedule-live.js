@@ -887,6 +887,7 @@ function renderScheduleAssignmentVideoList(videos = []) {
   }
   const chips = videos.map((video) => {
     const phase = scheduleVideoPhaseLabel(video.video_phase);
+    const playableUrl = scheduleVideoPlayableUrl(video);
     const meta = [
       video.file_name || "Video file",
       bytes(video.file_size || video.file_size_bytes || 0),
@@ -899,7 +900,7 @@ function renderScheduleAssignmentVideoList(videos = []) {
           <strong>${escapeHtml(video.title || video.label || video.file_name || "Uploaded video")}</strong>
           <small>${escapeHtml(meta)}</small>
         </div>
-        ${video.signedUrl ? `<a class="secondary-action" href="${escapeHtml(video.signedUrl)}" target="_blank" rel="noreferrer"><span>Open</span></a>` : `<small>Preview unavailable</small>`}
+        ${playableUrl ? `<a class="secondary-action" href="${escapeHtml(playableUrl)}" target="_blank" rel="noreferrer"><span>Open</span></a>` : `<small>Preview unavailable</small>`}
       </article>
     `;
   }).join("");
@@ -912,11 +913,11 @@ function renderScheduleAssignmentVideoList(videos = []) {
 function renderScheduleAssignmentVideoPreviews(videos = []) {
   const assigned = new Set();
   const explicitVideoForPhase = (phase) => videos.find((video) => scheduleVideoPreviewPhase(video) === phase);
-  const beforeVideo = explicitVideoForPhase("before") || videos.find((video) => video.signedUrl);
-  if (beforeVideo) assigned.add(beforeVideo.id || beforeVideo.signedUrl || beforeVideo.storage_path || beforeVideo.file_name);
+  const beforeVideo = explicitVideoForPhase("before") || videos.find((video) => scheduleVideoPlayableUrl(video));
+  if (beforeVideo) assigned.add(scheduleVideoKey(beforeVideo));
   const afterVideo = explicitVideoForPhase("after") || videos.find((video) => {
-    const key = video.id || video.signedUrl || video.storage_path || video.file_name;
-    return video.signedUrl && !assigned.has(key);
+    const key = scheduleVideoKey(video);
+    return scheduleVideoPlayableUrl(video) && !assigned.has(key);
   });
   const previewVideos = { before: beforeVideo, after: afterVideo };
   return `
@@ -955,6 +956,7 @@ function renderScheduleAssignmentVideoPreviewCard(phase, video) {
     video.file_name || "",
     formatShortDate(video.created_at || video.recorded_at)
   ].filter(Boolean).join(" - ");
+  const playableUrl = scheduleVideoPlayableUrl(video);
   return `
     <article class="schedule-video-preview-card">
       <header>
@@ -963,13 +965,49 @@ function renderScheduleAssignmentVideoPreviewCard(phase, video) {
           <strong>${escapeHtml(title)}</strong>
           ${meta ? `<small>${escapeHtml(meta)}</small>` : ""}
         </div>
-        ${video.signedUrl ? `<a class="secondary-action" href="${escapeHtml(video.signedUrl)}" target="_blank" rel="noreferrer"><span>Open</span></a>` : ""}
+        ${playableUrl ? `<a class="secondary-action" href="${escapeHtml(playableUrl)}" target="_blank" rel="noreferrer"><span>Open</span></a>` : ""}
       </header>
-      ${video.signedUrl
-        ? `<video controls preload="metadata" playsinline><source src="${escapeHtml(video.signedUrl)}" ${video.mime_type ? `type="${escapeHtml(video.mime_type)}"` : ""} />Your browser cannot preview this video.</video>`
+      ${playableUrl
+        ? `<video controls preload="metadata" playsinline><source src="${escapeHtml(playableUrl)}" ${video.mime_type ? `type="${escapeHtml(video.mime_type)}"` : ""} />Your browser cannot preview this video.</video>`
         : `<div class="schedule-video-preview-empty">Preview unavailable for this file.</div>`}
     </article>
   `;
+}
+
+function scheduleVideoPlayableUrl(video) {
+  return String(
+    video?.signedUrl
+    || video?.signed_url
+    || video?.public_url
+    || video?.file_url
+    || video?.video_url
+    || video?.url
+    || video?.download_url
+    || video?.storage_url
+    || ""
+  ).trim();
+}
+
+function scheduleVideoKey(video) {
+  return String(
+    video?.id
+    || scheduleVideoPlayableUrl(video)
+    || scheduleVideoStoragePath(video)
+    || video?.file_name
+    || ""
+  ).trim();
+}
+
+function scheduleVideoStoragePath(video) {
+  return String(
+    video?.storage_path
+    || video?.storage_object_path
+    || video?.object_path
+    || video?.path
+    || video?.file_path
+    || video?.video_path
+    || ""
+  ).trim();
 }
 
 function updateScheduleVideoFileLabel(input) {
@@ -1045,12 +1083,19 @@ async function attachScheduleVideoUrls(videos = []) {
 }
 
 async function scheduleVideoSignedUrl(video) {
-  const path = String(video?.storage_path || "").trim();
-  if (!path || !supabase) return "";
+  const existingUrl = scheduleVideoPlayableUrl({ ...video, signedUrl: "" });
+  if (existingUrl) return existingUrl;
+  const path = scheduleVideoStoragePath(video).replace(/^\/+/, "");
+  if (!path) return "";
+  if (/^https?:\/\//i.test(path)) return path;
+  if (!supabase) return "";
+  const bucket = String(video?.storage_bucket || video?.bucket || video?.bucket_name || QA_VIDEO_BUCKET).trim() || QA_VIDEO_BUCKET;
+  const bucketPrefix = `${bucket}/`;
+  const objectPath = path.startsWith(bucketPrefix) ? path.slice(bucketPrefix.length) : path;
   try {
     const { data, error } = await supabase.storage
-      .from(video.storage_bucket || QA_VIDEO_BUCKET)
-      .createSignedUrl(path, QA_VIDEO_SIGNED_URL_SECONDS);
+      .from(bucket)
+      .createSignedUrl(objectPath, QA_VIDEO_SIGNED_URL_SECONDS);
     return error ? "" : (data?.signedUrl || "");
   } catch {
     return "";
