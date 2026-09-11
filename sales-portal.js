@@ -664,11 +664,11 @@ function focusStateFor(row) {
     follow_up_needed: storedStages.follow_up_needed ?? Boolean(row?.next_step || row?.task_due_at || ["in_progress", "pending"].includes(taskStatus(row)))
   };
   const questions = {
-    decision_maker: storedQuestions.decision_maker || yesNoFromDecisionMaker(row?.decision_maker_status),
-    cleaning_crew: storedQuestions.cleaning_crew || yesNoFromText(row?.current_vendor),
+    decision_maker: storedQuestions.decision_maker || "",
+    cleaning_crew: storedQuestions.cleaning_crew || "",
     wants_quote: storedQuestions.wants_quote || "",
-    price_acceptable: storedQuestions.price_acceptable || (pricingFitConfirmed(row) ? "yes" : yesNoFromPriceFit(row?.budget_range)),
-    wants_quality_walkthrough: storedQuestions.wants_quality_walkthrough || yesNoFromText(row?.walkthrough_type?.includes("Quality") ? "yes" : "")
+    price_acceptable: storedQuestions.price_acceptable || "",
+    wants_quality_walkthrough: storedQuestions.wants_quality_walkthrough || ""
   };
   const followUpStatus = parsed.follow_up_status || taskStatus(row);
   return {
