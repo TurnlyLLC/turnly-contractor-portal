@@ -1505,6 +1505,17 @@ button.sales-activity-row:hover {
   color: #90f5c6;
 }
 
+.sales-focus-followup-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+.sales-focus-conditional.is-hidden,
+.sales-focus-window-box.is-hidden {
+  display: none;
+}
+
 .sales-focus-outcome-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));

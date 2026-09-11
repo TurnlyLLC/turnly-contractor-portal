@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-contractor-pwa-v20260911-focus-state-version";
+const CACHE_NAME = "turnly-contractor-pwa-v20260911-focus-conditional-hide";
 
 const PRECACHE_URLS = [
   "/",
