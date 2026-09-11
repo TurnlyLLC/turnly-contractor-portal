@@ -677,7 +677,8 @@ function focusStateFor(row) {
     follow_up_status: focusFollowUpStatuses.some(([status]) => status === followUpStatus) ? followUpStatus : "open",
     walkthrough_window: parsed.walkthrough_window || "",
     qualification_outcome: parsed.qualification_outcome || "",
-    qualification_detail: parsed.qualification_detail || ""
+    qualification_detail: parsed.qualification_detail || "",
+    current_cleaning_quote_price: parsed.current_cleaning_quote_price || ""
   };
 }
 
@@ -1864,6 +1865,9 @@ function renderFocusQuestionList(row) {
   const focusState = focusStateFor(row);
   const outcome = focusState.qualification_outcome || "";
   const needsDetail = outcome === "partial" || outcome === "not_qualified";
+  const showDecisionMaker = focusState.questions.decision_maker === "yes";
+  const showCrewPrice = focusState.questions.cleaning_crew === "yes";
+  const showQuoteEmail = focusState.questions.wants_quote === "yes";
   return `
     <section class="sales-focus-info-box sales-focus-question-box">
       <span>Qualification Questions</span>
@@ -1888,6 +1892,20 @@ function renderFocusQuestionList(row) {
             </div>
           `;
         }).join("")}
+      </div>
+      <div class="sales-focus-followup-fields">
+        <label class="sales-field sales-focus-conditional ${showDecisionMaker ? "" : "is-hidden"}" data-focus-conditional="decision_maker">
+          Decision maker name
+          <input name="contact_name" type="text" value="${esc(row.contact_name || "")}" />
+        </label>
+        <label class="sales-field sales-focus-conditional ${showCrewPrice ? "" : "is-hidden"}" data-focus-conditional="cleaning_crew">
+          Current cleaning quote price
+          <input name="current_cleaning_quote_price" type="text" value="${esc(focusState.current_cleaning_quote_price || "")}" placeholder="Optional" />
+        </label>
+        <label class="sales-field sales-focus-conditional ${showQuoteEmail ? "" : "is-hidden"}" data-focus-conditional="wants_quote">
+          Email on file
+          <input name="contact_email" type="email" value="${esc(row.contact_email || "")}" />
+        </label>
       </div>
       <div class="sales-focus-outcome-grid" role="group" aria-label="Qualification outcome">
         <label class="sales-focus-outcome-card met">
@@ -2015,6 +2033,8 @@ function groupWalkthroughWindows(slots) {
 }
 
 function renderFocusWalkthroughWindows(row) {
+  const focusState = focusStateFor(row);
+  const showSchedule = focusState.questions.wants_quality_walkthrough === "yes";
   const selectedStart = walkthroughAt(row);
   const groups = groupWalkthroughWindows(walkthroughWindowOptions(row));
   const selectedSlot = groups.flatMap((group) => group.slots).find((slot) => selectedStart && slot.starts_at === selectedStart);
@@ -2022,7 +2042,7 @@ function renderFocusWalkthroughWindows(row) {
     ? `${formatDate(selectedSlot.starts_at, { weekday: "short", month: "short", day: "numeric" })} at ${formatTime(selectedSlot.starts_at)}`
     : "No walkthrough scheduled";
   return `
-    <section class="sales-focus-info-box sales-focus-window-box">
+    <section class="sales-focus-info-box sales-focus-window-box ${showSchedule ? "" : "is-hidden"}" data-focus-walkthrough-section>
       <span>Walkthrough Availability</span>
       <div class="sales-focus-schedule-summary">
         <strong>${esc(selectedLabel)}</strong>
@@ -2115,10 +2135,6 @@ function renderLeadFocusMode(rows) {
           <div class="sales-focus-board">
             <section class="sales-focus-info-box phone">
               <span>Lead Contact</span>
-              <div class="sales-focus-contact-grid">
-                ${field("contact_name", "Decision Maker Name", row.contact_name || "", "text")}
-                ${field("contact_email", "Email On File", row.contact_email || "", "email")}
-              </div>
               <strong>${esc(row.contact_phone || "No phone saved")}</strong>
               ${phoneHref ? `<a class="sales-primary-button" href="${esc(phoneHref)}">${icon("phone")}Call Lead</a>` : `<button class="sales-primary-button" type="button" disabled>${icon("phone")}No Phone Saved</button>`}
             </section>
@@ -3448,14 +3464,15 @@ async function autosaveFocusLead(options = {}) {
       follow_up_status: values.focus_follow_up_status || "open",
       walkthrough_window: values.walkthrough_window || "",
       qualification_outcome: qualificationOutcome,
-      qualification_detail: qualificationDetail
+      qualification_detail: qualificationDetail,
+      current_cleaning_quote_price: questions.cleaning_crew === "yes" ? values.current_cleaning_quote_price?.trim() || "" : ""
     };
 
     const payload = {
       pipeline_stage: pipelineStage,
       qualification_notes: mergeQualificationNotes(qualificationNotesText(row), focusState),
-      contact_name: values.contact_name?.trim() || "",
-      contact_email: values.contact_email?.trim() || "",
+      contact_name: questions.decision_maker === "yes" ? values.contact_name?.trim() || "" : "",
+      contact_email: questions.wants_quote === "yes" ? values.contact_email?.trim() || "" : "",
       decision_maker_status: questions.decision_maker === "yes" ? "confirmed" : questions.decision_maker === "no" ? "not_confirmed" : "",
       current_vendor: questions.cleaning_crew === "yes" ? "Yes" : questions.cleaning_crew === "no" ? "No" : ""
     };
@@ -3973,6 +3990,25 @@ function syncFocusConditionalUi(form, source = null) {
   const followUpChecked = Boolean(form.querySelector('input[name="focus_stage"][value="follow_up_needed"]')?.checked);
   const followUpWrap = form.querySelector("[data-follow-up-status-wrap]");
   if (followUpWrap) followUpWrap.classList.toggle("is-hidden", !followUpChecked);
+  const decisionMakerYes = form.querySelector('input[name="focus_decision_maker"][value="yes"]')?.checked;
+  const cleaningCrewYes = form.querySelector('input[name="focus_cleaning_crew"][value="yes"]')?.checked;
+  const wantsQuoteYes = form.querySelector('input[name="focus_wants_quote"][value="yes"]')?.checked;
+  const wantsWalkthroughYes = form.querySelector('input[name="focus_wants_quality_walkthrough"][value="yes"]')?.checked;
+  toggleFocusConditionalField(form, "decision_maker", decisionMakerYes);
+  toggleFocusConditionalField(form, "cleaning_crew", cleaningCrewYes);
+  toggleFocusConditionalField(form, "wants_quote", wantsQuoteYes);
+  const walkthroughSection = form.querySelector("[data-focus-walkthrough-section]");
+  if (walkthroughSection) walkthroughSection.classList.toggle("is-hidden", !wantsWalkthroughYes);
+  if (!wantsWalkthroughYes) {
+    form.querySelectorAll('input[name="walkthrough_window"]').forEach((radio) => {
+      radio.checked = false;
+    });
+    const walkthroughCheckbox = form.querySelector('input[name="focus_stage"][value="walkthrough_set"]');
+    if (walkthroughCheckbox) walkthroughCheckbox.checked = false;
+  } else if (source?.name === "focus_wants_quality_walkthrough") {
+    const schedulePopover = form.querySelector("[data-schedule-walkthrough-popover]");
+    if (schedulePopover) schedulePopover.hidden = false;
+  }
   const outcome = form.querySelector('input[name="focus_qualification_outcome"]:checked')?.value || "";
   const outcomeWrap = form.querySelector("[data-focus-outcome-detail-wrap]");
   if (outcomeWrap) {
@@ -3981,6 +4017,17 @@ function syncFocusConditionalUi(form, source = null) {
     if (label) label.textContent = outcome === "not_qualified" ? "Reason lead does not qualify" : "More qualification details";
     const textarea = outcomeWrap.querySelector("textarea");
     if (textarea) textarea.placeholder = outcome === "not_qualified" ? "Why does this lead not meet the qualifications?" : "What still needs to be confirmed?";
+  }
+}
+
+function toggleFocusConditionalField(form, key, visible) {
+  const wrap = form.querySelector(`[data-focus-conditional="${key}"]`);
+  if (!wrap) return;
+  wrap.classList.toggle("is-hidden", !visible);
+  if (!visible) {
+    wrap.querySelectorAll("input, textarea, select").forEach((field) => {
+      field.value = "";
+    });
   }
 }
 

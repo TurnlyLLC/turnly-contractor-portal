@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-contractor-pwa-v20260911-focus-all-leads-clear-walkthrough";
+const CACHE_NAME = "turnly-contractor-pwa-v20260911-focus-conditional-fields";
 
 const PRECACHE_URLS = [
   "/",
