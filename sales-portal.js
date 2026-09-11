@@ -13,11 +13,10 @@ import {
   writeAdminPreviewContext
 } from "./admin-preview-context.js?v=20260908-sales-preview";
 import {
-  createQuoteEmailDraft,
   generateTurnlyQuotePdf,
-  quoteDraftFileName,
+  openGmailQuoteDraft,
   quoteSenderEmail
-} from "./quote-proposal-tools.js?v=20260911-quote-draft";
+} from "./quote-proposal-tools.js?v=20260911-gmail-focus";
 
 const SALES_TABLES = {
   leads: "sales_leads",
@@ -675,7 +674,9 @@ function focusStateFor(row) {
     stages,
     questions,
     follow_up_status: focusFollowUpStatuses.some(([status]) => status === followUpStatus) ? followUpStatus : "open",
-    walkthrough_window: parsed.walkthrough_window || ""
+    walkthrough_window: parsed.walkthrough_window || "",
+    qualification_outcome: parsed.qualification_outcome || "",
+    qualification_detail: parsed.qualification_detail || ""
   };
 }
 
@@ -1855,6 +1856,8 @@ function renderFocusStageChecklist(row) {
 
 function renderFocusQuestionList(row) {
   const focusState = focusStateFor(row);
+  const outcome = focusState.qualification_outcome || "";
+  const needsDetail = outcome === "partial" || outcome === "not_qualified";
   return `
     <section class="sales-focus-info-box sales-focus-question-box">
       <span>Qualification Questions</span>
@@ -1880,6 +1883,27 @@ function renderFocusQuestionList(row) {
           `;
         }).join("")}
       </div>
+      <div class="sales-focus-outcome-grid" role="group" aria-label="Qualification outcome">
+        <label class="sales-focus-outcome-card met">
+          <input type="radio" name="focus_qualification_outcome" value="met" ${outcome === "met" ? "checked" : ""} />
+          <strong>All qualifications met</strong>
+          <small>Ready for walkthrough</small>
+        </label>
+        <label class="sales-focus-outcome-card partial">
+          <input type="radio" name="focus_qualification_outcome" value="partial" ${outcome === "partial" ? "checked" : ""} />
+          <strong>Some qualifications met</strong>
+          <small>Prompt for more details</small>
+        </label>
+        <label class="sales-focus-outcome-card no">
+          <input type="radio" name="focus_qualification_outcome" value="not_qualified" ${outcome === "not_qualified" ? "checked" : ""} />
+          <strong>Does not qualify</strong>
+          <small>Prompt for the reason</small>
+        </label>
+      </div>
+      <label class="sales-field sales-focus-outcome-detail ${needsDetail ? "" : "is-hidden"}" data-focus-outcome-detail-wrap>
+        ${outcome === "not_qualified" ? "Reason lead does not qualify" : "More qualification details"}
+        <textarea name="focus_qualification_detail" rows="3" placeholder="${outcome === "not_qualified" ? "Why does this lead not meet the qualifications?" : "What still needs to be confirmed?"}">${esc(focusState.qualification_detail || "")}</textarea>
+      </label>
     </section>
   `;
 }
@@ -1987,35 +2011,55 @@ function groupWalkthroughWindows(slots) {
 function renderFocusWalkthroughWindows(row) {
   const selectedStart = walkthroughAt(row);
   const groups = groupWalkthroughWindows(walkthroughWindowOptions(row));
+  const selectedSlot = groups.flatMap((group) => group.slots).find((slot) => selectedStart && slot.starts_at === selectedStart);
+  const selectedLabel = selectedSlot
+    ? `${formatDate(selectedSlot.starts_at, { weekday: "short", month: "short", day: "numeric" })} at ${formatTime(selectedSlot.starts_at)}`
+    : "No walkthrough scheduled";
   return `
     <section class="sales-focus-info-box sales-focus-window-box">
       <span>Walkthrough Availability</span>
-      <div class="sales-walkthrough-date-grid">
-        ${groups.map((group) => `
-          <article class="sales-walkthrough-date-card">
-            <header>
-              <div>
-                <h3>${esc(formatDate(group.date, { weekday: "short", month: "short", day: "numeric", year: "numeric" }))}</h3>
-                <p>${esc(formatTime(group.firstStart))} - ${esc(formatTime(group.lastEnd))}</p>
-              </div>
-              <span class="sales-availability-count">${esc(number(group.openCount))} slot${group.openCount === 1 ? "" : "s"}</span>
-            </header>
-            <div class="sales-walkthrough-time-grid">
-              ${group.slots.map((slot) => {
-                const start = dateValue(slot.starts_at);
-                const end = dateValue(slot.ends_at);
-                const checked = selectedStart && slot.starts_at === selectedStart;
-                return `
-                  <label class="sales-walkthrough-time-card">
-                    <input type="radio" name="walkthrough_window" value="${esc(walkthroughWindowValue(slot))}" ${checked ? "checked" : ""} />
-                    <strong>${esc(start && end ? `${formatTime(start)} - ${formatTime(end)}` : "Time TBD")}</strong>
-                    <span>${esc(slot.label || "Available walkthrough")}</span>
-                  </label>
-                `;
-              }).join("")}
+      <div class="sales-focus-schedule-summary">
+        <strong>${esc(selectedLabel)}</strong>
+        <button class="sales-primary-button" type="button" data-open-schedule-walkthrough>${icon("calendar")}Schedule Walkthrough</button>
+      </div>
+      <div class="sales-schedule-popover" data-schedule-walkthrough-popover hidden>
+        <div class="sales-schedule-backdrop" data-close-schedule-walkthrough></div>
+        <section class="sales-schedule-dialog" role="dialog" aria-modal="true" aria-label="Schedule walkthrough">
+          <header>
+            <div>
+              <span>Available Times</span>
+              <strong>Schedule walkthrough</strong>
             </div>
-          </article>
-        `).join("")}
+            <button class="sales-icon-button" type="button" data-close-schedule-walkthrough aria-label="Close schedule options">${icon("x")}</button>
+          </header>
+          <div class="sales-walkthrough-date-grid">
+            ${groups.map((group) => `
+              <article class="sales-walkthrough-date-card">
+                <header>
+                  <div>
+                    <h3>${esc(formatDate(group.date, { weekday: "short", month: "short", day: "numeric", year: "numeric" }))}</h3>
+                    <p>${esc(formatTime(group.firstStart))} - ${esc(formatTime(group.lastEnd))}</p>
+                  </div>
+                  <span class="sales-availability-count">${esc(number(group.openCount))} slot${group.openCount === 1 ? "" : "s"}</span>
+                </header>
+                <div class="sales-walkthrough-time-grid">
+                  ${group.slots.map((slot) => {
+                    const start = dateValue(slot.starts_at);
+                    const end = dateValue(slot.ends_at);
+                    const checked = selectedStart && slot.starts_at === selectedStart;
+                    return `
+                      <label class="sales-walkthrough-time-card">
+                        <input type="radio" name="walkthrough_window" value="${esc(walkthroughWindowValue(slot))}" ${checked ? "checked" : ""} />
+                        <strong>${esc(start && end ? `${formatTime(start)} - ${formatTime(end)}` : "Time TBD")}</strong>
+                        <span>${esc(slot.label || "Available walkthrough")}</span>
+                      </label>
+                    `;
+                  }).join("")}
+                </div>
+              </article>
+            `).join("")}
+          </div>
+        </section>
       </div>
     </section>
   `;
@@ -2064,7 +2108,11 @@ function renderLeadFocusMode(rows) {
         <form data-focus-lead-form data-record-id="${esc(row.id)}">
           <div class="sales-focus-board">
             <section class="sales-focus-info-box phone">
-              <span>Phone Number</span>
+              <span>Lead Contact</span>
+              <div class="sales-focus-contact-grid">
+                ${field("contact_name", "Decision Maker Name", row.contact_name || "", "text")}
+                ${field("contact_email", "Email On File", row.contact_email || "", "email")}
+              </div>
               <strong>${esc(row.contact_phone || "No phone saved")}</strong>
               ${phoneHref ? `<a class="sales-primary-button" href="${esc(phoneHref)}">${icon("phone")}Call Lead</a>` : `<button class="sales-primary-button" type="button" disabled>${icon("phone")}No Phone Saved</button>`}
             </section>
@@ -2529,7 +2577,7 @@ function renderQuoteDetail(row) {
         <strong>${esc(row.quote_notes || row.lead_notes || "No quote notes saved.")}</strong>
       </div>
       <div class="sales-action-stack">
-        <button class="sales-primary-button" type="button" data-open-quote="${esc(row.id)}">${icon("file-text")}Edit Quote</button>
+        <button class="sales-primary-button" type="button" data-open-quote="${esc(row.id)}">${icon("file-text")}Prepare Quote</button>
         <button class="sales-secondary-button" type="button" data-send-quote="${esc(row.id)}">${icon("mail")}Send Quote</button>
         <button class="sales-secondary-button" type="button" data-update-quote-status="${esc(row.id)}" data-status="accepted">${icon("check")}Mark Accepted</button>
         <button class="sales-secondary-button" type="button" data-update-stage="${esc(row.id)}" data-stage="contract_out">${icon("file-check")}Move to Contract</button>
@@ -2796,17 +2844,15 @@ async function emailQuotePreview(form) {
     row = generated.row;
     values = generated.values;
   }
-  if (!row || !quotePreviewBlob) throw new Error("Generate a quote preview before creating the email draft.");
-  await createQuoteEmailDraft({
+  if (!row || !quotePreviewBlob) throw new Error("Generate a quote preview before opening Gmail.");
+  await openGmailQuoteDraft({
     toEmail: row.contact_email,
-    toName: recordContact(row),
     subject: quoteEmailSubject(row),
     body: quoteEmailBody(row, values),
     pdfBlob: quotePreviewBlob,
-    pdfFileName: quotePreviewFileName,
-    draftFileName: quoteDraftFileName(quotePreviewFileName)
+    pdfFileName: quotePreviewFileName
   });
-  setInlineFormMessage(form, `Email draft created with the PDF attached. Open it and send from ${quoteSenderEmail()}.`, "success");
+  setInlineFormMessage(form, `Gmail opened with the quote email ready. Attach the downloaded PDF before sending from ${quoteSenderEmail()}.`, "success");
 }
 
 async function emailQuoteForRow(row) {
@@ -2815,14 +2861,12 @@ async function emailQuoteForRow(row) {
     fieldValues: quotePdfFieldValues(row, row),
     fileName: quoteSafeFileName(row)
   });
-  await createQuoteEmailDraft({
+  await openGmailQuoteDraft({
     toEmail: row.contact_email,
-    toName: recordContact(row),
     subject: quoteEmailSubject(row),
     body: quoteEmailBody(row, row),
     pdfBlob: generated.blob,
-    pdfFileName: generated.fileName,
-    draftFileName: quoteDraftFileName(generated.fileName)
+    pdfFileName: generated.fileName
   });
   return generated;
 }
@@ -3132,30 +3176,23 @@ function renderWalkthroughModal(row) {
 
 function renderQuoteModal(row) {
   const selectedId = row?.id || state.selectedId || "";
+  const selectedRow = row || recordById(selectedId);
   const body = `
     <form data-quote-form data-record-id="${esc(selectedId)}">
       <div class="sales-modal-body">
-        <div class="sales-form-grid">
-          ${selectField("record_id", "Property / Lead", recordOptions(), selectedId, true, "span-two")}
-          ${field("quote_amount", "Quote Amount", row?.quote_amount || row?.lead_value || "", "number", true)}
-          ${selectField("quote_status", "Quote Status", quoteStatuses.map((status) => [status, titleCase(status)]), row?.quote_status || "sent")}
-          ${field("quote_sent_at", "Date Sent", toDateInput(row?.quote_sent_at) || toDateInput(new Date()), "date")}
-          ${field("quote_expires_at", "Expiration Date", toDateInput(row?.quote_expires_at), "date")}
-          ${field("lead_value", "Pipeline Value", row?.lead_value || row?.quote_amount || "", "number")}
-          ${textAreaField("quote_notes", "Quote Notes", row?.quote_notes || "", "span-two")}
-        </div>
+        <input type="hidden" name="record_id" value="${esc(selectedId)}" />
         <section class="sales-quote-builder">
           <div class="sales-quote-builder-head">
             <div>
               <span>Quote PDF</span>
-              <strong>Fill the proposal and create an email draft</strong>
+              <strong>${esc(selectedRow ? recordTitle(selectedRow) : "Select a lead before sending a quote")}</strong>
             </div>
             <div class="sales-row-actions">
               <button class="sales-secondary-button" type="button" data-generate-quote-pdf>${icon("file-text")}Generate Preview</button>
               <button class="sales-primary-button" type="button" data-email-quote-pdf>${icon("mail")}Send Quote</button>
             </div>
           </div>
-          <p>The proposal pulls the property name, manager/contact, quote date, and address from the selected property record. Send Quote creates an attached email draft from ${esc(quoteSenderEmail())}.</p>
+          <p>Generate Preview fills the Turnly quote form. Send Quote opens Gmail with the email ready and downloads the PDF so it can be attached before sending from ${esc(quoteSenderEmail())}.</p>
           <div class="sales-quote-preview" data-sales-quote-preview-panel hidden>
             <div class="sales-quote-preview-bar">
               <small data-sales-quote-preview-details></small>
@@ -3165,10 +3202,9 @@ function renderQuoteModal(row) {
           </div>
         </section>
       </div>
-      ${modalFooter("Save Quote")}
     </form>
   `;
-  return renderModalShell(row ? "Edit Quote" : "Create Quote", "Quotes", body, "", false);
+  return renderModalShell("Send Quote", "Quotes", body, "", false);
 }
 
 function renderTaskModal(row) {
@@ -3381,6 +3417,8 @@ async function autosaveFocusLead(options = {}) {
     const questions = Object.fromEntries(
       focusQuestionDefs.map((question) => [question.id, values[`focus_${question.id}`] || ""])
     );
+    const qualificationOutcome = values.focus_qualification_outcome || "";
+    const qualificationDetail = ["partial", "not_qualified"].includes(qualificationOutcome) ? values.focus_qualification_detail?.trim() || "" : "";
     if (questions.price_acceptable === "yes") stageSet.add("pricing_confirmed");
     if (windowChoice) stageSet.add("walkthrough_set");
 
@@ -3399,12 +3437,16 @@ async function autosaveFocusLead(options = {}) {
       }, {}),
       questions,
       follow_up_status: values.focus_follow_up_status || "open",
-      walkthrough_window: values.walkthrough_window || previousFocusState.walkthrough_window || ""
+      walkthrough_window: values.walkthrough_window || previousFocusState.walkthrough_window || "",
+      qualification_outcome: qualificationOutcome,
+      qualification_detail: qualificationDetail
     };
 
     const payload = {
       pipeline_stage: pipelineStage,
       qualification_notes: mergeQualificationNotes(qualificationNotesText(row), focusState),
+      contact_name: values.contact_name?.trim() || "",
+      contact_email: values.contact_email?.trim() || "",
       decision_maker_status: questions.decision_maker === "yes" ? "confirmed" : questions.decision_maker === "no" ? "not_confirmed" : row?.decision_maker_status || "",
       current_vendor: questions.cleaning_crew === "yes" ? "Yes" : questions.cleaning_crew === "no" ? "No" : row?.current_vendor || ""
     };
@@ -3901,10 +3943,21 @@ function syncFocusConditionalUi(form, source = null) {
     const qualityChoice = form.querySelector('input[name="focus_wants_quality_walkthrough"]:checked');
     const qualityYes = form.querySelector('input[name="focus_wants_quality_walkthrough"][value="yes"]');
     if (!qualityChoice && qualityYes) qualityYes.checked = true;
+    const schedulePopover = form.querySelector("[data-schedule-walkthrough-popover]");
+    if (schedulePopover) schedulePopover.hidden = true;
   }
   const followUpChecked = Boolean(form.querySelector('input[name="focus_stage"][value="follow_up_needed"]')?.checked);
   const followUpWrap = form.querySelector("[data-follow-up-status-wrap]");
   if (followUpWrap) followUpWrap.classList.toggle("is-hidden", !followUpChecked);
+  const outcome = form.querySelector('input[name="focus_qualification_outcome"]:checked')?.value || "";
+  const outcomeWrap = form.querySelector("[data-focus-outcome-detail-wrap]");
+  if (outcomeWrap) {
+    outcomeWrap.classList.toggle("is-hidden", !(outcome === "partial" || outcome === "not_qualified"));
+    const label = outcomeWrap.firstChild;
+    if (label) label.textContent = outcome === "not_qualified" ? "Reason lead does not qualify" : "More qualification details";
+    const textarea = outcomeWrap.querySelector("textarea");
+    if (textarea) textarea.placeholder = outcome === "not_qualified" ? "Why does this lead not meet the qualifications?" : "What still needs to be confirmed?";
+  }
 }
 
 async function moveLeadFocus(direction) {
@@ -4058,6 +4111,20 @@ function bindEvents() {
       return;
     }
 
+    if (target.closest("[data-open-schedule-walkthrough]")) {
+      const form = target.closest("[data-focus-lead-form]");
+      const popover = form?.querySelector("[data-schedule-walkthrough-popover]");
+      if (popover) popover.hidden = false;
+      return;
+    }
+
+    if (target.closest("[data-close-schedule-walkthrough]")) {
+      const form = target.closest("[data-focus-lead-form]");
+      const popover = form?.querySelector("[data-schedule-walkthrough-popover]");
+      if (popover) popover.hidden = true;
+      return;
+    }
+
     if (target.closest("[data-delete-selected-leads]")) {
       if (!isSalesAdmin()) {
         setMessage("Only admins can delete sales leads.", "error");
@@ -4155,10 +4222,10 @@ function bindEvents() {
     if (sendQuoteButton) {
       const rowId = sendQuoteButton.dataset.sendQuote;
       try {
-        setMessage("Preparing quote email draft...");
+        setMessage("Preparing Gmail quote draft...");
         const row = recordById(rowId);
         await emailQuoteForRow(row);
-        setMessage(`Quote email draft created. Open it and send from ${quoteSenderEmail()}.`, "success");
+        setMessage(`Gmail opened with the quote email ready. Attach the downloaded PDF before sending from ${quoteSenderEmail()}.`, "success");
       } catch (error) {
         setMessage(`Unable to prepare quote email: ${error.message}`, "error");
       }
@@ -4264,7 +4331,7 @@ function bindEvents() {
       return;
     }
 
-    if (event.target?.matches('[data-focus-lead-form] input[type="checkbox"], [data-focus-lead-form] input[type="radio"], [data-focus-lead-form] select')) {
+    if (event.target?.matches('[data-focus-lead-form] input[type="checkbox"], [data-focus-lead-form] input[type="radio"], [data-focus-lead-form] select, [data-focus-lead-form] input[type="text"], [data-focus-lead-form] input[type="email"], [data-focus-lead-form] textarea[name="focus_qualification_detail"]')) {
       syncFocusConditionalUi(event.target.closest("[data-focus-lead-form]"), event.target);
       await autosaveFocusLead();
       return;
@@ -4340,8 +4407,8 @@ function bindEvents() {
   });
 
   document.addEventListener("focusout", async (event) => {
-    if (event.target?.matches('[data-focus-lead-form] textarea[name="focus_note"]')) {
-      await autosaveFocusLead({ includeNote: true });
+    if (event.target?.matches('[data-focus-lead-form] textarea[name="focus_note"], [data-focus-lead-form] input[type="text"], [data-focus-lead-form] input[type="email"], [data-focus-lead-form] textarea[name="focus_qualification_detail"]')) {
+      await autosaveFocusLead({ includeNote: event.target.name === "focus_note" });
     }
   });
 

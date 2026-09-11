@@ -69,6 +69,37 @@ export function quoteDraftFileName(pdfFileName) {
   return safeFileName(String(pdfFileName || "Turnly-Quote-Proposal.pdf").replace(/\.pdf$/i, ".eml"), "Turnly-Quote-Draft.eml");
 }
 
+export function quoteGmailComposeUrl({ toEmail, subject, body }) {
+  const cleanTo = cleanHeader(toEmail);
+  if (!cleanTo) throw new Error("Add the property manager email before opening Gmail.");
+  const params = new URLSearchParams({
+    view: "cm",
+    fs: "1",
+    tf: "cm",
+    authuser: QUOTE_FROM_EMAIL,
+    to: cleanTo,
+    su: cleanHeader(subject),
+    body: String(body || "")
+  });
+  return `https://mail.google.com/mail/?${params.toString()}`;
+}
+
+export async function openGmailQuoteDraft({
+  toEmail,
+  subject,
+  body,
+  pdfBlob,
+  pdfFileName
+}) {
+  const gmailUrl = quoteGmailComposeUrl({ toEmail, subject, body });
+  if (pdfBlob) {
+    downloadBlob(pdfBlob, safeFileName(pdfFileName, "Turnly-Quote-Proposal.pdf"));
+  }
+  const composeWindow = window.open(gmailUrl, "_blank", "noopener");
+  if (!composeWindow) window.location.href = gmailUrl;
+  return { url: gmailUrl, from: QUOTE_FROM_EMAIL, to: cleanHeader(toEmail) };
+}
+
 export function triggerBlobDownload(blob, fileName) {
   downloadBlob(blob, fileName);
 }

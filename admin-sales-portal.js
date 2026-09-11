@@ -1,10 +1,9 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 import {
-  createQuoteEmailDraft,
   generateTurnlyQuotePdf,
-  quoteDraftFileName,
+  openGmailQuoteDraft,
   quoteSenderEmail
-} from "./quote-proposal-tools.js?v=20260911-quote-draft";
+} from "./quote-proposal-tools.js?v=20260911-gmail-focus";
 
 const TABLES = {
   leads: "sales_leads",
@@ -876,17 +875,15 @@ async function emailQuotePreview(form) {
     row = generated.row;
     values = generated.values;
   }
-  if (!row || !quotePreviewBlob) throw new Error("Generate a quote preview before emailing it.");
-  await createQuoteEmailDraft({
+  if (!row || !quotePreviewBlob) throw new Error("Generate a quote preview before opening Gmail.");
+  await openGmailQuoteDraft({
     toEmail: row.contact_email,
-    toName: recordContact(row),
     subject: quoteEmailSubject(row),
     body: quoteEmailBody(row, values),
     pdfBlob: quotePreviewBlob,
-    pdfFileName: quotePreviewFileName,
-    draftFileName: quoteDraftFileName(quotePreviewFileName)
+    pdfFileName: quotePreviewFileName
   });
-  showModalMessage(form, `Email draft created with the PDF attached. Open the draft and send it from ${quoteSenderEmail()}.`, "success");
+  showModalMessage(form, `Gmail opened with the quote email ready. Attach the downloaded PDF before sending from ${quoteSenderEmail()}.`, "success");
 }
 
 async function emailQuoteForRow(row) {
@@ -895,14 +892,12 @@ async function emailQuoteForRow(row) {
     fieldValues: quotePdfFieldValues(row, row),
     fileName: quoteSafeFileName(row)
   });
-  await createQuoteEmailDraft({
+  await openGmailQuoteDraft({
     toEmail: row.contact_email,
-    toName: recordContact(row),
     subject: quoteEmailSubject(row),
     body: quoteEmailBody(row, row),
     pdfBlob: generated.blob,
-    pdfFileName: generated.fileName,
-    draftFileName: quoteDraftFileName(generated.fileName)
+    pdfFileName: generated.fileName
   });
   return generated;
 }
@@ -1035,7 +1030,7 @@ function renderPageActions() {
     return `<button class="admin-sales-primary" type="button" data-admin-sales-open="walkthrough">${icon("calendar")}Schedule Walkthrough</button>`;
   }
   if (state.page === "quotes") {
-    return `<button class="admin-sales-primary" type="button" data-admin-sales-open="quote">${icon("file")}New Quote</button>`;
+    return `<button class="admin-sales-primary" type="button" data-admin-sales-open="quote">${icon("file")}Prepare Quote</button>`;
   }
   if (state.page === "sales-tasks") {
     return `<button class="admin-sales-primary" type="button" data-admin-sales-open="task">${icon("clipboard")}Add Follow-up</button>`;
@@ -1921,7 +1916,7 @@ function renderQuoteDetail(row) {
         <strong>${esc(row.quote_notes || row.lead_notes || "No quote notes saved.")}</strong>
       </div>
       <div class="admin-sales-action-stack">
-        <button class="admin-sales-primary" type="button" data-admin-sales-open="quote" data-id="${esc(row.id)}">${icon("file")}Edit Quote</button>
+        <button class="admin-sales-primary" type="button" data-admin-sales-open="quote" data-id="${esc(row.id)}">${icon("file")}Prepare Quote</button>
         <button class="admin-sales-secondary" type="button" data-admin-sales-send-quote="${esc(row.id)}">${icon("mail")}Send Quote</button>
         <button class="admin-sales-secondary" type="button" data-admin-sales-update-quote="${esc(row.id)}" data-status="accepted">${icon("check")}Mark Accepted</button>
         <button class="admin-sales-secondary" type="button" data-admin-sales-update-stage="${esc(row.id)}" data-stage="contract_out">${icon("clipboard")}Move to Contracts</button>
@@ -2173,26 +2168,19 @@ function renderQuoteModal(row) {
   const body = `
     <form data-admin-sales-quote-form data-related-id="${esc(row?.quote_record_id || "")}">
       <div class="admin-sales-modal-body">
-        <div class="admin-sales-form-grid">
-          ${selectField("lead_id", "Lead", leadOptions(leadId), leadId, true, "wide")}
-          ${field("quote_amount", "Quote Amount", row?.quote_amount || row?.lead_value || "", "number", false)}
-          ${selectField("quote_status", "Quote Status", quoteStatuses.map((status) => [status, titleCase(status)]), row?.quote_status || "draft")}
-          ${field("quote_sent_at", "Date Sent", toDateTimeLocal(row?.quote_sent_at), "datetime-local")}
-          ${field("quote_expires_at", "Expiration Date", toDateInput(row?.quote_expires_at), "date")}
-          ${textField("quote_notes", "Quote Notes", row?.quote_notes || "")}
-        </div>
+        <input type="hidden" name="lead_id" value="${esc(leadId)}" />
         <section class="admin-sales-quote-builder">
           <div class="admin-sales-quote-builder-head">
             <div>
               <span>Quote PDF</span>
-              <strong>Generate the proposal from the selected lead</strong>
+              <strong>${esc(row ? recordTitle(row) : "Select a lead before sending a quote")}</strong>
             </div>
             <div class="admin-sales-row-actions">
               <button class="admin-sales-secondary" type="button" data-admin-sales-generate-quote-pdf>${icon("file")}Generate Preview</button>
               <button class="admin-sales-primary" type="button" data-admin-sales-email-quote-pdf>${icon("mail")}Send Quote</button>
             </div>
           </div>
-          <p>The preview fills the Turnly quote form with property name, property manager/contact, quote date, and property address from Supabase. Send Quote creates an attached email draft from ${esc(quoteSenderEmail())}.</p>
+          <p>Generate Preview fills the Turnly quote form. Send Quote opens Gmail with the email ready and downloads the PDF so it can be attached before sending from ${esc(quoteSenderEmail())}.</p>
           <div class="admin-sales-quote-preview" data-admin-sales-quote-preview-panel hidden>
             <div class="admin-sales-quote-preview-bar">
               <small data-admin-sales-quote-preview-details></small>
@@ -2202,10 +2190,9 @@ function renderQuoteModal(row) {
           </div>
         </section>
       </div>
-      ${modalFooter("Save Quote")}
     </form>
   `;
-  return modalShell(row ? "Edit Quote" : "New Quote", "Quotes", body, "", false);
+  return modalShell("Send Quote", "Quotes", body, "", false);
 }
 
 function renderContractModal(row) {
@@ -2951,11 +2938,11 @@ async function handleClick(event) {
   if (sendQuote) {
     const rowId = sendQuote.dataset.adminSalesSendQuote;
     try {
-      state.message = "Preparing quote email draft...";
+      state.message = "Preparing Gmail quote draft...";
       render();
       const row = rowById(rowId);
       await emailQuoteForRow(row);
-      state.message = `Quote email draft created. Open it and send from ${quoteSenderEmail()}.`;
+      state.message = `Gmail opened with the quote email ready. Attach the downloaded PDF before sending from ${quoteSenderEmail()}.`;
       state.messageTone = "success";
       render();
     } catch (error) {

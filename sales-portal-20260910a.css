@@ -1270,9 +1270,25 @@ button.sales-activity-row:hover {
   gap: 18px;
 }
 
+.sales-focus-contact-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.sales-focus-contact-grid .sales-field {
+  display: grid;
+  gap: 7px;
+  color: #8fa1b6;
+}
+
+.sales-focus-contact-grid input {
+  min-height: 44px;
+}
+
 .sales-focus-info-box.phone strong {
   color: #fff;
-  font-size: clamp(30px, 4vw, 54px);
+  font-size: clamp(18px, 2vw, 28px);
   line-height: 1.05;
   overflow-wrap: anywhere;
 }
@@ -1473,9 +1489,147 @@ button.sales-activity-row:hover {
   color: #90f5c6;
 }
 
+.sales-focus-outcome-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.sales-focus-outcome-card {
+  position: relative;
+  display: grid;
+  gap: 5px;
+  min-height: 92px;
+  padding: 14px 14px 14px 18px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: var(--sales-radius);
+  background: rgba(3, 12, 22, 0.48);
+  cursor: pointer;
+}
+
+.sales-focus-outcome-card input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.sales-focus-outcome-card strong {
+  color: #f8fbff;
+  font-size: 15px;
+}
+
+.sales-focus-outcome-card small {
+  color: var(--sales-muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.sales-focus-outcome-card.met:has(input:checked) {
+  border-color: rgba(22, 217, 137, 0.78);
+  background: rgba(22, 217, 137, 0.18);
+}
+
+.sales-focus-outcome-card.partial:has(input:checked) {
+  border-color: rgba(250, 204, 21, 0.80);
+  background: rgba(250, 204, 21, 0.14);
+}
+
+.sales-focus-outcome-card.no:has(input:checked) {
+  border-color: rgba(248, 113, 113, 0.82);
+  background: rgba(248, 113, 113, 0.14);
+}
+
+.sales-focus-outcome-detail {
+  display: grid;
+  gap: 8px;
+}
+
+.sales-focus-outcome-detail.is-hidden {
+  display: none;
+}
+
+.sales-focus-outcome-detail textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
 .sales-walkthrough-window-card {
   min-height: 96px;
   padding: 14px;
+}
+
+.sales-focus-schedule-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px;
+  border: 1px solid rgba(22, 217, 137, 0.20);
+  border-radius: var(--sales-radius);
+  background: rgba(3, 12, 22, 0.48);
+}
+
+.sales-focus-schedule-summary strong {
+  color: #f8fbff;
+  font-size: 16px;
+}
+
+.sales-schedule-popover[hidden] {
+  display: none;
+}
+
+.sales-schedule-popover {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+}
+
+.sales-schedule-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(1, 7, 14, 0.72);
+  backdrop-filter: blur(8px);
+}
+
+.sales-schedule-dialog {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 14px;
+  width: min(980px, 100%);
+  max-height: min(82vh, 760px);
+  overflow: auto;
+  padding: clamp(18px, 3vw, 26px);
+  border: 1px solid rgba(22, 217, 137, 0.32);
+  border-radius: var(--sales-radius);
+  background: linear-gradient(145deg, rgba(10, 24, 38, 0.98), rgba(3, 12, 22, 0.98));
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.45);
+}
+
+.sales-schedule-dialog > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.sales-schedule-dialog > header span {
+  color: var(--sales-cyan);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sales-schedule-dialog > header strong {
+  display: block;
+  margin-top: 3px;
+  color: #fff;
+  font-size: 20px;
 }
 
 .sales-walkthrough-date-grid {

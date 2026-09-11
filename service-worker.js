@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-contractor-pwa-v20260911-quote-draft";
+const CACHE_NAME = "turnly-contractor-pwa-v20260911-gmail-focus";
 
 const PRECACHE_URLS = [
   "/",
