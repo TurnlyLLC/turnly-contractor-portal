@@ -21,6 +21,7 @@ const SIGNED_URL_SECONDS = 60 * 60 * 4;
 const TURN_REQUEST_SERVICE = "Unit Cleaning";
 const MOVE_IN_TIME_LABEL = "2:00 PM";
 const MOVE_IN_HOUR = 14;
+const URGENT_TURN_NOTICE_HOURS = 36;
 const PROPERTY_MANAGER_GUIDE_STORAGE_PREFIX = "turnlyPropertyManagerWelcomeGuide:v2";
 const PROPERTY_MANAGER_THEME_STORAGE_KEY = "turnlyPropertyManagerDashboardTheme";
 const PROPERTY_MANAGER_NOTIFICATION_CLEAR_PREFIX = "turnlyPropertyManagerNotificationsClearedAt:v1";
@@ -613,12 +614,12 @@ function formatMoveInDate(value, fallback = "Not selected") {
   return date.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
 }
 
-function moveInIsWithin24Hours(value) {
+function moveInIsWithinUrgentNotice(value) {
   const date = scheduledMoveInDate(value);
   if (!date) return false;
   const now = new Date();
   const diff = date.getTime() - now.getTime();
-  return diff >= 0 && diff <= 24 * 60 * 60 * 1000;
+  return diff >= 0 && diff <= URGENT_TURN_NOTICE_HOURS * 60 * 60 * 1000;
 }
 
 function openNativeDatePicker(control) {
@@ -3059,9 +3060,12 @@ function renderRequestForm() {
           </div>
           <button class="pm-modal-close" type="button" aria-label="Close turn request form" data-manager-request-close>${pmIcon("x")}</button>
         </div>
-        <form id="managerTurnRequestForm" class="pm-turn-questionnaire">
-          <label class="pm-turn-question">
-            <span class="pm-question-number">1</span>
+        <form id="managerTurnRequestForm" class="pm-turn-questionnaire" data-manager-turn-form data-turn-step="0">
+          <div class="pm-turn-progress" aria-live="polite">
+            <span data-manager-turn-progress>Question 1 of 4</span>
+            <div><span data-manager-turn-progress-bar style="width: 25%;"></span></div>
+          </div>
+          <label class="pm-turn-question is-active" data-manager-turn-step="unit">
             <span class="pm-question-copy">
               <strong>What unit needs to be turned?</strong>
               <small>Search or choose from the units currently attached to this property.</small>
@@ -3074,18 +3078,16 @@ function renderRequestForm() {
               }).join("")}
             </datalist>
           </label>
-          <label class="pm-turn-question">
-            <span class="pm-question-number">2</span>
+          <label class="pm-turn-question" data-manager-turn-step="date">
             <span class="pm-question-copy">
               <strong>When does the resident move in?</strong>
               <small>Choose the scheduled move-in date.</small>
             </span>
             <input name="move_in_date" type="date" min="${esc(dateInputValue(new Date()))}" data-manager-move-in-date required />
           </label>
-          <fieldset class="pm-turn-question pm-urgent-question is-hidden" data-manager-urgent-question>
-            <span class="pm-question-number">3</span>
+          <fieldset class="pm-turn-question pm-urgent-question is-hidden" data-manager-turn-step="urgent" data-manager-urgent-question>
             <span class="pm-question-copy">
-              <strong>The scheduled resident move-in is less than 24 hours away. Is this an urgent request?</strong>
+              <strong>The scheduled resident move-in is less than ${esc(URGENT_TURN_NOTICE_HOURS)} hours away. Is this an urgent request?</strong>
               <small>Urgent requests are flagged for Turnly operations.</small>
             </span>
             <div class="pm-choice-row">
@@ -3093,8 +3095,7 @@ function renderRequestForm() {
               <label><input type="radio" name="urgent_notice" value="No" /><span>No</span></label>
             </div>
           </fieldset>
-          <fieldset class="pm-turn-question">
-            <span class="pm-question-number">4</span>
+          <fieldset class="pm-turn-question" data-manager-turn-step="before2">
             <span class="pm-question-copy">
               <strong>Are they scheduled to move in on <span data-manager-move-in-date-label>the selected date</span> before 2 PM local time?</strong>
               <small>This helps us plan the completion window correctly.</small>
@@ -3104,8 +3105,7 @@ function renderRequestForm() {
               <label><input type="radio" name="move_in_before_2" value="No" /><span>No</span></label>
             </div>
           </fieldset>
-          <label class="pm-turn-question">
-            <span class="pm-question-number">5</span>
+          <label class="pm-turn-question" data-manager-turn-step="notes">
             <span class="pm-question-copy">
               <strong>Add any notes you would like our staff to know about this move-in.</strong>
               <small>Access details, lockbox notes, special areas, pets, supplies, or timing concerns all help.</small>
@@ -3113,7 +3113,9 @@ function renderRequestForm() {
             <textarea name="body" rows="4" placeholder="Anything Turnly should know before we arrive..."></textarea>
           </label>
           <div class="pm-turn-submit-row">
-            <button class="new-btn pm-compact-btn" type="submit" ${state.sending ? "disabled" : ""}>Submit Turn Request</button>
+            <button class="secondary-command-btn pm-compact-btn" type="button" data-manager-turn-back hidden>Back</button>
+            <button class="new-btn pm-compact-btn" type="button" data-manager-turn-next>Next</button>
+            <button class="new-btn pm-compact-btn" type="submit" data-manager-turn-submit hidden ${state.sending ? "disabled" : ""}>Submit Turn Request</button>
             <small id="managerMessageStatus" class="${state.error ? "error" : ""}">${esc(state.message || "We will review the request and reach out if we have questions.")}</small>
           </div>
         </form>
@@ -3299,7 +3301,7 @@ async function createTurnRequest(form) {
   const service = TURN_REQUEST_SERVICE;
   const moveInDateValue = form.elements.move_in_date?.value || "";
   const moveInDate = scheduledMoveInDate(moveInDateValue);
-  const urgentRequired = moveInIsWithin24Hours(moveInDateValue);
+  const urgentRequired = moveInIsWithinUrgentNotice(moveInDateValue);
   const urgentNotice = form.elements.urgent_notice?.value || "";
   const moveInBefore2 = form.elements.move_in_before_2?.value || "";
   const additionalNotes = form.elements.body?.value?.trim() || "";
@@ -3309,7 +3311,7 @@ async function createTurnRequest(form) {
     return;
   }
   if (urgentRequired && !urgentNotice) {
-    setManagerMessageStatus("Tell us whether this less-than-24-hour turn is urgent.", true);
+    setManagerMessageStatus(`Tell us whether this less-than-${URGENT_TURN_NOTICE_HOURS}-hour turn is urgent.`, true);
     updateTurnRequestTimingPrompts(form);
     return;
   }
@@ -3322,7 +3324,7 @@ async function createTurnRequest(form) {
   const priority = urgentNotice === "Yes" ? "Urgent" : "Normal";
   const notes = [
     `Resident scheduled before 2 PM local time: ${moveInBefore2}`,
-    urgentRequired ? `Less than 24 hours notice - urgent request: ${urgentNotice}` : "",
+    urgentRequired ? `Less than ${URGENT_TURN_NOTICE_HOURS} hours notice - urgent request: ${urgentNotice}` : "",
     additionalNotes ? `Notes: ${additionalNotes}` : ""
   ].filter(Boolean).join("\n");
 
@@ -3373,7 +3375,7 @@ async function createTurnRequest(form) {
     `Scheduled move-in date: ${formatMoveInDate(moveInDateValue)}`,
     `Move-in time: ${MOVE_IN_TIME_LABEL}`,
     `Resident scheduled before 2 PM local time: ${moveInBefore2}`,
-    urgentRequired ? `Less than 24 hours notice - urgent request: ${urgentNotice}` : "",
+    urgentRequired ? `Less than ${URGENT_TURN_NOTICE_HOURS} hours notice - urgent request: ${urgentNotice}` : "",
     moveInDate ? `Scheduled move-in timestamp: ${moveInDate.toLocaleString()}` : "",
     assignmentId ? `Assignment request ID: ${assignmentId}` : "",
     "",
@@ -3765,18 +3767,93 @@ function setManagerMessageStatus(message, error = false) {
   target.classList.toggle("error", state.error);
 }
 
+function turnRequestSteps(form) {
+  const moveInDateValue = form?.elements?.move_in_date?.value || "";
+  return [
+    "unit",
+    "date",
+    ...(moveInIsWithinUrgentNotice(moveInDateValue) ? ["urgent"] : []),
+    "before2",
+    "notes"
+  ];
+}
+
+function turnRequestStepIndex(form) {
+  const steps = turnRequestSteps(form);
+  const rawIndex = Number(form?.dataset.turnStep || 0);
+  return Math.min(Math.max(0, Number.isFinite(rawIndex) ? rawIndex : 0), Math.max(steps.length - 1, 0));
+}
+
+function validateTurnRequestStep(form, step) {
+  if (step === "unit" && !form.elements.unit?.value?.trim()) return "Choose the unit that needs to be turned.";
+  if (step === "date" && !scheduledMoveInDate(form.elements.move_in_date?.value || "")) return "Choose the resident move-in date.";
+  if (step === "urgent" && !form.elements.urgent_notice?.value) return `Tell us whether this less-than-${URGENT_TURN_NOTICE_HOURS}-hour turn is urgent.`;
+  if (step === "before2" && !form.elements.move_in_before_2?.value) return "Tell us whether the resident is scheduled to move in before 2 PM local time.";
+  return "";
+}
+
+function syncTurnRequestWizard(form = document.getElementById("managerTurnRequestForm")) {
+  if (!form) return;
+  const steps = turnRequestSteps(form);
+  const activeIndex = turnRequestStepIndex(form);
+  form.dataset.turnStep = String(activeIndex);
+  const activeStep = steps[activeIndex] || steps[0] || "unit";
+  form.querySelectorAll("[data-manager-turn-step]").forEach((question) => {
+    const questionStep = question.dataset.managerTurnStep;
+    const isActive = questionStep === activeStep;
+    const isAvailable = steps.includes(questionStep);
+    question.classList.toggle("is-active", isActive);
+    question.classList.toggle("is-hidden", !isAvailable);
+  });
+  const progress = form.querySelector("[data-manager-turn-progress]");
+  if (progress) progress.textContent = `Question ${activeIndex + 1} of ${steps.length}`;
+  const progressBar = form.querySelector("[data-manager-turn-progress-bar]");
+  if (progressBar) progressBar.style.width = `${Math.round(((activeIndex + 1) / Math.max(steps.length, 1)) * 100)}%`;
+  const backButton = form.querySelector("[data-manager-turn-back]");
+  const nextButton = form.querySelector("[data-manager-turn-next]");
+  const submitButton = form.querySelector("[data-manager-turn-submit]");
+  if (backButton) backButton.hidden = activeIndex <= 0;
+  if (nextButton) nextButton.hidden = activeIndex >= steps.length - 1;
+  if (submitButton) submitButton.hidden = activeIndex < steps.length - 1;
+}
+
+function moveTurnRequestStep(form, direction) {
+  if (!form) return;
+  updateTurnRequestTimingPrompts(form);
+  const steps = turnRequestSteps(form);
+  const activeIndex = turnRequestStepIndex(form);
+  if (direction > 0) {
+    const message = validateTurnRequestStep(form, steps[activeIndex]);
+    if (message) {
+      setManagerMessageStatus(message, true);
+      syncTurnRequestWizard(form);
+      return;
+    }
+    setManagerMessageStatus("");
+  } else {
+    state.message = "";
+    state.error = false;
+  }
+  form.dataset.turnStep = String(Math.min(Math.max(activeIndex + direction, 0), steps.length - 1));
+  syncTurnRequestWizard(form);
+}
+
 function updateTurnRequestTimingPrompts(form = document.getElementById("managerTurnRequestForm")) {
   if (!form) return;
   const moveInDateValue = form.elements.move_in_date?.value || "";
   const dateLabel = form.querySelector("[data-manager-move-in-date-label]");
   if (dateLabel) dateLabel.textContent = moveInDateValue ? formatMoveInDate(moveInDateValue) : "the selected date";
   const urgentQuestion = form.querySelector("[data-manager-urgent-question]");
-  if (!urgentQuestion) return;
-  const showUrgent = moveInIsWithin24Hours(moveInDateValue);
+  if (!urgentQuestion) {
+    syncTurnRequestWizard(form);
+    return;
+  }
+  const showUrgent = moveInIsWithinUrgentNotice(moveInDateValue);
   urgentQuestion.classList.toggle("is-hidden", !showUrgent);
   urgentQuestion.querySelectorAll("input").forEach((input) => {
     if (!showUrgent) input.checked = false;
   });
+  syncTurnRequestWizard(form);
 }
 
 function setActiveNav() {
@@ -3948,6 +4025,20 @@ document.addEventListener("click", async (event) => {
     state.message = "";
     state.error = false;
     renderManagerPortal();
+    return;
+  }
+
+  const turnBack = event.target.closest("[data-manager-turn-back]");
+  if (turnBack) {
+    event.preventDefault();
+    moveTurnRequestStep(turnBack.form, -1);
+    return;
+  }
+
+  const turnNext = event.target.closest("[data-manager-turn-next]");
+  if (turnNext) {
+    event.preventDefault();
+    moveTurnRequestStep(turnNext.form, 1);
     return;
   }
 
