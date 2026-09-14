@@ -462,7 +462,8 @@ const invoiceReportState = {
     message: "",
     error: false,
     lastInvoiceSync: null,
-    lastPaymentSync: null
+    lastPaymentSync: null,
+    authorizationUrl: ""
   }
 };
 const financeState = {
@@ -10725,7 +10726,8 @@ function renderQuickBooksSyncPanel() {
   const state = quickBooksState();
   const connection = state.connection || {};
   const connected = Boolean(state.connected);
-  const busy = state.loading || state.connecting || state.syncingInvoices || state.syncingPayments;
+  const connectBusy = state.connecting || state.syncingInvoices || state.syncingPayments;
+  const syncBusy = state.loading || state.connecting || state.syncingInvoices || state.syncingPayments;
   const title = connected
     ? `QuickBooks connected${connection.companyName ? `: ${connection.companyName}` : ""}`
     : "QuickBooks not connected";
@@ -10753,9 +10755,10 @@ function renderQuickBooksSyncPanel() {
         </div>
       </div>
       <div class="quickbooks-sync-actions">
-        <button class="secondary-action" type="button" data-quickbooks-connect ${busy ? "disabled" : ""}>${icon("link")}<span>${connected ? "Reconnect" : state.connecting ? "Opening..." : "Connect QuickBooks"}</span></button>
-        <button class="primary-action" type="button" data-quickbooks-sync-invoices ${!connected || busy ? "disabled" : ""}>${icon("document")}<span>${esc(invoiceText)}</span></button>
-        <button class="secondary-action" type="button" data-quickbooks-sync-payments ${!connected || busy ? "disabled" : ""}>${icon("refresh")}<span>${esc(paymentText)}</span></button>
+        <button class="secondary-action" type="button" data-quickbooks-connect ${connectBusy ? "disabled" : ""}>${icon("link")}<span>${connected ? "Reconnect" : state.connecting ? "Opening..." : "Connect QuickBooks"}</span></button>
+        ${state.authorizationUrl ? `<a class="primary-action" href="${esc(state.authorizationUrl)}">${icon("link")}<span>Open Intuit Authorization</span></a>` : ""}
+        <button class="primary-action" type="button" data-quickbooks-sync-invoices ${!connected || syncBusy ? "disabled" : ""}>${icon("document")}<span>${esc(invoiceText)}</span></button>
+        <button class="secondary-action" type="button" data-quickbooks-sync-payments ${!connected || syncBusy ? "disabled" : ""}>${icon("refresh")}<span>${esc(paymentText)}</span></button>
       </div>
     </section>
   `;
@@ -10857,7 +10860,9 @@ async function connectQuickBooks() {
   try {
     const payload = await quickBooksApi("/api/quickbooks-connect", { method: "POST", body: "{}", timeoutMs: 15000 });
     if (!payload.authorizationUrl) throw new Error("QuickBooks did not return an authorization URL.");
+    state.authorizationUrl = payload.authorizationUrl;
     setQuickBooksConnectMessage("QuickBooks authorization opened. If the page does not move, allow popups/redirects and try again.");
+    showQuickBooksAuthorizationFallback(payload.authorizationUrl);
     window.location.href = payload.authorizationUrl;
   } catch (error) {
     state.connecting = false;
@@ -10866,6 +10871,19 @@ async function connectQuickBooks() {
     setQuickBooksConnectMessage(state.message, true);
     updateQuickBooksSyncPanel();
   }
+}
+
+function showQuickBooksAuthorizationFallback(url = "") {
+  if (!url) return;
+  const id = "quickBooksAuthorizationFallback";
+  const financeMessage = document.getElementById("financeMessage");
+  const invoiceMessage = document.getElementById("invoiceReportMessage");
+  const anchorHtml = `<a id="${id}" class="primary-action compact quickbooks-auth-fallback" href="${esc(url)}">${icon("link")}<span>Open Intuit Authorization</span></a>`;
+  let existing = document.getElementById(id);
+  if (existing) existing.remove();
+  const target = financeMessage || invoiceMessage;
+  if (!target) return;
+  target.insertAdjacentHTML("afterend", anchorHtml);
 }
 
 function setQuickBooksConnectMessage(message = "", isError = false) {
