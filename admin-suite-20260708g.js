@@ -10778,12 +10778,22 @@ async function quickBooksAuthHeaders() {
 
 async function quickBooksApi(path, options = {}) {
   const headers = await quickBooksAuthHeaders();
+  const timeoutMs = Number(options.timeoutMs || 15000);
+  const controller = typeof AbortController !== "undefined" && timeoutMs > 0 ? new AbortController() : null;
+  const timeout = controller ? window.setTimeout(() => controller.abort(), timeoutMs) : null;
+  const { timeoutMs: _timeoutMs, ...fetchOptions } = options;
   const response = await fetch(path, {
-    ...options,
+    ...fetchOptions,
+    signal: controller?.signal,
     headers: {
       ...headers,
       ...(options.headers || {})
     }
+  }).catch((error) => {
+    if (error?.name === "AbortError") throw new Error("QuickBooks request timed out. Try again in a moment.");
+    throw error;
+  }).finally(() => {
+    if (timeout) window.clearTimeout(timeout);
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || payload?.error) {
@@ -10815,7 +10825,7 @@ async function loadQuickBooksStatus() {
   state.error = false;
   updateQuickBooksSyncPanel();
   try {
-    const payload = await quickBooksApi("/api/quickbooks-status", { method: "GET" });
+    const payload = await quickBooksApi("/api/quickbooks-status", { method: "GET", timeoutMs: 8000 });
     state.connected = Boolean(payload.connected);
     state.connection = payload.connection || null;
     state.error = false;
@@ -10845,7 +10855,7 @@ async function connectQuickBooks() {
   setQuickBooksConnectMessage(state.message);
   updateQuickBooksSyncPanel();
   try {
-    const payload = await quickBooksApi("/api/quickbooks-connect", { method: "POST", body: "{}" });
+    const payload = await quickBooksApi("/api/quickbooks-connect", { method: "POST", body: "{}", timeoutMs: 15000 });
     if (!payload.authorizationUrl) throw new Error("QuickBooks did not return an authorization URL.");
     setQuickBooksConnectMessage("QuickBooks authorization opened. If the page does not move, allow popups/redirects and try again.");
     window.location.href = payload.authorizationUrl;
@@ -10881,7 +10891,8 @@ async function syncQuickBooksInvoices() {
   try {
     const payload = await quickBooksApi("/api/quickbooks-sync-invoices", {
       method: "POST",
-      body: quickBooksSyncPayload()
+      body: quickBooksSyncPayload(),
+      timeoutMs: 120000
     });
     state.lastInvoiceSync = payload;
     state.error = Boolean(payload.failed);
@@ -10906,7 +10917,8 @@ async function syncQuickBooksPaymentStatuses() {
   try {
     const payload = await quickBooksApi("/api/quickbooks-sync-payment-statuses", {
       method: "POST",
-      body: quickBooksSyncPayload()
+      body: quickBooksSyncPayload(),
+      timeoutMs: 120000
     });
     state.lastPaymentSync = payload;
     const invoiceSync = payload.invoiceStatusSync || {};
@@ -11015,35 +11027,43 @@ async function loadInvoiceReport() {
     return;
   }
 
-  const range = invoiceSelectedWeekRange();
-  const [properties, units, assignmentsResult, quickbooksInvoicesResult] = await Promise.all([
+  const [properties, units, assignmentsResult] = await Promise.all([
     loadAssignmentProperties(),
     loadAssignmentUnits(),
-    loadAssignmentRows(),
-    loadQuickBooksInvoiceStatuses(range)
+    loadAssignmentRows()
   ]);
   invoiceReportState.properties = properties || [];
   invoiceReportState.units = units || [];
   invoiceReportState.rows = enrichAssignmentRowsWithContractAccess(assignmentsResult.rows, invoiceReportState.properties);
-  invoiceReportState.quickbooksInvoices = quickbooksInvoicesResult.invoices || [];
+  invoiceReportState.quickbooksInvoices = [];
   invoiceReportState.loading = false;
   renderInvoiceReportData();
 
-  const invoiceStatusWarning = quickbooksInvoicesResult.error ? `QuickBooks invoice status could not load: ${quickbooksInvoicesResult.error}` : "";
   setInvoiceReportMessage(assignmentsResult.error
     ? invoiceReportSummaryMessage(`Supabase returned an error after loading assignment data.`)
-    : invoiceStatusWarning
-      ? invoiceReportSummaryMessage(invoiceStatusWarning)
-    : invoiceReportSummaryMessage());
+    : invoiceReportSummaryMessage("Portal invoices loaded. QuickBooks status is refreshing in the background."));
+  void refreshQuickBooksInvoiceStatusesForCurrentWeek();
 }
 
 async function loadQuickBooksInvoiceStatuses(range = invoiceSelectedWeekRange()) {
   try {
-    const payload = await quickBooksApi(`/api/quickbooks-invoice-statuses${quickBooksQueryString({ weekStart: invoiceDateInputValue(range.start) })}`, { method: "GET" });
+    const payload = await quickBooksApi(`/api/quickbooks-invoice-statuses${quickBooksQueryString({ weekStart: invoiceDateInputValue(range.start) })}`, { method: "GET", timeoutMs: 8000 });
     return { invoices: payload.invoices || [], error: "" };
   } catch (error) {
     return { invoices: [], error: error.message || "Unable to load QuickBooks invoice statuses." };
   }
+}
+
+async function refreshQuickBooksInvoiceStatusesForCurrentWeek() {
+  const range = invoiceSelectedWeekRange();
+  const weekKey = invoiceDateInputValue(range.start);
+  const result = await loadQuickBooksInvoiceStatuses(range);
+  if (weekKey !== invoiceDateInputValue(invoiceSelectedWeekRange().start)) return;
+  invoiceReportState.quickbooksInvoices = result.invoices || [];
+  renderInvoiceReportData();
+  setInvoiceReportMessage(result.error
+    ? invoiceReportSummaryMessage(`QuickBooks invoice status is unavailable right now: ${result.error}`)
+    : invoiceReportSummaryMessage());
 }
 
 function renderInvoiceReportData() {
@@ -11180,7 +11200,16 @@ function renderInvoiceWeekControls(range = invoiceSelectedWeekRange()) {
 function updateInvoiceSelectedWeek(reference) {
   const range = invoiceWeekRange(reference || new Date());
   invoiceReportState.weekStart = invoiceDateInputValue(range.start);
-  void loadInvoiceReport();
+  invoiceReportState.quickbooksInvoices = [];
+  renderInvoiceReportData();
+  setInvoiceReportMessage(invoiceReportState.rows.length
+    ? invoiceReportSummaryMessage("Portal invoices loaded. QuickBooks status is refreshing in the background.")
+    : "Loading weekly invoices...");
+  if (!invoiceReportState.rows.length) {
+    void loadInvoiceReport();
+    return;
+  }
+  void refreshQuickBooksInvoiceStatusesForCurrentWeek();
 }
 
 function invoiceWeekLabel(start, end) {
