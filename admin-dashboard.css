@@ -4708,6 +4708,10 @@ body.admin-command-body[data-portal-role="property-manager"] .pm-assignment-deta
   min-height: 46px;
 }
 
+.pm-turn-submit-row [data-manager-turn-submit] {
+  margin-left: auto;
+}
+
 .pm-turn-submit-row small {
   color: var(--pm-muted);
   flex: 1 1 280px;
