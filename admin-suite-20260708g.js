@@ -10852,6 +10852,7 @@ async function loadQuickBooksStatus() {
 
 async function connectQuickBooks() {
   const state = quickBooksState();
+  const authWindow = openQuickBooksAuthWindow();
   state.connecting = true;
   state.error = false;
   state.message = "Opening QuickBooks authorization...";
@@ -10865,13 +10866,30 @@ async function connectQuickBooks() {
     setQuickBooksConnectMessage("QuickBooks authorization is ready. If the page does not move, open the Intuit link below or copy the URL into a new tab.");
     showQuickBooksAuthorizationFallback(payload.authorizationUrl);
     updateQuickBooksSyncPanel();
-    window.location.assign(payload.authorizationUrl);
+    if (authWindow && !authWindow.closed) {
+      authWindow.location.href = payload.authorizationUrl;
+    } else {
+      window.location.assign(payload.authorizationUrl);
+    }
   } catch (error) {
+    if (authWindow && !authWindow.closed) authWindow.close();
     state.connecting = false;
     state.error = true;
     state.message = error.message || "Unable to start QuickBooks connection.";
     setQuickBooksConnectMessage(state.message, true);
     updateQuickBooksSyncPanel();
+  }
+}
+
+function openQuickBooksAuthWindow() {
+  try {
+    const popup = window.open("", "_blank");
+    if (!popup) return null;
+    popup.document.write(`<!doctype html><title>Opening QuickBooks...</title><body style="background:#071420;color:#f5f8fb;font-family:Arial,sans-serif;padding:24px"><h1>Opening QuickBooks...</h1><p>Keep this tab open while Turnly prepares the Intuit authorization link.</p></body>`);
+    popup.document.close();
+    return popup;
+  } catch {
+    return null;
   }
 }
 

@@ -40,7 +40,6 @@ module.exports = async function handler(req, res) {
   const { data, error } = await supabase
     .from("quickbooks_connections")
     .select("realm_id,company_name,environment,status,updated_at,last_sync_at,last_error,access_token_expires_at,refresh_token_expires_at")
-    .eq("status", "connected")
     .order("updated_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -54,9 +53,11 @@ module.exports = async function handler(req, res) {
     });
   }
   if (error) return sendJson(res, 500, { error: error.message });
+  const status = String(data?.status || "").toLowerCase();
+  const connected = Boolean(data?.realm_id) && !["disconnected", "revoked", "inactive", "error"].includes(status);
   return sendJson(res, 200, {
     ok: true,
-    connected: Boolean(data?.realm_id),
+    connected,
     connection: connectionSummary(data)
   });
 };
