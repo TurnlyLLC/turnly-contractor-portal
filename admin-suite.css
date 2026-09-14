@@ -4628,6 +4628,41 @@ a {
   margin: 0;
 }
 
+.finance-expense-import {
+  background: rgba(8, 20, 34, 0.46);
+  border: 1px solid var(--suite-border);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 14px;
+}
+
+.finance-expense-import strong {
+  color: var(--suite-text);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.finance-expense-import p {
+  color: var(--suite-muted);
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.finance-expense-import textarea {
+  background: var(--suite-panel-soft);
+  border: 1px solid var(--suite-border);
+  border-radius: 8px;
+  color: var(--suite-text);
+  font: inherit;
+  min-height: 110px;
+  padding: 10px 12px;
+  resize: vertical;
+  width: 100%;
+}
+
 .finance-integration-actions,
 .finance-row-actions {
   align-items: center;

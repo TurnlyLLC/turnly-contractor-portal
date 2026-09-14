@@ -223,16 +223,17 @@ function contractorPayItems(assignments = [], properties = [], units = []) {
     });
 }
 
-function invoiceIsOpenUnsent(row = {}) {
+function invoiceIsReadyToSend(row = {}) {
   const status = normalizeToken(row.quickbooks_status || "");
-  if (row.sent_to_quickbooks_at) return false;
   return !["paid", "void", "voided", "deleted"].includes(status);
 }
 
 function summarizeInvoices(rows = []) {
   return rows
-    .filter(invoiceIsOpenUnsent)
-    .map((row) => ({
+    .filter(invoiceIsReadyToSend)
+    .map((row) => {
+      const payload = row.payload && typeof row.payload === "object" && !Array.isArray(row.payload) ? row.payload : {};
+      return {
       id: row.id,
       propertyName: row.property_name || "Unnamed property",
       propertyKey: row.property_key || "",
@@ -247,8 +248,10 @@ function summarizeInvoices(rows = []) {
       assignmentCount: Array.isArray(row.source_assignment_ids) ? row.source_assignment_ids.length : 0,
       createdAt: row.created_at || "",
       syncedAt: row.synced_at || "",
+      financeSentAt: payload.finance_sent_at || "",
       lastError: row.last_error || ""
-    }))
+    };
+    })
     .sort((a, b) => String(b.weekStart).localeCompare(String(a.weekStart)) || a.propertyName.localeCompare(b.propertyName));
 }
 
@@ -259,6 +262,103 @@ function isMissingFinanceSetup(error) {
     || message.includes("quickbooks_invoice_links")
     || message.includes("does not exist")
     || message.includes("schema cache");
+}
+
+function expenseDateOnly(value) {
+  const date = value instanceof Date ? value : parseDate(value);
+  if (!date) return "";
+  const pad = (part) => String(part).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function expenseThisMonthRange() {
+  const now = new Date();
+  return {
+    start: new Date(now.getFullYear(), now.getMonth(), 1),
+    end: new Date(now.getFullYear(), now.getMonth() + 1, 1),
+    yearStart: new Date(now.getFullYear(), 0, 1),
+    yearEnd: new Date(now.getFullYear() + 1, 0, 1)
+  };
+}
+
+function expenseNextDueDate(row = {}, reference = new Date()) {
+  const dueDate = parseDate(row.due_date || row.dueDate);
+  const recurrence = normalizeToken(row.recurrence || "monthly");
+  if (recurrence === "one_time" || recurrence === "once") return dueDate;
+  if (recurrence === "yearly" || recurrence === "annual") {
+    const month = dueDate ? dueDate.getMonth() : reference.getMonth();
+    const day = dueDate ? dueDate.getDate() : Number(row.due_day || row.dueDay || 1);
+    let next = new Date(reference.getFullYear(), month, day);
+    if (next < new Date(reference.getFullYear(), reference.getMonth(), reference.getDate())) {
+      next = new Date(reference.getFullYear() + 1, month, day);
+    }
+    return next;
+  }
+  const day = Math.max(1, Math.min(31, Number(row.due_day || row.dueDay) || (dueDate ? dueDate.getDate() : 1)));
+  let next = new Date(reference.getFullYear(), reference.getMonth(), day);
+  if (next < new Date(reference.getFullYear(), reference.getMonth(), reference.getDate())) {
+    next = new Date(reference.getFullYear(), reference.getMonth() + 1, day);
+  }
+  return next;
+}
+
+function expenseOccursThisMonth(row = {}) {
+  const { start, end } = expenseThisMonthRange();
+  const recurrence = normalizeToken(row.recurrence || "monthly");
+  if (["monthly", "recurring", ""].includes(recurrence)) return true;
+  const due = expenseNextDueDate(row, start);
+  return Boolean(due && due >= start && due < end);
+}
+
+function expenseAnnualAmount(row = {}) {
+  const amount = Number(row.amount || 0);
+  const recurrence = normalizeToken(row.recurrence || "monthly");
+  if (["monthly", "recurring", ""].includes(recurrence)) return amount * 12;
+  if (["yearly", "annual"].includes(recurrence)) return amount;
+  const { yearStart, yearEnd } = expenseThisMonthRange();
+  const due = parseDate(row.due_date || row.dueDate);
+  return due && due >= yearStart && due < yearEnd ? amount : 0;
+}
+
+function summarizeExpenses(rows = []) {
+  const active = (rows || [])
+    .filter((row) => !["inactive", "archived", "deleted"].includes(normalizeToken(row.status || "active")))
+    .map((row) => {
+      const nextDue = expenseNextDueDate(row);
+      return {
+        id: row.id,
+        vendorName: row.vendor_name || row.name || "Expense",
+        category: row.category || "General",
+        description: row.description || "",
+        amount: Number(row.amount || 0),
+        dueDay: row.due_day || "",
+        dueDate: row.due_date || "",
+        nextDueDate: expenseDateOnly(nextDue),
+        recurrence: row.recurrence || "monthly",
+        status: row.status || "active",
+        paymentMethod: row.payment_method || "",
+        notes: row.notes || "",
+        sourceLabel: row.source_label || "",
+        paidAt: row.paid_at || ""
+      };
+    })
+    .filter((row) => row.amount > 0)
+    .sort((a, b) => String(a.nextDueDate || "").localeCompare(String(b.nextDueDate || "")) || a.vendorName.localeCompare(b.vendorName));
+  const upcoming = active.filter((row) => {
+    const due = parseDate(row.nextDueDate);
+    return Boolean(due && due <= new Date(Date.now() + 45 * 24 * 60 * 60 * 1000));
+  });
+  return {
+    rows: active,
+    upcoming,
+    totals: {
+      monthlyExpenses: active.filter(expenseOccursThisMonth).reduce((sum, row) => sum + Number(row.amount || 0), 0),
+      yearlyExpenses: active.reduce((sum, row) => sum + expenseAnnualAmount(row), 0),
+      expenseCount: active.length,
+      upcomingExpenseCount: upcoming.length,
+      upcomingExpenses: upcoming.reduce((sum, row) => sum + Number(row.amount || 0), 0)
+    }
+  };
 }
 
 module.exports = async function handler(req, res) {
@@ -276,7 +376,6 @@ module.exports = async function handler(req, res) {
   const invoiceResult = await supabase
     .from("quickbooks_invoice_links")
     .select("*")
-    .is("sent_to_quickbooks_at", null)
     .order("week_start", { ascending: false })
     .limit(250);
 
@@ -293,6 +392,15 @@ module.exports = async function handler(req, res) {
 
   const invoices = invoiceResult.error ? [] : summarizeInvoices(invoiceResult.data || []);
   const payItems = contractorPayItems(accounting.assignments, accounting.properties, accounting.units);
+  const expenseResult = await supabase
+    .from("finance_expenses")
+    .select("*")
+    .order("due_day", { ascending: true })
+    .limit(1000);
+  if (expenseResult.error && !isMissingFinanceSetup(expenseResult.error)) {
+    return sendJson(res, 500, { error: expenseResult.error.message });
+  }
+  const expenseSummary = expenseResult.error ? summarizeExpenses([]) : summarizeExpenses(expenseResult.data || []);
   const invoiceTotal = invoices.reduce((sum, item) => sum + Number(item.total || 0), 0);
   const contractorPayTotal = payItems.reduce((sum, item) => sum + Number(item.amount || 0), 0);
 
@@ -300,13 +408,19 @@ module.exports = async function handler(req, res) {
     ok: true,
     invoices,
     contractorPay: payItems,
+    expenses: expenseSummary.rows,
+    upcomingExpenses: expenseSummary.upcoming,
     totals: {
+      invoiceReadyCount: invoices.length,
+      invoiceReadyAmount: invoiceTotal,
       unsentInvoiceCount: invoices.length,
       unsentInvoiceAmount: invoiceTotal,
       contractorPayCount: payItems.length,
-      contractorPayOwed: contractorPayTotal
+      contractorPayOwed: contractorPayTotal,
+      ...expenseSummary.totals
     },
     relayUrl: process.env.RELAY_PAYMENTS_URL || process.env.RELAY_URL || "https://app.relayfi.com/",
-    setupRequired: Boolean(invoiceResult.error)
+    setupRequired: Boolean(invoiceResult.error),
+    expensesSetupRequired: Boolean(expenseResult.error)
   });
 };

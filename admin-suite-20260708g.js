@@ -467,14 +467,22 @@ const invoiceReportState = {
 const financeState = {
   invoices: [],
   contractorPay: [],
+  expenses: [],
+  upcomingExpenses: [],
   totals: {
     unsentInvoiceCount: 0,
     unsentInvoiceAmount: 0,
     contractorPayCount: 0,
-    contractorPayOwed: 0
+    contractorPayOwed: 0,
+    monthlyExpenses: 0,
+    yearlyExpenses: 0,
+    expenseCount: 0,
+    upcomingExpenseCount: 0,
+    upcomingExpenses: 0
   },
   relayUrl: suiteEnv.RELAY_PAYMENTS_URL || "https://app.relayfi.com/",
   loading: false,
+  importingExpenses: false,
   message: "",
   error: false,
   markingInvoices: new Set(),
@@ -10009,10 +10017,16 @@ function renderFinancePage() {
         `<a class="secondary-action" href="invoices.html">${icon("document")}<span>Invoice Builder</span></a><a class="primary-action" id="financeRelayLink" href="${esc(financeState.relayUrl)}" target="_blank" rel="noreferrer">${icon("wallet")}<span>Open Relay</span></a><button class="secondary-action" type="button" data-finance-refresh>${icon("refresh")}<span>Refresh</span></button>`
       )}
       <section class="metric-strip finance-metric-strip">
-        ${metric("Unsent Invoices", "0", "open invoice drafts", "document", "yellow", 'id="financeUnsentInvoiceCount"')}
-        ${metric("Invoice Amount", "$0", "waiting to send", "badge-dollar", "green", 'id="financeUnsentInvoiceTotal"')}
+        ${metric("Invoices Ready", "0", "available to send", "document", "yellow", 'id="financeUnsentInvoiceCount"')}
+        ${metric("Invoice Amount", "$0", "ready to send", "badge-dollar", "green", 'id="financeUnsentInvoiceTotal"')}
         ${metric("Contractor Pay Owed", "$0", "not paid out yet", "wallet", "blue", 'id="financeContractorPayTotal"')}
         ${metric("Payout Jobs", "0", "ready to mark paid", "users", "purple", 'id="financeContractorPayCount"')}
+      </section>
+      <section class="metric-strip finance-metric-strip">
+        ${metric("Monthly Expenses", "$0", "current month", "badge-dollar", "red", 'id="financeMonthlyExpenses"')}
+        ${metric("Yearly Expenses", "$0", "projected annual total", "line-chart", "purple", 'id="financeYearlyExpenses"')}
+        ${metric("Upcoming Due", "$0", "next 45 days", "calendar", "orange", 'id="financeUpcomingExpenses"')}
+        ${metric("Expense Items", "0", "active records", "clipboard-list", "blue", 'id="financeExpenseCount"')}
       </section>
       <section class="finance-action-grid">
         ${panel("QuickBooks", `
@@ -10034,7 +10048,7 @@ function renderFinancePage() {
         `, { icon: "wallet", className: "span-half" })}
       </section>
       <section class="finance-ledger-grid">
-        ${panel("Open Invoices Not Sent", `
+        ${panel("Invoices Ready To Send", `
           <div class="table-scroll finance-table-scroll">
             <table class="suite-table finance-table">
               <thead>
@@ -10050,6 +10064,32 @@ function renderFinancePage() {
             </table>
           </div>
         `, { icon: "document", className: "span-all" })}
+        ${panel("Expenses", `
+          <div class="finance-expense-import">
+            <div>
+              <strong>Import monthly expenses</strong>
+              <p>Paste rows copied from Google Sheets or CSV. Expected columns can include vendor/name, amount, category, due day/date, recurrence, notes, and payment method.</p>
+            </div>
+            <textarea id="financeExpenseImportText" rows="5" placeholder="Vendor,Category,Amount,Due Day,Recurrence,Notes"></textarea>
+            <div class="finance-integration-actions">
+              <button class="primary-action" type="button" data-finance-import-expenses>${icon("upload")}<span id="financeExpenseImportLabel">Import Expenses</span></button>
+            </div>
+          </div>
+          <div class="table-scroll finance-table-scroll">
+            <table class="suite-table finance-table">
+              <thead>
+                <tr>
+                  <th>Expense</th>
+                  <th>Category</th>
+                  <th>Due</th>
+                  <th>Amount</th>
+                  <th>Recurrence</th>
+                </tr>
+              </thead>
+              <tbody id="financeExpenseRows">${financeLoadingRows(5)}</tbody>
+            </table>
+          </div>
+        `, { icon: "badge-dollar", className: "span-all" })}
         ${panel("Contractor Pay Owed", `
           <div class="table-scroll finance-table-scroll">
             <table class="suite-table finance-table">
@@ -10091,6 +10131,11 @@ function initFinancePage() {
     const payment = event.target.closest("[data-finance-mark-paid]");
     if (payment) {
       void markFinanceContractorPaid(payment.dataset.financeMarkPaid, Number(payment.dataset.financePayAmount || 0));
+      return;
+    }
+    const importExpenses = event.target.closest("[data-finance-import-expenses]");
+    if (importExpenses) {
+      void importFinanceExpenses();
     }
   });
   void loadFinancePage();
@@ -10109,6 +10154,8 @@ async function loadFinancePage() {
     const payload = await financeApi("/api/finance-summary", { method: "GET" });
     financeState.invoices = payload.invoices || [];
     financeState.contractorPay = payload.contractorPay || [];
+    financeState.expenses = payload.expenses || [];
+    financeState.upcomingExpenses = payload.upcomingExpenses || [];
     financeState.totals = payload.totals || financeState.totals;
     financeState.relayUrl = payload.relayUrl || financeState.relayUrl;
     financeState.loading = false;
@@ -10116,12 +10163,16 @@ async function loadFinancePage() {
     renderFinanceData();
     setFinanceMessage(payload.setupRequired
       ? "Finance loaded. Apply the QuickBooks migration to show synced invoice drafts."
-      : `Loaded ${financeState.invoices.length.toLocaleString()} unsent invoice${financeState.invoices.length === 1 ? "" : "s"} and ${financeState.contractorPay.length.toLocaleString()} contractor payout item${financeState.contractorPay.length === 1 ? "" : "s"}.`);
+      : payload.expensesSetupRequired
+        ? "Finance loaded. Apply the finance expenses Supabase migration before importing expenses."
+        : `Loaded ${financeState.invoices.length.toLocaleString()} invoice${financeState.invoices.length === 1 ? "" : "s"}, ${financeState.contractorPay.length.toLocaleString()} payout item${financeState.contractorPay.length === 1 ? "" : "s"}, and ${financeState.expenses.length.toLocaleString()} expense${financeState.expenses.length === 1 ? "" : "s"}.`);
   } catch (error) {
     financeState.loading = false;
     financeState.error = true;
     financeState.invoices = [];
     financeState.contractorPay = [];
+    financeState.expenses = [];
+    financeState.upcomingExpenses = [];
     renderFinanceData();
     setFinanceMessage(error.message || "Unable to load finance data.", true);
   }
@@ -10133,8 +10184,16 @@ function renderFinanceData() {
   setText("financeUnsentInvoiceTotal", salesMoney(totals.unsentInvoiceAmount || 0));
   setText("financeContractorPayTotal", salesMoney(totals.contractorPayOwed || 0));
   setText("financeContractorPayCount", Number(totals.contractorPayCount || financeState.contractorPay.length || 0).toLocaleString());
+  setText("financeMonthlyExpenses", salesMoney(totals.monthlyExpenses || 0));
+  setText("financeYearlyExpenses", salesMoney(totals.yearlyExpenses || 0));
+  setText("financeUpcomingExpenses", salesMoney(totals.upcomingExpenses || 0));
+  setText("financeExpenseCount", Number(totals.expenseCount || financeState.expenses.length || 0).toLocaleString());
   setFinanceHtml("financeInvoiceRows", financeInvoiceRows());
   setFinanceHtml("financePaymentRows", financePaymentRows());
+  setFinanceHtml("financeExpenseRows", financeExpenseRows());
+  setText("financeExpenseImportLabel", financeState.importingExpenses ? "Importing..." : "Import Expenses");
+  const importButton = document.querySelector("[data-finance-import-expenses]");
+  if (importButton) importButton.disabled = financeState.importingExpenses;
   document.querySelectorAll("#financeRelayLink, #financeRelayPanelLink").forEach((link) => {
     link.setAttribute("href", financeState.relayUrl || "https://app.relayfi.com/");
   });
@@ -10150,7 +10209,7 @@ function financeInvoiceRows() {
   if (!rows.length) {
     return `
       <tr>
-        <td colspan="5">${emptyState("document", "No unsent invoices", "Synced invoice drafts that still need to be sent will appear here.")}</td>
+        <td colspan="5">${emptyState("document", "No invoices ready", "Synced invoice drafts from QuickBooks will appear here when available.")}</td>
       </tr>
     `;
   }
@@ -10158,7 +10217,7 @@ function financeInvoiceRows() {
     const id = String(invoice.id || "");
     const busy = financeState.markingInvoices.has(id);
     const week = financeWeekLabel(invoice.weekStart, invoice.weekEnd);
-    const status = invoice.lastError ? "Error" : titleCase(invoice.quickbooksStatus || "drafted");
+    const status = invoice.lastError ? "Error" : invoice.financeSentAt ? "Finance Sent" : "Ready To Send";
     const meta = [
       invoice.docNumber ? `Doc ${invoice.docNumber}` : "",
       invoice.assignmentCount ? `${invoice.assignmentCount} assignment${invoice.assignmentCount === 1 ? "" : "s"}` : ""
@@ -10171,7 +10230,7 @@ function financeInvoiceRows() {
         </td>
         <td>
           <strong>${esc(week)}</strong>
-          <small>${esc(invoice.syncedAt ? `Synced ${formatDashboardDate(invoice.syncedAt, "")}` : "Not synced")}</small>
+          <small>${esc(invoice.financeSentAt ? `Sent ${formatDashboardDate(invoice.financeSentAt, "")}` : invoice.syncedAt ? `Synced ${formatDashboardDate(invoice.syncedAt, "")}` : "Not synced")}</small>
         </td>
         <td>
           <strong>${esc(salesMoney(invoice.total || 0))}</strong>
@@ -10181,12 +10240,39 @@ function financeInvoiceRows() {
         <td>
           <div class="finance-row-actions">
             ${invoice.quickbooksInvoiceUrl ? `<a class="secondary-action compact" href="${esc(invoice.quickbooksInvoiceUrl)}" target="_blank" rel="noreferrer">${icon("link")}<span>Open</span></a>` : ""}
-            <button class="primary-action compact" type="button" data-finance-mark-invoice-sent="${esc(id)}" ${busy ? "disabled" : ""}>${icon("check")}<span>${busy ? "Saving..." : "Mark Sent"}</span></button>
+            <button class="primary-action compact" type="button" data-finance-mark-invoice-sent="${esc(id)}" ${busy ? "disabled" : ""}>${icon("check")}<span>${busy ? "Saving..." : invoice.financeSentAt ? "Mark Sent Again" : "Mark Sent"}</span></button>
           </div>
         </td>
       </tr>
     `;
   }).join("");
+}
+
+function financeExpenseRows() {
+  if (financeState.loading) return financeLoadingRows(5);
+  const rows = financeState.upcomingExpenses?.length ? financeState.upcomingExpenses : financeState.expenses || [];
+  if (!rows.length) {
+    return `
+      <tr>
+        <td colspan="5">${emptyState("badge-dollar", "No expenses loaded", "Import monthly expense rows from your spreadsheet to see monthly, yearly, and upcoming due totals.")}</td>
+      </tr>
+    `;
+  }
+  return rows.map((item) => `
+    <tr>
+      <td>
+        <strong>${esc(item.vendorName || "Expense")}</strong>
+        <small>${esc(item.description || item.notes || "")}</small>
+      </td>
+      <td>${esc(item.category || "General")}</td>
+      <td>
+        <strong>${esc(formatDashboardDate(item.nextDueDate || item.dueDate, "No due date"))}</strong>
+        <small>${esc(item.dueDay ? `Day ${item.dueDay}` : "")}</small>
+      </td>
+      <td><strong>${esc(salesMoney(item.amount || 0))}</strong></td>
+      <td>${statusBadge(item.recurrence || "monthly")}</td>
+    </tr>
+  `).join("");
 }
 
 function financePaymentRows() {
@@ -10244,16 +10330,101 @@ async function markFinanceInvoiceSent(id) {
       method: "POST",
       body: JSON.stringify({ id })
     });
-    financeState.invoices = financeState.invoices.filter((row) => String(row.id || "") !== String(id));
-    financeState.totals.unsentInvoiceCount = Math.max(0, Number(financeState.totals.unsentInvoiceCount || 0) - 1);
-    financeState.totals.unsentInvoiceAmount = financeState.invoices.reduce((sum, row) => sum + Number(row.total || 0), 0);
-    setFinanceMessage("Invoice marked as sent.");
+    await loadFinancePage();
+    setFinanceMessage("Invoice marked as sent for finance tracking.");
   } catch (error) {
     setFinanceMessage(error.message || "Unable to mark invoice sent.", true);
   } finally {
     financeState.markingInvoices.delete(id);
     renderFinanceData();
   }
+}
+
+async function importFinanceExpenses() {
+  if (financeState.importingExpenses) return;
+  const input = document.getElementById("financeExpenseImportText");
+  const raw = input?.value || "";
+  const rows = parseFinanceExpenseImport(raw);
+  if (!rows.length) {
+    setFinanceMessage("Paste expense rows with headers before importing.", true);
+    return;
+  }
+  financeState.importingExpenses = true;
+  renderFinanceData();
+  setFinanceMessage("Importing expense rows...");
+  try {
+    const payload = await financeApi("/api/finance-import-expenses", {
+      method: "POST",
+      body: JSON.stringify({ rows })
+    });
+    if (input) input.value = "";
+    await loadFinancePage();
+    setFinanceMessage(`Imported ${Number(payload.imported || rows.length).toLocaleString()} expense row${Number(payload.imported || rows.length) === 1 ? "" : "s"}.`);
+  } catch (error) {
+    setFinanceMessage(error.message || "Unable to import expenses.", true);
+  } finally {
+    financeState.importingExpenses = false;
+    renderFinanceData();
+  }
+}
+
+function parseFinanceExpenseImport(raw = "") {
+  const lines = String(raw || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (lines.length < 2) return [];
+  const header = splitFinanceCsvLine(lines[0]).map(financeHeaderKey);
+  return lines.slice(1).map((line, index) => {
+    const cells = splitFinanceCsvLine(line);
+    const row = { sourceLabel: "Finance spreadsheet import", sourceRowNumber: index + 2 };
+    header.forEach((key, cellIndex) => {
+      if (key) row[key] = cells[cellIndex] || "";
+    });
+    return row;
+  }).filter((row) => row.vendorName || row.vendor || row.name || row.expense);
+}
+
+function splitFinanceCsvLine(line = "") {
+  const cells = [];
+  let current = "";
+  let quoted = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    const next = line[index + 1];
+    if (char === '"' && quoted && next === '"') {
+      current += '"';
+      index += 1;
+      continue;
+    }
+    if (char === '"') {
+      quoted = !quoted;
+      continue;
+    }
+    if ((char === "," || char === "\t") && !quoted) {
+      cells.push(current.trim());
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+  cells.push(current.trim());
+  return cells;
+}
+
+function financeHeaderKey(value = "") {
+  const key = normalizeToken(value);
+  if (["vendor", "vendor_name", "payee", "company", "name", "expense", "expense_name"].includes(key)) return "vendorName";
+  if (["amount", "cost", "price", "payment", "monthly_amount", "monthly_cost"].includes(key)) return "amount";
+  if (["category", "group", "type", "expense_type"].includes(key)) return "category";
+  if (["description", "details", "memo"].includes(key)) return "description";
+  if (["due_day", "day", "due"].includes(key)) return "dueDay";
+  if (["due_date", "date"].includes(key)) return "dueDate";
+  if (["recurrence", "frequency", "cadence"].includes(key)) return "recurrence";
+  if (["payment_method", "method", "account"].includes(key)) return "paymentMethod";
+  if (["notes", "note"].includes(key)) return "notes";
+  if (["status"].includes(key)) return "status";
+  return key || "";
 }
 
 async function markFinanceContractorPaid(id, amount = 0) {

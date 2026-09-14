@@ -27,12 +27,27 @@ module.exports = async function handler(req, res) {
   const id = String(body.id || body.invoiceId || "").trim();
   if (!id) return sendJson(res, 400, { error: "Missing invoice id." });
 
+  const { data: current, error: loadError } = await supabase
+    .from("quickbooks_invoice_links")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (loadError) return sendJson(res, 500, { error: loadError.message });
+  if (!current) return sendJson(res, 404, { error: "Invoice was not found." });
+
   const now = new Date().toISOString();
+  const payload = current.payload && typeof current.payload === "object" && !Array.isArray(current.payload)
+    ? current.payload
+    : {};
   const { data, error } = await supabase
     .from("quickbooks_invoice_links")
     .update({
-      quickbooks_status: "sent",
-      sent_to_quickbooks_at: now,
+      payload: {
+        ...payload,
+        finance_sent_at: now,
+        finance_sent_by: admin.user?.id || null,
+        finance_sent_to_property_manager: true
+      },
       updated_at: now,
       last_error: null
     })
@@ -41,12 +56,10 @@ module.exports = async function handler(req, res) {
     .maybeSingle();
 
   if (error) return sendJson(res, 500, { error: error.message });
-  if (!data) return sendJson(res, 404, { error: "Invoice was not found." });
 
   await supabase
     .from("assignment_blocks")
     .update({
-      quickbooks_invoice_status: "sent",
       quickbooks_invoice_synced_at: now
     })
     .eq("quickbooks_invoice_link_id", id);
