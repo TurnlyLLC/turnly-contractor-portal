@@ -3097,7 +3097,7 @@ function renderRequestForm() {
           </fieldset>
           <fieldset class="pm-turn-question" data-manager-turn-step="before2">
             <span class="pm-question-copy">
-              <strong>Are they scheduled to move in on <span data-manager-move-in-date-label>the selected date</span> before 2 PM local time?</strong>
+              <strong>On <span data-manager-move-in-date-label>the selected date</span>, are they scheduled to move in before 2 PM local time?</strong>
               <small>This helps us plan the completion window correctly.</small>
             </span>
             <div class="pm-choice-row">
