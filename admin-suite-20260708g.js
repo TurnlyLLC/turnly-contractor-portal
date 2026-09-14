@@ -10756,7 +10756,7 @@ function renderQuickBooksSyncPanel() {
       </div>
       <div class="quickbooks-sync-actions">
         <button class="secondary-action" type="button" data-quickbooks-connect ${connectBusy ? "disabled" : ""}>${icon("link")}<span>${connected ? "Reconnect" : state.connecting ? "Opening..." : "Connect QuickBooks"}</span></button>
-        ${state.authorizationUrl ? `<a class="primary-action" href="${esc(state.authorizationUrl)}">${icon("link")}<span>Open Intuit Authorization</span></a>` : ""}
+        ${state.authorizationUrl ? `<a class="primary-action" href="${esc(state.authorizationUrl)}" target="_blank" rel="noreferrer">${icon("link")}<span>Open Intuit Authorization</span></a>` : ""}
         <button class="primary-action" type="button" data-quickbooks-sync-invoices ${!connected || syncBusy ? "disabled" : ""}>${icon("document")}<span>${esc(invoiceText)}</span></button>
         <button class="secondary-action" type="button" data-quickbooks-sync-payments ${!connected || syncBusy ? "disabled" : ""}>${icon("refresh")}<span>${esc(paymentText)}</span></button>
       </div>
@@ -10861,9 +10861,11 @@ async function connectQuickBooks() {
     const payload = await quickBooksApi("/api/quickbooks-connect", { method: "POST", body: "{}", timeoutMs: 15000 });
     if (!payload.authorizationUrl) throw new Error("QuickBooks did not return an authorization URL.");
     state.authorizationUrl = payload.authorizationUrl;
-    setQuickBooksConnectMessage("QuickBooks authorization opened. If the page does not move, allow popups/redirects and try again.");
+    state.connecting = false;
+    setQuickBooksConnectMessage("QuickBooks authorization is ready. If the page does not move, open the Intuit link below or copy the URL into a new tab.");
     showQuickBooksAuthorizationFallback(payload.authorizationUrl);
-    window.location.href = payload.authorizationUrl;
+    updateQuickBooksSyncPanel();
+    window.location.assign(payload.authorizationUrl);
   } catch (error) {
     state.connecting = false;
     state.error = true;
@@ -10878,7 +10880,15 @@ function showQuickBooksAuthorizationFallback(url = "") {
   const id = "quickBooksAuthorizationFallback";
   const financeMessage = document.getElementById("financeMessage");
   const invoiceMessage = document.getElementById("invoiceReportMessage");
-  const anchorHtml = `<a id="${id}" class="primary-action compact quickbooks-auth-fallback" href="${esc(url)}">${icon("link")}<span>Open Intuit Authorization</span></a>`;
+  const anchorHtml = `
+    <div id="${id}" class="quickbooks-auth-fallback">
+      <a class="primary-action compact" href="${esc(url)}" target="_blank" rel="noreferrer">${icon("link")}<span>Open Intuit Authorization</span></a>
+      <label>
+        <span>Authorization URL</span>
+        <textarea readonly rows="3" onclick="this.select()">${esc(url)}</textarea>
+      </label>
+    </div>
+  `;
   let existing = document.getElementById(id);
   if (existing) existing.remove();
   const target = financeMessage || invoiceMessage;
