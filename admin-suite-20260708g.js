@@ -10768,9 +10768,18 @@ function updateQuickBooksSyncPanel() {
   setInvoiceHtml("quickbooksSyncPanelMount", renderQuickBooksSyncPanel());
 }
 
-async function quickBooksAuthHeaders() {
+function timeoutPromise(ms, message) {
+  return new Promise((_, reject) => {
+    window.setTimeout(() => reject(new Error(message)), ms);
+  });
+}
+
+async function quickBooksAuthHeaders(timeoutMs = 8000) {
   if (!suiteSupabase) throw new Error("Supabase config is missing.");
-  const { data, error } = await suiteSupabase.auth.getSession();
+  const { data, error } = await Promise.race([
+    suiteSupabase.auth.getSession(),
+    timeoutPromise(timeoutMs, "Supabase session lookup timed out. Refresh the page and sign in again.")
+  ]);
   const accessToken = data?.session?.access_token || "";
   if (error || !accessToken) throw new Error("Sign in again before using QuickBooks sync.");
   return {
@@ -10780,8 +10789,8 @@ async function quickBooksAuthHeaders() {
 }
 
 async function quickBooksApi(path, options = {}) {
-  const headers = await quickBooksAuthHeaders();
   const timeoutMs = Number(options.timeoutMs || 15000);
+  const headers = await quickBooksAuthHeaders(Math.min(timeoutMs, 8000));
   const controller = typeof AbortController !== "undefined" && timeoutMs > 0 ? new AbortController() : null;
   const timeout = controller ? window.setTimeout(() => controller.abort(), timeoutMs) : null;
   const { timeoutMs: _timeoutMs, ...fetchOptions } = options;
@@ -10872,7 +10881,7 @@ async function connectQuickBooks() {
       window.location.assign(payload.authorizationUrl);
     }
   } catch (error) {
-    if (authWindow && !authWindow.closed) authWindow.close();
+    writeQuickBooksAuthWindowError(authWindow, error.message || "Unable to start QuickBooks connection.");
     state.connecting = false;
     state.error = true;
     state.message = error.message || "Unable to start QuickBooks connection.";
@@ -10890,6 +10899,15 @@ function openQuickBooksAuthWindow() {
     return popup;
   } catch {
     return null;
+  }
+}
+
+function writeQuickBooksAuthWindowError(authWindow, message = "") {
+  if (!authWindow || authWindow.closed) return;
+  try {
+    authWindow.document.body.innerHTML = `<h1>QuickBooks did not open</h1><p>${esc(message)}</p><p>Return to Turnly, refresh the page, and try Connect QuickBooks again.</p>`;
+  } catch {
+    // The popup may already have navigated or been blocked.
   }
 }
 
