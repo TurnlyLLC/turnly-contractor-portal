@@ -10861,7 +10861,8 @@ async function loadQuickBooksStatus() {
 
 async function connectQuickBooks() {
   const state = quickBooksState();
-  const authWindow = openQuickBooksAuthWindow();
+  const useSameTabAuthorization = Boolean(document.querySelector("[data-invoice-report-page]"));
+  const authWindow = useSameTabAuthorization ? null : openQuickBooksAuthWindow();
   state.connecting = true;
   state.error = false;
   state.message = "Opening QuickBooks authorization...";
@@ -10875,6 +10876,10 @@ async function connectQuickBooks() {
     setQuickBooksConnectMessage("QuickBooks authorization is ready. If the page does not move, open the Intuit link below or copy the URL into a new tab.");
     showQuickBooksAuthorizationFallback(payload.authorizationUrl);
     updateQuickBooksSyncPanel();
+    if (useSameTabAuthorization) {
+      window.location.assign(payload.authorizationUrl);
+      return;
+    }
     if (authWindow && !authWindow.closed) {
       authWindow.location.href = payload.authorizationUrl;
     } else {
