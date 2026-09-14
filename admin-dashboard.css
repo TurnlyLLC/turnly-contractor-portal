@@ -6179,6 +6179,10 @@ body.admin-command-body[data-portal-role="property-manager"] .pm-topbar {
   min-width: 0;
 }
 
+body.admin-command-body[data-portal-role="property-manager"] .pm-theme-toggle {
+  display: none;
+}
+
 body.admin-command-body[data-portal-role="property-manager"] .admin-preview-trigger,
 body.admin-command-body[data-portal-role="property-manager"] .global-search,
 body.admin-command-body[data-portal-role="property-manager"] .top-icon,
