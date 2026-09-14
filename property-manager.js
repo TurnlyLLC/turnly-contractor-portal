@@ -63,6 +63,14 @@ const state = {
   view: "overview",
   requestOpen: false,
   requestConfirmation: null,
+  requestDraft: {
+    unit: "",
+    move_in_date: "",
+    urgent_notice: "",
+    move_in_before_2: "",
+    body: "",
+    turnStep: 0
+  },
   assignmentDetailsOpen: false,
   requestPage: 1,
   requestPageSize: 10,
@@ -620,6 +628,34 @@ function moveInIsWithinUrgentNotice(value) {
   const now = new Date();
   const diff = date.getTime() - now.getTime();
   return diff >= 0 && diff <= URGENT_TURN_NOTICE_HOURS * 60 * 60 * 1000;
+}
+
+function blankTurnRequestDraft() {
+  return {
+    unit: "",
+    move_in_date: "",
+    urgent_notice: "",
+    move_in_before_2: "",
+    body: "",
+    turnStep: 0
+  };
+}
+
+function resetTurnRequestDraft() {
+  state.requestDraft = blankTurnRequestDraft();
+}
+
+function captureTurnRequestDraft(form = document.getElementById("managerTurnRequestForm")) {
+  if (!form) return state.requestDraft;
+  state.requestDraft = {
+    unit: form.elements.unit?.value || "",
+    move_in_date: form.elements.move_in_date?.value || "",
+    urgent_notice: form.elements.urgent_notice?.value || "",
+    move_in_before_2: form.elements.move_in_before_2?.value || "",
+    body: form.elements.body?.value || "",
+    turnStep: turnRequestStepIndex(form)
+  };
+  return state.requestDraft;
 }
 
 function openNativeDatePicker(control) {
@@ -1839,6 +1875,7 @@ function renderManagerPortal(loading = false) {
     ${renderAssignmentDetailsModal()}
     ${renderManagerGuideOverlay()}
   `;
+  if (state.requestOpen) updateTurnRequestTimingPrompts();
 }
 
 function currentGuideSteps() {
@@ -3048,6 +3085,7 @@ function renderRequestForm() {
       </section>
     `;
   }
+  const draft = state.requestDraft || blankTurnRequestDraft();
   return `
     <section class="pm-turn-request-modal" role="dialog" aria-modal="true" aria-labelledby="pmTurnRequestTitle">
       <button class="pm-turn-request-backdrop" type="button" aria-label="Close turn request form" data-manager-request-close></button>
@@ -3060,7 +3098,7 @@ function renderRequestForm() {
           </div>
           <button class="pm-modal-close" type="button" aria-label="Close turn request form" data-manager-request-close>${pmIcon("x")}</button>
         </div>
-        <form id="managerTurnRequestForm" class="pm-turn-questionnaire" data-manager-turn-form data-turn-step="0">
+        <form id="managerTurnRequestForm" class="pm-turn-questionnaire" data-manager-turn-form data-turn-step="${esc(draft.turnStep || 0)}">
           <div class="pm-turn-progress" aria-live="polite">
             <span data-manager-turn-progress>Question 1 of 4</span>
             <div><span data-manager-turn-progress-bar style="width: 25%;"></span></div>
@@ -3070,7 +3108,7 @@ function renderRequestForm() {
               <strong>What unit needs to be turned?</strong>
               <small>Search or choose from the units currently attached to this property.</small>
             </span>
-            <input name="unit" type="search" list="managerUnitOptions" placeholder="Start typing a unit..." autocomplete="off" required />
+            <input name="unit" type="search" list="managerUnitOptions" value="${esc(draft.unit || "")}" placeholder="Start typing a unit..." autocomplete="off" required />
             <datalist id="managerUnitOptions">
               ${state.units.map((unit) => {
                 const name = unit.unit_name || unit.name || unit.unit_number || "";
@@ -3083,7 +3121,7 @@ function renderRequestForm() {
               <strong>When does the resident move in?</strong>
               <small>Choose the scheduled move-in date.</small>
             </span>
-            <input name="move_in_date" type="date" min="${esc(dateInputValue(new Date()))}" data-manager-move-in-date required />
+            <input name="move_in_date" type="date" min="${esc(dateInputValue(new Date()))}" value="${esc(draft.move_in_date || "")}" data-manager-move-in-date required />
           </label>
           <fieldset class="pm-turn-question pm-urgent-question is-hidden" data-manager-turn-step="urgent" data-manager-urgent-question>
             <span class="pm-question-copy">
@@ -3091,8 +3129,8 @@ function renderRequestForm() {
               <small>Urgent requests are flagged for Turnly operations.</small>
             </span>
             <div class="pm-choice-row">
-              <label><input type="radio" name="urgent_notice" value="Yes" /><span>Yes</span></label>
-              <label><input type="radio" name="urgent_notice" value="No" /><span>No</span></label>
+              <label><input type="radio" name="urgent_notice" value="Yes" ${draft.urgent_notice === "Yes" ? "checked" : ""} /><span>Yes</span></label>
+              <label><input type="radio" name="urgent_notice" value="No" ${draft.urgent_notice === "No" ? "checked" : ""} /><span>No</span></label>
             </div>
           </fieldset>
           <fieldset class="pm-turn-question" data-manager-turn-step="before2">
@@ -3101,8 +3139,8 @@ function renderRequestForm() {
               <small>This helps us plan the completion window correctly.</small>
             </span>
             <div class="pm-choice-row">
-              <label><input type="radio" name="move_in_before_2" value="Yes" /><span>Yes</span></label>
-              <label><input type="radio" name="move_in_before_2" value="No" /><span>No</span></label>
+              <label><input type="radio" name="move_in_before_2" value="Yes" ${draft.move_in_before_2 === "Yes" ? "checked" : ""} /><span>Yes</span></label>
+              <label><input type="radio" name="move_in_before_2" value="No" ${draft.move_in_before_2 === "No" ? "checked" : ""} /><span>No</span></label>
             </div>
           </fieldset>
           <label class="pm-turn-question" data-manager-turn-step="notes">
@@ -3110,7 +3148,7 @@ function renderRequestForm() {
               <strong>Add any notes you would like our staff to know about this move-in.</strong>
               <small>Access details, lockbox notes, special areas, pets, supplies, or timing concerns all help.</small>
             </span>
-            <textarea name="body" rows="4" placeholder="Anything Turnly should know before we arrive..."></textarea>
+            <textarea name="body" rows="4" placeholder="Anything Turnly should know before we arrive...">${esc(draft.body || "")}</textarea>
           </label>
           <div class="pm-turn-submit-row">
             <button class="secondary-command-btn pm-compact-btn" type="button" data-manager-turn-back hidden>Back</button>
@@ -3297,6 +3335,7 @@ async function createTurnRequest(form) {
     return;
   }
 
+  captureTurnRequestDraft(form);
   const unit = form.elements.unit?.value?.trim() || "";
   const service = TURN_REQUEST_SERVICE;
   const moveInDateValue = form.elements.move_in_date?.value || "";
@@ -3404,6 +3443,7 @@ async function createTurnRequest(form) {
     state.selectedAssignmentId = assignmentId || state.selectedAssignmentId;
     state.requestOpen = false;
     state.requestConfirmation = { unit, moveInDateValue };
+    resetTurnRequestDraft();
     state.dataMessage = "";
     state.dataError = false;
     await refreshManagerPortal();
@@ -3797,6 +3837,7 @@ function syncTurnRequestWizard(form = document.getElementById("managerTurnReques
   const steps = turnRequestSteps(form);
   const activeIndex = turnRequestStepIndex(form);
   form.dataset.turnStep = String(activeIndex);
+  state.requestDraft.turnStep = activeIndex;
   const activeStep = steps[activeIndex] || steps[0] || "unit";
   form.querySelectorAll("[data-manager-turn-step]").forEach((question) => {
     const questionStep = question.dataset.managerTurnStep;
@@ -3819,6 +3860,7 @@ function syncTurnRequestWizard(form = document.getElementById("managerTurnReques
 
 function moveTurnRequestStep(form, direction) {
   if (!form) return;
+  captureTurnRequestDraft(form);
   updateTurnRequestTimingPrompts(form);
   const steps = turnRequestSteps(form);
   const activeIndex = turnRequestStepIndex(form);
@@ -3835,6 +3877,7 @@ function moveTurnRequestStep(form, direction) {
     state.error = false;
   }
   form.dataset.turnStep = String(Math.min(Math.max(activeIndex + direction, 0), steps.length - 1));
+  captureTurnRequestDraft(form);
   syncTurnRequestWizard(form);
 }
 
@@ -3853,6 +3896,7 @@ function updateTurnRequestTimingPrompts(form = document.getElementById("managerT
   urgentQuestion.querySelectorAll("input").forEach((input) => {
     if (!showUrgent) input.checked = false;
   });
+  if (!showUrgent) state.requestDraft.urgent_notice = "";
   syncTurnRequestWizard(form);
 }
 
@@ -4013,6 +4057,7 @@ document.addEventListener("click", async (event) => {
     }
     state.requestOpen = true;
     state.requestConfirmation = null;
+    resetTurnRequestDraft();
     state.message = "";
     state.error = false;
     renderManagerPortal();
@@ -4022,6 +4067,7 @@ document.addEventListener("click", async (event) => {
   if (event.target.closest("[data-manager-message-compose]")) {
     state.requestOpen = true;
     state.requestConfirmation = null;
+    resetTurnRequestDraft();
     state.message = "";
     state.error = false;
     renderManagerPortal();
@@ -4045,6 +4091,7 @@ document.addEventListener("click", async (event) => {
   if (event.target.closest("[data-manager-request-close]")) {
     state.requestOpen = false;
     state.requestConfirmation = null;
+    resetTurnRequestDraft();
     state.message = "";
     state.error = false;
     renderManagerPortal();
@@ -4120,6 +4167,9 @@ document.addEventListener("focusin", (event) => {
 });
 
 document.addEventListener("input", (event) => {
+  const turnRequestForm = event.target.closest("[data-manager-turn-form]");
+  if (turnRequestForm) captureTurnRequestDraft(turnRequestForm);
+
   if (event.target.matches("[data-manager-move-in-date]")) {
     updateTurnRequestTimingPrompts(event.target.form);
     return;
@@ -4157,6 +4207,9 @@ document.addEventListener("keydown", (event) => {
 });
 
 document.addEventListener("change", (event) => {
+  const turnRequestForm = event.target.closest("[data-manager-turn-form]");
+  if (turnRequestForm) captureTurnRequestDraft(turnRequestForm);
+
   if (event.target.matches("[data-manager-move-in-date]")) {
     updateTurnRequestTimingPrompts(event.target.form);
     return;
