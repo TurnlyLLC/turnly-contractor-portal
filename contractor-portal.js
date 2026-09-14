@@ -35,13 +35,13 @@ const contractorDashboardThemeStorageKey = "turnlyContractorDashboardTheme";
 const navItems = [
   ["dashboard", "Dashboard", contractorRoute("dashboard", contractorSurface)],
   ["my-jobs", "My Jobs", contractorRoute("my-jobs", contractorSurface)],
+  ["job-board", "Job Board", contractorRoute("job-board", contractorSurface)],
   ["schedule", "Schedule", contractorRoute("schedule", contractorSurface)],
   ["resources", "Resources", contractorRoute("resources", contractorSurface)],
   ["messages", "Messages", contractorRoute("messages", contractorSurface)],
   ["documents", "Documents", contractorRoute("documents", contractorSurface)],
   ["payments", "Payments", contractorRoute("payments", contractorSurface)],
   ["performance", "Performance", contractorRoute("performance", contractorSurface)],
-  ["job-board", "Job Board", contractorRoute("job-board", contractorSurface)],
   ["video-library", "Video Library", contractorRoute("video-library", contractorSurface)]
 ];
 
