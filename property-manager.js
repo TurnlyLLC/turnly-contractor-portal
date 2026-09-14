@@ -61,6 +61,7 @@ const state = {
   scheduleView: "week",
   view: "overview",
   requestOpen: false,
+  requestConfirmation: null,
   assignmentDetailsOpen: false,
   requestPage: 1,
   requestPageSize: 10,
@@ -610,6 +611,14 @@ function formatMoveInDate(value, fallback = "Not selected") {
   const date = scheduledMoveInDate(value);
   if (!date) return fallback;
   return date.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+}
+
+function moveInIsWithin24Hours(value) {
+  const date = scheduledMoveInDate(value);
+  if (!date) return false;
+  const now = new Date();
+  const diff = date.getTime() - now.getTime();
+  return diff >= 0 && diff <= 24 * 60 * 60 * 1000;
 }
 
 function openNativeDatePicker(control) {
@@ -3018,57 +3027,98 @@ function renderThreadActivity(thread) {
 }
 
 function renderRequestForm() {
-  if (!state.requestOpen || state.view === "messages") return "";
+  if ((!state.requestOpen && !state.requestConfirmation) || state.view === "messages") return "";
   if (!hasLinkedProperty()) return "";
+  if (state.requestConfirmation) {
+    return `
+      <section class="pm-turn-request-modal" role="dialog" aria-modal="true" aria-labelledby="pmTurnRequestThanksTitle">
+        <button class="pm-turn-request-backdrop" type="button" aria-label="Close turn request confirmation" data-manager-request-close></button>
+        <article class="pm-turn-request-card pm-turn-request-thanks">
+          <div class="pm-turn-request-success-icon">${pmIcon("check")}</div>
+          <p class="pm-eyebrow">Request Submitted</p>
+          <h2 id="pmTurnRequestThanksTitle">Thank you for choosing Turnly.</h2>
+          <p>Our staff will complete this request before the scheduled move-in date. We will reach out if we have any questions.</p>
+          <dl>
+            <div><dt>Unit</dt><dd>${esc(state.requestConfirmation.unit || "Not listed")}</dd></div>
+            <div><dt>Move-In Date</dt><dd>${esc(formatMoveInDate(state.requestConfirmation.moveInDateValue))}</dd></div>
+            <div><dt>Property</dt><dd>${esc(propertyTitle())}</dd></div>
+          </dl>
+          <button class="new-btn pm-compact-btn" type="button" data-manager-request-close>Done</button>
+        </article>
+      </section>
+    `;
+  }
   return `
-    <section class="panel-card pm-request-form-panel">
-      <div class="pm-panel-head">
-        <div><h2>New Turn Request</h2><p>Send Turnly the unit, scheduled move-in date, and access notes for ${esc(propertyTitle())}.</p></div>
-        <button class="secondary-command-btn pm-compact-btn" type="button" data-manager-request-close>Close</button>
-      </div>
-      <p class="pm-form-note">Turn requests go straight to Turnly operations. Service type is fixed to ${esc(TURN_REQUEST_SERVICE)}, and move-in time is automatically set to ${esc(MOVE_IN_TIME_LABEL)}.</p>
-      <form id="managerTurnRequestForm" class="manager-message-form pm-request-form">
-        <label>
-          <span>Unit</span>
-          <input name="unit" type="search" list="managerUnitOptions" placeholder="Start typing a unit..." autocomplete="off" required />
-          <datalist id="managerUnitOptions">
-            ${state.units.map((unit) => {
-              const name = unit.unit_name || unit.name || unit.unit_number || "";
-              return name ? `<option value="${esc(name)}"></option>` : "";
-            }).join("")}
-          </datalist>
-        </label>
-        <label>
-          <span>Service Type</span>
-          <select name="service" required>
-            <option value="${esc(TURN_REQUEST_SERVICE)}" selected>${esc(TURN_REQUEST_SERVICE)}</option>
-          </select>
-        </label>
-        <label>
-          <span>Scheduled Move-In Date</span>
-          <input name="move_in_date" type="date" min="${esc(dateInputValue(new Date()))}" data-manager-move-in-date required />
-        </label>
-        <label>
-          <span>Move-In Time</span>
-          <input name="move_in_time" type="text" value="${esc(MOVE_IN_TIME_LABEL)}" readonly aria-readonly="true" />
-        </label>
-        <label>
-          <span>Priority</span>
-          <select name="priority">
-            <option>Normal</option>
-            <option>High</option>
-            <option>Urgent</option>
-          </select>
-        </label>
-        <label class="span-all">
-          <span>Access / Turn Notes</span>
-          <textarea name="body" rows="4" placeholder="Move-out date, lockbox or access notes, special rooms, supply concerns, or anything Turnly should know..." required></textarea>
-        </label>
-        <div class="pm-form-actions span-all">
-          <button class="new-btn pm-compact-btn" type="submit" ${state.sending ? "disabled" : ""}>Submit Turn Request</button>
-          <small>Turnly will review the request and confirm schedule details in Messages.</small>
+    <section class="pm-turn-request-modal" role="dialog" aria-modal="true" aria-labelledby="pmTurnRequestTitle">
+      <button class="pm-turn-request-backdrop" type="button" aria-label="Close turn request form" data-manager-request-close></button>
+      <article class="pm-turn-request-card">
+        <div class="pm-turn-request-header">
+          <div>
+            <p class="pm-eyebrow">New Turn Request</p>
+            <h2 id="pmTurnRequestTitle">Tell us about the move-in.</h2>
+            <p>${esc(propertyTitle())} turns are sent directly to Turnly operations.</p>
+          </div>
+          <button class="pm-modal-close" type="button" aria-label="Close turn request form" data-manager-request-close>${pmIcon("x")}</button>
         </div>
-      </form>
+        <form id="managerTurnRequestForm" class="pm-turn-questionnaire">
+          <label class="pm-turn-question">
+            <span class="pm-question-number">1</span>
+            <span class="pm-question-copy">
+              <strong>What unit needs to be turned?</strong>
+              <small>Search or choose from the units currently attached to this property.</small>
+            </span>
+            <input name="unit" type="search" list="managerUnitOptions" placeholder="Start typing a unit..." autocomplete="off" required />
+            <datalist id="managerUnitOptions">
+              ${state.units.map((unit) => {
+                const name = unit.unit_name || unit.name || unit.unit_number || "";
+                return name ? `<option value="${esc(name)}"></option>` : "";
+              }).join("")}
+            </datalist>
+          </label>
+          <label class="pm-turn-question">
+            <span class="pm-question-number">2</span>
+            <span class="pm-question-copy">
+              <strong>When does the resident move in?</strong>
+              <small>Choose the scheduled move-in date.</small>
+            </span>
+            <input name="move_in_date" type="date" min="${esc(dateInputValue(new Date()))}" data-manager-move-in-date required />
+          </label>
+          <fieldset class="pm-turn-question pm-urgent-question is-hidden" data-manager-urgent-question>
+            <span class="pm-question-number">3</span>
+            <span class="pm-question-copy">
+              <strong>The scheduled resident move-in is less than 24 hours away. Is this an urgent request?</strong>
+              <small>Urgent requests are flagged for Turnly operations.</small>
+            </span>
+            <div class="pm-choice-row">
+              <label><input type="radio" name="urgent_notice" value="Yes" /><span>Yes</span></label>
+              <label><input type="radio" name="urgent_notice" value="No" /><span>No</span></label>
+            </div>
+          </fieldset>
+          <fieldset class="pm-turn-question">
+            <span class="pm-question-number">4</span>
+            <span class="pm-question-copy">
+              <strong>Are they scheduled to move in on <span data-manager-move-in-date-label>the selected date</span> before 2 PM local time?</strong>
+              <small>This helps us plan the completion window correctly.</small>
+            </span>
+            <div class="pm-choice-row">
+              <label><input type="radio" name="move_in_before_2" value="Yes" /><span>Yes</span></label>
+              <label><input type="radio" name="move_in_before_2" value="No" /><span>No</span></label>
+            </div>
+          </fieldset>
+          <label class="pm-turn-question">
+            <span class="pm-question-number">5</span>
+            <span class="pm-question-copy">
+              <strong>Add any notes you would like our staff to know about this move-in.</strong>
+              <small>Access details, lockbox notes, special areas, pets, supplies, or timing concerns all help.</small>
+            </span>
+            <textarea name="body" rows="4" placeholder="Anything Turnly should know before we arrive..."></textarea>
+          </label>
+          <div class="pm-turn-submit-row">
+            <button class="new-btn pm-compact-btn" type="submit" ${state.sending ? "disabled" : ""}>Submit Turn Request</button>
+            <small id="managerMessageStatus" class="${state.error ? "error" : ""}">${esc(state.message || "We will review the request and reach out if we have questions.")}</small>
+          </div>
+        </form>
+      </article>
     </section>
   `;
 }
@@ -3248,15 +3298,34 @@ async function createTurnRequest(form) {
 
   const unit = form.elements.unit?.value?.trim() || "";
   const service = TURN_REQUEST_SERVICE;
-  const priority = form.elements.priority?.value?.trim() || "Normal";
   const moveInDateValue = form.elements.move_in_date?.value || "";
   const moveInDate = scheduledMoveInDate(moveInDateValue);
-  const notes = form.elements.body?.value?.trim() || "";
+  const urgentRequired = moveInIsWithin24Hours(moveInDateValue);
+  const urgentNotice = form.elements.urgent_notice?.value || "";
+  const moveInBefore2 = form.elements.move_in_before_2?.value || "";
+  const additionalNotes = form.elements.body?.value?.trim() || "";
   if (!moveInDate) {
     setManagerMessageStatus("Choose a scheduled move-in date.", true);
-    renderManagerPortal();
+    updateTurnRequestTimingPrompts(form);
     return;
   }
+  if (urgentRequired && !urgentNotice) {
+    setManagerMessageStatus("Tell us whether this less-than-24-hour turn is urgent.", true);
+    updateTurnRequestTimingPrompts(form);
+    return;
+  }
+  if (!moveInBefore2) {
+    setManagerMessageStatus("Tell us whether the resident is scheduled to move in before 2 PM local time.", true);
+    updateTurnRequestTimingPrompts(form);
+    return;
+  }
+
+  const priority = urgentNotice === "Yes" ? "Urgent" : "Normal";
+  const notes = [
+    `Resident scheduled before 2 PM local time: ${moveInBefore2}`,
+    urgentRequired ? `Less than 24 hours notice - urgent request: ${urgentNotice}` : "",
+    additionalNotes ? `Notes: ${additionalNotes}` : ""
+  ].filter(Boolean).join("\n");
 
   state.sending = true;
   setManagerMessageStatus("Submitting turn request...");
@@ -3304,10 +3373,12 @@ async function createTurnRequest(form) {
     `Priority: ${priority}`,
     `Scheduled move-in date: ${formatMoveInDate(moveInDateValue)}`,
     `Move-in time: ${MOVE_IN_TIME_LABEL}`,
+    `Resident scheduled before 2 PM local time: ${moveInBefore2}`,
+    urgentRequired ? `Less than 24 hours notice - urgent request: ${urgentNotice}` : "",
     moveInDate ? `Scheduled move-in timestamp: ${moveInDate.toLocaleString()}` : "",
     assignmentId ? `Assignment request ID: ${assignmentId}` : "",
     "",
-    notes
+    additionalNotes
   ].filter((line) => line !== "").join("\n");
 
   notifyAdminTurnRequestSms({
@@ -3331,7 +3402,8 @@ async function createTurnRequest(form) {
   if (!state.error) {
     state.selectedAssignmentId = assignmentId || state.selectedAssignmentId;
     state.requestOpen = false;
-    state.dataMessage = "Turn request submitted as pending for Turnly approval.";
+    state.requestConfirmation = { unit, moveInDateValue };
+    state.dataMessage = "";
     state.dataError = false;
     await refreshManagerPortal();
     renderManagerPortal();
@@ -3694,6 +3766,20 @@ function setManagerMessageStatus(message, error = false) {
   target.classList.toggle("error", state.error);
 }
 
+function updateTurnRequestTimingPrompts(form = document.getElementById("managerTurnRequestForm")) {
+  if (!form) return;
+  const moveInDateValue = form.elements.move_in_date?.value || "";
+  const dateLabel = form.querySelector("[data-manager-move-in-date-label]");
+  if (dateLabel) dateLabel.textContent = moveInDateValue ? formatMoveInDate(moveInDateValue) : "the selected date";
+  const urgentQuestion = form.querySelector("[data-manager-urgent-question]");
+  if (!urgentQuestion) return;
+  const showUrgent = moveInIsWithin24Hours(moveInDateValue);
+  urgentQuestion.classList.toggle("is-hidden", !showUrgent);
+  urgentQuestion.querySelectorAll("input").forEach((input) => {
+    if (!showUrgent) input.checked = false;
+  });
+}
+
 function setActiveNav() {
   document.querySelectorAll(".command-nav .nav-link").forEach((link) => {
     link.classList.toggle("active", link.dataset.pmView === state.view);
@@ -3850,18 +3936,27 @@ document.addEventListener("click", async (event) => {
       return;
     }
     state.requestOpen = true;
+    state.requestConfirmation = null;
+    state.message = "";
+    state.error = false;
     renderManagerPortal();
     return;
   }
 
   if (event.target.closest("[data-manager-message-compose]")) {
     state.requestOpen = true;
+    state.requestConfirmation = null;
+    state.message = "";
+    state.error = false;
     renderManagerPortal();
     return;
   }
 
   if (event.target.closest("[data-manager-request-close]")) {
     state.requestOpen = false;
+    state.requestConfirmation = null;
+    state.message = "";
+    state.error = false;
     renderManagerPortal();
     return;
   }
@@ -3935,6 +4030,11 @@ document.addEventListener("focusin", (event) => {
 });
 
 document.addEventListener("input", (event) => {
+  if (event.target.matches("[data-manager-move-in-date]")) {
+    updateTurnRequestTimingPrompts(event.target.form);
+    return;
+  }
+
   const filter = event.target.closest("[data-pm-filter]");
   if (!filter) return;
   state.filters[filter.dataset.pmFilter] = filter.value;
@@ -3967,6 +4067,11 @@ document.addEventListener("keydown", (event) => {
 });
 
 document.addEventListener("change", (event) => {
+  if (event.target.matches("[data-manager-move-in-date]")) {
+    updateTurnRequestTimingPrompts(event.target.form);
+    return;
+  }
+
   const previewField = event.target.closest("[data-admin-preview-field]");
   if (previewField) {
     adminPreviewContextFromControls();
