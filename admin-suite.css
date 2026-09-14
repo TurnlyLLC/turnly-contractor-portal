@@ -4588,6 +4588,81 @@ a {
   margin: 0;
 }
 
+.finance-workspace {
+  display: grid;
+  gap: 14px;
+}
+
+.finance-workspace .status-message {
+  margin: 0;
+}
+
+.finance-metric-strip {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.finance-action-grid,
+.finance-ledger-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.finance-action-grid .span-half {
+  grid-column: span 1;
+}
+
+.finance-ledger-grid .span-all {
+  grid-column: 1 / -1;
+}
+
+.finance-integration-card {
+  display: grid;
+  gap: 14px;
+}
+
+.finance-integration-card p {
+  color: var(--suite-muted);
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.finance-integration-actions,
+.finance-row-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.finance-row-actions {
+  justify-content: flex-end;
+}
+
+.finance-table-scroll {
+  max-height: 520px;
+}
+
+.finance-table td strong,
+.finance-table td small {
+  display: block;
+}
+
+.finance-table td small {
+  color: var(--suite-muted);
+  font-size: 12px;
+  line-height: 1.35;
+  margin-top: 4px;
+}
+
+.primary-action.compact,
+.secondary-action.compact {
+  min-height: 34px;
+  padding: 7px 10px;
+  white-space: nowrap;
+}
+
 .invoice-report-workspace {
   display: grid;
   gap: 14px;
@@ -5750,7 +5825,8 @@ a {
   .four-panels,
   .performance-layout,
   .analytics-layout,
-  .report-grid {
+  .report-grid,
+  .finance-action-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -5768,6 +5844,10 @@ a {
   }
 
   .assignment-detail-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .finance-metric-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -5832,6 +5912,19 @@ a {
   }
 
   .quickbooks-sync-actions {
+    justify-content: flex-start;
+  }
+
+  .finance-action-grid,
+  .finance-ledger-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .finance-action-grid .span-half {
+    grid-column: 1 / -1;
+  }
+
+  .finance-row-actions {
     justify-content: flex-start;
   }
 

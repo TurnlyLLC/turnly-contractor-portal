@@ -75,6 +75,7 @@ const navSections = [
   {
     title: "Reports",
     links: [
+      { key: "finance", label: "Finance", href: "finance.html", icon: "badge-dollar" },
       { key: "reports-sales", label: "Sales", href: "reports-sales.html", icon: "wallet" },
       { key: "invoices", label: "Invoices", href: "invoices.html", icon: "document" },
       { key: "contractor-feedback", label: "Contractor Feedback", href: "contractor-feedback.html", icon: "star" },
@@ -463,6 +464,22 @@ const invoiceReportState = {
     lastPaymentSync: null
   }
 };
+const financeState = {
+  invoices: [],
+  contractorPay: [],
+  totals: {
+    unsentInvoiceCount: 0,
+    unsentInvoiceAmount: 0,
+    contractorPayCount: 0,
+    contractorPayOwed: 0
+  },
+  relayUrl: suiteEnv.RELAY_PAYMENTS_URL || "https://app.relayfi.com/",
+  loading: false,
+  message: "",
+  error: false,
+  markingInvoices: new Set(),
+  markingPayments: new Set()
+};
 const contractorFeedbackReportState = {
   rows: [],
   loading: false,
@@ -710,6 +727,14 @@ const pages = {
       { label: "Assignments", icon: "clipboard-list", href: "assignments.html", tone: "secondary" }
     ],
     render: renderSalesReport
+  },
+  "finance": {
+    title: "Finance",
+    subtitle: "Track unsent invoices and contractor payouts from one admin workspace.",
+    actions: [
+      { label: "QuickBooks", icon: "link", href: "invoices.html", tone: "secondary" }
+    ],
+    render: renderFinancePage
   },
   "invoices": {
     title: "Invoices",
@@ -9976,6 +10001,297 @@ function setContractorFeedbackHtml(id, html) {
   if (node) node.innerHTML = html;
 }
 
+function renderFinancePage() {
+  return `
+    <section class="finance-workspace" data-finance-page>
+      ${toolbar(
+        `<p id="financeMessage" class="status-message" aria-live="polite">Loading finance data...</p>`,
+        `<a class="secondary-action" href="invoices.html">${icon("document")}<span>Invoice Builder</span></a><a class="primary-action" id="financeRelayLink" href="${esc(financeState.relayUrl)}" target="_blank" rel="noreferrer">${icon("wallet")}<span>Open Relay</span></a><button class="secondary-action" type="button" data-finance-refresh>${icon("refresh")}<span>Refresh</span></button>`
+      )}
+      <section class="metric-strip finance-metric-strip">
+        ${metric("Unsent Invoices", "0", "open invoice drafts", "document", "yellow", 'id="financeUnsentInvoiceCount"')}
+        ${metric("Invoice Amount", "$0", "waiting to send", "badge-dollar", "green", 'id="financeUnsentInvoiceTotal"')}
+        ${metric("Contractor Pay Owed", "$0", "not paid out yet", "wallet", "blue", 'id="financeContractorPayTotal"')}
+        ${metric("Payout Jobs", "0", "ready to mark paid", "users", "purple", 'id="financeContractorPayCount"')}
+      </section>
+      <section class="finance-action-grid">
+        ${panel("QuickBooks", `
+          <div class="finance-integration-card">
+            <p>Import invoice details into QuickBooks from the weekly invoice builder, then mark invoices sent here after they are delivered.</p>
+            <div class="finance-integration-actions">
+              <a class="primary-action" href="invoices.html">${icon("document")}<span>Open Invoice Builder</span></a>
+              <button class="secondary-action" type="button" data-quickbooks-connect>${icon("link")}<span>Connect QuickBooks</span></button>
+            </div>
+          </div>
+        `, { icon: "link", className: "span-half" })}
+        ${panel("Relay", `
+          <div class="finance-integration-card">
+            <p>Use Relay to send contractor payouts after reviewing the owed-pay queue below.</p>
+            <div class="finance-integration-actions">
+              <a class="primary-action" id="financeRelayPanelLink" href="${esc(financeState.relayUrl)}" target="_blank" rel="noreferrer">${icon("wallet")}<span>Open Relay Payments</span></a>
+            </div>
+          </div>
+        `, { icon: "wallet", className: "span-half" })}
+      </section>
+      <section class="finance-ledger-grid">
+        ${panel("Open Invoices Not Sent", `
+          <div class="table-scroll finance-table-scroll">
+            <table class="suite-table finance-table">
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Week</th>
+                  <th>Total</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="financeInvoiceRows">${financeLoadingRows(5)}</tbody>
+            </table>
+          </div>
+        `, { icon: "document", className: "span-all" })}
+        ${panel("Contractor Pay Owed", `
+          <div class="table-scroll finance-table-scroll">
+            <table class="suite-table finance-table">
+              <thead>
+                <tr>
+                  <th>Assignment</th>
+                  <th>Contractor</th>
+                  <th>Completed</th>
+                  <th>Amount</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="financePaymentRows">${financeLoadingRows(5)}</tbody>
+            </table>
+          </div>
+        `, { icon: "wallet", className: "span-all" })}
+      </section>
+    </section>
+  `;
+}
+
+function initFinancePage() {
+  const root = document.querySelector("[data-finance-page]");
+  if (!root) return;
+  root.querySelector("[data-finance-refresh]")?.addEventListener("click", () => {
+    void loadFinancePage();
+  });
+  root.addEventListener("click", (event) => {
+    const connect = event.target.closest("[data-quickbooks-connect]");
+    if (connect) {
+      void connectQuickBooks();
+      return;
+    }
+    const invoice = event.target.closest("[data-finance-mark-invoice-sent]");
+    if (invoice) {
+      void markFinanceInvoiceSent(invoice.dataset.financeMarkInvoiceSent);
+      return;
+    }
+    const payment = event.target.closest("[data-finance-mark-paid]");
+    if (payment) {
+      void markFinanceContractorPaid(payment.dataset.financeMarkPaid, Number(payment.dataset.financePayAmount || 0));
+    }
+  });
+  void loadFinancePage();
+}
+
+async function financeApi(path, options = {}) {
+  return quickBooksApi(path, options);
+}
+
+async function loadFinancePage() {
+  financeState.loading = true;
+  financeState.error = false;
+  setFinanceMessage("Loading finance data...");
+  renderFinanceData();
+  try {
+    const payload = await financeApi("/api/finance-summary", { method: "GET" });
+    financeState.invoices = payload.invoices || [];
+    financeState.contractorPay = payload.contractorPay || [];
+    financeState.totals = payload.totals || financeState.totals;
+    financeState.relayUrl = payload.relayUrl || financeState.relayUrl;
+    financeState.loading = false;
+    financeState.error = false;
+    renderFinanceData();
+    setFinanceMessage(payload.setupRequired
+      ? "Finance loaded. Apply the QuickBooks migration to show synced invoice drafts."
+      : `Loaded ${financeState.invoices.length.toLocaleString()} unsent invoice${financeState.invoices.length === 1 ? "" : "s"} and ${financeState.contractorPay.length.toLocaleString()} contractor payout item${financeState.contractorPay.length === 1 ? "" : "s"}.`);
+  } catch (error) {
+    financeState.loading = false;
+    financeState.error = true;
+    financeState.invoices = [];
+    financeState.contractorPay = [];
+    renderFinanceData();
+    setFinanceMessage(error.message || "Unable to load finance data.", true);
+  }
+}
+
+function renderFinanceData() {
+  const totals = financeState.totals || {};
+  setText("financeUnsentInvoiceCount", Number(totals.unsentInvoiceCount || financeState.invoices.length || 0).toLocaleString());
+  setText("financeUnsentInvoiceTotal", salesMoney(totals.unsentInvoiceAmount || 0));
+  setText("financeContractorPayTotal", salesMoney(totals.contractorPayOwed || 0));
+  setText("financeContractorPayCount", Number(totals.contractorPayCount || financeState.contractorPay.length || 0).toLocaleString());
+  setFinanceHtml("financeInvoiceRows", financeInvoiceRows());
+  setFinanceHtml("financePaymentRows", financePaymentRows());
+  document.querySelectorAll("#financeRelayLink, #financeRelayPanelLink").forEach((link) => {
+    link.setAttribute("href", financeState.relayUrl || "https://app.relayfi.com/");
+  });
+}
+
+function financeLoadingRows(count = 4) {
+  return `<tr><td colspan="5">${skeletonRows(count)}</td></tr>`;
+}
+
+function financeInvoiceRows() {
+  if (financeState.loading) return financeLoadingRows(5);
+  const rows = financeState.invoices || [];
+  if (!rows.length) {
+    return `
+      <tr>
+        <td colspan="5">${emptyState("document", "No unsent invoices", "Synced invoice drafts that still need to be sent will appear here.")}</td>
+      </tr>
+    `;
+  }
+  return rows.map((invoice) => {
+    const id = String(invoice.id || "");
+    const busy = financeState.markingInvoices.has(id);
+    const week = financeWeekLabel(invoice.weekStart, invoice.weekEnd);
+    const status = invoice.lastError ? "Error" : titleCase(invoice.quickbooksStatus || "drafted");
+    const meta = [
+      invoice.docNumber ? `Doc ${invoice.docNumber}` : "",
+      invoice.assignmentCount ? `${invoice.assignmentCount} assignment${invoice.assignmentCount === 1 ? "" : "s"}` : ""
+    ].filter(Boolean).join(" - ");
+    return `
+      <tr>
+        <td>
+          <strong>${esc(invoice.propertyName || "Unnamed property")}</strong>
+          <small>${esc(meta || invoice.propertyKey || "")}</small>
+        </td>
+        <td>
+          <strong>${esc(week)}</strong>
+          <small>${esc(invoice.syncedAt ? `Synced ${formatDashboardDate(invoice.syncedAt, "")}` : "Not synced")}</small>
+        </td>
+        <td>
+          <strong>${esc(salesMoney(invoice.total || 0))}</strong>
+          <small>${esc(invoice.balance ? `${salesMoney(invoice.balance)} balance` : "No balance listed")}</small>
+        </td>
+        <td>${statusBadge(status)}</td>
+        <td>
+          <div class="finance-row-actions">
+            ${invoice.quickbooksInvoiceUrl ? `<a class="secondary-action compact" href="${esc(invoice.quickbooksInvoiceUrl)}" target="_blank" rel="noreferrer">${icon("link")}<span>Open</span></a>` : ""}
+            <button class="primary-action compact" type="button" data-finance-mark-invoice-sent="${esc(id)}" ${busy ? "disabled" : ""}>${icon("check")}<span>${busy ? "Saving..." : "Mark Sent"}</span></button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function financePaymentRows() {
+  if (financeState.loading) return financeLoadingRows(5);
+  const rows = financeState.contractorPay || [];
+  if (!rows.length) {
+    return `
+      <tr>
+        <td colspan="5">${emptyState("wallet", "No contractor pay owed", "Completed contractor jobs awaiting payout will appear here.")}</td>
+      </tr>
+    `;
+  }
+  return rows.map((item) => {
+    const id = String(item.assignmentId || "");
+    const busy = financeState.markingPayments.has(id);
+    const assignment = [item.propertyName, item.unitNumber ? `Unit ${item.unitNumber}` : ""].filter(Boolean).join(" - ");
+    return `
+      <tr>
+        <td>
+          <strong>${esc(assignment || item.title || "Completed assignment")}</strong>
+          <small>${esc(item.title || "")}</small>
+        </td>
+        <td>
+          <strong>${esc(item.contractorName || "Unassigned contractor")}</strong>
+          <small>${esc(item.contractorEmail || "")}</small>
+        </td>
+        <td>
+          <strong>${esc(formatDashboardDate(item.completedAt, "No date"))}</strong>
+          <small>${esc(titleCase(item.status || "unpaid"))}</small>
+        </td>
+        <td><strong>${esc(salesMoney(item.amount || 0))}</strong></td>
+        <td>
+          <button class="primary-action compact" type="button" data-finance-mark-paid="${esc(id)}" data-finance-pay-amount="${esc(item.amount || 0)}" ${busy ? "disabled" : ""}>${icon("check")}<span>${busy ? "Saving..." : "Mark Paid"}</span></button>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function financeWeekLabel(start, end) {
+  const startDate = parseDate(start);
+  const endDate = parseDate(end);
+  if (!startDate && !endDate) return "No week";
+  if (startDate && endDate) return invoiceWeekLabel(startDate, endDate);
+  return formatDashboardDate(start || end, "No week");
+}
+
+async function markFinanceInvoiceSent(id) {
+  if (!id || financeState.markingInvoices.has(id)) return;
+  financeState.markingInvoices.add(id);
+  renderFinanceData();
+  setFinanceMessage("Marking invoice sent...");
+  try {
+    await financeApi("/api/finance-mark-invoice-sent", {
+      method: "POST",
+      body: JSON.stringify({ id })
+    });
+    financeState.invoices = financeState.invoices.filter((row) => String(row.id || "") !== String(id));
+    financeState.totals.unsentInvoiceCount = Math.max(0, Number(financeState.totals.unsentInvoiceCount || 0) - 1);
+    financeState.totals.unsentInvoiceAmount = financeState.invoices.reduce((sum, row) => sum + Number(row.total || 0), 0);
+    setFinanceMessage("Invoice marked as sent.");
+  } catch (error) {
+    setFinanceMessage(error.message || "Unable to mark invoice sent.", true);
+  } finally {
+    financeState.markingInvoices.delete(id);
+    renderFinanceData();
+  }
+}
+
+async function markFinanceContractorPaid(id, amount = 0) {
+  if (!id || financeState.markingPayments.has(id)) return;
+  financeState.markingPayments.add(id);
+  renderFinanceData();
+  setFinanceMessage("Marking contractor pay as paid...");
+  try {
+    await financeApi("/api/finance-mark-contractor-paid", {
+      method: "POST",
+      body: JSON.stringify({ assignmentId: id, amount })
+    });
+    financeState.contractorPay = financeState.contractorPay.filter((row) => String(row.assignmentId || "") !== String(id));
+    financeState.totals.contractorPayCount = Math.max(0, Number(financeState.totals.contractorPayCount || 0) - 1);
+    financeState.totals.contractorPayOwed = financeState.contractorPay.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+    setFinanceMessage("Contractor pay marked as paid.");
+  } catch (error) {
+    setFinanceMessage(error.message || "Unable to mark contractor pay paid.", true);
+  } finally {
+    financeState.markingPayments.delete(id);
+    renderFinanceData();
+  }
+}
+
+function setFinanceMessage(text = "", isError = false) {
+  financeState.message = text;
+  financeState.error = Boolean(isError);
+  const message = document.getElementById("financeMessage");
+  if (!message) return;
+  message.textContent = text || "";
+  message.classList.toggle("error", Boolean(isError));
+}
+
+function setFinanceHtml(id, html) {
+  const node = document.getElementById(id);
+  if (node) node.innerHTML = html;
+}
+
 function renderInvoiceReport() {
   const range = invoiceSelectedWeekRange();
   return `
@@ -15873,6 +16189,9 @@ function renderApp() {
   }
   if (activeKey === "reports-sales") {
     initSalesReport();
+  }
+  if (activeKey === "finance") {
+    initFinancePage();
   }
   if (activeKey === "invoices") {
     initInvoiceReport();
