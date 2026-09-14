@@ -1042,9 +1042,16 @@ function normalizeUnitLookup(value) {
   return String(value || "").trim().toLowerCase();
 }
 
+function normalizeUnitKey(value) {
+  return normalizeUnitLookup(value)
+    .replace(/^unit\s+/i, "")
+    .replace(/(^|[^a-z0-9])0+([0-9])/g, "$1$2")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
 function unitLookupValues(value) {
   const meta = typeof value === "object" ? rowMeta(value) : {};
-  return compact([
+  const rawValues = compact([
     typeof value === "string" || typeof value === "number" ? value : "",
     value?.id,
     value?.unit_id,
@@ -1060,7 +1067,11 @@ function unitLookupValues(value) {
     meta.unit_name,
     meta.property_unit_name,
     meta.unit
-  ]).map(normalizeUnitLookup).filter(Boolean);
+  ]);
+  return [...new Set(rawValues.flatMap((rawValue) => [
+    normalizeUnitLookup(rawValue),
+    normalizeUnitKey(rawValue)
+  ]))].filter(Boolean);
 }
 
 function matchingUnit(rowOrValue) {
