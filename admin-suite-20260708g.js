@@ -10068,9 +10068,9 @@ function renderFinancePage() {
           <div class="finance-expense-import">
             <div>
               <strong>Import monthly expenses</strong>
-              <p>Paste rows copied from Google Sheets or CSV. Expected columns can include vendor/name, amount, category, due day/date, recurrence, notes, and payment method.</p>
+              <p>Paste rows copied from Google Sheets or CSV. The Turnly expenses workbook columns are supported, including Website Name, Cost Breakdown, Next Payment, Monthly, and Yearly.</p>
             </div>
-            <textarea id="financeExpenseImportText" rows="5" placeholder="Vendor,Category,Amount,Due Day,Recurrence,Notes"></textarea>
+            <textarea id="financeExpenseImportText" rows="5" placeholder="Website Name,Cost Breakdown,Next Payment (Monthly),Next Payment (Yearly),Monthly:,Yearly:"></textarea>
             <div class="finance-integration-actions">
               <button class="primary-action" type="button" data-finance-import-expenses>${icon("upload")}<span id="financeExpenseImportLabel">Import Expenses</span></button>
             </div>
@@ -10415,11 +10415,19 @@ function splitFinanceCsvLine(line = "") {
 function financeHeaderKey(value = "") {
   const key = normalizeToken(value);
   if (["vendor", "vendor_name", "payee", "company", "name", "expense", "expense_name"].includes(key)) return "vendorName";
+  if (["website_name", "website"].includes(key)) return "vendorName";
   if (["amount", "cost", "price", "payment", "monthly_amount", "monthly_cost"].includes(key)) return "amount";
+  if (["monthly", "monthly_"].includes(key)) return "monthlyAmount";
+  if (["yearly", "yearly_", "annual", "annual_amount"].includes(key)) return "yearlyAmount";
   if (["category", "group", "type", "expense_type"].includes(key)) return "category";
   if (["description", "details", "memo"].includes(key)) return "description";
+  if (["cost_breakdown", "cost_details"].includes(key)) return "costBreakdown";
   if (["due_day", "day", "due"].includes(key)) return "dueDay";
   if (["due_date", "date"].includes(key)) return "dueDate";
+  if (["next_payment_monthly", "next_monthly_payment", "monthly_next_payment", "next_payment"].includes(key)) return "nextPaymentMonthly";
+  if (["next_payment_yearly", "next_yearly_payment", "yearly_next_payment"].includes(key)) return "nextPaymentYearly";
+  if (["payments_started_monthly", "monthly_start", "started_monthly"].includes(key)) return "paymentsStartedMonthly";
+  if (["payments_started_yearly", "yearly_start", "started_yearly"].includes(key)) return "paymentsStartedYearly";
   if (["recurrence", "frequency", "cadence"].includes(key)) return "recurrence";
   if (["payment_method", "method", "account"].includes(key)) return "paymentMethod";
   if (["notes", "note"].includes(key)) return "notes";

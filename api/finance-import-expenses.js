@@ -28,6 +28,11 @@ function parseDueDay(value) {
   return Number.isFinite(number) && number >= 1 && number <= 31 ? Math.round(number) : null;
 }
 
+function dueDayFromDate(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.getDate();
+}
+
 function normalizeExpense(row = {}, index = 0, adminUserId = null) {
   const vendor = textValue(row.vendorName || row.vendor_name || row.vendor || row.name || row.expense || row.payee || row.company);
   const amount = numberValue(row.amount || row.monthlyAmount || row.monthly_amount || row.cost || row.price || row.payment);
@@ -51,6 +56,61 @@ function normalizeExpense(row = {}, index = 0, adminUserId = null) {
   };
 }
 
+function normalizeWorkbookExpenseRows(row = {}, index = 0, adminUserId = null) {
+  const vendor = textValue(row.vendorName || row.vendor_name || row.vendor || row.name || row.expense || row.payee || row.company);
+  const description = textValue(row.description || row.memo || row.details || row.costBreakdown || row.cost_breakdown || "");
+  const category = textValue(row.category || row.group || row.expenseType || row.expense_type || "General") || "General";
+  if (!vendor) return [];
+
+  const rows = [];
+  const monthlyAmount = numberValue(row.monthlyAmount || row.monthly_amount || row.monthly);
+  if (monthlyAmount > 0) {
+    const dueDate = textValue(row.nextPaymentMonthly || row.next_payment_monthly || row.monthlyDueDate || row.monthly_due_date || row.dueDate || row.due_date || "") || null;
+    rows.push({
+      vendor_name: vendor,
+      category,
+      description,
+      amount: monthlyAmount,
+      due_day: parseDueDay(row.dueDay || row.due_day) || dueDayFromDate(dueDate),
+      due_date: dueDate,
+      recurrence: "monthly",
+      status: normalizeToken(row.status || "active") || "active",
+      payment_method: textValue(row.paymentMethod || row.payment_method || row.method || ""),
+      notes: textValue(row.notes || row.note || ""),
+      source_label: textValue(row.sourceLabel || row.source_label || "Turnly expenses workbook"),
+      source_row_number: Number(row.sourceRowNumber || row.source_row_number || index + 1) || index + 1,
+      created_by: adminUserId,
+      updated_at: new Date().toISOString()
+    });
+  }
+
+  const yearlyAmount = numberValue(row.yearlyAmount || row.yearly_amount || row.yearly || row.annualAmount || row.annual_amount);
+  const yearlyDueDate = textValue(row.nextPaymentYearly || row.next_payment_yearly || row.yearlyDueDate || row.yearly_due_date || "") || null;
+  const separateYearlyAmount = monthlyAmount > 0
+    ? (yearlyDueDate ? Math.max(0, yearlyAmount - monthlyAmount * 12) : 0)
+    : yearlyAmount;
+  if (separateYearlyAmount > 0) {
+    rows.push({
+      vendor_name: vendor,
+      category,
+      description,
+      amount: separateYearlyAmount,
+      due_day: dueDayFromDate(yearlyDueDate),
+      due_date: yearlyDueDate,
+      recurrence: "yearly",
+      status: normalizeToken(row.status || "active") || "active",
+      payment_method: textValue(row.paymentMethod || row.payment_method || row.method || ""),
+      notes: textValue(row.notes || row.note || ""),
+      source_label: textValue(row.sourceLabel || row.source_label || "Turnly expenses workbook"),
+      source_row_number: Number(row.sourceRowNumber || row.source_row_number || index + 1) || index + 1,
+      created_by: adminUserId,
+      updated_at: new Date().toISOString()
+    });
+  }
+
+  return rows.length ? rows : [normalizeExpense(row, index, adminUserId)].filter(Boolean);
+}
+
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
@@ -72,7 +132,7 @@ module.exports = async function handler(req, res) {
 
   const rows = Array.isArray(body.rows) ? body.rows : [];
   const payloads = rows
-    .map((row, index) => normalizeExpense(row, index, admin.user?.id || null))
+    .flatMap((row, index) => normalizeWorkbookExpenseRows(row, index, admin.user?.id || null))
     .filter(Boolean);
 
   if (!payloads.length) {
