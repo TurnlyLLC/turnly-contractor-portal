@@ -447,6 +447,7 @@ const invoiceReportState = {
   rows: [],
   units: [],
   properties: [],
+  quickbooksInvoices: [],
   weekStart: "",
   loading: false,
   message: "",
@@ -10736,7 +10737,7 @@ function renderQuickBooksSyncPanel() {
     ].filter(Boolean).join(" - ")
     : "Connect QuickBooks before sending invoices or pulling payment statuses.";
   const message = state.message || (connected
-    ? "Sync invoices for the selected week, then pull contractor payment statuses back from QuickBooks."
+    ? "Sync invoices for the selected week, then pull invoice and contractor payment statuses back from QuickBooks."
     : "Invoices and payment syncs run through secure server routes.");
   const invoiceText = state.syncingInvoices ? "Syncing Invoices..." : "Sync Invoices";
   const paymentText = state.syncingPayments ? "Syncing Payments..." : "Sync Payment Statuses";
@@ -10789,6 +10790,15 @@ async function quickBooksApi(path, options = {}) {
     throw new Error(payload?.error || `QuickBooks request failed with ${response.status}.`);
   }
   return payload;
+}
+
+function quickBooksQueryString(params = {}) {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== null && value !== undefined && value !== "") query.set(key, value);
+  });
+  const text = query.toString();
+  return text ? `?${text}` : "";
 }
 
 async function loadQuickBooksStatus() {
@@ -10878,7 +10888,7 @@ async function syncQuickBooksPaymentStatuses() {
   const state = quickBooksState();
   state.syncingPayments = true;
   state.error = false;
-  state.message = "Pulling contractor payment statuses from QuickBooks...";
+  state.message = "Pulling invoice and contractor payment statuses from QuickBooks...";
   updateQuickBooksSyncPanel();
   try {
     const payload = await quickBooksApi("/api/quickbooks-sync-payment-statuses", {
@@ -10886,8 +10896,9 @@ async function syncQuickBooksPaymentStatuses() {
       body: quickBooksSyncPayload()
     });
     state.lastPaymentSync = payload;
-    state.error = Boolean(payload.invoiceLinksError || payload.invoiceRefreshErrors?.length);
-    state.message = `QuickBooks payments: ${Number(payload.matched?.length || 0).toLocaleString()} job${payload.matched?.length === 1 ? "" : "s"} marked paid, ${Number(payload.skippedOverrides?.length || 0).toLocaleString()} manual override${payload.skippedOverrides?.length === 1 ? "" : "s"} skipped.`;
+    const invoiceSync = payload.invoiceStatusSync || {};
+    state.error = Boolean(invoiceSync.failed?.length);
+    state.message = `QuickBooks sync: ${Number(invoiceSync.refreshed || 0).toLocaleString()} invoice${Number(invoiceSync.refreshed || 0) === 1 ? "" : "s"} refreshed (${Number(invoiceSync.paidCount || 0).toLocaleString()} paid, ${Number(invoiceSync.openCount || 0).toLocaleString()} open), ${Number(payload.matched?.length || 0).toLocaleString()} contractor job${payload.matched?.length === 1 ? "" : "s"} marked paid.`;
     await loadInvoiceReport();
     void loadQuickBooksStatus();
   } catch (error) {
@@ -10952,6 +10963,7 @@ async function loadInvoiceReport() {
     invoiceReportState.rows = [];
     invoiceReportState.units = [];
     invoiceReportState.properties = [];
+    invoiceReportState.quickbooksInvoices = [];
     renderInvoiceReportData();
     setInvoiceReportMessage("Supabase config is missing. Add env.js values before using invoices.", true);
     return;
@@ -10965,6 +10977,7 @@ async function loadInvoiceReport() {
     invoiceReportState.rows = [];
     invoiceReportState.units = [];
     invoiceReportState.properties = [];
+    invoiceReportState.quickbooksInvoices = [];
     invoiceReportState.loading = false;
     renderInvoiceReportData();
     setInvoiceReportMessage("Sign in as an admin to load invoices.", true);
@@ -10980,6 +10993,7 @@ async function loadInvoiceReport() {
     invoiceReportState.rows = [];
     invoiceReportState.units = [];
     invoiceReportState.properties = [];
+    invoiceReportState.quickbooksInvoices = [];
     invoiceReportState.loading = false;
     renderInvoiceReportData();
     setInvoiceReportMessage(profileError
@@ -10988,20 +11002,35 @@ async function loadInvoiceReport() {
     return;
   }
 
-  const [properties, units, assignmentsResult] = await Promise.all([
+  const range = invoiceSelectedWeekRange();
+  const [properties, units, assignmentsResult, quickbooksInvoicesResult] = await Promise.all([
     loadAssignmentProperties(),
     loadAssignmentUnits(),
-    loadAssignmentRows()
+    loadAssignmentRows(),
+    loadQuickBooksInvoiceStatuses(range)
   ]);
   invoiceReportState.properties = properties || [];
   invoiceReportState.units = units || [];
   invoiceReportState.rows = enrichAssignmentRowsWithContractAccess(assignmentsResult.rows, invoiceReportState.properties);
+  invoiceReportState.quickbooksInvoices = quickbooksInvoicesResult.invoices || [];
   invoiceReportState.loading = false;
   renderInvoiceReportData();
 
+  const invoiceStatusWarning = quickbooksInvoicesResult.error ? `QuickBooks invoice status could not load: ${quickbooksInvoicesResult.error}` : "";
   setInvoiceReportMessage(assignmentsResult.error
     ? invoiceReportSummaryMessage(`Supabase returned an error after loading assignment data.`)
+    : invoiceStatusWarning
+      ? invoiceReportSummaryMessage(invoiceStatusWarning)
     : invoiceReportSummaryMessage());
+}
+
+async function loadQuickBooksInvoiceStatuses(range = invoiceSelectedWeekRange()) {
+  try {
+    const payload = await quickBooksApi(`/api/quickbooks-invoice-statuses${quickBooksQueryString({ weekStart: invoiceDateInputValue(range.start) })}`, { method: "GET" });
+    return { invoices: payload.invoices || [], error: "" };
+  } catch (error) {
+    return { invoices: [], error: error.message || "Unable to load QuickBooks invoice statuses." };
+  }
 }
 
 function renderInvoiceReportData() {
@@ -11138,8 +11167,7 @@ function renderInvoiceWeekControls(range = invoiceSelectedWeekRange()) {
 function updateInvoiceSelectedWeek(reference) {
   const range = invoiceWeekRange(reference || new Date());
   invoiceReportState.weekStart = invoiceDateInputValue(range.start);
-  renderInvoiceReportData();
-  setInvoiceReportMessage(invoiceReportSummaryMessage());
+  void loadInvoiceReport();
 }
 
 function invoiceWeekLabel(start, end) {
@@ -11171,7 +11199,7 @@ function invoiceGroupsForRows(rows = []) {
   rows.forEach((row) => {
     const property = assignmentPropertyForRow(row, invoiceReportState.properties);
     const metadata = assignmentMetadata(row);
-    const key = String(property?.id || property?.contract_id || property?.client_id || row.property_id || metadata.contract_id || row.property_name || "unknown");
+    const key = invoicePropertyKey(row, property, metadata);
     if (!groups.has(key)) {
       groups.set(key, {
         key,
@@ -11187,8 +11215,56 @@ function invoiceGroupsForRows(rows = []) {
     group.total += item.amount;
   });
   return Array.from(groups.values())
-    .map((group) => ({ ...group, items: group.items.sort((a, b) => dateValue(a.startWindow, 0) - dateValue(b.startWindow, 0) || a.unit.localeCompare(b.unit, undefined, { numeric: true, sensitivity: "base" })) }))
+    .map((group) => ({
+      ...group,
+      quickbooksInvoice: quickBooksInvoiceForGroup(group),
+      items: group.items.sort((a, b) => dateValue(a.startWindow, 0) - dateValue(b.startWindow, 0) || a.unit.localeCompare(b.unit, undefined, { numeric: true, sensitivity: "base" }))
+    }))
     .sort((a, b) => a.propertyName.localeCompare(b.propertyName, undefined, { sensitivity: "base" }));
+}
+
+function invoicePropertyKey(row = {}, property = null, metadata = assignmentMetadata(row)) {
+  return String(
+    property?.id
+    || property?.contract_id
+    || property?.client_id
+    || row.portal_property_id
+    || row.recurring_portal_property_id
+    || row.property_id
+    || row.contract_id
+    || metadata.portal_property_id
+    || metadata.property_id
+    || metadata.contract_id
+    || row.property_name
+    || "unknown"
+  ).trim();
+}
+
+function quickBooksInvoiceForGroup(group = {}) {
+  const links = invoiceReportState.quickbooksInvoices || [];
+  const groupAssignmentIds = new Set((group.items || []).map((item) => String(item.id || "")).filter(Boolean));
+  return links.find((link) => String(link.propertyKey || "") === String(group.key || ""))
+    || links.find((link) => (link.assignmentIds || []).some((id) => groupAssignmentIds.has(String(id || ""))))
+    || null;
+}
+
+function quickBooksInvoiceStatusBadge(link = null) {
+  if (!link?.id) return statusBadge("Not synced");
+  const status = link.statusKey || normalizeToken(link.status || "");
+  if (status === "paid") return statusBadge("Paid");
+  if (["void", "voided", "deleted"].includes(status)) return statusBadge("Void");
+  if (link.lastError) return statusBadge("Error");
+  return statusBadge("Open");
+}
+
+function quickBooksInvoiceMeta(link = null) {
+  if (!link?.id) return "Not synced to QuickBooks yet";
+  const parts = [
+    link.docNumber ? `QB invoice ${link.docNumber}` : link.quickbooksInvoiceId ? `QB invoice ${link.quickbooksInvoiceId}` : "QuickBooks invoice",
+    link.syncedAt ? `synced ${formatDashboardDate(link.syncedAt, "")}` : "",
+    link.financeSentAt ? `sent ${formatDashboardDate(link.financeSentAt, "")}` : ""
+  ].filter(Boolean);
+  return parts.join(" - ");
 }
 
 function invoiceLineItem(row = {}) {
@@ -11252,6 +11328,8 @@ function invoiceUnitMatchKey(value) {
 }
 
 function renderInvoiceDocument(groups, total, range, rows = []) {
+  const paidGroups = groups.filter((group) => normalizeToken(group.quickbooksInvoice?.status || "") === "paid").length;
+  const openGroups = groups.filter((group) => group.quickbooksInvoice?.id && normalizeToken(group.quickbooksInvoice?.status || "") !== "paid").length;
   return `
     <section class="suite-panel invoice-file-card">
       <div class="invoice-file-head">
@@ -11269,6 +11347,8 @@ function renderInvoiceDocument(groups, total, range, rows = []) {
         <div><span>Properties</span><strong>${esc(groups.length.toLocaleString())}</strong></div>
         <div><span>Assignments</span><strong>${esc(rows.length.toLocaleString())}</strong></div>
         <div><span>Week</span><strong>${esc(invoiceWeekLabel(range.start, range.end))}</strong></div>
+        <div><span>QB Paid</span><strong>${esc(paidGroups.toLocaleString())}</strong></div>
+        <div><span>QB Open</span><strong>${esc(openGroups.toLocaleString())}</strong></div>
       </div>
       <div class="invoice-property-list">
         ${groups.map(renderInvoicePropertyGroup).join("")}
@@ -11278,6 +11358,7 @@ function renderInvoiceDocument(groups, total, range, rows = []) {
 }
 
 function renderInvoicePropertyGroup(group) {
+  const link = group.quickbooksInvoice || null;
   return `
     <details class="invoice-property-details" open>
       <summary class="invoice-property-summary">
@@ -11287,11 +11368,19 @@ function renderInvoicePropertyGroup(group) {
           ${group.address ? `<small>${esc(group.address)}</small>` : ""}
         </div>
         <div class="invoice-property-summary-meta">
+          ${quickBooksInvoiceStatusBadge(link)}
           <span>${esc(group.items.length.toLocaleString())} job${group.items.length === 1 ? "" : "s"}</span>
           <strong>${esc(salesMoney(group.total))}</strong>
         </div>
       </summary>
       <div class="invoice-property-body">
+        <div class="invoice-quickbooks-match">
+          <div>
+            <strong>${esc(quickBooksInvoiceMeta(link))}</strong>
+            <small>${esc(link?.id ? `Balance ${salesMoney(link.balance || 0)} of ${salesMoney(link.total || group.total || 0)}` : "Use Sync Invoices to create the QuickBooks invoice, then Sync Payment Statuses to import paid/open state.")}</small>
+          </div>
+          ${link?.invoiceUrl ? `<a class="secondary-action compact" href="${esc(link.invoiceUrl)}" target="_blank" rel="noreferrer">${icon("link")}<span>Open QuickBooks</span></a>` : ""}
+        </div>
         <div class="table-scroll invoice-line-scroll">
           <table class="suite-table invoice-line-table">
             <thead>

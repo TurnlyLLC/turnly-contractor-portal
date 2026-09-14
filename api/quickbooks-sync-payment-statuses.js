@@ -2,7 +2,7 @@ const {
   getSupabaseAdmin,
   loadTurnlyAccountingData,
   readJsonBody,
-  refreshInvoiceStatus,
+  refreshLinkedInvoiceStatuses,
   requireAdmin,
   sendJson,
   syncContractorPaymentStatuses,
@@ -49,23 +49,17 @@ module.exports = async function handler(req, res) {
     return sendJson(res, 500, { error: `Unable to load Turnly accounting data: ${error.message}` });
   }
 
-  let refreshedInvoices = 0;
-  const invoiceRefreshErrors = [];
-  const { data: invoiceLinks, error: invoiceLinksError } = await supabase
-    .from("quickbooks_invoice_links")
-    .select("*")
-    .eq("week_start", range.startDate);
-
-  if (!invoiceLinksError) {
-    for (const link of invoiceLinks || []) {
-      if (!link.quickbooks_invoice_id) continue;
-      try {
-        await refreshInvoiceStatus(supabase, req, link);
-        refreshedInvoices += 1;
-      } catch (error) {
-        invoiceRefreshErrors.push({ invoiceId: link.quickbooks_invoice_id, propertyName: link.property_name, error: error.message });
-      }
-    }
+  let invoiceStatusSync = {
+    checked: 0,
+    refreshed: 0,
+    paid: [],
+    open: [],
+    failed: []
+  };
+  try {
+    invoiceStatusSync = await refreshLinkedInvoiceStatuses(supabase, req, range);
+  } catch (error) {
+    invoiceStatusSync.failed = [{ error: error.message || "Unable to refresh QuickBooks invoice payment statuses." }];
   }
 
   try {
@@ -82,18 +76,22 @@ module.exports = async function handler(req, res) {
       .from("quickbooks_connections")
       .update({
         last_sync_at: now,
-        last_error: invoiceLinksError?.message || invoiceRefreshErrors[0]?.error || null,
+        last_error: invoiceStatusSync.failed?.[0]?.error || null,
         updated_at: now
       })
       .eq("status", "connected");
 
-    return sendJson(res, invoiceLinksError || invoiceRefreshErrors.length ? 207 : 200, {
-      ok: !invoiceLinksError && !invoiceRefreshErrors.length,
+    return sendJson(res, invoiceStatusSync.failed?.length ? 207 : 200, {
+      ok: !invoiceStatusSync.failed?.length,
       weekStart: range.startDate,
       weekEnd: range.endDate,
-      refreshedInvoices,
-      invoiceRefreshErrors,
-      invoiceLinksError: invoiceLinksError?.message || "",
+      invoiceStatusSync: {
+        checked: invoiceStatusSync.checked,
+        refreshed: invoiceStatusSync.refreshed,
+        paidCount: invoiceStatusSync.paid?.length || 0,
+        openCount: invoiceStatusSync.open?.length || 0,
+        failed: invoiceStatusSync.failed || []
+      },
       ...payments
     });
   } catch (error) {

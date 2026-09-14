@@ -5040,6 +5040,33 @@ a {
   border-top: 1px solid var(--suite-border-soft);
 }
 
+.invoice-quickbooks-match {
+  align-items: center;
+  background: rgba(0, 214, 163, 0.06);
+  border-bottom: 1px solid var(--suite-border-soft);
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 12px;
+}
+
+.invoice-quickbooks-match strong,
+.invoice-quickbooks-match small {
+  display: block;
+}
+
+.invoice-quickbooks-match strong {
+  color: var(--suite-text);
+  font-size: 13px;
+}
+
+.invoice-quickbooks-match small {
+  color: var(--suite-muted);
+  font-size: 12px;
+  line-height: 1.35;
+  margin-top: 3px;
+}
+
 .invoice-line-scroll {
   border: 0;
   border-radius: 0;
@@ -6074,6 +6101,11 @@ a {
   .invoice-file-summary-grid,
   .invoice-property-summary {
     grid-template-columns: 1fr;
+  }
+
+  .invoice-quickbooks-match {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .invoice-property-summary-meta {

@@ -795,6 +795,57 @@ async function refreshInvoiceStatus(supabase, req, link) {
   return data;
 }
 
+function linkedInvoiceIsOpen(link = {}) {
+  const status = normalizeToken(link.quickbooks_status || "");
+  return Boolean(link.quickbooks_invoice_id) && !["paid", "void", "voided", "deleted"].includes(status);
+}
+
+function linkedInvoiceMatchesWeek(link = {}, range = {}) {
+  return Boolean(range.startDate && String(link.week_start || "") === String(range.startDate));
+}
+
+async function refreshLinkedInvoiceStatuses(supabase, req, range = {}, options = {}) {
+  const limit = Number(options.limit || 500);
+  const { data: links, error } = await supabase
+    .from("quickbooks_invoice_links")
+    .select("*")
+    .not("quickbooks_invoice_id", "is", null)
+    .order("week_start", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+
+  const targets = (links || []).filter((link) => linkedInvoiceMatchesWeek(link, range) || linkedInvoiceIsOpen(link));
+  const refreshed = [];
+  const paid = [];
+  const open = [];
+  const failed = [];
+
+  for (const link of targets) {
+    try {
+      const updated = await refreshInvoiceStatus(supabase, req, link);
+      if (!updated) continue;
+      refreshed.push(updated);
+      if (normalizeToken(updated.quickbooks_status || "") === "paid") paid.push(updated);
+      else if (linkedInvoiceIsOpen(updated)) open.push(updated);
+    } catch (error) {
+      failed.push({
+        id: link.id,
+        invoiceId: link.quickbooks_invoice_id,
+        propertyName: link.property_name,
+        error: error.message || "Unable to refresh QuickBooks invoice."
+      });
+    }
+  }
+
+  return {
+    checked: targets.length,
+    refreshed: refreshed.length,
+    paid,
+    open,
+    failed
+  };
+}
+
 function candidatePayeeName(candidate = {}) {
   const entity = candidate.EntityRef || candidate.PayeeRef || candidate.VendorRef || {};
   return firstText(entity.name, entity.value, candidate.Name, candidate.PrintOnCheckName);
@@ -970,6 +1021,7 @@ module.exports = {
   readJsonBody,
   refreshConnectionIfNeeded,
   refreshInvoiceStatus,
+  refreshLinkedInvoiceStatuses,
   requireAdmin,
   requireQuickBooksConfig,
   saveConnection,
