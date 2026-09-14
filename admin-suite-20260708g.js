@@ -10842,16 +10842,29 @@ async function connectQuickBooks() {
   state.connecting = true;
   state.error = false;
   state.message = "Opening QuickBooks authorization...";
+  setQuickBooksConnectMessage(state.message);
   updateQuickBooksSyncPanel();
   try {
     const payload = await quickBooksApi("/api/quickbooks-connect", { method: "POST", body: "{}" });
     if (!payload.authorizationUrl) throw new Error("QuickBooks did not return an authorization URL.");
+    setQuickBooksConnectMessage("QuickBooks authorization opened. If the page does not move, allow popups/redirects and try again.");
     window.location.href = payload.authorizationUrl;
   } catch (error) {
     state.connecting = false;
     state.error = true;
     state.message = error.message || "Unable to start QuickBooks connection.";
+    setQuickBooksConnectMessage(state.message, true);
     updateQuickBooksSyncPanel();
+  }
+}
+
+function setQuickBooksConnectMessage(message = "", isError = false) {
+  if (document.querySelector("[data-finance-page]")) {
+    setFinanceMessage(message, isError);
+    return;
+  }
+  if (document.querySelector("[data-invoice-report-page]")) {
+    setInvoiceReportMessage(message, isError);
   }
 }
 
