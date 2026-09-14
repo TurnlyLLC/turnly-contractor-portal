@@ -485,8 +485,11 @@ const financeState = {
   importingExpenses: false,
   message: "",
   error: false,
+  editingExpenseId: "",
   markingInvoices: new Set(),
-  markingPayments: new Set()
+  markingPayments: new Set(),
+  savingExpenses: new Set(),
+  removingExpenses: new Set()
 };
 const contractorFeedbackReportState = {
   rows: [],
@@ -801,6 +804,7 @@ const iconPaths = {
   contact: '<path d="M16 2v4"/><path d="M8 2v4"/><rect x="3" y="4" width="18" height="18" rx="2"/><circle cx="12" cy="12" r="3"/><path d="M6 20c1.5-3 10.5-3 12 0"/>',
   document: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/>',
   download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>',
+  edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
   "file-check": '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="m9 15 2 2 4-5"/>',
   "file-signature": '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8 18c2-4 4-4 6 0"/><path d="M8 14h6"/>',
   filter: '<path d="M22 3H2l8 9v7l4 2v-9Z"/>',
@@ -10025,7 +10029,7 @@ function renderFinancePage() {
       <section class="metric-strip finance-metric-strip">
         ${metric("Monthly Expenses", "$0", "current month", "badge-dollar", "red", 'id="financeMonthlyExpenses"')}
         ${metric("Yearly Expenses", "$0", "projected annual total", "line-chart", "purple", 'id="financeYearlyExpenses"')}
-        ${metric("Upcoming Due", "$0", "next 45 days", "calendar", "orange", 'id="financeUpcomingExpenses"')}
+        ${metric("Upcoming Due", "$0", "next 7 days", "calendar", "orange", 'id="financeUpcomingExpenses"')}
         ${metric("Expense Items", "0", "active records", "clipboard-list", "blue", 'id="financeExpenseCount"')}
       </section>
       <section class="finance-action-grid">
@@ -10084,12 +10088,28 @@ function renderFinancePage() {
                   <th>Due</th>
                   <th>Amount</th>
                   <th>Recurrence</th>
+                  <th>Action</th>
                 </tr>
               </thead>
-              <tbody id="financeExpenseRows">${financeLoadingRows(5)}</tbody>
+              <tbody id="financeExpenseRows">${financeLoadingRows(5, 6)}</tbody>
             </table>
           </div>
         `, { icon: "badge-dollar", className: "span-all" })}
+        ${panel("Upcoming Expenses - Next 7 Days", `
+          <div class="table-scroll finance-table-scroll compact-scroll">
+            <table class="suite-table finance-table">
+              <thead>
+                <tr>
+                  <th>Expense</th>
+                  <th>Due</th>
+                  <th>Amount</th>
+                  <th>Recurrence</th>
+                </tr>
+              </thead>
+              <tbody id="financeUpcomingExpenseRows">${financeLoadingRows(4, 4)}</tbody>
+            </table>
+          </div>
+        `, { icon: "calendar", className: "span-all" })}
         ${panel("Contractor Pay Owed", `
           <div class="table-scroll finance-table-scroll">
             <table class="suite-table finance-table">
@@ -10136,6 +10156,28 @@ function initFinancePage() {
     const importExpenses = event.target.closest("[data-finance-import-expenses]");
     if (importExpenses) {
       void importFinanceExpenses();
+      return;
+    }
+    const editExpense = event.target.closest("[data-finance-edit-expense]");
+    if (editExpense) {
+      financeState.editingExpenseId = editExpense.dataset.financeEditExpense || "";
+      renderFinanceData();
+      return;
+    }
+    const cancelExpense = event.target.closest("[data-finance-cancel-expense]");
+    if (cancelExpense) {
+      financeState.editingExpenseId = "";
+      renderFinanceData();
+      return;
+    }
+    const saveExpense = event.target.closest("[data-finance-save-expense]");
+    if (saveExpense) {
+      void saveFinanceExpense(saveExpense.dataset.financeSaveExpense || "");
+      return;
+    }
+    const removeExpense = event.target.closest("[data-finance-remove-expense]");
+    if (removeExpense) {
+      void removeFinanceExpense(removeExpense.dataset.financeRemoveExpense || "");
     }
   });
   void loadFinancePage();
@@ -10191,6 +10233,7 @@ function renderFinanceData() {
   setFinanceHtml("financeInvoiceRows", financeInvoiceRows());
   setFinanceHtml("financePaymentRows", financePaymentRows());
   setFinanceHtml("financeExpenseRows", financeExpenseRows());
+  setFinanceHtml("financeUpcomingExpenseRows", financeUpcomingExpenseRows());
   setText("financeExpenseImportLabel", financeState.importingExpenses ? "Importing..." : "Import Expenses");
   const importButton = document.querySelector("[data-finance-import-expenses]");
   if (importButton) importButton.disabled = financeState.importingExpenses;
@@ -10199,8 +10242,8 @@ function renderFinanceData() {
   });
 }
 
-function financeLoadingRows(count = 4) {
-  return `<tr><td colspan="5">${skeletonRows(count)}</td></tr>`;
+function financeLoadingRows(count = 4, colspan = 5) {
+  return `<tr><td colspan="${colspan}">${skeletonRows(count)}</td></tr>`;
 }
 
 function financeInvoiceRows() {
@@ -10249,12 +10292,124 @@ function financeInvoiceRows() {
 }
 
 function financeExpenseRows() {
-  if (financeState.loading) return financeLoadingRows(5);
-  const rows = financeState.upcomingExpenses?.length ? financeState.upcomingExpenses : financeState.expenses || [];
+  if (financeState.loading) return financeLoadingRows(5, 6);
+  const rows = financeState.expenses || [];
   if (!rows.length) {
     return `
       <tr>
-        <td colspan="5">${emptyState("badge-dollar", "No expenses loaded", "Import monthly expense rows from your spreadsheet to see monthly, yearly, and upcoming due totals.")}</td>
+        <td colspan="6">${emptyState("badge-dollar", "No expenses loaded", "Import monthly expense rows from your spreadsheet to see monthly, yearly, and upcoming due totals.")}</td>
+      </tr>
+    `;
+  }
+  return rows.map((item) => financeState.editingExpenseId === String(item.id || "")
+    ? financeExpenseEditRow(item)
+    : financeExpenseDisplayRow(item)).join("");
+}
+
+function financeExpenseDisplayRow(item = {}) {
+  const id = String(item.id || "");
+  const saving = financeState.savingExpenses.has(id);
+  const removing = financeState.removingExpenses.has(id);
+  return `
+    <tr>
+      <td>
+        <strong>${esc(item.vendorName || "Expense")}</strong>
+        <small>${esc(item.description || item.notes || "")}</small>
+      </td>
+      <td>${esc(item.category || "General")}</td>
+      <td>
+        <strong>${esc(formatDashboardDate(item.nextDueDate || item.dueDate, "No due date"))}</strong>
+        <small>${esc(item.dueDay ? `Day ${item.dueDay}` : "")}</small>
+      </td>
+      <td><strong>${esc(salesMoney(item.amount || 0))}</strong></td>
+      <td>${statusBadge(item.recurrence || "monthly")}</td>
+      <td>
+        <div class="finance-row-actions">
+          <button class="secondary-action compact" type="button" data-finance-edit-expense="${esc(id)}" ${saving || removing ? "disabled" : ""}>${icon("edit")}<span>Edit</span></button>
+          <button class="secondary-action compact danger-action" type="button" data-finance-remove-expense="${esc(id)}" ${saving || removing ? "disabled" : ""}>${icon("trash")}<span>${removing ? "Removing..." : "Remove"}</span></button>
+        </div>
+      </td>
+    </tr>
+  `;
+}
+
+function financeExpenseEditRow(item = {}) {
+  const id = String(item.id || "");
+  const saving = financeState.savingExpenses.has(id);
+  return `
+    <tr class="finance-expense-edit-row" data-finance-expense-editor="${esc(id)}">
+      <td>
+        <label class="finance-edit-field">
+          <span>Expense</span>
+          <input data-finance-expense-field="vendorName" value="${esc(item.vendorName || "")}" />
+        </label>
+        <label class="finance-edit-field">
+          <span>Description</span>
+          <input data-finance-expense-field="description" value="${esc(item.description || "")}" />
+        </label>
+      </td>
+      <td>
+        <label class="finance-edit-field">
+          <span>Category</span>
+          <input data-finance-expense-field="category" value="${esc(item.category || "General")}" />
+        </label>
+      </td>
+      <td>
+        <div class="finance-edit-split">
+          <label class="finance-edit-field">
+            <span>Due date</span>
+            <input type="date" data-finance-expense-field="dueDate" value="${esc(financeDateInputValue(item.dueDate || item.nextDueDate))}" />
+          </label>
+          <label class="finance-edit-field">
+            <span>Day</span>
+            <input type="number" min="1" max="31" data-finance-expense-field="dueDay" value="${esc(item.dueDay || "")}" />
+          </label>
+        </div>
+      </td>
+      <td>
+        <label class="finance-edit-field">
+          <span>Amount</span>
+          <input type="number" min="0" step="0.01" data-finance-expense-field="amount" value="${esc(Number(item.amount || 0).toFixed(2))}" />
+        </label>
+      </td>
+      <td>
+        <label class="finance-edit-field">
+          <span>Recurrence</span>
+          <select data-finance-expense-field="recurrence">
+            ${financeExpenseRecurrenceOption("monthly", item.recurrence)}
+            ${financeExpenseRecurrenceOption("yearly", item.recurrence)}
+            ${financeExpenseRecurrenceOption("one_time", item.recurrence)}
+          </select>
+        </label>
+      </td>
+      <td>
+        <div class="finance-row-actions">
+          <button class="primary-action compact" type="button" data-finance-save-expense="${esc(id)}" ${saving ? "disabled" : ""}>${icon("check")}<span>${saving ? "Saving..." : "Save"}</span></button>
+          <button class="secondary-action compact" type="button" data-finance-cancel-expense="${esc(id)}" ${saving ? "disabled" : ""}>${icon("x")}<span>Cancel</span></button>
+        </div>
+      </td>
+    </tr>
+  `;
+}
+
+function financeExpenseRecurrenceOption(value, selected) {
+  return `<option value="${esc(value)}" ${String(selected || "monthly") === value ? "selected" : ""}>${esc(titleCase(value.replace(/_/g, " ")))}</option>`;
+}
+
+function financeDateInputValue(value) {
+  const date = parseDate(value);
+  if (!date) return "";
+  const pad = (part) => String(part).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function financeUpcomingExpenseRows() {
+  if (financeState.loading) return financeLoadingRows(4, 4);
+  const rows = financeState.upcomingExpenses || [];
+  if (!rows.length) {
+    return `
+      <tr>
+        <td colspan="4">${emptyState("calendar", "Nothing due in the next 7 days", "Upcoming expenses will appear here when they are due this week.")}</td>
       </tr>
     `;
   }
@@ -10262,9 +10417,8 @@ function financeExpenseRows() {
     <tr>
       <td>
         <strong>${esc(item.vendorName || "Expense")}</strong>
-        <small>${esc(item.description || item.notes || "")}</small>
+        <small>${esc(item.category || "General")}</small>
       </td>
-      <td>${esc(item.category || "General")}</td>
       <td>
         <strong>${esc(formatDashboardDate(item.nextDueDate || item.dueDate, "No due date"))}</strong>
         <small>${esc(item.dueDay ? `Day ${item.dueDay}` : "")}</small>
@@ -10364,6 +10518,74 @@ async function importFinanceExpenses() {
     setFinanceMessage(error.message || "Unable to import expenses.", true);
   } finally {
     financeState.importingExpenses = false;
+    renderFinanceData();
+  }
+}
+
+function financeExpenseFormPayload(id = "") {
+  const row = document.querySelector(`[data-finance-expense-editor="${selectorValue(id)}"]`);
+  if (!row) return null;
+  const field = (name) => row.querySelector(`[data-finance-expense-field="${name}"]`)?.value || "";
+  return {
+    id,
+    vendorName: field("vendorName"),
+    description: field("description"),
+    category: field("category"),
+    dueDate: field("dueDate"),
+    dueDay: field("dueDay"),
+    amount: field("amount"),
+    recurrence: field("recurrence"),
+    status: "active"
+  };
+}
+
+async function saveFinanceExpense(id) {
+  if (!id || financeState.savingExpenses.has(id)) return;
+  const payload = financeExpenseFormPayload(id);
+  if (!payload) return;
+  if (!payload.vendorName.trim()) {
+    setFinanceMessage("Expense name is required.", true);
+    return;
+  }
+  financeState.savingExpenses.add(id);
+  renderFinanceData();
+  setFinanceMessage("Saving expense...");
+  try {
+    await financeApi("/api/finance-expense", {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    });
+    financeState.editingExpenseId = "";
+    await loadFinancePage();
+    setFinanceMessage("Expense updated.");
+  } catch (error) {
+    setFinanceMessage(error.message || "Unable to update expense.", true);
+  } finally {
+    financeState.savingExpenses.delete(id);
+    renderFinanceData();
+  }
+}
+
+async function removeFinanceExpense(id) {
+  if (!id || financeState.removingExpenses.has(id)) return;
+  const item = (financeState.expenses || []).find((row) => String(row.id || "") === String(id));
+  const label = item?.vendorName || "this expense";
+  if (!window.confirm(`Remove ${label} from the finance dashboard?`)) return;
+  financeState.removingExpenses.add(id);
+  renderFinanceData();
+  setFinanceMessage("Removing expense...");
+  try {
+    await financeApi("/api/finance-expense", {
+      method: "DELETE",
+      body: JSON.stringify({ id })
+    });
+    if (financeState.editingExpenseId === id) financeState.editingExpenseId = "";
+    await loadFinancePage();
+    setFinanceMessage("Expense removed.");
+  } catch (error) {
+    setFinanceMessage(error.message || "Unable to remove expense.", true);
+  } finally {
+    financeState.removingExpenses.delete(id);
     renderFinanceData();
   }
 }

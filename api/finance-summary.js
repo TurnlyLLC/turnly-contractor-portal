@@ -320,6 +320,14 @@ function expenseAnnualAmount(row = {}) {
   return due && due >= yearStart && due < yearEnd ? amount : 0;
 }
 
+function expenseUpcomingLimit(reference = new Date()) {
+  const start = new Date(reference.getFullYear(), reference.getMonth(), reference.getDate());
+  const end = new Date(start);
+  end.setDate(start.getDate() + 7);
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+}
+
 function summarizeExpenses(rows = []) {
   const active = (rows || [])
     .filter((row) => !["inactive", "archived", "deleted"].includes(normalizeToken(row.status || "active")))
@@ -344,9 +352,10 @@ function summarizeExpenses(rows = []) {
     })
     .filter((row) => row.amount > 0)
     .sort((a, b) => String(a.nextDueDate || "").localeCompare(String(b.nextDueDate || "")) || a.vendorName.localeCompare(b.vendorName));
+  const upcomingLimit = expenseUpcomingLimit();
   const upcoming = active.filter((row) => {
     const due = parseDate(row.nextDueDate);
-    return Boolean(due && due <= new Date(Date.now() + 45 * 24 * 60 * 60 * 1000));
+    return Boolean(due && due >= upcomingLimit.start && due <= upcomingLimit.end);
   });
   return {
     rows: active,

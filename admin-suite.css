@@ -4679,6 +4679,10 @@ a {
   max-height: 520px;
 }
 
+.finance-table-scroll.compact-scroll {
+  max-height: 320px;
+}
+
 .finance-table td strong,
 .finance-table td small {
   display: block;
@@ -4689,6 +4693,46 @@ a {
   font-size: 12px;
   line-height: 1.35;
   margin-top: 4px;
+}
+
+.finance-expense-edit-row td {
+  vertical-align: top;
+}
+
+.finance-edit-field {
+  display: grid;
+  gap: 5px;
+  min-width: 120px;
+}
+
+.finance-edit-field + .finance-edit-field {
+  margin-top: 8px;
+}
+
+.finance-edit-field span {
+  color: var(--suite-muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.finance-edit-field input,
+.finance-edit-field select {
+  background: rgba(5, 14, 24, 0.82);
+  border: 1px solid var(--suite-border);
+  border-radius: 8px;
+  color: var(--suite-text);
+  font: inherit;
+  min-height: 38px;
+  padding: 8px 10px;
+  width: 100%;
+}
+
+.finance-edit-split {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(140px, 1fr) minmax(72px, 0.45fr);
 }
 
 .primary-action.compact,
@@ -5961,6 +6005,10 @@ a {
 
   .finance-row-actions {
     justify-content: flex-start;
+  }
+
+  .finance-edit-split {
+    grid-template-columns: 1fr;
   }
 
   .admin-preview-wrap {
