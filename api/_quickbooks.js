@@ -83,9 +83,7 @@ async function requireAdmin(supabase, req) {
 
 function publicBaseUrl(req = {}) {
   const configured = process.env.PUBLIC_SITE_URL
-    || process.env.SITE_URL
-    || process.env.VERCEL_PROJECT_PRODUCTION_URL
-    || process.env.URL;
+    || process.env.SITE_URL;
   if (configured) {
     const trimmed = String(configured).trim().replace(/\/+$/, "");
     return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
@@ -93,7 +91,12 @@ function publicBaseUrl(req = {}) {
   const headers = req.headers || {};
   const proto = String(headers["x-forwarded-proto"] || "https").split(",")[0].trim() || "https";
   const host = String(headers["x-forwarded-host"] || headers.host || "portal.turnlypros.com").split(",")[0].trim();
-  return `${proto}://${host}`.replace(/\/+$/, "");
+  if (host) return `${proto}://${host}`.replace(/\/+$/, "");
+  const fallback = process.env.VERCEL_PROJECT_PRODUCTION_URL
+    || process.env.URL
+    || "portal.turnlypros.com";
+  const trimmed = String(fallback).trim().replace(/\/+$/, "");
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
 }
 
 function quickbooksConfig(req = {}) {
