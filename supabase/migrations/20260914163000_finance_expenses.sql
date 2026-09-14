@@ -39,7 +39,7 @@ create policy finance_expenses_admin_select
       select 1
       from public.profiles
       where profiles.id = auth.uid()
-        and lower(coalesce(profiles.role, '')) in ('admin', 'owner', 'super_admin')
+        and lower(coalesce(profiles.role::text, '')) in ('admin', 'owner', 'super_admin')
     )
   );
 
@@ -53,7 +53,7 @@ create policy finance_expenses_admin_insert
       select 1
       from public.profiles
       where profiles.id = auth.uid()
-        and lower(coalesce(profiles.role, '')) in ('admin', 'owner', 'super_admin')
+        and lower(coalesce(profiles.role::text, '')) in ('admin', 'owner', 'super_admin')
     )
   );
 
@@ -67,7 +67,7 @@ create policy finance_expenses_admin_update
       select 1
       from public.profiles
       where profiles.id = auth.uid()
-        and lower(coalesce(profiles.role, '')) in ('admin', 'owner', 'super_admin')
+        and lower(coalesce(profiles.role::text, '')) in ('admin', 'owner', 'super_admin')
     )
   )
   with check (
@@ -75,6 +75,6 @@ create policy finance_expenses_admin_update
       select 1
       from public.profiles
       where profiles.id = auth.uid()
-        and lower(coalesce(profiles.role, '')) in ('admin', 'owner', 'super_admin')
+        and lower(coalesce(profiles.role::text, '')) in ('admin', 'owner', 'super_admin')
     )
   );
