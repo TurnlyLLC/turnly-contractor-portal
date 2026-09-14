@@ -10869,7 +10869,10 @@ async function connectQuickBooks() {
   setQuickBooksConnectMessage(state.message);
   updateQuickBooksSyncPanel();
   try {
-    const payload = await quickBooksApi("/api/quickbooks-connect", { method: "POST", body: "{}", timeoutMs: 15000 });
+    const payload = await Promise.race([
+      quickBooksApi("/api/quickbooks-connect", { method: "POST", body: "{}", timeoutMs: 15000 }),
+      timeoutPromise(18000, "QuickBooks authorization did not start. Refresh the page and try Connect QuickBooks again.")
+    ]);
     if (!payload.authorizationUrl) throw new Error("QuickBooks did not return an authorization URL.");
     state.authorizationUrl = payload.authorizationUrl;
     state.connecting = false;
