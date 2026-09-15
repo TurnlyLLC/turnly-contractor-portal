@@ -85,6 +85,7 @@ const focusQuestionDefs = [
   { id: "price_acceptable", label: "Is the quoted price of $0.25 / sq ft acceptable?" },
   { id: "wants_quality_walkthrough", label: "Would they like an in-person walkthrough demonstration of our quality control processes?" }
 ];
+const SALES_FOCUS_PLACE_STORAGE_PREFIX = "turnlySalesFocusPlace:v1";
 const FOCUS_STATE_PREFIX = "TURNLY_FOCUS_STATE:";
 const FOCUS_STATE_VERSION = "20260911-yes-only-conditionals";
 const walkthroughStatuses = ["scheduled", "confirmed", "rescheduled", "completed", "cancelled"];
@@ -781,6 +782,41 @@ function isSalesAdmin() {
   return normalize(state.profile?.role || state.user?.user_metadata?.role) === "admin";
 }
 
+function salesFocusPlaceStorageKey() {
+  return `${SALES_FOCUS_PLACE_STORAGE_PREFIX}:${state.user?.id || "browser"}`;
+}
+
+function readSalesFocusPlace() {
+  try {
+    const raw = window.localStorage?.getItem(salesFocusPlaceStorageKey());
+    const parsed = raw ? JSON.parse(raw) : null;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeSalesFocusPlace({ leadId = state.selectedId, leadFocusMode = state.leadFocusMode } = {}) {
+  if (!leadId) return;
+  try {
+    window.localStorage?.setItem(salesFocusPlaceStorageKey(), JSON.stringify({
+      leadId,
+      leadFocusMode: Boolean(leadFocusMode),
+      updatedAt: new Date().toISOString()
+    }));
+  } catch {
+    // Restoring focus position is helpful, not required for the sales workflow.
+  }
+}
+
+function restoreSalesFocusPlace() {
+  const saved = readSalesFocusPlace();
+  if (!saved.leadId) return false;
+  state.selectedId = saved.leadId;
+  state.leadFocusMode = Boolean(saved.leadFocusMode);
+  return true;
+}
+
 function setMessage(text, tone = "") {
   state.message = text || "";
   state.messageTone = tone;
@@ -1338,6 +1374,7 @@ function selectRecord(rows) {
     return null;
   }
   if (!rows.some((row) => row.id === state.selectedId)) state.selectedId = rows[0].id;
+  if (state.leadFocusMode) writeSalesFocusPlace({ leadId: state.selectedId, leadFocusMode: true });
   return rows.find((row) => row.id === state.selectedId) || rows[0];
 }
 
@@ -2138,6 +2175,7 @@ function renderLeadFocusMode(rows) {
             <section class="sales-focus-info-box phone">
               <span>Lead Contact</span>
               <strong>${esc(row.contact_phone || "No phone saved")}</strong>
+              <small class="sales-focus-address">${esc(recordAddress(row))}</small>
               ${phoneHref ? `<a class="sales-primary-button" href="${esc(phoneHref)}">${icon("phone")}Call Lead</a>` : `<button class="sales-primary-button" type="button" disabled>${icon("phone")}No Phone Saved</button>`}
             </section>
             ${renderFocusStageChecklist(row)}
@@ -4042,6 +4080,7 @@ async function moveLeadFocus(direction) {
   const currentIndex = rows.findIndex((row) => row.id === state.selectedId);
   const nextIndex = currentIndex >= 0 ? (currentIndex + direction + rows.length) % rows.length : 0;
   state.selectedId = rows[nextIndex].id;
+  writeSalesFocusPlace({ leadId: state.selectedId, leadFocusMode: true });
   render();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -4163,6 +4202,7 @@ function bindEvents() {
     if (enterLeadFocus) {
       state.selectedId = enterLeadFocus.dataset.selectRecord || state.selectedId;
       state.leadFocusMode = true;
+      writeSalesFocusPlace({ leadId: state.selectedId, leadFocusMode: true });
       render();
       window.scrollTo({ top: 0, behavior: "smooth" });
       return;
@@ -4170,6 +4210,7 @@ function bindEvents() {
 
     if (target.closest("[data-exit-lead-focus]")) {
       await autosaveFocusLead({ includeNote: true });
+      writeSalesFocusPlace({ leadId: state.selectedId, leadFocusMode: false });
       state.leadFocusMode = false;
       render();
       return;
@@ -4498,6 +4539,10 @@ bindEvents();
 
 if (await requireSalesAccess()) {
   const hashId = window.location.hash.replace("#", "");
-  if (hashId) state.selectedId = hashId;
+  if (hashId) {
+    state.selectedId = hashId;
+  } else {
+    restoreSalesFocusPlace();
+  }
   await refreshData();
 }

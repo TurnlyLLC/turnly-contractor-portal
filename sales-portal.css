@@ -1309,6 +1309,14 @@ button.sales-activity-row:hover {
   overflow-wrap: anywhere;
 }
 
+.sales-focus-address {
+  color: #b8d6ea;
+  display: block;
+  font-size: clamp(14px, 1.4vw, 17px);
+  font-weight: 750;
+  line-height: 1.35;
+}
+
 .sales-focus-info-box.controls {
   display: grid;
   align-content: center;
