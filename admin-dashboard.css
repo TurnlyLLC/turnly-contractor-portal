@@ -4333,6 +4333,84 @@ body.admin-command-body[data-portal-role="property-manager"] .pm-assignment-deta
   padding: 16px;
 }
 
+.pm-quality-review-panel {
+  width: min(560px, calc(100vw - 32px));
+}
+
+.pm-quality-review-form {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+}
+
+.pm-quality-review-unit {
+  background: linear-gradient(135deg, rgba(0, 214, 163, 0.16), rgba(0, 180, 255, 0.1));
+  border: 1px solid rgba(0, 214, 163, 0.36);
+  border-radius: 8px;
+  display: grid;
+  gap: 5px;
+  padding: 14px;
+}
+
+.pm-quality-review-unit span,
+.pm-quality-rating-field > span,
+.pm-quality-review-form label > span {
+  color: var(--pm-muted);
+  display: block;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pm-quality-review-unit strong {
+  color: var(--pm-text);
+  font-size: 28px;
+  line-height: 1.1;
+}
+
+.pm-quality-review-unit small {
+  color: var(--pm-muted);
+}
+
+.pm-quality-rating-field {
+  display: grid;
+  gap: 10px;
+}
+
+.pm-quality-stars {
+  display: flex;
+  gap: 8px;
+}
+
+.pm-quality-star {
+  align-items: center;
+  background: rgba(9, 23, 39, 0.92);
+  border: 1px solid rgba(139, 176, 201, 0.26);
+  border-radius: 8px;
+  color: rgba(248, 250, 252, 0.48);
+  cursor: pointer;
+  display: inline-grid;
+  font-size: 34px;
+  height: 56px;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+  transition: border-color 0.16s ease, color 0.16s ease, transform 0.16s ease;
+  width: 56px;
+}
+
+.pm-quality-star:hover,
+.pm-quality-star.is-selected {
+  border-color: rgba(250, 204, 21, 0.78);
+  color: #facc15;
+  transform: translateY(-1px);
+}
+
+.pm-quality-review-actions {
+  grid-template-columns: auto auto minmax(0, 1fr);
+}
+
 .pm-guide-layer {
   inset: 0;
   pointer-events: none;
@@ -5591,6 +5669,21 @@ body.admin-command-body[data-portal-role="property-manager"][data-dashboard-them
 body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .manager-message-bubble {
   background: #f8fbfe;
   border-color: var(--pm-border);
+}
+
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-quality-review-unit {
+  background: linear-gradient(135deg, rgba(13, 148, 136, 0.1), rgba(2, 132, 199, 0.08));
+  border-color: rgba(13, 148, 136, 0.26);
+}
+
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-quality-star {
+  background: #ffffff;
+  color: rgba(15, 23, 42, 0.35);
+}
+
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-quality-star:hover,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-quality-star.is-selected {
+  color: #ca8a04;
 }
 
 body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-request-form-panel {

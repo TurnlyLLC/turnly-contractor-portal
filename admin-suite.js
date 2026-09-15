@@ -423,6 +423,15 @@ const qaQueueState = {
   tone: "",
   user: null
 };
+const propertyManagerReviewState = {
+  rows: [],
+  loading: false,
+  loaded: false,
+  message: "",
+  tone: "",
+  search: "",
+  ratingFilter: "all"
+};
 const topbarState = {
   user: null,
   profile: null,
@@ -5870,32 +5879,189 @@ function renderQaQueue() {
   `;
 }
 
+function propertyManagerReviewMetrics(rows = propertyManagerReviewState.rows) {
+  const rated = rows.filter((row) => Number(row.rating) >= 1);
+  const average = rated.length
+    ? rated.reduce((total, row) => total + Number(row.rating || 0), 0) / rated.length
+    : 0;
+  const needsImprovement = rated.filter((row) => Number(row.rating) <= 3).length;
+  const fiveStar = rated.filter((row) => Number(row.rating) === 5).length;
+  return { total: rated.length, average, needsImprovement, fiveStar };
+}
+
+function qualityReviewDate(value) {
+  if (!value) return "No date";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "No date";
+  return date.toLocaleString([], { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+function ratingStars(rating) {
+  const value = Math.min(Math.max(Number(rating) || 0, 0), 5);
+  return `<span class="contractor-feedback-stars" aria-label="${esc(value)} out of 5 stars">${"★".repeat(value)}${"☆".repeat(5 - value)}</span>`;
+}
+
+function filteredPropertyManagerReviews() {
+  const query = normalizeToken(propertyManagerReviewState.search);
+  const rating = propertyManagerReviewState.ratingFilter;
+  return (propertyManagerReviewState.rows || []).filter((row) => {
+    const ratingMatches = rating === "all" || String(row.rating || "") === rating;
+    const haystack = normalizeToken([
+      row.property_name,
+      row.unit_number,
+      row.contractor_name,
+      row.contractor_email,
+      row.created_by_name,
+      row.created_by_email,
+      row.message,
+      row.status
+    ].join(" "));
+    return ratingMatches && (!query || haystack.includes(query));
+  });
+}
+
+function renderPropertyManagerReviewRows() {
+  const rows = filteredPropertyManagerReviews();
+  if (propertyManagerReviewState.loading) return `<tr><td colspan="10">Loading quality reviews...</td></tr>`;
+  if (!rows.length) return `<tr><td colspan="10">${emptyState("star", "No quality reviews found", propertyManagerReviewState.message || "Property manager ratings will appear here after completed units are reviewed.")}</td></tr>`;
+  return rows.map((row) => {
+    const assignmentLabel = row.assignment_id ? `A-${String(row.assignment_id).slice(0, 8).toUpperCase()}` : "Review";
+    const contractor = row.contractor_name || row.contractor_email || "Contractor not linked";
+    const reviewer = row.created_by_name || row.created_by_email || "Property manager";
+    return `
+      <tr>
+        <td></td>
+        <td><strong>${esc(assignmentLabel)}</strong><small>${esc(row.id ? String(row.id).slice(0, 8) : "")}</small></td>
+        <td><strong>${esc(contractor)}</strong><small>${esc(row.contractor_email || "")}</small></td>
+        <td><strong>${esc(row.property_name || "Property")}</strong><small>${esc(row.unit_number ? `Unit ${row.unit_number}` : "Unit not listed")}</small></td>
+        <td>${esc(titleCase(row.feedback_type || "quality_review"))}</td>
+        <td>${esc(row.unit_number || "")}</td>
+        <td><strong>${esc(reviewer)}</strong><small>${esc(row.created_by_email || "")}</small></td>
+        <td><div class="contractor-feedback-rating">${ratingStars(row.rating)}<small>${esc(row.rating || "-")} / 5</small></div></td>
+        <td>${statusBadge(row.status || "new")}</td>
+        <td><div class="contractor-feedback-comment">${row.message ? `<p>${esc(row.message)}</p>` : `<span>No notes added</span>`}<small>${esc(qualityReviewDate(row.created_at))}</small></div></td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function renderReviewDistribution(rows = propertyManagerReviewState.rows) {
+  const ratedRows = rows.filter((row) => Number(row.rating) >= 1);
+  const total = Math.max(ratedRows.length, 1);
+  return statLegend([5, 4, 3, 2, 1].map((rating) => {
+    const count = ratedRows.filter((row) => Number(row.rating) === rating).length;
+    const percent = Math.round((count / total) * 100);
+    const tone = rating >= 4 ? "green" : rating === 3 ? "yellow" : "red";
+    return [`${rating} Star${rating === 1 ? "" : "s"}`, `${count} (${percent}%)`, tone];
+  }));
+}
+
+function renderTopReviewedContractors(rows = propertyManagerReviewState.rows) {
+  const byContractor = new Map();
+  rows.forEach((row) => {
+    const key = row.contractor_id || row.contractor_email || row.contractor_name || "Unlinked contractor";
+    const current = byContractor.get(key) || { name: row.contractor_name || row.contractor_email || "Unlinked contractor", total: 0, count: 0 };
+    current.total += Number(row.rating || 0);
+    current.count += Number(row.rating) >= 1 ? 1 : 0;
+    byContractor.set(key, current);
+  });
+  const leaders = Array.from(byContractor.values())
+    .filter((item) => item.count)
+    .sort((a, b) => (b.total / b.count) - (a.total / a.count))
+    .slice(0, 5);
+  if (!leaders.length) return emptyState("users", "No contractor scores yet", "Contractor rating averages will appear as property managers submit reviews.");
+  return `<div class="stat-legend">${leaders.map((item) => `<div><span class="green"></span><strong>${esc(item.name)}</strong><em>${esc((item.total / item.count).toFixed(1))} stars across ${esc(item.count)} review${item.count === 1 ? "" : "s"}</em></div>`).join("")}</div>`;
+}
+
 function renderQaReviews() {
+  const rows = filteredPropertyManagerReviews();
+  const metrics = propertyManagerReviewMetrics(propertyManagerReviewState.rows);
+  const averagePercent = metrics.average ? `${Math.round((metrics.average / 5) * 100)}%` : "0%";
   return `
     ${qualityTabs("qa-reviews")}
     <section class="metric-strip six">
-      ${metric("Total Reviews", "0", "all time", "calendar", "blue")}
-      ${metric("Pending Review", "0", "awaiting review", "clock", "yellow")}
-      ${metric("Approved", "0", "(0%)", "check", "green")}
-      ${metric("Needs Improvement", "0", "(0%)", "alert", "red")}
-      ${metric("Average Score", "0%", "overall average", "star", "purple")}
-      ${metric("Re-Reviews", "0", "required", "activity", "blue")}
+      ${metric("Total Reviews", String(metrics.total), "property manager ratings", "calendar", "blue")}
+      ${metric("5-Star Reviews", String(metrics.fiveStar), "excellent cleans", "star", "green")}
+      ${metric("Needs Improvement", String(metrics.needsImprovement), "3 stars or below", "alert", "red")}
+      ${metric("Average Rating", metrics.average ? metrics.average.toFixed(1) : "0.0", "out of 5 stars", "star", "purple")}
+      ${metric("Average Score", averagePercent, "overall average", "activity", "yellow")}
+      ${metric("Visible Rows", String(rows.length), "current filters", "filter", "blue")}
     </section>
-    <section class="content-rail">
-      ${tableFrame(["", "Review ID", "Contractor", "Property / Project", "Service Type", "Location", "Reviewer", "Score", "Status", "Review Date", "Actions"], emptyState("document", "No reviews found", "Reviews will appear here once work is completed and submitted for quality assurance.", actionButton("View QA Queue", "message-square")), {
+    <section class="contractor-feedback-workspace">
+      <div class="contractor-feedback-filters">
+        <label class="suite-field contractor-feedback-search"><span>Search Reviews</span><input id="pmQualityReviewSearch" type="search" placeholder="Search property, unit, contractor, notes..." value="${esc(propertyManagerReviewState.search)}" /></label>
+        <label class="suite-field contractor-feedback-rating-filter"><span>Rating</span><select id="pmQualityReviewRatingFilter">
+          ${["all", "5", "4", "3", "2", "1"].map((value) => `<option value="${esc(value)}" ${propertyManagerReviewState.ratingFilter === value ? "selected" : ""}>${esc(value === "all" ? "All ratings" : `${value} stars`)}</option>`).join("")}
+        </select></label>
+      </div>
+      ${propertyManagerReviewState.message ? `<p class="suite-inline-message ${esc(propertyManagerReviewState.tone)}">${esc(propertyManagerReviewState.message)}</p>` : ""}
+      ${tableFrame(["", "Review ID", "Contractor", "Property / Project", "Service Type", "Unit", "Reviewer", "Score", "Status", "Notes / Review Date"], "", {
         checkbox: true,
-        toolbar: toolbar(`${searchBox("Search reviews...")}${selectButton("All Statuses")}${selectButton("All Service Types")}${selectButton("All Locations")}`, actionButton("Export", "download", "", "secondary")),
-        className: "span-main"
+        rows: renderPropertyManagerReviewRows(),
+        toolbar: toolbar("", `<button class="secondary-action" type="button" data-pm-quality-reviews-refresh>${icon("refresh")}<span>Refresh</span></button>`),
+        className: "contractor-feedback-table",
+        pagination: false
       })}
-      ${filters("Filters", [inputControl("Date Range", "May 19 - May 25, 2025", "date"), selectControl("Status", ["Select status..."]), selectControl("Service Type", ["Select service type..."]), selectControl("Location", ["Select location..."]), inputControl("Contractor", "Search contractor..."), inputControl("Score", "Min"), inputControl("Reviewer", "Search reviewer...")])}
     </section>
     <section class="four-panels">
-      ${panel("Score Distribution", statLegend([["5 Stars", "0 (0%)", "green"], ["4 Stars", "0 (0%)", "green"], ["3 Stars", "0 (0%)", "yellow"], ["2 Stars", "0 (0%)", "orange"], ["1 Star", "0 (0%)", "red"]]))}
-      ${panel("Top Service Types", emptyState("settings", "No data available", "Service type data will appear here once reviews are available."))}
-      ${panel("Top Contractors", emptyState("users", "No data available", "Contractor performance will appear here once reviews are available."))}
-      ${panel("Recent Activity", emptyState("clock", "No recent activity", "QA review activity will appear here."))}
+      ${panel("Score Distribution", renderReviewDistribution(propertyManagerReviewState.rows))}
+      ${panel("Top Contractors", renderTopReviewedContractors(propertyManagerReviewState.rows))}
+      ${panel("Recent Notes", rows.slice(0, 5).map((row) => `<div class="mini-row"><strong>${esc(row.unit_number || row.property_name || "Review")}</strong><span>${ratingStars(row.rating)}</span><small>${esc(row.message || "No notes added")}</small></div>`).join("") || emptyState("clock", "No recent notes", "Optional feedback notes will appear here."))}
+      ${panel("Admin Next Steps", emptyState("target", "No follow-up required", "Low ratings will help identify cleans that need coaching or contractor follow-up."))}
     </section>
   `;
+}
+
+function initQaReviews() {
+  const root = document.getElementById("adminSuiteApp");
+  if (!root) return;
+  root.querySelector("#pmQualityReviewSearch")?.addEventListener("input", (event) => {
+    propertyManagerReviewState.search = event.target.value || "";
+    renderApp();
+  });
+  root.querySelector("#pmQualityReviewRatingFilter")?.addEventListener("change", (event) => {
+    propertyManagerReviewState.ratingFilter = event.target.value || "all";
+    renderApp();
+  });
+  root.querySelector("[data-pm-quality-reviews-refresh]")?.addEventListener("click", () => {
+    void loadPropertyManagerQualityReviews({ force: true });
+  });
+  if (!propertyManagerReviewState.loaded && !propertyManagerReviewState.loading) {
+    void loadPropertyManagerQualityReviews();
+  }
+}
+
+async function loadPropertyManagerQualityReviews({ force = false } = {}) {
+  if (!suiteSupabase || propertyManagerReviewState.loading) return;
+  if (propertyManagerReviewState.loaded && !force) return;
+  propertyManagerReviewState.loading = true;
+  propertyManagerReviewState.message = "Loading property manager quality reviews...";
+  propertyManagerReviewState.tone = "";
+  renderApp();
+
+  const { data, error } = await suiteSupabase
+    .from("property_manager_clean_feedback")
+    .select("id,assignment_id,portal_property_id,property_name,unit_number,feedback_type,rating,message,status,created_by,created_by_name,created_by_email,contractor_id,contractor_name,contractor_email,created_at,updated_at")
+    .not("rating", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(1000);
+
+  propertyManagerReviewState.loading = false;
+  propertyManagerReviewState.loaded = true;
+  if (error) {
+    propertyManagerReviewState.rows = [];
+    propertyManagerReviewState.message = `Unable to load quality reviews: ${error.message}`;
+    propertyManagerReviewState.tone = "error";
+    renderApp();
+    return;
+  }
+
+  propertyManagerReviewState.rows = data || [];
+  propertyManagerReviewState.message = propertyManagerReviewState.rows.length
+    ? `Synced ${propertyManagerReviewState.rows.length} property manager quality review${propertyManagerReviewState.rows.length === 1 ? "" : "s"} from Supabase.`
+    : "Synced with Supabase. No property manager quality reviews yet.";
+  propertyManagerReviewState.tone = "";
+  renderApp();
 }
 
 function renderQaAnalytics() {
@@ -11340,6 +11506,9 @@ function renderApp() {
   }
   if (activeKey === "qa-queue") {
     initQaQueue();
+  }
+  if (activeKey === "qa-reviews") {
+    initQaReviews();
   }
   if (activeKey === "leads") {
     initLeads();

@@ -50,6 +50,7 @@ const state = {
   assignments: [],
   qaJobs: [],
   videos: [],
+  cleanReviews: [],
   dataMessage: "",
   dataError: false,
   threads: [],
@@ -77,6 +78,12 @@ const state = {
   feedbackSaving: false,
   feedbackMessage: "",
   feedbackError: false,
+  qualityReviewOpen: false,
+  qualityReviewAssignmentId: "",
+  qualityReviewSaving: false,
+  qualityReviewMessage: "",
+  qualityReviewError: false,
+  qualityReviewSessionDismissedIds: new Set(),
   accountMenuOpen: false,
   adminPreviewMenuOpen: false,
   guideOpen: false,
@@ -1548,6 +1555,7 @@ async function refreshManagerPortal() {
     state.dataError = true;
   } finally {
     state.refreshing = false;
+    maybeOpenQualityReviewPrompt();
     renderManagerPortal();
   }
 }
@@ -1565,6 +1573,7 @@ async function loadManagerData() {
   state.assignments = [];
   state.qaJobs = [];
   state.videos = [];
+  state.cleanReviews = [];
 
   if (!supabase || !propertyId) return;
 
@@ -1584,11 +1593,14 @@ async function loadManagerData() {
     if (result.status === "rejected") notes.push(result.reason?.message || "Some property data could not be loaded.");
   }
 
-  const [qaResult, videoResult] = await Promise.allSettled([
+  const [reviewResult, qaResult, videoResult] = await Promise.allSettled([
+    loadManagerCleanReviews(),
     loadManagerQaJobs(),
     loadManagerVideos()
   ]);
 
+  if (reviewResult.status === "fulfilled" && reviewResult.value) notes.push(reviewResult.value);
+  if (reviewResult.status === "rejected") notes.push(`Quality reviews are limited right now: ${errorMessage(reviewResult.reason)}.`);
   if (qaResult.status === "fulfilled" && qaResult.value) notes.push(qaResult.value);
   if (qaResult.status === "rejected") notes.push(`QA review details are limited right now: ${errorMessage(qaResult.reason)}.`);
   if (videoResult.status === "fulfilled" && videoResult.value) notes.push(videoResult.value);
@@ -1751,6 +1763,32 @@ async function loadManagerQaJobs() {
   return blocked && !rows.length ? "QA review details are limited by current access rules." : "";
 }
 
+async function loadManagerCleanReviews() {
+  const assignmentIds = state.assignments.map((row) => row.id).filter(Boolean);
+  if (!assignmentIds.length) {
+    state.cleanReviews = [];
+    return "";
+  }
+  const rows = [];
+  let blocked = false;
+  for (const ids of chunk(assignmentIds, 80)) {
+    const { data, error } = await supabase
+      .from("property_manager_clean_feedback")
+      .select("id,assignment_id,portal_property_id,property_name,unit_number,feedback_type,rating,message,status,created_by,created_by_name,created_by_email,contractor_id,contractor_name,contractor_email,created_at,updated_at")
+      .in("assignment_id", ids)
+      .not("rating", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(200);
+    if (error) {
+      blocked = true;
+    } else {
+      rows.push(...(data || []));
+    }
+  }
+  state.cleanReviews = dedupeRows(rows);
+  return blocked && !rows.length ? "Quality review history is limited by current access rules." : "";
+}
+
 function videoPropertyCandidates() {
   const propertyMeta = rowMeta(state.property);
   return uuidValues([
@@ -1873,6 +1911,7 @@ function renderManagerPortal(loading = false) {
     ${renderRequestForm()}
     ${renderCurrentView()}
     ${renderAssignmentDetailsModal()}
+    ${renderQualityReviewPromptModal()}
     ${renderManagerGuideOverlay()}
   `;
   if (state.requestOpen) updateTurnRequestTimingPrompts();
@@ -1904,7 +1943,7 @@ function markManagerGuideSeen(view = state.view) {
 
 function maybeStartScheduleGuide() {
   const steps = currentGuideSteps();
-  if (!steps.length || state.assignmentDetailsOpen || state.requestOpen || state.guideOpen || hasSeenManagerGuide()) return;
+  if (!steps.length || state.assignmentDetailsOpen || state.requestOpen || state.qualityReviewOpen || state.guideOpen || hasSeenManagerGuide()) return;
   state.guideOpen = true;
   state.guideStep = 0;
 }
@@ -2567,6 +2606,92 @@ function renderRequestPagination(totalRows, page, pageSize, totalPages, visibleC
 
 function selectedAssignment(rows = state.assignments) {
   return rows.find((row) => row.id === state.selectedAssignmentId) || rows[0] || state.assignments[0] || null;
+}
+
+function reviewAssignmentIds() {
+  return new Set((state.cleanReviews || [])
+    .filter((review) => Number(review.rating) >= 1)
+    .map((review) => String(review.assignment_id || ""))
+    .filter(Boolean));
+}
+
+function pendingQualityReviewAssignments() {
+  const reviewed = reviewAssignmentIds();
+  return completedAssignments()
+    .filter((row) => row?.id && !reviewed.has(String(row.id)))
+    .filter((row) => !state.qualityReviewSessionDismissedIds.has(String(row.id)))
+    .sort((a, b) => dateValue(completionDateValue(b), 0) - dateValue(completionDateValue(a), 0));
+}
+
+function maybeOpenQualityReviewPrompt() {
+  if (state.qualityReviewOpen || state.requestOpen || state.assignmentDetailsOpen || state.refreshing) return;
+  const next = pendingQualityReviewAssignments()[0];
+  if (!next) {
+    state.qualityReviewAssignmentId = "";
+    state.qualityReviewMessage = "";
+    state.qualityReviewError = false;
+    return;
+  }
+  state.qualityReviewAssignmentId = next.id;
+  state.qualityReviewOpen = true;
+  state.qualityReviewMessage = "";
+  state.qualityReviewError = false;
+}
+
+function selectedQualityReviewAssignment() {
+  const id = state.qualityReviewAssignmentId;
+  return state.assignments.find((row) => String(row.id || "") === String(id || "")) || pendingQualityReviewAssignments()[0] || null;
+}
+
+function renderStarRatingButtons(selectedRating = 0) {
+  return [1, 2, 3, 4, 5].map((rating) => `
+    <button class="pm-quality-star ${rating <= selectedRating ? "is-selected" : ""}" type="button" data-pm-quality-star="${rating}" aria-label="${rating} star${rating === 1 ? "" : "s"}">
+      ${rating <= selectedRating ? "★" : "☆"}
+    </button>
+  `).join("");
+}
+
+function renderQualityReviewPromptModal() {
+  if (!state.qualityReviewOpen) return "";
+  const row = selectedQualityReviewAssignment();
+  if (!row) return "";
+  const statusClass = state.qualityReviewMessage ? (state.qualityReviewError ? "error" : "success") : "";
+  const unit = assignmentUnit(row) || "Unit";
+  return `
+    <div class="pm-assignment-detail-modal pm-quality-review-modal" role="dialog" aria-modal="true" aria-labelledby="pmQualityReviewTitle">
+      <button class="pm-assignment-detail-backdrop" type="button" aria-label="Review later" data-pm-quality-review-later></button>
+      <section class="pm-assignment-detail-panel pm-quality-review-panel">
+        <header class="pm-assignment-detail-header">
+          <div>
+            <p class="pm-eyebrow">Completed Unit Review</p>
+            <h2 id="pmQualityReviewTitle">How did we do?</h2>
+          </div>
+          <button class="pm-modal-close" type="button" aria-label="Review later" data-pm-quality-review-later>${pmIcon("x")}</button>
+        </header>
+        <form id="managerQualityReviewForm" class="pm-quality-review-form" data-feedback-assignment-id="${esc(row.id)}">
+          <div class="pm-quality-review-unit">
+            <span>Unit Number</span>
+            <strong>${esc(unit)}</strong>
+            <small>${esc([assignmentTitle(row), formatDate(completionDateValue(row), "")].filter(Boolean).join(" - "))}</small>
+          </div>
+          <label class="pm-quality-rating-field">
+            <span>Star Rating</span>
+            <input type="hidden" name="rating" value="" required />
+            <div class="pm-quality-stars" role="group" aria-label="Choose a star rating">${renderStarRatingButtons(0)}</div>
+          </label>
+          <label>
+            <span>Optional Feedback Notes</span>
+            <textarea name="message" rows="4" placeholder="Anything our team should know about this completed unit?"></textarea>
+          </label>
+          <div class="pm-form-actions pm-quality-review-actions">
+            <button class="secondary-command-btn pm-compact-btn" type="button" data-pm-quality-review-later>Later</button>
+            <button class="new-btn pm-compact-btn" type="submit" ${state.qualityReviewSaving ? "disabled" : ""}>Submit Review</button>
+            <small class="${esc(statusClass)}">${esc(state.qualityReviewMessage)}</small>
+          </div>
+        </form>
+      </section>
+    </div>
+  `;
 }
 
 function renderAssignmentDetailsModal() {
@@ -3575,6 +3700,97 @@ async function submitCleanFeedback(form) {
   renderManagerPortal();
 }
 
+async function submitQualityReview(form) {
+  if (!supabase || state.qualityReviewSaving) return;
+  const assignmentId = form.dataset.feedbackAssignmentId || state.qualityReviewAssignmentId || "";
+  const row = state.assignments.find((assignment) => String(assignment.id || "") === String(assignmentId)) || null;
+  const rating = Number(form.elements.rating?.value || 0);
+  const message = form.elements.message?.value?.trim() || "";
+  if (!assignmentId || !row) {
+    state.qualityReviewMessage = "Select a completed unit before sending the review.";
+    state.qualityReviewError = true;
+    renderManagerPortal();
+    return;
+  }
+  if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
+    state.qualityReviewMessage = "Choose a 1 to 5 star rating.";
+    state.qualityReviewError = true;
+    renderManagerPortal();
+    return;
+  }
+
+  state.qualityReviewSaving = true;
+  state.qualityReviewMessage = "Sending review...";
+  state.qualityReviewError = false;
+  renderManagerPortal();
+
+  const feedbackPayload = {
+    assignment_id: assignmentId,
+    portal_property_id: state.property?.id || row.portal_property_id || rowMeta(row).portal_property_id || null,
+    property_name: assignmentTitle(row) || propertyTitle(),
+    unit_number: assignmentUnit(row) || "",
+    rating,
+    message
+  };
+
+  let result = await supabase.rpc("create_property_manager_quality_review", {
+    feedback_payload: feedbackPayload
+  });
+
+  if (result.error && /function|schema cache|create_property_manager_quality_review/i.test(result.error.message || "")) {
+    result = await supabase
+      .from("property_manager_clean_feedback")
+      .insert({
+        assignment_id: feedbackPayload.assignment_id,
+        portal_property_id: feedbackPayload.portal_property_id,
+        property_name: feedbackPayload.property_name,
+        unit_number: feedbackPayload.unit_number,
+        feedback_type: "quality_review",
+        rating: feedbackPayload.rating,
+        message: feedbackPayload.message || null,
+        status: "new",
+        created_by: state.user?.id || null
+      })
+      .select("id")
+      .maybeSingle();
+  }
+
+  state.qualityReviewSaving = false;
+  if (result.error) {
+    state.qualityReviewMessage = `Unable to send review: ${result.error.message}`;
+    state.qualityReviewError = true;
+    renderManagerPortal();
+    return;
+  }
+
+  state.cleanReviews = dedupeRows([
+    {
+      id: result.data?.id || result.data || `local-${assignmentId}`,
+      assignment_id: assignmentId,
+      portal_property_id: feedbackPayload.portal_property_id,
+      property_name: feedbackPayload.property_name,
+      unit_number: feedbackPayload.unit_number,
+      feedback_type: "quality_review",
+      rating,
+      message,
+      status: "new",
+      created_by: state.user?.id || "",
+      created_by_name: getName(state.user, state.profile),
+      created_by_email: state.profile?.email || state.user?.email || "",
+      created_at: new Date().toISOString()
+    },
+    ...state.cleanReviews
+  ]);
+  state.qualityReviewSessionDismissedIds.delete(String(assignmentId));
+
+  const next = pendingQualityReviewAssignments()[0];
+  state.qualityReviewAssignmentId = next?.id || "";
+  state.qualityReviewOpen = Boolean(next);
+  state.qualityReviewMessage = next ? "" : "Review submitted. Thank you.";
+  state.qualityReviewError = false;
+  renderManagerPortal();
+}
+
 async function createAdminPreviewTurnRequest({ unit, service, priority, moveInDateValue, moveInDate, notes }) {
   const unitRecord = unit ? matchingUnit({ unit_name: unit, unit_number: unit }) : null;
   const start = moveInDate || scheduledMoveInDate(moveInDateValue);
@@ -3970,6 +4186,34 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
+  const qualityStar = event.target.closest("[data-pm-quality-star]");
+  if (qualityStar) {
+    event.preventDefault();
+    const form = qualityStar.closest("#managerQualityReviewForm");
+    const rating = Number(qualityStar.dataset.pmQualityStar || 0);
+    if (form?.elements.rating) form.elements.rating.value = String(rating);
+    form?.querySelectorAll("[data-pm-quality-star]").forEach((button) => {
+      const buttonRating = Number(button.dataset.pmQualityStar || 0);
+      button.classList.toggle("is-selected", buttonRating <= rating);
+      button.textContent = buttonRating <= rating ? "★" : "☆";
+    });
+    state.qualityReviewMessage = "";
+    state.qualityReviewError = false;
+    return;
+  }
+
+  if (event.target.closest("[data-pm-quality-review-later]")) {
+    const row = selectedQualityReviewAssignment();
+    if (row?.id) state.qualityReviewSessionDismissedIds.add(String(row.id));
+    state.qualityReviewOpen = false;
+    state.qualityReviewAssignmentId = "";
+    state.qualityReviewMessage = "";
+    state.qualityReviewError = false;
+    maybeOpenQualityReviewPrompt();
+    renderManagerPortal();
+    return;
+  }
+
   if (event.target.closest("[data-pm-notifications]")) {
     writeNotificationClearedAt();
     window.location.hash = "messages";
@@ -4181,6 +4425,15 @@ document.addEventListener("input", (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && state.qualityReviewOpen) {
+    const row = selectedQualityReviewAssignment();
+    if (row?.id) state.qualityReviewSessionDismissedIds.add(String(row.id));
+    state.qualityReviewOpen = false;
+    state.qualityReviewAssignmentId = "";
+    renderManagerPortal();
+    return;
+  }
+
   if (event.key === "Escape" && state.assignmentDetailsOpen) {
     state.assignmentDetailsOpen = false;
     renderManagerPortal();
@@ -4266,6 +4519,10 @@ document.addEventListener("submit", async (event) => {
   if (event.target.matches("#managerCleanFeedbackForm")) {
     event.preventDefault();
     await submitCleanFeedback(event.target);
+  }
+  if (event.target.matches("#managerQualityReviewForm")) {
+    event.preventDefault();
+    await submitQualityReview(event.target);
   }
   if (event.target.matches("#managerReplyForm")) {
     event.preventDefault();

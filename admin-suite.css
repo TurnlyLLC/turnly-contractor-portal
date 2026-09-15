@@ -7728,6 +7728,43 @@ body.turnly-admin-suite[data-dashboard-theme="light"] .sales-trend-tooltip .sale
   color: var(--suite-soft);
 }
 
+.suite-inline-message {
+  color: var(--suite-soft);
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.suite-inline-message.error {
+  color: #fb7185;
+}
+
+.mini-row {
+  border-bottom: 1px solid rgba(126, 172, 206, 0.14);
+  display: grid;
+  gap: 5px;
+  padding: 10px 0;
+}
+
+.mini-row:first-child {
+  padding-top: 0;
+}
+
+.mini-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.mini-row strong,
+.mini-row small {
+  display: block;
+}
+
+.mini-row small {
+  color: var(--suite-soft);
+  line-height: 1.4;
+}
+
 body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-feedback-table .table-card,
 body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-feedback-table .suite-table td {
   background: #ffffff;
