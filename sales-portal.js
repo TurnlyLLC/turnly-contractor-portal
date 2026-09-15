@@ -71,7 +71,9 @@ const focusStageDefs = [
   { id: "contacted", label: "Contacted", detail: "A real contact attempt happened." },
   { id: "pricing_confirmed", label: "Pricing Confirmed", detail: "$0.25/sq ft has been discussed." },
   { id: "walkthrough_set", label: "Walkthrough Set", detail: "A walkthrough window is selected." },
-  { id: "follow_up_needed", label: "Follow Up Needed", detail: "Keep this prospect in the work queue." }
+  { id: "follow_up_needed", label: "Follow Up Needed", detail: "Keep this prospect in the work queue." },
+  { id: "not_interested", label: "Not Interested", detail: "The prospect declined moving forward." },
+  { id: "handled_by_corporate", label: "Handled by Corporate", detail: "Cleaning decisions are managed at corporate." }
 ];
 const focusFollowUpStatuses = [
   ["open", "Needed"],
@@ -664,7 +666,9 @@ function focusStateFor(row) {
     contacted: storedStages.contacted ?? stage !== "new_leads",
     pricing_confirmed: storedStages.pricing_confirmed ?? pricingFitConfirmed(row),
     walkthrough_set: storedStages.walkthrough_set ?? Boolean(walkthroughAt(row) || ["walkthrough", "contract_out", "active"].includes(stage)),
-    follow_up_needed: storedStages.follow_up_needed ?? Boolean(row?.next_step || row?.task_due_at || ["in_progress", "pending"].includes(taskStatus(row)))
+    follow_up_needed: storedStages.follow_up_needed ?? Boolean(row?.next_step || row?.task_due_at || ["in_progress", "pending"].includes(taskStatus(row))),
+    not_interested: storedStages.not_interested ?? false,
+    handled_by_corporate: storedStages.handled_by_corporate ?? false
   };
   const questions = {
     decision_maker: storedQuestions.decision_maker || "",
@@ -3487,13 +3491,16 @@ async function autosaveFocusLead(options = {}) {
     if (questions.price_acceptable === "yes") stageSet.add("pricing_confirmed");
     if (windowChoice) stageSet.add("walkthrough_set");
 
-    const pipelineStage = stageSet.has("walkthrough_set")
-      ? "walkthrough"
-      : stageSet.has("pricing_confirmed")
-        ? "quote_sent"
-        : stageSet.has("contacted")
-          ? "contacted"
-          : "new_leads";
+    const isClosedByFocus = stageSet.has("not_interested") || stageSet.has("handled_by_corporate");
+    const pipelineStage = isClosedByFocus
+      ? "lost"
+      : stageSet.has("walkthrough_set")
+        ? "walkthrough"
+        : stageSet.has("pricing_confirmed")
+          ? "quote_sent"
+          : stageSet.has("contacted")
+            ? "contacted"
+            : "new_leads";
 
     const focusState = {
       version: FOCUS_STATE_VERSION,
@@ -3526,7 +3533,11 @@ async function autosaveFocusLead(options = {}) {
       payload.budget_range = "";
     }
 
-    if (stageSet.has("follow_up_needed") || previousFocusState.stages.follow_up_needed || row?.next_step || row?.task_due_at) {
+    if (isClosedByFocus) {
+      payload.task_type = row?.task_type || "Sales follow-up";
+      payload.task_status = "completed";
+      payload.next_step = "";
+    } else if (stageSet.has("follow_up_needed") || previousFocusState.stages.follow_up_needed || row?.next_step || row?.task_due_at) {
       payload.task_type = row?.task_type || "Sales follow-up";
       payload.task_status = stageSet.has("follow_up_needed") ? values.focus_follow_up_status || "open" : "completed";
       payload.next_step = stageSet.has("follow_up_needed") ? row?.next_step || "Follow up needed" : "";
