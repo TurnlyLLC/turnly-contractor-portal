@@ -4,9 +4,12 @@ const defaultSupabaseUrl = "https://nwnzdoveskthebfyndcs.supabase.co";
 const allowedOrigins = new Set([
   "https://turnlypros.com",
   "https://www.turnlypros.com",
+  "https://portal.turnlypros.com",
   "http://localhost:3000",
   "http://127.0.0.1:3000"
 ]);
+const inquirySelect = "id,property_name,contact_name,contact_email,contact_phone,sales_city,company_name,default_service_type,default_scope,lead_source,lead_notes,pipeline_stage,created_at";
+const allowedPortalRoles = new Set(["admin", "sales", "sales_team"]);
 
 function sendJson(res, statusCode, body) {
   res.statusCode = statusCode;
@@ -20,8 +23,8 @@ function setCors(req, res) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
   }
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 }
 
 async function readJsonBody(req) {
@@ -62,6 +65,34 @@ function getSupabaseAdmin() {
   };
 }
 
+function bearerToken(req) {
+  const header = req.headers.authorization || req.headers.Authorization || "";
+  const match = String(header).match(/^Bearer\s+(.+)$/i);
+  return match ? match[1].trim() : "";
+}
+
+async function requirePortalUser(req, client) {
+  const token = bearerToken(req);
+  if (!token) return { error: "Sign in to view website inquiries.", status: 401 };
+
+  const { data: userResult, error: userError } = await client.auth.getUser(token);
+  const user = userResult?.user;
+  if (userError || !user?.id) return { error: "Your session expired. Sign in again to view website inquiries.", status: 401 };
+
+  const { data: profile, error: profileError } = await client
+    .from("profiles")
+    .select("role,status,contractor_approved")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  const role = String(profile?.role || user.app_metadata?.role || user.user_metadata?.role || "").toLowerCase();
+  if (profileError || !allowedPortalRoles.has(role)) {
+    return { error: "Admin or sales access is required to view website inquiries.", status: 403 };
+  }
+
+  return { user, profile };
+}
+
 function buildLeadNotes(body, req) {
   const lines = [
     "Website quote request from TurnlyPros.com",
@@ -81,20 +112,32 @@ function buildLeadNotes(body, req) {
   return lines.join("\n").slice(0, 5000);
 }
 
-module.exports = async function handler(req, res) {
-  setCors(req, res);
-
-  if (req.method === "OPTIONS") {
-    res.statusCode = 204;
-    res.end();
+async function listInquiries(req, res, client) {
+  const access = await requirePortalUser(req, client);
+  if (access.error) {
+    sendJson(res, access.status || 403, { error: access.error });
     return;
   }
 
-  if (req.method !== "POST") {
-    sendJson(res, 405, { error: "Method not allowed." });
+  const requestedLimit = Number(new URL(req.url, "https://portal.turnlypros.com").searchParams.get("limit") || 6);
+  const limit = Math.min(20, Math.max(1, Number.isFinite(requestedLimit) ? requestedLimit : 6));
+  const { data, error } = await client
+    .from("sales_leads")
+    .select(inquirySelect)
+    .or("lead_source.eq.website_contact_form,lead_notes.ilike.%Website quote request%,lead_notes.ilike.%TurnlyPros.com%")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error("[website-inquiries] sales lead list failed", error);
+    sendJson(res, 500, { error: "Unable to load inquiries." });
     return;
   }
 
+  sendJson(res, 200, { ok: true, inquiries: data || [] });
+}
+
+async function createInquiry(req, res, client) {
   let body;
   try {
     body = await readJsonBody(req);
@@ -123,12 +166,6 @@ module.exports = async function handler(req, res) {
 
   if (!bool(body.sms_consent)) {
     sendJson(res, 400, { error: "SMS consent is required." });
-    return;
-  }
-
-  const { client, error: clientError } = getSupabaseAdmin();
-  if (clientError) {
-    sendJson(res, 500, { error: clientError.message });
     return;
   }
 
@@ -167,4 +204,32 @@ module.exports = async function handler(req, res) {
   }
 
   sendJson(res, 200, { ok: true, inquiry: data });
+}
+
+module.exports = async function handler(req, res) {
+  setCors(req, res);
+
+  if (req.method === "OPTIONS") {
+    res.statusCode = 204;
+    res.end();
+    return;
+  }
+
+  const { client, error: clientError } = getSupabaseAdmin();
+  if (clientError) {
+    sendJson(res, 500, { error: clientError.message });
+    return;
+  }
+
+  if (req.method === "GET") {
+    await listInquiries(req, res, client);
+    return;
+  }
+
+  if (req.method === "POST") {
+    await createInquiry(req, res, client);
+    return;
+  }
+
+  sendJson(res, 405, { error: "Method not allowed." });
 };
