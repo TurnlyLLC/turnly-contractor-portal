@@ -3503,6 +3503,11 @@ async function autosaveFocusLead(options = {}) {
     const qualificationDetail = ["partial", "not_qualified"].includes(qualificationOutcome) ? values.focus_qualification_detail?.trim() || "" : "";
     if (questions.price_acceptable === "yes") stageSet.add("pricing_confirmed");
     if (windowChoice) stageSet.add("walkthrough_set");
+    if (stageSet.has("walkthrough_set")) {
+      questions.wants_quality_walkthrough = "yes";
+      stageSet.delete("not_interested");
+      stageSet.delete("handled_by_corporate");
+    }
 
     const isClosedByFocus = stageSet.has("not_interested") || stageSet.has("handled_by_corporate");
     const pipelineStage = isClosedByFocus
@@ -4039,18 +4044,36 @@ async function deleteAvailabilitySlot(id) {
 
 function syncFocusConditionalUi(form, source = null) {
   if (!form) return;
+  const walkthroughCheckbox = form.querySelector('input[name="focus_stage"][value="walkthrough_set"]');
+  const qualityChoice = form.querySelector('input[name="focus_wants_quality_walkthrough"]:checked');
+  const qualityYes = form.querySelector('input[name="focus_wants_quality_walkthrough"][value="yes"]');
+  const closedStageValues = ["not_interested", "handled_by_corporate"];
+
   if (source?.name === "walkthrough_window" && source.checked) {
-    const walkthroughCheckbox = form.querySelector('input[name="focus_stage"][value="walkthrough_set"]');
     if (walkthroughCheckbox) walkthroughCheckbox.checked = true;
-    const qualityChoice = form.querySelector('input[name="focus_wants_quality_walkthrough"]:checked');
-    const qualityYes = form.querySelector('input[name="focus_wants_quality_walkthrough"][value="yes"]');
-    if (!qualityChoice && qualityYes) qualityYes.checked = true;
+    if (qualityYes) qualityYes.checked = true;
+    closedStageValues.forEach((value) => {
+      const closedCheckbox = form.querySelector(`input[name="focus_stage"][value="${value}"]`);
+      if (closedCheckbox) closedCheckbox.checked = false;
+    });
     const schedulePopover = form.querySelector("[data-schedule-walkthrough-popover]");
     if (schedulePopover) schedulePopover.hidden = true;
   } else if (source?.name === "walkthrough_window") {
     const hasWindowChoice = Boolean(form.querySelector('input[name="walkthrough_window"]:checked'));
-    const walkthroughCheckbox = form.querySelector('input[name="focus_stage"][value="walkthrough_set"]');
     if (!hasWindowChoice && walkthroughCheckbox) walkthroughCheckbox.checked = false;
+  } else if (source?.name === "focus_stage" && source.value === "walkthrough_set" && source.checked) {
+    if (qualityYes) qualityYes.checked = true;
+    closedStageValues.forEach((value) => {
+      const closedCheckbox = form.querySelector(`input[name="focus_stage"][value="${value}"]`);
+      if (closedCheckbox) closedCheckbox.checked = false;
+    });
+    const schedulePopover = form.querySelector("[data-schedule-walkthrough-popover]");
+    if (schedulePopover) schedulePopover.hidden = false;
+  } else if (source?.name === "focus_stage" && closedStageValues.includes(source.value) && source.checked) {
+    if (walkthroughCheckbox) walkthroughCheckbox.checked = false;
+    form.querySelectorAll('input[name="walkthrough_window"]').forEach((radio) => {
+      radio.checked = false;
+    });
   }
   const followUpChecked = Boolean(form.querySelector('input[name="focus_stage"][value="follow_up_needed"]')?.checked);
   const followUpWrap = form.querySelector("[data-follow-up-status-wrap]");
