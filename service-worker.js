@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-contractor-pwa-v20260916-website-inquiries";
+const CACHE_NAME = "turnly-contractor-pwa-v20260916-walkthrough-checklist";
 
 const PRECACHE_URLS = [
   "/",
@@ -219,3 +219,4 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(isAdminRuntimeAsset(request) ? networkFirst(request) : staleWhileRevalidate(request));
   }
 });
+

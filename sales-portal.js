@@ -1382,6 +1382,19 @@ function selectRecord(rows) {
   return rows.find((row) => row.id === state.selectedId) || rows[0];
 }
 
+function selectLeadFocusRecord(preferredId = "") {
+  const rows = leadFocusRows();
+  if (!rows.length) {
+    state.selectedId = null;
+    return null;
+  }
+  const preferred = preferredId && rows.find((row) => row.id === preferredId);
+  const current = state.selectedId && rows.find((row) => row.id === state.selectedId);
+  const row = preferred || current || rows[0];
+  state.selectedId = row.id;
+  return row;
+}
+
 function rowsByStage(stage) {
   return state.rows.filter((row) => stageFor(row) === stage);
 }
@@ -4211,9 +4224,13 @@ function bindEvents() {
 
     const enterLeadFocus = target.closest("[data-enter-lead-focus]");
     if (enterLeadFocus) {
-      state.selectedId = enterLeadFocus.dataset.selectRecord || state.selectedId;
+      const row = selectLeadFocusRecord(enterLeadFocus.dataset.selectRecord || "");
+      if (!row) {
+        setMessage("No prospects are available for the walkthrough checklist.", "error");
+        return;
+      }
       state.leadFocusMode = true;
-      writeSalesFocusPlace({ leadId: state.selectedId, leadFocusMode: true });
+      writeSalesFocusPlace({ leadId: row.id, leadFocusMode: true });
       render();
       window.scrollTo({ top: 0, behavior: "smooth" });
       return;
@@ -4239,8 +4256,14 @@ function bindEvents() {
 
     if (target.closest("[data-open-schedule-walkthrough]")) {
       const form = target.closest("[data-focus-lead-form]");
+      const walkthroughYes = form?.querySelector('input[name="focus_wants_quality_walkthrough"][value="yes"]');
+      if (walkthroughYes && !walkthroughYes.checked) {
+        walkthroughYes.checked = true;
+        syncFocusConditionalUi(form, walkthroughYes);
+      }
       const popover = form?.querySelector("[data-schedule-walkthrough-popover]");
       if (popover) popover.hidden = false;
+      await autosaveFocusLead();
       return;
     }
 
