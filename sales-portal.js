@@ -4170,6 +4170,7 @@ function changeCalendar(direction) {
 function bindEvents() {
   document.addEventListener("pointerdown", (event) => {
     const option = event.target?.closest?.("[data-focus-lead-form] label");
+    if (option?.classList?.contains("sales-walkthrough-time-card")) return;
     const radio = option?.querySelector?.('input[type="radio"]');
     if (radio) radio.dataset.wasChecked = radio.checked ? "true" : "false";
   });
@@ -4194,7 +4195,9 @@ function bindEvents() {
     }
 
     const focusRadioOption = target.closest?.("[data-focus-lead-form] label");
-    const focusRadio = focusRadioOption?.querySelector?.('input[type="radio"]');
+    const focusRadio = focusRadioOption?.classList?.contains("sales-walkthrough-time-card")
+      ? null
+      : focusRadioOption?.querySelector?.('input[type="radio"]');
     if (focusRadio?.dataset.wasChecked === "true") {
       event.preventDefault();
       focusRadio.checked = false;
@@ -4263,7 +4266,6 @@ function bindEvents() {
       }
       const popover = form?.querySelector("[data-schedule-walkthrough-popover]");
       if (popover) popover.hidden = false;
-      await autosaveFocusLead();
       return;
     }
 
@@ -4474,6 +4476,12 @@ function bindEvents() {
   });
 
   document.addEventListener("change", async (event) => {
+    if (event.target?.matches('[data-focus-lead-form] input[name="walkthrough_window"]')) {
+      syncFocusConditionalUi(event.target.closest("[data-focus-lead-form]"), event.target);
+      await autosaveFocusLead();
+      return;
+    }
+
     if (event.target?.matches("[data-sales-preview-field]")) {
       updateSalesPreviewFromControls();
       render();
