@@ -62,10 +62,23 @@ function getSupabaseAdmin() {
   };
 }
 
-function clientIp(req = {}) {
-  return String(req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "")
-    .split(",")[0]
-    .trim();
+function buildLeadNotes(body, req) {
+  const lines = [
+    "Website quote request from TurnlyPros.com",
+    "",
+    `Contact: ${text(body.name, 160)}`,
+    `Email: ${text(body.email, 254)}`,
+    `Phone: ${text(body.phone, 80)}`,
+    `City: ${text(body.city, 160) || "Not provided"}`,
+    `Property Type: ${text(body.facility_type, 160) || "Not provided"}`,
+    `Service Interest: ${text(body.service_interest, 160) || "Apartment Turnover Cleaning"}`,
+    `SMS Consent: ${bool(body.sms_consent) ? "Yes" : "No"}`,
+    `Source URL: ${text(body.source_url || req.headers.referer, 500) || "Not provided"}`,
+    "",
+    "Message:",
+    text(body.message, 5000) || "No message provided."
+  ];
+  return lines.join("\n").slice(0, 5000);
 }
 
 module.exports = async function handler(req, res) {
@@ -98,6 +111,10 @@ module.exports = async function handler(req, res) {
   const name = text(body.name, 160);
   const email = text(body.email, 254);
   const phone = text(body.phone, 80);
+  const city = text(body.city, 160);
+  const facilityType = text(body.facility_type, 160);
+  const serviceInterest = text(body.service_interest, 160) || "Apartment Turnover Cleaning";
+  const message = text(body.message, 5000);
 
   if (!name || !email || !phone) {
     sendJson(res, 400, { error: "Name, email, and phone are required." });
@@ -115,34 +132,36 @@ module.exports = async function handler(req, res) {
     return;
   }
 
+  const propertyName = [facilityType || "Apartment Turnover Inquiry", city].filter(Boolean).join(" - ");
+  const leadNotes = buildLeadNotes(body, req);
   const payload = {
-    name,
-    email,
-    phone,
-    city: text(body.city, 160),
-    facility_type: text(body.facility_type, 160),
-    service_interest: text(body.service_interest, 160) || "Apartment Turnover Cleaning",
-    message: text(body.message, 5000),
-    sms_consent: true,
-    source: text(body.source, 120) || "website_contact_form",
-    source_url: text(body.source_url || req.headers.referer, 500),
-    user_agent: text(req.headers["user-agent"], 500),
-    ip_address: clientIp(req),
-    status: "new",
-    metadata: {
-      origin: req.headers.origin || "",
-      form: "turnlypros_contact"
-    }
+    property_name: propertyName,
+    name: propertyName,
+    company_name: facilityType,
+    contact_name: name,
+    contact_email: email,
+    contact_phone: phone,
+    sales_city: city,
+    default_service_type: serviceInterest,
+    default_scope: message || leadNotes,
+    lead_source: "website_contact_form",
+    lead_notes: leadNotes,
+    service_needs: [serviceInterest],
+    pipeline_stage: "new_leads",
+    next_step: "Follow up on website quote request",
+    task_priority: "high",
+    task_status: "open",
+    last_activity_at: new Date().toISOString()
   };
 
   const { data, error } = await client
-    .from("website_inquiries")
+    .from("sales_leads")
     .insert(payload)
     .select("id,created_at")
     .single();
 
   if (error) {
-    console.error("[website-inquiries] insert failed", error);
+    console.error("[website-inquiries] sales lead insert failed", error);
     sendJson(res, 500, { error: "Unable to save inquiry." });
     return;
   }
