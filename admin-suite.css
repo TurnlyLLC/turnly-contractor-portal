@@ -7803,3 +7803,281 @@ body.turnly-admin-suite[data-dashboard-theme="light"] .contractor-feedback-table
     box-shadow: none !important;
   }
 }
+
+/* Polished command-center widget styling: applies to Action Items, Property Manager Requests, Pending Turn Requests, QA Alerts, and Schedule. */
+.command-center-workspace {
+  gap: 18px;
+}
+
+.command-customize-bar {
+  align-items: center;
+  background: linear-gradient(135deg, rgba(17, 32, 50, 0.58), rgba(10, 24, 40, 0.44));
+  border: 1px solid var(--suite-border-soft);
+  border-radius: 18px;
+  padding: 10px;
+}
+
+.command-grid {
+  gap: 18px;
+}
+
+.command-grid > .suite-panel:not(.website-inquiries-card) {
+  background:
+    radial-gradient(circle at 0 0, rgba(57, 169, 255, 0.12), transparent 32%),
+    linear-gradient(145deg, rgba(18, 33, 52, 0.98), rgba(10, 24, 40, 0.96));
+  border: 1px solid rgba(117, 143, 169, 0.24);
+  border-radius: 20px;
+  box-shadow: 0 22px 54px rgba(0, 0, 0, 0.22);
+  overflow: hidden;
+  padding: 0;
+  position: relative;
+}
+
+.command-grid > .suite-panel:not(.website-inquiries-card)::before {
+  background: linear-gradient(90deg, rgba(57, 169, 255, 0.9), rgba(155, 108, 255, 0.82), rgba(0, 214, 163, 0.86));
+  content: "";
+  height: 3px;
+  inset: 0 0 auto;
+  position: absolute;
+}
+
+.command-grid > .suite-panel:not(.website-inquiries-card) > .panel-head {
+  align-items: flex-start;
+  margin: 0;
+  padding: 20px 20px 12px;
+}
+
+.command-grid .panel-title-row {
+  align-items: flex-start;
+  display: flex;
+  gap: 13px;
+  min-width: 0;
+}
+
+.command-grid .panel-title-icon {
+  align-items: center;
+  background: linear-gradient(135deg, rgba(57, 169, 255, 0.18), rgba(0, 214, 163, 0.12));
+  border: 1px solid rgba(57, 169, 255, 0.24);
+  border-radius: 16px;
+  color: var(--suite-blue);
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 42px;
+  justify-content: center;
+  width: 42px;
+}
+
+.command-grid .panel-title-copy h2,
+.command-grid > .suite-panel:not(.website-inquiries-card) > .panel-head h2 {
+  font-size: 18px;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.command-grid .panel-title-copy p,
+.command-grid > .suite-panel:not(.website-inquiries-card) > .panel-head p {
+  color: var(--suite-soft);
+  line-height: 1.45;
+  max-width: 46ch;
+}
+
+.command-grid > .suite-panel:not(.website-inquiries-card) .panel-actions,
+.command-grid > .suite-panel:not(.website-inquiries-card) .widget-menu-wrap {
+  flex: 0 0 auto;
+}
+
+.command-grid > .suite-panel:not(.website-inquiries-card) .ghost-icon-btn,
+.command-grid > .suite-panel:not(.website-inquiries-card) .view-chip,
+.command-grid > .suite-panel:not(.website-inquiries-card) .secondary-action {
+  border-radius: 999px;
+}
+
+.command-grid > .suite-panel:not(.website-inquiries-card) .dashboard-list,
+.command-grid > .suite-panel:not(.website-inquiries-card) .manager-request-list {
+  display: grid;
+  gap: 12px;
+  padding: 0 16px 16px;
+}
+
+.command-grid > .suite-panel:not(.website-inquiries-card) .request-message {
+  color: var(--suite-soft);
+  font-size: 12px;
+  font-weight: 750;
+  margin: 0;
+  min-height: 18px;
+  padding: 0 20px 10px;
+}
+
+.command-grid > .suite-panel:not(.website-inquiries-card) .request-message:empty {
+  display: none;
+}
+
+.command-grid > .suite-panel:not(.website-inquiries-card) .dashboard-item-row,
+.command-grid > .suite-panel:not(.website-inquiries-card) .manager-request-row {
+  background: rgba(15, 29, 47, 0.68);
+  border: 1px solid rgba(117, 143, 169, 0.16);
+  border-radius: 18px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  gap: 14px;
+  padding: 14px;
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.command-grid > .suite-panel:not(.website-inquiries-card) .dashboard-item-row:hover,
+.command-grid > .suite-panel:not(.website-inquiries-card) .manager-request-row:hover {
+  background: rgba(24, 42, 64, 0.9);
+  border-color: rgba(57, 169, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+.command-grid .dashboard-item-title {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.command-grid .dashboard-item-title strong {
+  color: var(--suite-text);
+  font-size: 14px;
+  letter-spacing: -0.01em;
+}
+
+.command-grid .dashboard-item-title .suite-icon,
+.command-grid .dashboard-item-meta .suite-icon {
+  color: var(--suite-green);
+}
+
+.command-grid .dashboard-item-meta {
+  color: var(--suite-muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  line-height: 1.4;
+}
+
+.command-grid .dashboard-item-main p {
+  color: var(--suite-soft);
+  line-height: 1.45;
+}
+
+.command-grid .dashboard-item-action,
+.command-grid .dashboard-approve-action {
+  background: rgba(57, 169, 255, 0.11);
+  border: 1px solid rgba(57, 169, 255, 0.22);
+  border-radius: 14px;
+  color: var(--suite-blue);
+  min-width: 38px;
+}
+
+.command-grid .dashboard-approve-action:not(:disabled) {
+  background: rgba(0, 214, 163, 0.12);
+  border-color: rgba(0, 214, 163, 0.28);
+  color: var(--suite-green);
+}
+
+.command-grid .suite-tab.command-filter-tab,
+.command-grid .view-chip {
+  background: rgba(148, 163, 184, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 999px;
+  color: var(--suite-soft);
+  min-height: 30px;
+  padding: 0 10px;
+}
+
+.command-grid .suite-tab.command-filter-tab.active,
+.command-grid .view-chip.active {
+  background: rgba(0, 214, 163, 0.12);
+  border-color: rgba(0, 214, 163, 0.36);
+  color: var(--suite-green);
+}
+
+.command-grid .suite-tabs {
+  border: 0;
+  gap: 8px;
+  padding: 0 16px 12px;
+}
+
+.command-grid > .suite-panel:not(.website-inquiries-card) .panel-bottom-link {
+  background: rgba(148, 163, 184, 0.08);
+  border-top: 1px solid rgba(117, 143, 169, 0.12);
+  border-radius: 0;
+  color: var(--suite-soft);
+  font-weight: 850;
+  justify-content: space-between;
+  min-height: 48px;
+  padding: 0 18px;
+  width: 100%;
+}
+
+.command-grid > .suite-panel:not(.website-inquiries-card) .empty-state,
+.command-grid > .suite-panel:not(.website-inquiries-card) .small-empty-state {
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px dashed rgba(148, 163, 184, 0.24);
+  border-radius: 20px;
+  color: var(--suite-soft);
+  min-height: 142px;
+}
+
+.command-grid .skeleton-list {
+  display: grid;
+  gap: 12px;
+}
+
+.command-grid .skeleton-list > div {
+  background: rgba(15, 29, 47, 0.68);
+  border: 1px solid rgba(117, 143, 169, 0.14);
+  border-radius: 18px;
+  padding: 14px;
+}
+
+.command-grid .schedule-mini-stats,
+.command-grid .quick-actions {
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"] .command-customize-bar {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(248, 251, 253, 0.82));
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"] .command-grid > .suite-panel:not(.website-inquiries-card) {
+  background:
+    radial-gradient(circle at 0 0, rgba(37, 99, 235, 0.11), transparent 34%),
+    linear-gradient(145deg, #ffffff, #f8fbfd);
+  border-color: rgba(15, 35, 55, 0.12);
+  box-shadow: 0 22px 45px rgba(15, 35, 55, 0.1);
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"] .command-grid > .suite-panel:not(.website-inquiries-card) .dashboard-item-row,
+body.turnly-admin-suite[data-dashboard-theme="light"] .command-grid > .suite-panel:not(.website-inquiries-card) .manager-request-row,
+body.turnly-admin-suite[data-dashboard-theme="light"] .command-grid .skeleton-list > div {
+  background: rgba(255, 255, 255, 0.86);
+  border-color: rgba(15, 35, 55, 0.08);
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"] .command-grid > .suite-panel:not(.website-inquiries-card) .dashboard-item-row:hover,
+body.turnly-admin-suite[data-dashboard-theme="light"] .command-grid > .suite-panel:not(.website-inquiries-card) .manager-request-row:hover {
+  background: #ffffff;
+  border-color: rgba(37, 99, 235, 0.18);
+}
+
+body.turnly-admin-suite[data-dashboard-theme="light"] .command-grid > .suite-panel:not(.website-inquiries-card) .empty-state,
+body.turnly-admin-suite[data-dashboard-theme="light"] .command-grid > .suite-panel:not(.website-inquiries-card) .small-empty-state {
+  background: rgba(37, 99, 235, 0.04);
+  border-color: rgba(15, 35, 55, 0.1);
+}
+
+@media (max-width: 620px) {
+  .command-grid > .suite-panel:not(.website-inquiries-card) > .panel-head {
+    padding: 18px 16px 12px;
+  }
+
+  .command-grid > .suite-panel:not(.website-inquiries-card) .dashboard-list,
+  .command-grid > .suite-panel:not(.website-inquiries-card) .manager-request-list,
+  .command-grid .suite-tabs {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}
