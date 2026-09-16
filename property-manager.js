@@ -64,8 +64,13 @@ const state = {
   view: "overview",
   requestOpen: false,
   requestConfirmation: null,
+  addUnitOpen: false,
+  addUnitSaving: false,
+  addUnitMessage: "",
+  addUnitError: false,
   requestDraft: {
     unit: "",
+    unit_id: "",
     move_in_date: "",
     urgent_notice: "",
     move_in_before_2: "",
@@ -640,6 +645,7 @@ function moveInIsWithinUrgentNotice(value) {
 function blankTurnRequestDraft() {
   return {
     unit: "",
+    unit_id: "",
     move_in_date: "",
     urgent_notice: "",
     move_in_before_2: "",
@@ -656,6 +662,7 @@ function captureTurnRequestDraft(form = document.getElementById("managerTurnRequ
   if (!form) return state.requestDraft;
   state.requestDraft = {
     unit: form.elements.unit?.value || "",
+    unit_id: form.elements.unit_id?.value || "",
     move_in_date: form.elements.move_in_date?.value || "",
     urgent_notice: form.elements.urgent_notice?.value || "",
     move_in_before_2: form.elements.move_in_before_2?.value || "",
@@ -1135,6 +1142,10 @@ function matchingUnit(rowOrValue) {
   return state.units.find((unit) => unitLookupValues(unit).some((value) => values.has(value))) || null;
 }
 
+function unitName(unit = {}) {
+  return unit?.unit_name || unit?.unit_number || unit?.name || unit?.unit || "";
+}
+
 function unitBedBath(rowOrUnit) {
   const unit = matchingUnit(rowOrUnit) || (rowOrUnit?.unit_name || rowOrUnit?.unit_number || rowOrUnit?.name ? rowOrUnit : null);
   const meta = rowMeta(rowOrUnit);
@@ -1144,6 +1155,31 @@ function unitBedBath(rowOrUnit) {
     bedrooms !== undefined && bedrooms !== null && bedrooms !== "" ? `${bedrooms} Bed` : "",
     bathrooms !== undefined && bathrooms !== null && bathrooms !== "" ? `${bathrooms} Bath` : ""
   ]).join(" / ") || "Bed/Bath not set";
+}
+
+function unitSquareFeet(unit = {}) {
+  const feet = unit?.square_feet ?? unit?.sq_ft ?? unit?.squareFeet;
+  return asNumber(feet) > 0 ? `${integer(feet)} sq ft` : "";
+}
+
+function unitDropdownLabel(unit = {}) {
+  return compact([unitBedBath(unit), unitSquareFeet(unit)]).join(" - ");
+}
+
+function visibleTurnRequestUnits(draft = state.requestDraft || {}) {
+  const term = normalizeUnitLookup(draft.unit || "");
+  const key = normalizeUnitKey(draft.unit || "");
+  const rows = state.units.filter((unit) => {
+    if (!term && !key) return true;
+    return unitLookupValues(unit).some((value) => value.includes(term) || value.includes(key));
+  });
+  return rows.slice(0, 10);
+}
+
+function selectedTurnRequestUnit(form = document.getElementById("managerTurnRequestForm")) {
+  const id = form?.elements?.unit_id?.value || state.requestDraft?.unit_id || "";
+  const unitValue = form?.elements?.unit?.value || state.requestDraft?.unit || "";
+  return state.units.find((unit) => String(unit.id || "") === String(id)) || matchingUnit(unitValue);
 }
 
 function assignmentStatus(row) {
@@ -1909,6 +1945,7 @@ function renderManagerPortal(loading = false) {
     </header>
     ${renderPropertyLinkNotice()}
     ${renderRequestForm()}
+    ${renderAddUnitModal()}
     ${renderCurrentView()}
     ${renderAssignmentDetailsModal()}
     ${renderQualityReviewPromptModal()}
@@ -3211,6 +3248,7 @@ function renderRequestForm() {
     `;
   }
   const draft = state.requestDraft || blankTurnRequestDraft();
+  const unitPicker = renderTurnRequestUnitPicker(draft);
   return `
     <section class="pm-turn-request-modal" role="dialog" aria-modal="true" aria-labelledby="pmTurnRequestTitle">
       <button class="pm-turn-request-backdrop" type="button" aria-label="Close turn request form" data-manager-request-close></button>
@@ -3231,15 +3269,9 @@ function renderRequestForm() {
           <label class="pm-turn-question is-active" data-manager-turn-step="unit">
             <span class="pm-question-copy">
               <strong>What unit needs to be turned?</strong>
-              <small>Search or choose from the units currently attached to this property.</small>
+              <small>Search and choose from the units currently attached to this property.</small>
             </span>
-            <input name="unit" type="search" list="managerUnitOptions" value="${esc(draft.unit || "")}" placeholder="Start typing a unit..." autocomplete="off" required />
-            <datalist id="managerUnitOptions">
-              ${state.units.map((unit) => {
-                const name = unit.unit_name || unit.name || unit.unit_number || "";
-                return name ? `<option value="${esc(name)}"></option>` : "";
-              }).join("")}
-            </datalist>
+            ${unitPicker}
           </label>
           <label class="pm-turn-question" data-manager-turn-step="date">
             <span class="pm-question-copy">
@@ -3280,6 +3312,92 @@ function renderRequestForm() {
             <button class="new-btn pm-compact-btn" type="button" data-manager-turn-next>Next</button>
             <button class="new-btn pm-compact-btn" type="submit" data-manager-turn-submit hidden ${state.sending ? "disabled" : ""}>Submit Turn Request</button>
             <small id="managerMessageStatus" class="${state.error ? "error" : ""}">${esc(state.message || "We will review the request and reach out if we have questions.")}</small>
+          </div>
+        </form>
+      </article>
+    </section>
+  `;
+}
+
+function renderTurnRequestUnitPicker(draft = {}) {
+  const selectedId = draft.unit_id || "";
+  const selectedUnit = selectedId ? state.units.find((unit) => String(unit.id || "") === String(selectedId)) : matchingUnit(draft.unit || "");
+  return `
+    <div class="pm-unit-combobox" data-manager-unit-combobox>
+      <input name="unit" type="search" value="${esc(draft.unit || "")}" placeholder="Start typing a unit..." autocomplete="off" required data-manager-unit-search />
+      <input name="unit_id" type="hidden" value="${esc(selectedUnit?.id || selectedId || "")}" data-manager-unit-id />
+      <div class="pm-unit-dropdown" data-manager-unit-results>
+        ${turnRequestUnitResultsHtml(draft)}
+      </div>
+      <button class="pm-unit-missing-link" type="button" data-manager-add-unit-open>Don't see the unit you're looking for?</button>
+    </div>
+  `;
+}
+
+function turnRequestUnitResultsHtml(draft = {}) {
+  const units = visibleTurnRequestUnits(draft);
+  const selectedId = draft.unit_id || "";
+  const hasSearch = Boolean(String(draft.unit || "").trim());
+  const emptyMessage = hasSearch
+    ? "No matching property units. Add it first if this unit belongs to the property."
+    : "Start typing to narrow the property unit list.";
+  if (!units.length) return `<p>${esc(emptyMessage)}</p>`;
+  return units.map((unit) => {
+    const name = unitName(unit);
+    const active = String(unit.id || "") === String(selectedId || "");
+    return `
+      <button type="button" class="${active ? "is-selected" : ""}" data-manager-unit-select="${esc(unit.id || "")}" data-manager-unit-name="${esc(name)}">
+        <strong>${esc(name || "Unnamed unit")}</strong>
+        <small>${esc(unitDropdownLabel(unit) || "Unit details not set")}</small>
+      </button>
+    `;
+  }).join("");
+}
+
+function refreshTurnRequestUnitResults(form = document.getElementById("managerTurnRequestForm")) {
+  if (!form) return;
+  const results = form.querySelector("[data-manager-unit-results]");
+  if (!results) return;
+  results.innerHTML = turnRequestUnitResultsHtml(state.requestDraft || {});
+}
+
+function renderAddUnitModal() {
+  if (!state.addUnitOpen) return "";
+  return `
+    <section class="pm-turn-request-modal pm-add-unit-modal" role="dialog" aria-modal="true" aria-labelledby="pmAddUnitTitle">
+      <button class="pm-turn-request-backdrop" type="button" aria-label="Close add unit form" data-manager-add-unit-close></button>
+      <article class="pm-turn-request-card pm-add-unit-card">
+        <div class="pm-turn-request-header">
+          <div>
+            <p class="pm-eyebrow">Add Property Unit</p>
+            <h2 id="pmAddUnitTitle">Don't see the unit you're looking for?</h2>
+            <p>Add it to ${esc(propertyTitle())}. Turnly will match the checklist from the bed and bath count.</p>
+          </div>
+          <button class="pm-modal-close" type="button" aria-label="Close add unit form" data-manager-add-unit-close>${pmIcon("x")}</button>
+        </div>
+        <form id="managerAddUnitForm" class="pm-add-unit-form">
+          <label class="pm-turn-question is-active">
+            <span class="pm-question-copy"><strong>Unit number</strong><small>Use the exact unit number the property manager team uses.</small></span>
+            <input name="unit_name" required placeholder="Unit 2314-6" autocomplete="off" />
+          </label>
+          <div class="pm-add-unit-grid">
+            <label class="pm-turn-question is-active">
+              <span class="pm-question-copy"><strong>Bed count</strong></span>
+              <input name="bedroom_count" type="number" min="0" step="0.5" required placeholder="2" />
+            </label>
+            <label class="pm-turn-question is-active">
+              <span class="pm-question-copy"><strong>Bath count</strong></span>
+              <input name="bathroom_count" type="number" min="0" step="0.5" required placeholder="1.5" />
+            </label>
+            <label class="pm-turn-question is-active">
+              <span class="pm-question-copy"><strong>Sq ft</strong></span>
+              <input name="square_feet" type="number" min="0" step="1" required placeholder="1200" />
+            </label>
+          </div>
+          <div class="pm-turn-submit-row">
+            <button class="secondary-command-btn pm-compact-btn" type="button" data-manager-add-unit-close>Cancel</button>
+            <button class="new-btn pm-compact-btn" type="submit" ${state.addUnitSaving ? "disabled" : ""}>${state.addUnitSaving ? "Adding..." : "Add Unit"}</button>
+            <small class="${state.addUnitError ? "error" : ""}">${esc(state.addUnitMessage || "This will save the unit to the property unit list and assign the matching checklist.")}</small>
           </div>
         </form>
       </article>
@@ -3461,7 +3579,8 @@ async function createTurnRequest(form) {
   }
 
   captureTurnRequestDraft(form);
-  const unit = form.elements.unit?.value?.trim() || "";
+  const unitRecord = selectedTurnRequestUnit(form);
+  const unit = unitName(unitRecord) || form.elements.unit?.value?.trim() || "";
   const service = TURN_REQUEST_SERVICE;
   const moveInDateValue = form.elements.move_in_date?.value || "";
   const moveInDate = scheduledMoveInDate(moveInDateValue);
@@ -3472,6 +3591,11 @@ async function createTurnRequest(form) {
   if (!moveInDate) {
     setManagerMessageStatus("Choose a scheduled move-in date.", true);
     updateTurnRequestTimingPrompts(form);
+    return;
+  }
+  if (!unitRecord?.id) {
+    setManagerMessageStatus("Choose a unit from the list, or add the unit first.", true);
+    syncTurnRequestWizard(form);
     return;
   }
   if (urgentRequired && !urgentNotice) {
@@ -3513,6 +3637,7 @@ async function createTurnRequest(form) {
     const result = await supabase.rpc("create_property_manager_turn_request", {
       request_payload: {
         unit,
+        unit_id: unitRecord.id,
         service_type: service,
         priority,
         move_in_date: moveInDateValue,
@@ -3602,6 +3727,58 @@ async function notifyAdminTurnRequestSms(payload = {}) {
   } catch (error) {
     console.warn("[property-manager] Turn request SMS notification failed", error);
   }
+}
+
+async function submitPropertyManagerUnit(form) {
+  if (!supabase || state.addUnitSaving) return;
+  const unitNameValue = form.elements.unit_name?.value?.trim() || "";
+  const bedroomCount = form.elements.bedroom_count?.value || "";
+  const bathroomCount = form.elements.bathroom_count?.value || "";
+  const squareFeet = form.elements.square_feet?.value || "";
+  if (!unitNameValue || bedroomCount === "" || bathroomCount === "" || squareFeet === "") {
+    state.addUnitMessage = "Enter the unit number, bed count, bath count, and sq ft.";
+    state.addUnitError = true;
+    renderManagerPortal();
+    return;
+  }
+
+  state.addUnitSaving = true;
+  state.addUnitMessage = "Adding unit and matching checklist...";
+  state.addUnitError = false;
+  renderManagerPortal();
+
+  const { data, error } = await supabase.rpc("turnly_property_manager_create_unit", {
+    unit_payload: {
+      unit_name: unitNameValue,
+      bedroom_count: bedroomCount,
+      bathroom_count: bathroomCount,
+      square_feet: squareFeet
+    }
+  });
+
+  state.addUnitSaving = false;
+  if (error) {
+    state.addUnitMessage = error.message || "Unable to add unit.";
+    state.addUnitError = true;
+    renderManagerPortal();
+    return;
+  }
+
+  const saved = Array.isArray(data) ? data[0] : data;
+  if (saved?.id) {
+    const index = state.units.findIndex((unit) => String(unit.id || "") === String(saved.id));
+    if (index >= 0) state.units[index] = saved;
+    else state.units.push(saved);
+    state.units.sort((a, b) => String(unitName(a)).localeCompare(String(unitName(b)), undefined, { numeric: true, sensitivity: "base" }));
+    state.requestDraft.unit = unitName(saved);
+    state.requestDraft.unit_id = saved.id;
+  }
+
+  state.addUnitOpen = false;
+  state.addUnitMessage = "";
+  state.addUnitError = false;
+  setManagerMessageStatus(`${unitName(saved) || unitNameValue} was added to this property and selected for the turn request.`);
+  renderManagerPortal();
 }
 
 async function submitCleanFeedback(form) {
@@ -3792,7 +3969,7 @@ async function submitQualityReview(form) {
 }
 
 async function createAdminPreviewTurnRequest({ unit, service, priority, moveInDateValue, moveInDate, notes }) {
-  const unitRecord = unit ? matchingUnit({ unit_name: unit, unit_number: unit }) : null;
+  const unitRecord = unit ? matchingUnit({ unit_name: unit, unit_number: unit, id: state.requestDraft?.unit_id }) : null;
   const start = moveInDate || scheduledMoveInDate(moveInDateValue);
   const end = start ? new Date(start.getTime() + 2 * 60 * 60 * 1000) : null;
   const propertyId = state.profile?.property_manager_property_id || state.property?.id || null;
@@ -3819,6 +3996,8 @@ async function createAdminPreviewTurnRequest({ unit, service, priority, moveInDa
     unit_square_feet: unitRecord?.square_feet ?? unitRecord?.sq_ft ?? null,
     unit_customer_price: unitRecord?.customer_price ?? null,
     unit_contractor_pay: unitRecord?.contractor_pay ?? null,
+    checklist_template_id: unitRecord?.checklist_template_id || null,
+    checklist_item_count: Array.isArray(unitRecord?.checklist_items) ? unitRecord.checklist_items.length : 0,
     move_in_date: moveInDateValue,
     move_in_time: MOVE_IN_TIME_LABEL,
     property_manager_notes: notes || "",
@@ -3849,6 +4028,7 @@ async function createAdminPreviewTurnRequest({ unit, service, priority, moveInDa
     created_by: state.user?.id || null,
     portal_property_id: propertyId,
     recurring_portal_property_id: propertyId,
+    property_checklist_items: Array.isArray(unitRecord?.checklist_items) ? unitRecord.checklist_items : [],
     metadata
   };
 
@@ -4041,7 +4221,7 @@ function turnRequestStepIndex(form) {
 }
 
 function validateTurnRequestStep(form, step) {
-  if (step === "unit" && !form.elements.unit?.value?.trim()) return "Choose the unit that needs to be turned.";
+  if (step === "unit" && !selectedTurnRequestUnit(form)?.id) return "Choose a unit from the list, or add the unit first.";
   if (step === "date" && !scheduledMoveInDate(form.elements.move_in_date?.value || "")) return "Choose the resident move-in date.";
   if (step === "urgent" && !form.elements.urgent_notice?.value) return `Tell us whether this less-than-${URGENT_TURN_NOTICE_HOURS}-hour turn is urgent.`;
   if (step === "before2" && !form.elements.move_in_before_2?.value) return "Tell us whether the resident is scheduled to move in before 2 PM local time.";
@@ -4301,6 +4481,7 @@ document.addEventListener("click", async (event) => {
     }
     state.requestOpen = true;
     state.requestConfirmation = null;
+    state.addUnitOpen = false;
     resetTurnRequestDraft();
     state.message = "";
     state.error = false;
@@ -4311,6 +4492,7 @@ document.addEventListener("click", async (event) => {
   if (event.target.closest("[data-manager-message-compose]")) {
     state.requestOpen = true;
     state.requestConfirmation = null;
+    state.addUnitOpen = false;
     resetTurnRequestDraft();
     state.message = "";
     state.error = false;
@@ -4332,9 +4514,44 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
+  const unitSelect = event.target.closest("[data-manager-unit-select]");
+  if (unitSelect) {
+    event.preventDefault();
+    const form = unitSelect.closest("form");
+    const id = unitSelect.dataset.managerUnitSelect || "";
+    const name = unitSelect.dataset.managerUnitName || "";
+    if (form?.elements?.unit) form.elements.unit.value = name;
+    if (form?.elements?.unit_id) form.elements.unit_id.value = id;
+    state.requestDraft.unit = name;
+    state.requestDraft.unit_id = id;
+    refreshTurnRequestUnitResults(form);
+    setManagerMessageStatus("");
+    return;
+  }
+
+  if (event.target.closest("[data-manager-add-unit-open]")) {
+    event.preventDefault();
+    captureTurnRequestDraft();
+    state.addUnitOpen = true;
+    state.addUnitMessage = "";
+    state.addUnitError = false;
+    renderManagerPortal();
+    return;
+  }
+
+  if (event.target.closest("[data-manager-add-unit-close]")) {
+    event.preventDefault();
+    state.addUnitOpen = false;
+    state.addUnitMessage = "";
+    state.addUnitError = false;
+    renderManagerPortal();
+    return;
+  }
+
   if (event.target.closest("[data-manager-request-close]")) {
     state.requestOpen = false;
     state.requestConfirmation = null;
+    state.addUnitOpen = false;
     resetTurnRequestDraft();
     state.message = "";
     state.error = false;
@@ -4412,7 +4629,13 @@ document.addEventListener("focusin", (event) => {
 
 document.addEventListener("input", (event) => {
   const turnRequestForm = event.target.closest("[data-manager-turn-form]");
-  if (turnRequestForm) captureTurnRequestDraft(turnRequestForm);
+  if (turnRequestForm) {
+    if (event.target.matches("[data-manager-unit-search]")) {
+      turnRequestForm.elements.unit_id.value = "";
+    }
+    captureTurnRequestDraft(turnRequestForm);
+    if (event.target.matches("[data-manager-unit-search]")) refreshTurnRequestUnitResults(turnRequestForm);
+  }
 
   if (event.target.matches("[data-manager-move-in-date]")) {
     updateTurnRequestTimingPrompts(event.target.form);
@@ -4515,6 +4738,10 @@ document.addEventListener("submit", async (event) => {
   if (event.target.matches("#managerTurnRequestForm")) {
     event.preventDefault();
     await createTurnRequest(event.target);
+  }
+  if (event.target.matches("#managerAddUnitForm")) {
+    event.preventDefault();
+    await submitPropertyManagerUnit(event.target);
   }
   if (event.target.matches("#managerCleanFeedbackForm")) {
     event.preventDefault();

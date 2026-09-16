@@ -4696,6 +4696,7 @@ body.admin-command-body[data-portal-role="property-manager"] .pm-assignment-deta
 
 .pm-turn-question input[type="search"],
 .pm-turn-question input[type="date"],
+.pm-turn-question input[type="number"],
 .pm-turn-question textarea {
   background: rgba(2, 12, 22, 0.92);
   border: 1px solid rgba(126, 158, 188, 0.28);
@@ -4717,6 +4718,94 @@ body.admin-command-body[data-portal-role="property-manager"] .pm-assignment-deta
 .pm-turn-question textarea:focus {
   border-color: rgba(0, 214, 163, 0.64);
   box-shadow: 0 0 0 3px rgba(0, 214, 163, 0.12);
+}
+
+.pm-unit-combobox {
+  display: grid;
+  gap: 8px;
+}
+
+.pm-unit-dropdown {
+  border: 1px solid rgba(126, 158, 188, 0.18);
+  border-radius: 8px;
+  display: grid;
+  max-height: 330px;
+  overflow: auto;
+}
+
+.pm-unit-dropdown button {
+  background: rgba(8, 24, 39, 0.78);
+  border: 0;
+  border-bottom: 1px solid rgba(126, 158, 188, 0.12);
+  color: var(--pm-text);
+  cursor: pointer;
+  display: grid;
+  gap: 3px;
+  min-height: 48px;
+  padding: 9px 11px;
+  text-align: left;
+}
+
+.pm-unit-dropdown button:last-child {
+  border-bottom: 0;
+}
+
+.pm-unit-dropdown button:hover,
+.pm-unit-dropdown button:focus-visible,
+.pm-unit-dropdown button.is-selected {
+  background: rgba(0, 214, 163, 0.12);
+  outline: 0;
+}
+
+.pm-unit-dropdown strong {
+  font-size: 13px;
+}
+
+.pm-unit-dropdown small,
+.pm-unit-dropdown p {
+  color: var(--pm-muted);
+  font-size: 11px;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.pm-unit-dropdown p {
+  padding: 12px;
+}
+
+.pm-unit-missing-link {
+  background: transparent;
+  border: 0;
+  color: var(--pm-green);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+  justify-self: start;
+  padding: 4px 0;
+}
+
+.pm-unit-missing-link:hover,
+.pm-unit-missing-link:focus-visible {
+  text-decoration: underline;
+}
+
+.pm-add-unit-modal {
+  z-index: 90;
+}
+
+.pm-add-unit-card {
+  max-width: 640px;
+}
+
+.pm-add-unit-form {
+  display: grid;
+  gap: 12px;
+}
+
+.pm-add-unit-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .pm-choice-row {
@@ -5708,11 +5797,23 @@ body.admin-command-body[data-portal-role="property-manager"][data-dashboard-them
 
 body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-turn-question input[type="search"],
 body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-turn-question input[type="date"],
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-turn-question input[type="number"],
 body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-turn-question textarea,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-unit-dropdown button,
 body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-choice-row span {
   background: #ffffff;
   border-color: rgba(43, 68, 91, 0.18);
   color: var(--pm-text);
+}
+
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-unit-dropdown {
+  border-color: rgba(43, 68, 91, 0.16);
+}
+
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-unit-dropdown button:hover,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-unit-dropdown button:focus-visible,
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-unit-dropdown button.is-selected {
+  background: rgba(0, 176, 138, 0.12);
 }
 
 body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] .pm-choice-row input:checked + span {
@@ -6001,6 +6102,7 @@ body.admin-command-body[data-portal-role="property-manager"][data-dashboard-them
   .pm-request-form,
   .pm-action-banner dl,
   .pm-choice-row,
+  .pm-add-unit-grid,
   .pm-turn-request-thanks dl,
   .pm-detail-list dl,
   .pm-video-pair,
