@@ -2094,6 +2094,7 @@ function renderFocusWalkthroughWindows(row) {
   const selectedStart = walkthroughAt(row);
   const groups = groupWalkthroughWindows(walkthroughWindowOptions(row));
   const selectedSlot = groups.flatMap((group) => group.slots).find((slot) => selectedStart && slot.starts_at === selectedStart);
+  const selectedGroupKey = selectedSlot ? toDateInput(dateValue(selectedSlot.starts_at)) : "";
   const selectedLabel = selectedSlot
     ? `${formatDate(selectedSlot.starts_at, { weekday: "short", month: "short", day: "numeric" })} at ${formatTime(selectedSlot.starts_at)}`
     : "No walkthrough scheduled";
@@ -2114,15 +2115,36 @@ function renderFocusWalkthroughWindows(row) {
             </div>
             <button class="sales-icon-button" type="button" data-close-schedule-walkthrough aria-label="Close schedule options">${icon("x")}</button>
           </header>
-          <div class="sales-walkthrough-date-grid">
+          <div class="sales-walkthrough-picker-copy">
+            <strong>Choose an available day</strong>
+            <span>Pick a day first, then select one of the available times for that day.</span>
+          </div>
+          <div class="sales-walkthrough-date-grid" data-walkthrough-day-grid>
+            ${groups.map((group) => {
+              const isActive = group.key === selectedGroupKey;
+              return `
+                <button class="sales-walkthrough-date-card ${isActive ? "active" : ""}" type="button" data-walkthrough-day="${esc(group.key)}" aria-expanded="${isActive ? "true" : "false"}">
+                  <header>
+                    <div>
+                      <h3>${esc(formatDate(group.date, { weekday: "short", month: "short", day: "numeric", year: "numeric" }))}</h3>
+                      <p>${esc(formatTime(group.firstStart))} - ${esc(formatTime(group.lastEnd))}</p>
+                    </div>
+                    <span class="sales-availability-count">${esc(number(group.openCount))} slot${group.openCount === 1 ? "" : "s"}</span>
+                  </header>
+                </button>
+              `;
+            }).join("")}
+          </div>
+          <div class="sales-walkthrough-time-panels">
+            <p class="sales-walkthrough-time-empty ${selectedGroupKey ? "is-hidden" : ""}" data-walkthrough-time-empty>Choose a day above to see available walkthrough times.</p>
             ${groups.map((group) => `
-              <article class="sales-walkthrough-date-card">
+              <section class="sales-walkthrough-times-panel" data-walkthrough-times-panel="${esc(group.key)}" ${group.key === selectedGroupKey ? "" : "hidden"}>
                 <header>
                   <div>
-                    <h3>${esc(formatDate(group.date, { weekday: "short", month: "short", day: "numeric", year: "numeric" }))}</h3>
-                    <p>${esc(formatTime(group.firstStart))} - ${esc(formatTime(group.lastEnd))}</p>
+                    <span>Available Times</span>
+                    <strong>${esc(formatDate(group.date, { weekday: "long", month: "short", day: "numeric" }))}</strong>
                   </div>
-                  <span class="sales-availability-count">${esc(number(group.openCount))} slot${group.openCount === 1 ? "" : "s"}</span>
+                  <small>${esc(number(group.openCount))} slot${group.openCount === 1 ? "" : "s"}</small>
                 </header>
                 <div class="sales-walkthrough-time-grid">
                   ${group.slots.map((slot) => {
@@ -2138,7 +2160,7 @@ function renderFocusWalkthroughWindows(row) {
                     `;
                   }).join("")}
                 </div>
-              </article>
+              </section>
             `).join("")}
           </div>
         </section>
@@ -4289,6 +4311,23 @@ function bindEvents() {
       }
       const popover = form?.querySelector("[data-schedule-walkthrough-popover]");
       if (popover) popover.hidden = false;
+      return;
+    }
+
+    const walkthroughDay = target.closest("[data-walkthrough-day]");
+    if (walkthroughDay) {
+      const form = walkthroughDay.closest("[data-focus-lead-form]");
+      const key = walkthroughDay.dataset.walkthroughDay || "";
+      form?.querySelectorAll("[data-walkthrough-day]").forEach((button) => {
+        const active = button.dataset.walkthroughDay === key;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-expanded", active ? "true" : "false");
+      });
+      form?.querySelectorAll("[data-walkthrough-times-panel]").forEach((panel) => {
+        panel.hidden = panel.dataset.walkthroughTimesPanel !== key;
+      });
+      const empty = form?.querySelector("[data-walkthrough-time-empty]");
+      if (empty) empty.classList.add("is-hidden");
       return;
     }
 

@@ -1730,6 +1730,96 @@ button.sales-activity-row:hover {
   white-space: nowrap;
 }
 
+
+.sales-walkthrough-picker-copy {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid rgba(14, 165, 233, 0.18);
+  border-radius: calc(var(--sales-radius) - 4px);
+  background: rgba(14, 165, 233, 0.08);
+}
+
+.sales-walkthrough-picker-copy strong {
+  color: #fff;
+  font-size: 14px;
+}
+
+.sales-walkthrough-picker-copy span {
+  color: var(--sales-muted);
+  font-size: 12px;
+}
+
+button.sales-walkthrough-date-card {
+  width: 100%;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+button.sales-walkthrough-date-card:hover,
+button.sales-walkthrough-date-card.active {
+  border-color: rgba(22, 217, 137, 0.74);
+  background: linear-gradient(145deg, rgba(11, 64, 58, 0.86), rgba(6, 34, 45, 0.74));
+  box-shadow: 0 18px 42px rgba(2, 12, 20, 0.24);
+}
+
+.sales-walkthrough-time-panels {
+  display: grid;
+  gap: 12px;
+}
+
+.sales-walkthrough-time-empty {
+  margin: 0;
+  padding: 14px;
+  border: 1px dashed rgba(148, 163, 184, 0.28);
+  border-radius: calc(var(--sales-radius) - 4px);
+  color: var(--sales-muted);
+  text-align: center;
+}
+
+.sales-walkthrough-time-empty.is-hidden,
+.sales-walkthrough-times-panel[hidden] {
+  display: none;
+}
+
+.sales-walkthrough-times-panel {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgba(22, 217, 137, 0.22);
+  border-radius: var(--sales-radius);
+  background: rgba(3, 12, 22, 0.42);
+}
+
+.sales-walkthrough-times-panel > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sales-walkthrough-times-panel > header span {
+  color: var(--sales-cyan);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sales-walkthrough-times-panel > header strong {
+  display: block;
+  margin-top: 2px;
+  color: #fff;
+  font-size: 16px;
+}
+
+.sales-walkthrough-times-panel > header small {
+  color: var(--sales-muted);
+  font-weight: 800;
+}
+
 .sales-walkthrough-time-grid {
   display: grid;
   gap: 8px;
