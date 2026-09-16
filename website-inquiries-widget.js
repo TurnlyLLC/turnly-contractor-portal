@@ -64,7 +64,7 @@ function renderShell(grid) {
     <div data-website-inquiries-body class="dashboard-list">
       <div class="skeleton-list"><div><span></span><strong></strong><em></em></div><div><span></span><strong></strong><em></em></div></div>
     </div>
-    <a class="panel-bottom-link" href="sales-leads.html">Open Sales Leads ${icon("right")}</a>
+    <a class="panel-bottom-link" href="leads.html">Open Leads ${icon("right")}</a>
   `;
   grid.prepend(wrapper);
   return wrapper;
@@ -78,7 +78,7 @@ function renderRows(container, rows = []) {
     body.innerHTML = `
       <div class="empty-state small-empty-state">
         <strong>No website inquiries yet</strong>
-        <p>New quote form submissions will appear here and in Sales Leads.</p>
+        <p>New quote form submissions will appear here and on Leads.</p>
       </div>
     `;
     return;
@@ -98,7 +98,7 @@ function renderRows(container, rows = []) {
           <span>${icon("phone")} ${esc(row.contact_phone || "No phone")}</span>
         </div>
       </div>
-      <a class="dashboard-item-action" href="sales-leads.html" aria-label="Open Sales Leads">${icon("right")}</a>
+      <a class="dashboard-item-action" href="leads.html" aria-label="Open Leads">${icon("right")}</a>
     </article>
   `).join("");
 }
@@ -118,8 +118,8 @@ async function loadInquiries(container) {
 
   const { data, error } = await supabase
     .from("sales_leads")
-    .select("id,property_name,contact_name,contact_email,contact_phone,sales_city,company_name,default_service_type,default_scope,lead_notes,pipeline_stage,created_at")
-    .eq("lead_source", "website_contact_form")
+    .select("id,property_name,contact_name,contact_email,contact_phone,sales_city,company_name,default_service_type,default_scope,lead_source,lead_notes,pipeline_stage,created_at")
+    .or("lead_source.eq.website_contact_form,lead_notes.ilike.%Website quote request%,lead_notes.ilike.%TurnlyPros.com%")
     .order("created_at", { ascending: false })
     .limit(6);
 
