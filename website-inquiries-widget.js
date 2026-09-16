@@ -16,126 +16,121 @@ function esc(value) {
 }
 
 function formatDate(value) {
-  if (!value) return "New inquiry";
+  if (!value) return "";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "New inquiry";
-  return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit"
-  }).format(date);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-function iconMarkup() {
-  return '<span class="panel-title-icon"><svg class="suite-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"></path></svg></span>';
+function excerpt(value, fallback = "No message captured") {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (!text) return fallback;
+  return text.length > 150 ? `${text.slice(0, 147)}...` : text;
 }
 
-function skeletonRows(count = 3) {
-  return `<div class="skeleton-list">${Array.from({ length: count }, () => "<div><span></span><strong></strong><em></em></div>").join("")}</div>`;
+function detailLine(row) {
+  return [
+    row.sales_city,
+    row.company_name,
+    row.default_service_type
+  ].filter(Boolean).join(" • ") || "Apartment turnover inquiry";
 }
 
-function emptyState(message) {
-  return `
-    <div class="empty-state">
-      <h3>${esc(message)}</h3>
+function renderShell(target) {
+  const wrapper = document.createElement("section");
+  wrapper.id = widgetId;
+  wrapper.className = "suite-panel";
+  wrapper.innerHTML = `
+    <div class="suite-panel-heading">
+      <div>
+        <p class="suite-eyebrow">Website</p>
+        <h2>Website Inquiries</h2>
+        <p>Recent quote requests submitted from TurnlyPros.com.</p>
+      </div>
+      <button type="button" class="suite-ghost-button" data-refresh-website-inquiries>Refresh</button>
+    </div>
+    <div data-website-inquiries-body class="suite-list">
+      <p class="suite-muted">Loading website inquiries...</p>
     </div>
   `;
+  target.prepend(wrapper);
+  return wrapper;
 }
 
-function statusBadge(status = "new") {
-  const label = String(status || "new").replace(/[_-]+/g, " ");
-  return `<span class="status-badge">${esc(label)}</span>`;
-}
+function renderRows(container, rows = []) {
+  const body = container.querySelector("[data-website-inquiries-body]");
+  if (!body) return;
 
-function inquiryRow(row) {
-  const title = row.name || row.email || "Website inquiry";
-  const details = [row.city, row.facility_type, row.service_interest].filter(Boolean).join(" - ");
-  const contact = [row.email, row.phone].filter(Boolean).join(" - ");
-  return `
-    <article class="dashboard-item-row">
-      <div class="dashboard-item-main">
-        <div class="dashboard-item-title"><strong>${esc(title)}</strong></div>
-        ${details ? `<p>${esc(details)}</p>` : ""}
-        ${row.message ? `<p>${esc(row.message).slice(0, 180)}</p>` : ""}
-        <div class="dashboard-item-meta">
-          <span>${esc(contact || formatDate(row.created_at))}</span>
-          ${statusBadge(row.status)}
-        </div>
+  if (!rows.length) {
+    body.innerHTML = `
+      <div class="suite-empty-state">
+        <strong>No website inquiries yet</strong>
+        <span>New quote form submissions will appear here and in Sales Leads.</span>
       </div>
-      <a class="dashboard-item-action" href="leads.html" aria-label="Open sales leads">›</a>
-    </article>
-  `;
-}
-
-function renderShell(grid) {
-  if (document.getElementById(widgetId)) return document.getElementById(widgetId);
-  const section = document.createElement("section");
-  section.className = "suite-panel";
-  section.id = widgetId;
-  section.innerHTML = `
-    <div class="panel-head">
-      <div class="panel-title-row">
-        ${iconMarkup()}
-        <div class="panel-title-copy">
-          <h2>Website Inquiries</h2>
-        </div>
-      </div>
-      <div class="panel-actions">
-        <button class="secondary-action" type="button" data-website-inquiries-refresh><span>Refresh</span></button>
-      </div>
-    </div>
-    <div id="websiteInquiriesMessage" class="request-message" aria-live="polite">Syncing...</div>
-    <div id="websiteInquiriesList" class="dashboard-list">${skeletonRows(3)}</div>
-    <a class="panel-bottom-link" href="leads.html">Open Sales Leads</a>
-  `;
-  grid.prepend(section);
-  section.querySelector("[data-website-inquiries-refresh]")?.addEventListener("click", loadInquiries);
-  return section;
-}
-
-async function loadInquiries() {
-  const message = document.getElementById("websiteInquiriesMessage");
-  const list = document.getElementById("websiteInquiriesList");
-  if (!message || !list) return;
-
-  if (!supabase) {
-    message.textContent = "Supabase config is missing.";
-    list.innerHTML = emptyState("Website inquiries unavailable");
+    `;
     return;
   }
 
-  message.textContent = "Syncing...";
-  list.innerHTML = skeletonRows(3);
+  body.innerHTML = rows.map((row) => `
+    <article class="suite-list-row">
+      <div>
+        <strong>${esc(row.contact_name || row.property_name || "Website inquiry")}</strong>
+        <small>${esc(detailLine(row))}</small>
+        <p>${esc(excerpt(row.lead_notes || row.default_scope))}</p>
+      </div>
+      <div class="suite-row-meta">
+        <span>${esc(formatDate(row.created_at))}</span>
+        <a href="sales-leads.html" class="suite-link">Open Sales Leads</a>
+      </div>
+      <div class="suite-row-meta">
+        <span>${esc(row.contact_email || "No email")}</span>
+        <span>${esc(row.contact_phone || "No phone")}</span>
+      </div>
+    </article>
+  `).join("");
+}
+
+async function loadInquiries(container) {
+  const body = container.querySelector("[data-website-inquiries-body]");
+  if (!body) return;
+
+  if (!supabase) {
+    body.innerHTML = `<p class="suite-muted">Supabase environment is not loaded.</p>`;
+    return;
+  }
+
+  body.innerHTML = `<p class="suite-muted">Loading website inquiries...</p>`;
 
   const { data, error } = await supabase
-    .from("website_inquiries")
-    .select("id,name,email,phone,city,facility_type,service_interest,message,status,created_at")
+    .from("sales_leads")
+    .select("id,property_name,contact_name,contact_email,contact_phone,sales_city,company_name,default_service_type,default_scope,lead_notes,pipeline_stage,created_at")
+    .eq("lead_source", "website_contact_form")
     .order("created_at", { ascending: false })
     .limit(6);
 
   if (error) {
-    console.warn("[website-inquiries-widget] load failed", error);
-    message.textContent = "Website inquiries are ready once the Supabase migration is applied.";
-    list.innerHTML = emptyState("No website inquiries");
+    console.error("Unable to load website inquiries", error);
+    body.innerHTML = `<p class="suite-muted">Unable to load website inquiries: ${esc(error.message || "Unknown error")}</p>`;
     return;
   }
 
-  const rows = data || [];
-  message.textContent = rows.length
-    ? `${rows.length} recent website ${rows.length === 1 ? "inquiry" : "inquiries"}`
-    : "Synced with Supabase. No website inquiries yet.";
-  list.innerHTML = rows.length ? rows.map(inquiryRow).join("") : emptyState("No website inquiries");
+  renderRows(container, data || []);
 }
 
-function mountWhenReady() {
-  const grid = document.querySelector("[data-command-grid]");
-  if (!grid) {
-    window.setTimeout(mountWhenReady, 150);
-    return;
-  }
-  renderShell(grid);
-  void loadInquiries();
+function mount() {
+  if (document.getElementById(widgetId)) return true;
+  const target = document.querySelector("[data-command-grid]") || document.querySelector("main") || document.body;
+  if (!target) return false;
+
+  const container = renderShell(target);
+  container.addEventListener("click", (event) => {
+    if (event.target.closest("[data-refresh-website-inquiries]")) loadInquiries(container);
+  });
+  loadInquiries(container);
+  return true;
 }
 
-mountWhenReady();
+if (!mount()) {
+  document.addEventListener("DOMContentLoaded", mount, { once: true });
+  window.addEventListener("load", mount, { once: true });
+}
