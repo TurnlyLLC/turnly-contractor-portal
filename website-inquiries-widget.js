@@ -103,6 +103,12 @@ function renderRows(container, rows = []) {
   `).join("");
 }
 
+async function getSessionToken() {
+  if (!supabase) return "";
+  const { data } = await supabase.auth.getSession();
+  return data?.session?.access_token || "";
+}
+
 async function loadInquiries(container) {
   const body = container.querySelector("[data-website-inquiries-body]");
   const message = container.querySelector("#websiteInquiriesMessage");
@@ -116,22 +122,27 @@ async function loadInquiries(container) {
 
   if (message) message.textContent = "Loading website inquiries...";
 
-  const { data, error } = await supabase
-    .from("sales_leads")
-    .select("id,property_name,contact_name,contact_email,contact_phone,sales_city,company_name,default_service_type,default_scope,lead_source,lead_notes,pipeline_stage,created_at")
-    .or("lead_source.eq.website_contact_form,lead_notes.ilike.%Website quote request%,lead_notes.ilike.%TurnlyPros.com%")
-    .order("created_at", { ascending: false })
-    .limit(6);
+  try {
+    const token = await getSessionToken();
+    if (!token) {
+      if (message) message.textContent = "Sign in with an admin account to view website inquiries.";
+      body.innerHTML = "";
+      return;
+    }
 
-  if (error) {
+    const response = await fetch("/api/website-inquiries?limit=6", {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload.error) throw new Error(payload.error || "Unable to load inquiries.");
+
+    if (message) message.textContent = "";
+    renderRows(container, payload.inquiries || []);
+  } catch (error) {
     console.error("Unable to load website inquiries", error);
     if (message) message.textContent = `Unable to load website inquiries: ${error.message || "Unknown error"}`;
     body.innerHTML = "";
-    return;
   }
-
-  if (message) message.textContent = "";
-  renderRows(container, data || []);
 }
 
 function mountIntoCommandGrid() {
