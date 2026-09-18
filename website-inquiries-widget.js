@@ -89,7 +89,7 @@ function renderShell(grid) {
         <div class="wi-heading">
           <p class="wi-eyebrow">Quote inbox</p>
           <h2>Website Inquiries</h2>
-          <p>Fresh apartment turnover quote requests from TurnlyPros.com, ready for sales follow-up.</p>
+          <p>Commercial and residential quote requests from Turnly, ready for follow-up.</p>
         </div>
       </div>
       <div class="wi-actions">
@@ -119,7 +119,7 @@ function renderRows(container, rows = []) {
       <article class="wi-row">
         <div class="wi-avatar">${esc(initials(row))}</div>
         <div class="wi-main">
-          <div class="wi-title-line"><strong>${esc(row.contact_name || row.property_name || "Website inquiry")}</strong><span class="wi-pill">${icon("sparkle")} ${esc(stageLabel(row))}</span></div>
+          <div class="wi-title-line"><strong>${esc(row.contact_name || row.property_name || "Website inquiry")}</strong><span class="wi-pill">${row.lead_source === "residential_website_contact_form" ? "Residential" : "Commercial"}</span><span class="wi-pill">${icon("sparkle")} ${esc(stageLabel(row))}</span></div>
           <div class="wi-meta"><span>${esc(detailLine(row))}</span><span class="wi-dot">${esc(formatDate(row.created_at))}</span></div>
           <p class="wi-preview">${esc(excerpt(row.lead_notes || row.default_scope))}</p>
           <div class="wi-contact">

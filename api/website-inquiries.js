@@ -4,6 +4,7 @@ const defaultSupabaseUrl = "https://nwnzdoveskthebfyndcs.supabase.co";
 const allowedOrigins = new Set([
   "https://turnlypros.com",
   "https://www.turnlypros.com",
+  "https://residential.turnlypros.com",
   "https://portal.turnlypros.com",
   "http://localhost:3000",
   "http://127.0.0.1:3000"
@@ -93,16 +94,23 @@ async function requirePortalUser(req, client) {
   return { user, profile };
 }
 
-function buildLeadNotes(body, req) {
+function buildLeadNotes(body, req, residential) {
   const lines = [
     "Website quote request from TurnlyPros.com",
+    `Client type: ${residential ? "Residential" : "Commercial"}`,
     "",
     `Contact: ${text(body.name, 160)}`,
     `Email: ${text(body.email, 254)}`,
     `Phone: ${text(body.phone, 80)}`,
     `City: ${text(body.city, 160) || "Not provided"}`,
     `Property Type: ${text(body.facility_type, 160) || "Not provided"}`,
-    `Service Interest: ${text(body.service_interest, 160) || "Apartment Turnover Cleaning"}`,
+    `Service Interest: ${text(body.service_interest, 160) || (residential ? "Residential cleaning" : "Apartment Turnover Cleaning")}`,
+    ...(residential ? [
+      `Bedrooms: ${text(body.bedrooms, 10) || "Not provided"}`,
+      `Bathrooms: ${text(body.bathrooms, 10) || "Not provided"}`,
+      `Square feet: ${text(body.square_feet, 10) || "Not provided"}`,
+      `Frequency: ${text(body.frequency, 80) || "Not specified"}`
+    ] : []),
     `SMS Consent: ${bool(body.sms_consent) ? "Yes" : "No"}`,
     `Source URL: ${text(body.source_url || req.headers.referer, 500) || "Not provided"}`,
     "",
@@ -124,7 +132,7 @@ async function listInquiries(req, res, client) {
   const { data, error } = await client
     .from("sales_leads")
     .select(inquirySelect)
-    .or("lead_source.eq.website_contact_form,lead_notes.ilike.%Website quote request%,lead_notes.ilike.%TurnlyPros.com%")
+    .or("lead_source.eq.website_contact_form,lead_source.eq.residential_website_contact_form,lead_notes.ilike.%Website quote request%,lead_notes.ilike.%TurnlyPros.com%")
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -134,7 +142,9 @@ async function listInquiries(req, res, client) {
     return;
   }
 
-  sendJson(res, 200, { ok: true, inquiries: data || [] });
+  sendJson(res, 200, { ok: true, inquiries: (data || []).map(row => ({
+    ...row, client_type: row.lead_source === "residential_website_contact_form" ? "residential" : "commercial"
+  })) });
 }
 
 async function createInquiry(req, res, client) {
@@ -146,17 +156,28 @@ async function createInquiry(req, res, client) {
     return;
   }
 
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    sendJson(res, 400, { error: "A request object is required." });
+    return;
+  }
+
   if (text(body._gotcha)) {
     sendJson(res, 200, { ok: true });
     return;
   }
 
+  if (body.client_type && !["commercial", "residential"].includes(body.client_type)) {
+    sendJson(res, 400, { error: "Invalid client type." });
+    return;
+  }
+  // Classify on the server; the public form cannot supply an arbitrary lead source.
+  const residential = req.headers.origin === "https://residential.turnlypros.com" || body.client_type === "residential";
   const name = text(body.name, 160);
   const email = text(body.email, 254);
   const phone = text(body.phone, 80);
   const city = text(body.city, 160);
   const facilityType = text(body.facility_type, 160);
-  const serviceInterest = text(body.service_interest, 160) || "Apartment Turnover Cleaning";
+  const serviceInterest = text(body.service_interest, 160) || (residential ? "Residential cleaning" : "Apartment Turnover Cleaning");
   const message = text(body.message, 5000);
 
   if (!name || !email || !phone) {
@@ -164,13 +185,30 @@ async function createInquiry(req, res, client) {
     return;
   }
 
-  if (!bool(body.sms_consent)) {
+  if (residential && (!city || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !/^(1\d{10}|\d{10})$/.test(phone.replace(/\D/g, "")))) {
+    sendJson(res, 400, { error: "A valid email, phone number, and city are required." });
+    return;
+  }
+
+  if (residential) {
+    for (const [field, min, max, step] of [["bedrooms", 0, 30, 1], ["bathrooms", 1, 30, 0.5], ["square_feet", 100, 100000, 1]]) {
+      const value = body[field];
+      if (value !== undefined && value !== "" && (typeof value !== "string" && typeof value !== "number" || !Number.isFinite(Number(value)) || Number(value) < min || Number(value) > max || Number(value) % step !== 0)) {
+        sendJson(res, 400, { error: `Invalid ${field.replace(/_/g, " ")}.` });
+        return;
+      }
+    }
+  }
+
+  if (!residential && !bool(body.sms_consent)) {
     sendJson(res, 400, { error: "SMS consent is required." });
     return;
   }
 
-  const propertyName = [facilityType || "Apartment Turnover Inquiry", city].filter(Boolean).join(" - ");
-  const leadNotes = buildLeadNotes(body, req);
+  const propertyName = residential
+    ? ["Residential", name, city].filter(Boolean).join(" - ")
+    : [facilityType || "Apartment Turnover Inquiry", city].filter(Boolean).join(" - ");
+  const leadNotes = buildLeadNotes(body, req, residential);
   const payload = {
     property_name: propertyName,
     name: propertyName,
@@ -181,11 +219,11 @@ async function createInquiry(req, res, client) {
     sales_city: city,
     default_service_type: serviceInterest,
     default_scope: message || leadNotes,
-    lead_source: "website_contact_form",
+    lead_source: residential ? "residential_website_contact_form" : "website_contact_form",
     lead_notes: leadNotes,
     service_needs: [serviceInterest],
     pipeline_stage: "new_leads",
-    next_step: "Follow up on website quote request",
+    next_step: residential ? "Follow up on residential cleaning request" : "Follow up on website quote request",
     task_priority: "high",
     task_status: "open",
     last_activity_at: new Date().toISOString()
