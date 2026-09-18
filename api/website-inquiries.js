@@ -95,6 +95,8 @@ async function requirePortalUser(req, client) {
 }
 
 function buildLeadNotes(body, req, residential) {
+  const propertyName = text(body.property_name || body.facility_type, 180);
+  const managementCompany = text(body.management_company, 180);
   const lines = [
     "Website quote request from TurnlyPros.com",
     `Client type: ${residential ? "Residential" : "Commercial"}`,
@@ -103,7 +105,11 @@ function buildLeadNotes(body, req, residential) {
     `Email: ${text(body.email, 254)}`,
     `Phone: ${text(body.phone, 80)}`,
     `City: ${text(body.city, 160) || "Not provided"}`,
-    `Property Type: ${text(body.facility_type, 160) || "Not provided"}`,
+    `Property / community: ${propertyName || "Not provided"}`,
+    `Management company: ${managementCompany || "Not provided"}`,
+    `Approx. unit count: ${text(body.unit_count, 10) || "Not provided"}`,
+    `Requested timeline: ${text(body.timeline, 100) || "Not provided"}`,
+    `Property Type: ${text(body.facility_type, 160) || "Apartment community"}`,
     `Service Interest: ${text(body.service_interest, 160) || (residential ? "Residential cleaning" : "Apartment Turnover Cleaning")}`,
     ...(residential ? [
       `Bedrooms: ${text(body.bedrooms, 10) || "Not provided"}`,
@@ -177,6 +183,8 @@ async function createInquiry(req, res, client) {
   const phone = text(body.phone, 80);
   const city = text(body.city, 160);
   const facilityType = text(body.facility_type, 160);
+  const propertyName = text(body.property_name, 180);
+  const managementCompany = text(body.management_company, 180);
   const serviceInterest = text(body.service_interest, 160) || (residential ? "Residential cleaning" : "Apartment Turnover Cleaning");
   const message = text(body.message, 5000);
 
@@ -185,8 +193,19 @@ async function createInquiry(req, res, client) {
     return;
   }
 
-  if (residential && (!city || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !/^(1\d{10}|\d{10})$/.test(phone.replace(/\D/g, "")))) {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !/^(1\d{10}|\d{10})$/.test(phone.replace(/\D/g, ""))) {
+    sendJson(res, 400, { error: "A valid email and phone number are required." });
+    return;
+  }
+
+  if ((residential || propertyName) && !city) {
     sendJson(res, 400, { error: "A valid email, phone number, and city are required." });
+    return;
+  }
+
+  if (body.unit_count !== undefined && body.unit_count !== null && body.unit_count !== "" &&
+      (!Number.isInteger(Number(body.unit_count)) || Number(body.unit_count) < 1 || Number(body.unit_count) > 10000)) {
+    sendJson(res, 400, { error: "Unit count must be between 1 and 10,000." });
     return;
   }
 
@@ -200,19 +219,14 @@ async function createInquiry(req, res, client) {
     }
   }
 
-  if (!residential && !bool(body.sms_consent)) {
-    sendJson(res, 400, { error: "SMS consent is required." });
-    return;
-  }
-
-  const propertyName = residential
+  const leadPropertyName = residential
     ? ["Residential", name, city].filter(Boolean).join(" - ")
-    : [facilityType || "Apartment Turnover Inquiry", city].filter(Boolean).join(" - ");
+    : [propertyName || facilityType || "Apartment Turnover Inquiry", city].filter(Boolean).join(" - ");
   const leadNotes = buildLeadNotes(body, req, residential);
   const payload = {
-    property_name: propertyName,
-    name: propertyName,
-    company_name: facilityType,
+    property_name: leadPropertyName,
+    name: leadPropertyName,
+    company_name: managementCompany || facilityType,
     contact_name: name,
     contact_email: email,
     contact_phone: phone,

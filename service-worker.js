@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-contractor-pwa-v20260916-walkthrough-day-picker";
+const CACHE_NAME = "turnly-contractor-pwa-v20260918-resident-feedback";
 
 const PRECACHE_URLS = [
   "/",
@@ -57,6 +57,7 @@ const PRECACHE_URLS = [
   "/sales-quotes.html",
   "/sales-contracts.html",
   "/sales-tasks.html",
+  "/resident-feedback.html",
   "/sales-portal-20260910a.css",
   "/sales-portal.js",
   "/admin-sales-portal.css",
@@ -111,6 +112,9 @@ function isAdminRuntimeAsset(request) {
     || pathname.startsWith("/admin-suite-")
     || pathname === "/admin-suite.css"
     || pathname === "/website-inquiries-widget.js"
+    || pathname === "/resident-feedback-admin.js"
+    || pathname === "/resident-feedback-widget.js"
+    || pathname === "/resident-feedback.css"
     || pathname === "/admin-regions.js"
     || pathname === "/admin-dashboard.css"
     || pathname === "/contractor-portal.css"

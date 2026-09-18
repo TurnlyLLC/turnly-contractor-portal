@@ -12,10 +12,13 @@ import {
   writeAdminPreviewContext
 } from "./admin-preview-context.js?v=20260908-sales-preview";
 
+import { createResidentFeedbackWidget } from "./resident-feedback-widget.js?v=20260918";
+
 const suiteEnv = window.__ENV || {};
 const suiteSupabase = suiteEnv.SUPABASE_URL && suiteEnv.SUPABASE_ANON_KEY
   ? createClient(suiteEnv.SUPABASE_URL, suiteEnv.SUPABASE_ANON_KEY)
   : null;
+const residentFeedbackWidget = createResidentFeedbackWidget({ client: suiteSupabase, panel, esc });
 
 if (typeof window !== "undefined") {
   window.turnlyAdminSuiteHandlesAssignmentForm = true;
@@ -62,6 +65,7 @@ const navSections = [
       { key: "qa-queue", label: "QA Queue", href: "qa-queue.html", icon: "message-square" },
       { key: "checklists", label: "Checklists", href: "checklists.html", icon: "file-check" },
       { key: "qa-analytics", label: "QA Analytics", href: "qa-analytics.html", icon: "bar-chart" },
+      { key: "resident-feedback", label: "Resident Feedback", href: "resident-feedback.html", icon: "star" },
       { key: "videos", label: "Video Library", href: "videos.html", icon: "video" }
     ]
   },
@@ -104,9 +108,10 @@ const pipelineStages = [
   ["active", "Active", "green"]
 ];
 
-const commandCenterDefaultWidgetIds = ["action-items", "property-manager-requests", "pending-turn-requests", "coverage-requests", "qa-alerts", "schedule"];
+const commandCenterDefaultWidgetIds = ["resident-feedback", "action-items", "property-manager-requests", "pending-turn-requests", "coverage-requests", "qa-alerts", "schedule"];
 const commandCenterStorageKey = "turnlyAdminCommandCenterWidgets:20260721";
 const commandCenterWidgetCatalog = [
+  { id: "resident-feedback", title: "Resident Feedback", icon: "star", href: "resident-feedback.html" },
   { id: "action-items", title: "Action Items", icon: "clipboard-list", href: "assignments.html" },
   { id: "property-manager-requests", title: "Property Manager Requests", icon: "building", href: "contracts.html" },
   { id: "pending-turn-requests", title: "Pending Turn Requests", icon: "calendar", href: "assignments.html" },
@@ -759,6 +764,11 @@ const pages = {
     subtitle: "Review contractor ratings and notes submitted after checklist completion.",
     render: renderContractorFeedbackReport
   },
+  "resident-feedback": {
+    title: "Resident Feedback",
+    subtitle: "Create property QR cards and review resident feedback.",
+    render: () => '<div id="residentFeedbackAdminMount" class="resident-feedback-admin-mount"></div>'
+  },
   "reports-operations": {
     title: "Operations",
     subtitle: "Monitor operational performance and team productivity.",
@@ -1177,6 +1187,12 @@ function readCommandWidgetIds() {
   if (Array.isArray(commandCenterState.widgetIds)) return commandCenterState.widgetIds;
   try {
     commandCenterState.widgetIds = normalizeCommandWidgetIds(JSON.parse(localStorage.getItem(commandCenterStorageKey) || "null"));
+    // Introduce the new default once while retaining existing widget order and visibility.
+    if (!localStorage.getItem("turnlyResidentFeedbackIntroduced:20260918")) {
+      commandCenterState.widgetIds = normalizeCommandWidgetIds(["resident-feedback", ...commandCenterState.widgetIds]);
+      localStorage.setItem(commandCenterStorageKey, JSON.stringify(commandCenterState.widgetIds));
+      localStorage.setItem("turnlyResidentFeedbackIntroduced:20260918", "true");
+    }
   } catch {
     commandCenterState.widgetIds = [...commandCenterDefaultWidgetIds];
   }
@@ -1211,6 +1227,7 @@ function renderCommandWidgetCatalog(activeIds) {
 }
 
 function renderCommandWidget(widgetId) {
+  if (widgetId === "resident-feedback") return residentFeedbackWidget.render();
   if (widgetId === "action-items") return renderActionItemsWidget();
   if (widgetId === "property-manager-requests") return renderPropertyManagerRequestsWidget();
   if (widgetId === "pending-turn-requests") return renderPendingTurnRequestsWidget();
@@ -1286,6 +1303,7 @@ function initCommandCenter(options = {}) {
   const root = document.querySelector("[data-command-center]");
   if (!root) return;
   root.addEventListener("click", handleCommandCenterClick);
+  root.addEventListener("click", residentFeedbackWidget.click);
   renderCommandCenterLists();
   if (!options.skipRemotePreferences) {
     void hydrateCommandWidgetPreferences();
@@ -1456,6 +1474,7 @@ async function getCommandCenterUser() {
 
 async function loadCommandCenterData() {
   await Promise.all([
+    residentFeedbackWidget.load(),
     loadCommandActionItems(),
     loadCommandPropertyManagerRequests(),
     loadCommandPendingTurnRequests(),
@@ -1466,6 +1485,7 @@ async function loadCommandCenterData() {
 }
 
 async function refreshCommandWidget(widgetId) {
+  if (widgetId === "resident-feedback") return residentFeedbackWidget.load();
   setCommandWidgetLoading(widgetId);
   if (widgetId === "action-items") await loadCommandActionItems();
   if (widgetId === "property-manager-requests") await loadCommandPropertyManagerRequests();
@@ -1628,6 +1648,7 @@ async function loadCommandSchedule() {
 }
 
 function renderCommandCenterLists() {
+  residentFeedbackWidget.renderRows();
   renderCommandActionItems();
   renderCommandPropertyManagerRequests();
   renderCommandPendingTurnRequests();
