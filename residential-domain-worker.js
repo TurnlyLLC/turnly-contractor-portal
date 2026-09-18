@@ -6,8 +6,11 @@ if (self.location.hostname === "residental.turnlypros.com") {
   });
   self.addEventListener("activate", (event) => {
     event.waitUntil((async () => {
+      await self.clients.claim();
+      const keys = await caches.keys();
+      await Promise.all(keys.filter((key) => key.startsWith("turnly-contractor-pwa-")).map((key) => caches.delete(key)));
       await self.registration.unregister();
-      const windows = await self.clients.matchAll({ type: "window" });
+      const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
       await Promise.all(windows.map((client) => client.navigate("/")));
     })());
   });

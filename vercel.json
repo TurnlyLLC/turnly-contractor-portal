@@ -1,21 +1,23 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": ".",
-  "rewrites": [
+  "routes": [
     {
-      "source": "/service-worker.js",
+      "src": "^/service-worker\\.js$",
       "has": [{ "type": "host", "value": "residental.turnlypros.com" }],
-      "destination": "/residential-domain-worker.js"
+      "headers": { "Cache-Control": "no-store" },
+      "dest": "/residential-domain-worker.js"
     },
     {
-      "source": "/",
+      "src": "^/(?:index\\.html)?$",
       "has": [{ "type": "host", "value": "residental.turnlypros.com" }],
-      "destination": "https://turnlypros.com/residential/index.html"
+      "dest": "https://turnlypros.com/residential/index.html"
     },
     {
-      "source": "/:path*",
+      "src": "^/(.*)$",
       "has": [{ "type": "host", "value": "residental.turnlypros.com" }],
-      "destination": "https://turnlypros.com/residential/:path*"
-    }
+      "dest": "https://turnlypros.com/residential/$1"
+    },
+    { "handle": "filesystem" }
   ]
 }
