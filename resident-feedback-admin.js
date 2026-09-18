@@ -1,9 +1,10 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+import { buildFlyerPdf, flyerSvg, loadFlyerArtwork } from './resident-feedback-pdf.mjs?v=20260918-flyer';
 
 const env = window.__ENV || {};
 const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY ? createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY) : null;
 const root = document.getElementById('adminSuiteApp');
-const state = { properties: [], propertyId: '', propertyCode: '', codeEdited: false, creating: false, cards: [], error: '', status: '' };
+const state = { properties: [], propertyId: '', propertyCode: '', codeEdited: false, creating: false, downloading: false, cards: [], batchPropertyName: '', batchPropertyCode: '', error: '', status: '' };
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[char]);
 const messageNode = () => document.getElementById('residentFeedbackMessage');
 const endpointReady = () => Boolean(supabase);
@@ -30,6 +31,8 @@ function updateExample() {
   const number = Number(document.getElementById('residentFeedbackStartNumber')?.value || 1);
   const example = document.getElementById('residentFeedbackExample');
   if (example) example.textContent = `${code}-${cardNumber(Math.max(1, number || 1))}`;
+  const preview = document.getElementById('residentFeedbackDesignPreview');
+  if (preview && window.qrcode) preview.innerHTML = flyerSvg({ card_number: Math.max(1, number || 1) }, selectedProperty()?.label || 'YOUR PROPERTY', code, { preview: true });
 }
 
 async function loadProperties() {
@@ -52,33 +55,60 @@ async function loadProperties() {
 
 function makeCardMarkup(card, propertyName, propertyCode) {
   const id = `${propertyCode}-${cardNumber(card.card_number)}`;
-  return `<article class="resident-qr-card" data-card-id="${esc(id)}">
-    <div class="resident-qr-card-top"><span class="resident-qr-brand-mark" aria-hidden="true">T</span><span class="resident-qr-brand">Turnly<small>Clean spaces. Better living.</small></span></div>
-    <p class="resident-qr-kicker">YOUR FEEDBACK MATTERS</p><h2>How was your<br><em>Turn?</em></h2>
-    <p class="resident-qr-copy">Your feedback helps us keep your community clean and ready for the next resident.</p>
-    <div class="resident-qr-code-wrap"><div class="resident-qr-code" data-qr-url="${esc(card.feedback_url)}" aria-label="QR code for ${esc(id)}"></div><span>SCAN TO SHARE YOUR FEEDBACK</span></div>
-    <div class="resident-qr-card-footer"><strong>${esc(propertyName)}</strong><span>${esc(id)}</span></div>
-  </article>`;
+  return `<article class="resident-flyer" data-card-id="${esc(id)}">${flyerSvg(card, propertyName, propertyCode)}</article>`;
+}
+
+async function downloadBatch({ automatic = false } = {}) {
+  if (state.downloading || (state.creating && !automatic) || !state.cards.length) return;
+  state.downloading = true;
+  const button = document.getElementById('residentFeedbackDownload');
+  const generate = document.querySelector('#residentFeedbackGeneratorForm [type="submit"]');
+  if (button) button.disabled = true;
+  if (generate) generate.disabled = true;
+  try {
+    const bytes = await buildFlyerPdf({ cards: state.cards, propertyName: state.batchPropertyName, propertyCode: state.batchPropertyCode,
+      onProgress: (done, total) => message(`Preparing PDF: ${done} of ${total} flyers…`) });
+    const blob = new Blob([bytes], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Turnly_Feedback_${state.batchPropertyCode}_${cardNumber(state.cards[0].card_number)}-${cardNumber(state.cards.at(-1).card_number)}_4up_Letter.pdf`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    message(`PDF ready: ${state.cards.length} unique flyers on ${Math.ceil(state.cards.length / 4)} Letter page(s). Download it again below if needed.`);
+  } catch (error) {
+    message(`Your batch is saved. ${error.message || 'Unable to prepare the PDF.'} Use Download PDF to retry without generating new codes.`, true);
+  } finally {
+    state.downloading = false;
+    if (button) button.disabled = false;
+    if (generate) generate.disabled = state.creating;
+  }
 }
 
 async function createBatch(form) {
-  if (state.creating) return;
+  if (state.creating || state.downloading) return;
   if (!endpointReady()) { message('Supabase is not configured in the portal.', true); return; }
   const property = selectedProperty();
   const count = Number(form.elements.count.value);
   const start = Number(form.elements.start_number.value);
   const propertyCode = String(form.elements.property_code.value || '').trim().toUpperCase();
   if (!property) { message('Choose a property to create QR cards.', true); return; }
-  if (!window.QRCode) { message('The QR-code generator is still loading. Wait a moment and try again.', true); return; }
+  if (!window.qrcode || !window.PDFLib) { message('The flyer generator is still loading. Wait a moment and try again.', true); return; }
   if (!/^[A-Z0-9]{2,10}$/.test(propertyCode)) { message('Use 2–10 letters or numbers for the property code.', true); return; }
   if (!Number.isInteger(count) || count < 1 || count > 500) { message('Choose between 1 and 500 QR cards.', true); return; }
   if (!Number.isInteger(start) || start < 1 || start + count - 1 > 999999) { message('Choose a starting number that fits within six digits.', true); return; }
   state.creating = true;
   const button = form.querySelector('[type="submit"]');
+  const downloadButton = document.getElementById('residentFeedbackDownload');
   button.disabled = true;
+  if (downloadButton) downloadButton.disabled = true;
   button.textContent = 'Creating secure QR cards…';
   message('Generating unique links and saving the batch…');
   try {
+    // Load the template before saving codes, so an asset failure cannot strand a batch.
+    await loadFlyerArtwork();
     const session = await supabase.auth.getSession();
     const accessToken = session.data?.session?.access_token;
     if (!accessToken) throw new Error('Your admin session has expired. Sign in and try again.');
@@ -90,9 +120,12 @@ async function createBatch(form) {
     const result = await response.json().catch(() => ({}));
     if (!response.ok || !result.ok) throw new Error(result.error || 'Unable to create this QR batch. Check the resident feedback migration and retry.');
     state.cards = result.cards || [];
+    state.batchPropertyName = result.property_name;
+    state.batchPropertyCode = result.property_code;
     renderBatch(result.property_name, result.property_code);
-    message(`${state.cards.length} QR card${state.cards.length === 1 ? '' : 's'} saved for ${result.property_name}. Print the batch below.`);
+    message(`${state.cards.length} flyers saved for ${result.property_name}. Preparing your PDF…`);
     document.getElementById('residentFeedbackBatch')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    await downloadBatch({ automatic: true });
   } catch (error) {
     const text = String(error?.message || '');
     message(text.includes('resident_feedback_cards') || text.includes('already exist')
@@ -101,22 +134,21 @@ async function createBatch(form) {
   } finally {
     state.creating = false;
     button.disabled = false;
-    button.textContent = 'Generate QR batch';
+    if (downloadButton) downloadButton.disabled = false;
+    button.textContent = 'Generate flyer PDF';
   }
 }
 
 function renderBatch(propertyName, propertyCode) {
   const batch = document.getElementById('residentFeedbackBatch');
   const cards = document.getElementById('residentFeedbackCards');
-  const print = document.getElementById('residentFeedbackPrint');
+  const download = document.getElementById('residentFeedbackDownload');
   if (!batch || !cards) return;
-  cards.innerHTML = state.cards.map(card => makeCardMarkup(card, propertyName, propertyCode)).join('');
+  // Show the first sheet; the downloaded PDF always includes the entire saved batch.
+  cards.innerHTML = state.cards.slice(0, 4).map(card => makeCardMarkup(card, propertyName, propertyCode)).join('');
   batch.hidden = !state.cards.length;
-  print.hidden = !state.cards.length;
-  if (!window.QRCode) { message('The QR-code generator did not load. Refresh this page and try again.', true); return; }
-  for (const node of cards.querySelectorAll('.resident-qr-code')) {
-    new window.QRCode(node, { text: node.dataset.qrUrl, width: 176, height: 176, colorDark: '#061523', colorLight: '#ffffff', correctLevel: window.QRCode.CorrectLevel.M });
-  }
+  download.hidden = !state.cards.length;
+  document.getElementById('residentFeedbackBatchSummary').textContent = `${state.cards.length} unique flyers · ${Math.ceil(state.cards.length / 4)} Letter pages · first sheet preview`;
 }
 
 function bindPage() {
@@ -137,10 +169,10 @@ function bindPage() {
   document.getElementById('residentFeedbackCount')?.addEventListener('input', () => {
     const count = Number(document.getElementById('residentFeedbackCount').value || 0);
     const summary = document.getElementById('residentFeedbackBatchSummary');
-    if (summary) summary.textContent = `${count || 0} unique cards · ${Math.ceil(count / 4)} print pages`;
+    if (summary && !state.cards.length) summary.textContent = `${count || 0} unique flyers · ${Math.ceil(count / 4)} Letter pages`;
   });
   form.addEventListener('submit', event => { event.preventDefault(); void createBatch(form); });
-  document.getElementById('residentFeedbackPrint')?.addEventListener('click', () => window.print());
+  document.getElementById('residentFeedbackDownload')?.addEventListener('click', () => void downloadBatch());
   void loadProperties();
   return true;
 }
@@ -156,8 +188,8 @@ function renderAdminPage() {
     </section>
     <section class="resident-feedback-generator">
       <form id="residentFeedbackGeneratorForm" class="resident-feedback-form-panel">
-        <h3>Resident Feedback QR Generator</h3>
-        <p>Choose the property and number range. We’ll create secure links and prepare print-ready cards.</p>
+        <h3>Resident Feedback Flyer Generator</h3>
+        <p>Choose the property and number range. Download the Turnly flyer as a PDF, with four unique flyers on each Letter page.</p>
         <div class="resident-feedback-fields">
           <label class="wide">Property<select id="residentFeedbackProperty" name="property_id" required disabled><option>Loading properties…</option></select></label>
           <label>Property code<input id="residentFeedbackPropertyCode" name="property_code" type="text" value="" minlength="2" maxlength="10" autocomplete="off" required aria-describedby="residentFeedbackCodeHelp" /><small id="residentFeedbackCodeHelp">2–10 letters or numbers. We’ll suggest a code from the property name.</small></label>
@@ -166,19 +198,24 @@ function renderAdminPage() {
         </div>
         <div class="resident-feedback-example"><span>Example card ID</span><strong id="residentFeedbackExample">VFH-001</strong></div>
         <div class="resident-feedback-example resident-feedback-url"><span>Feedback URL pattern</span><strong>turnlypros.com/f/[secure token]</strong></div>
-        <button class="primary-action resident-feedback-submit" type="submit">Generate QR batch</button>
+        <button class="primary-action resident-feedback-submit" type="submit">Generate flyer PDF</button>
         <p id="residentFeedbackMessage" class="resident-feedback-notice" role="status" aria-live="polite"></p>
       </form>
       <aside class="resident-feedback-preview-panel">
-        <h3>Resident card preview</h3><p>Each print card carries a unique QR code and card ID.</p>
-        <div class="resident-feedback-preview-card"><span class="resident-qr-brand">Turnly<small>Clean spaces. Better living.</small></span><strong>How was your<br><em>Turn?</em></strong><p>Your feedback helps us keep your community clean and ready for the next resident.</p><span class="resident-feedback-preview-qr" aria-label="Unique QR codes appear on generated cards">QR</span></div>
+        <h3>Your flyer design</h3><p>The supplied Turnly design, with your property details and a unique feedback QR on every flyer.</p>
+        <div class="resident-flyer resident-flyer-design" id="residentFeedbackDesignPreview"></div>
       </aside>
     </section>
     <section id="residentFeedbackBatch" class="resident-feedback-batch" hidden>
-      <div class="resident-feedback-batch-head"><div><h3>Your QR card batch</h3><span id="residentFeedbackBatchSummary"></span><p class="resident-feedback-save-note">Print or save this batch as a PDF now. Secure QR links are not shown again after you leave this page.</p></div><div class="resident-feedback-batch-actions"><button class="primary-action" id="residentFeedbackPrint" type="button" hidden>Print / save PDF</button></div></div>
+      <div class="resident-feedback-batch-head"><div><h3>Your flyer PDF</h3><span id="residentFeedbackBatchSummary"></span><p class="resident-feedback-save-note">Keep the downloaded PDF before leaving this page. To print, open the PDF and choose Letter paper at Actual size (100%).</p></div><div class="resident-feedback-batch-actions"><button class="primary-action" id="residentFeedbackDownload" type="button" hidden>Download PDF</button></div></div>
       <div id="residentFeedbackCards" class="resident-feedback-cards"></div>
     </section>`;
   bindPage();
+  try {
+    document.getElementById('residentFeedbackDesignPreview').innerHTML = flyerSvg({ card_number: 1 }, 'YOUR PROPERTY', 'CODE', { preview: true });
+  } catch {
+    document.getElementById('residentFeedbackDesignPreview').textContent = 'Flyer preview could not load. Refresh to try again.';
+  }
   const count = document.getElementById('residentFeedbackCount');
   count?.dispatchEvent(new Event('input', { bubbles: true }));
   return true;
