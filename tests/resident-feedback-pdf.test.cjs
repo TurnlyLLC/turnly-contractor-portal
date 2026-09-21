@@ -48,6 +48,11 @@ test('ream PDF, download retries, batch history and confirmed deletion', { timeo
       const body = route.request().postDataJSON();
       assert.equal(route.request().headers().authorization, 'Bearer test-only');
       if (body.action === 'list_batches') return route.fulfill({json:{ok:true,batches,page:1,total:batches.length,page_size:20}});
+      if (body.action === 'update_batch_home') {
+        assert.equal(body.batch_id,batchId);assert.equal(body.bedrooms,0);assert.equal(body.bathrooms,1.5);assert.equal(body.square_feet,850);
+        Object.assign(batches.find(batch=>batch.id===body.batch_id),{bedrooms:body.bedrooms,bathrooms:body.bathrooms,square_feet:body.square_feet});
+        return route.fulfill({json:{ok:true}});
+      }
       if (body.action === 'delete_batch') {
         deletes++;
         assert.equal(body.confirm_delete,true);
@@ -82,7 +87,7 @@ test('ream PDF, download retries, batch history and confirmed deletion', { timeo
     const qrBox = await page.locator('#residentFeedbackCards .resident-flyer > svg > svg').first().boundingBox();
     assert.ok(Math.abs(qrBox.width / flyerBox.width - 378 / 1054) < 0.01, 'Nested QR SVG must retain its artwork dimensions');
     assert.equal(saves, 1);
-    assert.deepEqual(request, { action: 'create_batch', property_id: 'property-1', property_code: 'VFH', count: 5, start_number: 103 });
+    assert.deepEqual(request, { action: 'create_batch', property_id: 'property-1', property_code: 'VFH', count: 5, start_number: 103, bedrooms:null, bathrooms:null, square_feet:null });
     if (process.env.FLYER_QA_DIR) {
       fs.mkdirSync(process.env.FLYER_QA_DIR, { recursive: true });
       fs.writeFileSync(path.join(process.env.FLYER_QA_DIR, 'flyer-test.pdf'), bytes);
@@ -104,6 +109,13 @@ test('ream PDF, download retries, batch history and confirmed deletion', { timeo
     await retry;
     assert.equal(saves, 1);
     const deleteButton = page.locator(`[data-delete-batch="${batchId}"]`);
+    await page.locator(`[data-home-batch="${batchId}"]`).click();
+    await page.locator('#residentFeedbackEditBedrooms').fill('0');
+    await page.locator('#residentFeedbackEditBathrooms').fill('1.5');
+    await page.locator('#residentFeedbackEditSquareFeet').fill('850');
+    await page.getByRole('button',{name:'Save home details',exact:true}).click();
+    await page.waitForFunction(()=>document.getElementById('residentFeedbackHistoryMessage').textContent.includes('Home details saved'));
+    assert.equal(batches[0].square_feet,850);
     page.once('dialog', dialog => { assert.match(dialog.message(), /Printed|printed/); void dialog.dismiss(); });
     await deleteButton.click();
     assert.equal(deletes,0);

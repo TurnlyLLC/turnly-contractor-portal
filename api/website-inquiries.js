@@ -112,18 +112,28 @@ function buildLeadNotes(body, req, residential) {
     `Property Type: ${text(body.facility_type, 160) || "Apartment community"}`,
     `Service Interest: ${text(body.service_interest, 160) || (residential ? "Residential cleaning" : "Apartment Turnover Cleaning")}`,
     ...(residential ? [
+      `Street address: ${text(body.street_address, 240) || "Not provided"}`,
+      `Apartment / unit: ${text(body.unit_number, 40) || "Not provided"}`,
+      `State: ${text(body.state, 2) || "Not provided"}`,
+      `ZIP code: ${text(body.postal_code, 10) || "Not provided"}`,
+      ...(body.verified_feedback_card ? [`Referred from feedback card: ${body.verified_feedback_card}`] : []),
       `Bedrooms: ${text(body.bedrooms, 10) || "Not provided"}`,
       `Bathrooms: ${text(body.bathrooms, 10) || "Not provided"}`,
       `Square feet: ${text(body.square_feet, 10) || "Not provided"}`,
       `Frequency: ${text(body.frequency, 80) || "Not specified"}`
     ] : []),
     `SMS Consent: ${bool(body.sms_consent) ? "Yes" : "No"}`,
-    `Source URL: ${text(body.source_url || req.headers.referer, 500) || "Not provided"}`,
+    `Source URL: ${safeSourceUrl(body.source_url || req.headers.referer)}`,
     "",
     "Message:",
     text(body.message, 5000) || "No message provided."
   ];
   return lines.join("\n").slice(0, 5000);
+}
+
+function safeSourceUrl(value) {
+  try { const url = new URL(String(value)); return ['https:','http:'].includes(url.protocol) ? (url.origin + url.pathname).slice(0, 500) : 'Not provided'; }
+  catch { return 'Not provided'; }
 }
 
 async function listInquiries(req, res, client) {
@@ -210,12 +220,27 @@ async function createInquiry(req, res, client) {
   }
 
   if (residential) {
+    // Older cached forms remain compatible; the new form requires a full address.
+    if (body.street_address !== undefined && (!text(body.street_address,240) || !/^[A-Za-z]{2}$/.test(String(body.state || '')) || !/^\d{5}(-\d{4})?$/.test(String(body.postal_code || '')))) {
+      sendJson(res, 400, { error: 'Enter your street address, two-letter state, and ZIP code.' }); return;
+    }
     for (const [field, min, max, step] of [["bedrooms", 0, 30, 1], ["bathrooms", 1, 30, 0.5], ["square_feet", 100, 100000, 1]]) {
       const value = body[field];
       if (value !== undefined && value !== "" && (typeof value !== "string" && typeof value !== "number" || !Number.isFinite(Number(value)) || Number(value) < min || Number(value) > max || Number(value) % step !== 0)) {
         sendJson(res, 400, { error: `Invalid ${field.replace(/_/g, " ")}.` });
         return;
       }
+    }
+  }
+
+  // The card supplies only its verified community label, never contact/address data.
+  delete body.verified_feedback_card;
+  if (residential && /^[a-f0-9]{64}$/.test(String(body.feedback_token || ''))) {
+    const context = await client.rpc('get_resident_feedback_quote_context', { p_token: body.feedback_token });
+    if (context.error) { sendJson(res, 503, { error: 'Unable to verify your flyer. Please try again.' }); return; }
+    if (context.data) {
+      body.property_name = context.data.property_name;
+      body.verified_feedback_card = `${context.data.property_code}-${String(context.data.card_number).padStart(3,'0')}`;
     }
   }
 

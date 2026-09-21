@@ -53,6 +53,7 @@
 .resident-feedback-delete { flex-shrink: 0; padding: 10px 14px; border: 1px solid #bc5361; border-radius: 8px; background: rgba(180,40,60,.12); color: #ffacb5; cursor: pointer; }
 .resident-feedback-delete:disabled,.resident-feedback-history-pagination button:disabled { opacity: .5; cursor: default; }
 .resident-feedback-history-pagination { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; }
+.resident-feedback-home-settings{margin-top:20px}.resident-feedback-home-settings summary{cursor:pointer;color:var(--suite-soft);font-size:.85rem}.resident-feedback-home-settings .resident-feedback-fields{margin-top:12px}.resident-feedback-home-dialog{width:min(560px,calc(100% - 32px));padding:26px;border:1px solid var(--suite-border);border-radius:14px;background:#0c2030;color:var(--suite-text)}.resident-feedback-home-dialog::backdrop{background:#001018b8}.resident-feedback-home-dialog p{font-size:.88rem;line-height:1.5;color:var(--suite-soft)}
 @media (max-width: 640px) { .resident-feedback-history-row { align-items: flex-start; flex-direction: column; } }
 @media print {
   #residentFeedbackBatch { display: none!important; }

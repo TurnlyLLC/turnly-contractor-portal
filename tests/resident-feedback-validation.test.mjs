@@ -8,6 +8,14 @@ const propertyId = '9f2b20d0-906c-4bb5-a42c-89bb5f505c84';
 const requestId = 'df27d778-e05f-4a42-8d9c-4fc9454db94d';
 const token = 'a'.repeat(64);
 
+test('home defaults allow studio counts, half bathrooms and unknown values', () => {
+  const base={action:'update_batch_home',batch_id:propertyId};
+  assert.deepEqual(validateResidentFeedbackRequest({...base,bedrooms:0,bathrooms:1.5,square_feet:800}),{...base,bedrooms:0,bathrooms:1.5,square_feet:800});
+  assert.equal(validateResidentFeedbackRequest(base).square_feet,null);
+  for (const bad of [{bedrooms:-1},{bedrooms:1.5},{bathrooms:1.2},{square_feet:0}]) assert.throws(()=>validateResidentFeedbackRequest({...base,...bad}), /valid/);
+  assert.deepEqual(validateResidentFeedbackRequest({action:'quote_context',token}),{action:'quote_context',token});
+});
+
 test('accepts bounded QR batches and normalizes the property code', () => {
   assert.deepEqual(validateResidentFeedbackRequest({ action: 'create_batch', property_id: propertyId, property_code: 'vfh', count: 100, start_number: 1 }), {
     action: 'create_batch', property_id: propertyId, property_code: 'VFH', count: 100, start_number: 1

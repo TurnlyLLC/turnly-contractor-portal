@@ -9,6 +9,8 @@ const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&a
 const messageNode = () => document.getElementById('residentFeedbackMessage');
 const endpointReady = () => Boolean(supabase);
 const cardNumber = (number) => String(number).padStart(3, '0');
+const homeValues = form => Object.fromEntries(['bedrooms','bathrooms','square_feet'].map(name => [name, form.elements[name].value === '' ? null : Number(form.elements[name].value)]));
+const homeFields = (prefix) => `<label>Bedrooms<input id="${prefix}Bedrooms" name="bedrooms" type="number" min="0" max="30" step="1" placeholder="Optional" /></label><label>Bathrooms<input id="${prefix}Bathrooms" name="bathrooms" type="number" min="1" max="30" step="0.5" placeholder="Optional" /></label><label>Square feet<input id="${prefix}SquareFeet" name="square_feet" type="number" min="100" max="100000" step="1" placeholder="Optional" /></label>`;
 
 function message(text, error = false) {
   state.status = error ? '' : text;
@@ -78,7 +80,7 @@ function renderHistory() {
   const busy = state.creating || state.downloading || state.deleting || state.loadingBatches;
   list.innerHTML = state.batches.map(batch => `<article class="resident-feedback-history-row">
     <div><strong>${esc(batch.property_name)}</strong><span>${esc(batch.property_code)}-${cardNumber(batch.start_number)} through ${esc(batch.property_code)}-${cardNumber(batch.end_number)}</span>
-    <small>${Number(batch.card_count).toLocaleString()} flyers · ${Math.ceil(batch.card_count / 4).toLocaleString()} pages · ${esc(new Date(batch.created_at).toLocaleString())}</small></div>
+    <small>${Number(batch.card_count).toLocaleString()} flyers · ${Math.ceil(batch.card_count / 4).toLocaleString()} pages · ${esc(new Date(batch.created_at).toLocaleString())}</small><small>${esc([batch.bedrooms != null ? `${batch.bedrooms} bed` : '',batch.bathrooms != null ? `${batch.bathrooms} bath` : '',batch.square_feet != null ? `${batch.square_feet} sq ft` : ''].filter(Boolean).join(' · ') || 'Home size not set')}</small><button class="primary-action" type="button" data-home-batch="${esc(batch.id)}" ${busy ? 'disabled' : ''}>Edit home details</button></div>
     <button type="button" class="resident-feedback-delete" data-delete-batch="${esc(batch.id)}" ${busy ? 'disabled' : ''} aria-label="Delete batch ${esc(batch.property_code)}-${cardNumber(batch.start_number)} through ${esc(batch.property_code)}-${cardNumber(batch.end_number)}">Delete batch</button>
   </article>`).join('') || '<p class="resident-feedback-save-note">No saved batches.</p>';
   document.getElementById('residentFeedbackHistoryPage').textContent = `Page ${state.batchPage} of ${Math.max(1, Math.ceil(state.batchTotal / state.batchPageSize))} · ${state.batchTotal} batches`;
@@ -201,7 +203,7 @@ async function createBatch(form) {
     const response = await fetch('/api/resident-feedback', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-      body: JSON.stringify({ action: 'create_batch', property_id: property.id, property_code: propertyCode, count, start_number: start })
+      body: JSON.stringify({ action: 'create_batch', property_id: property.id, property_code: propertyCode, count, start_number: start, ...homeValues(form) })
     });
     const result = await response.json().catch(() => ({}));
     if (!response.ok || !result.ok) throw new Error(result.error || 'Unable to create this QR batch. Check the resident feedback migration and retry.');
@@ -263,12 +265,39 @@ function bindPage() {
   form.addEventListener('submit', event => { event.preventDefault(); void createBatch(form); });
   document.getElementById('residentFeedbackDownload')?.addEventListener('click', () => void downloadBatch());
   document.getElementById('residentFeedbackHistoryList').addEventListener('click', event => {
+    const home = event.target.closest('[data-home-batch]');
+    if (home) {
+      const batch = state.batches.find(item => item.id === home.dataset.homeBatch);
+      if (!batch) return;
+      const editor = document.getElementById('residentFeedbackHomeForm');
+      editor.dataset.batchId = batch.id;
+      for (const name of ['bedrooms','bathrooms','square_feet']) editor.elements[name].value = batch[name] ?? '';
+      document.getElementById('residentFeedbackHomeTitle').textContent = `Home details: ${batch.property_code}-${cardNumber(batch.start_number)} through ${cardNumber(batch.end_number)}`;
+      document.getElementById('residentFeedbackHomeMessage').textContent = '';
+      document.getElementById('residentFeedbackHomeDialog').showModal();
+      return;
+    }
     const button = event.target.closest('[data-delete-batch]');
     if (button) void deleteBatch(button.dataset.deleteBatch);
   });
   document.getElementById('residentFeedbackHistoryRefresh').addEventListener('click', () => void loadBatches());
   document.getElementById('residentFeedbackHistoryPrevious').addEventListener('click', () => void loadBatches(state.batchPage - 1));
   document.getElementById('residentFeedbackHistoryNext').addEventListener('click', () => void loadBatches(state.batchPage + 1));
+  document.getElementById('residentFeedbackHomeCancel').addEventListener('click', () => document.getElementById('residentFeedbackHomeDialog').close());
+  document.getElementById('residentFeedbackHomeForm').addEventListener('submit', async event => {
+    event.preventDefault();
+    const editor = event.currentTarget;
+    const button = editor.querySelector('[type="submit"]');
+    if (button.disabled || !editor.reportValidity()) return;
+    button.disabled = true;
+    try {
+      await batchRequest({ action: 'update_batch_home', batch_id: editor.dataset.batchId, ...homeValues(editor) });
+      document.getElementById('residentFeedbackHomeDialog').close();
+      await loadBatches();
+      batchMessage('Home details saved. Existing printed flyers will carry these details to the quote form.');
+    } catch (error) { document.getElementById('residentFeedbackHomeMessage').textContent = error.message; }
+    finally { button.disabled = false; }
+  });
   void loadProperties();
   return true;
 }
@@ -293,6 +322,7 @@ function renderAdminPage() {
           <label>Starting card number<input id="residentFeedbackStartNumber" name="start_number" type="text" inputmode="numeric" pattern="[0-9]{1,6}" maxlength="6" value="001" required /></label>
         </div>
         <div class="resident-feedback-example"><span>Example card ID</span><strong id="residentFeedbackExample">VFH-001</strong></div>
+        <details class="resident-feedback-home-settings"><summary>Home details for quote requests (optional)</summary><p class="resident-feedback-save-note">Only enter a layout if every flyer in this batch is for a home of that size. Residents can confirm or edit these details. Leave them blank for mixed layouts.</p><div class="resident-feedback-fields">${homeFields('residentFeedbackNew')}</div></details>
         <div class="resident-feedback-example resident-feedback-url"><span>Feedback URL pattern</span><strong>turnlypros.com/f/[secure token]</strong></div>
         <button class="primary-action resident-feedback-submit" type="submit">Generate flyer PDF</button>
         <p id="residentFeedbackMessage" class="resident-feedback-notice" role="status" aria-live="polite"></p>
@@ -311,7 +341,8 @@ function renderAdminPage() {
       <p id="residentFeedbackHistoryMessage" class="resident-feedback-notice" role="status" aria-live="polite"></p>
       <div id="residentFeedbackHistoryList"></div>
       <div class="resident-feedback-history-pagination"><button class="primary-action" id="residentFeedbackHistoryPrevious" type="button" disabled>Previous</button><span id="residentFeedbackHistoryPage"></span><button class="primary-action" id="residentFeedbackHistoryNext" type="button" disabled>Next</button></div>
-    </section>`;
+    </section>
+    <dialog id="residentFeedbackHomeDialog" class="resident-feedback-home-dialog" aria-labelledby="residentFeedbackHomeTitle"><form id="residentFeedbackHomeForm"><h3 id="residentFeedbackHomeTitle">Home details</h3><p>These defaults apply to every flyer in this batch. Enter them only for a shared home layout; leave blank for mixed layouts. Residents can edit them when requesting a quote.</p><div class="resident-feedback-fields">${homeFields('residentFeedbackEdit')}</div><p id="residentFeedbackHomeMessage" role="status"></p><div class="resident-feedback-batch-actions"><button class="primary-action" type="submit">Save home details</button><button class="primary-action" type="button" id="residentFeedbackHomeCancel">Cancel</button></div></form></dialog>`;
   bindPage();
   try {
     document.getElementById('residentFeedbackDesignPreview').innerHTML = flyerSvg({ card_number: 1 }, 'YOUR PROPERTY', 'CODE', { preview: true });

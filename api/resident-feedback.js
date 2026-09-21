@@ -74,7 +74,7 @@ module.exports = async function handler(req, res) {
   const client = admin.client;
 
   try {
-    if (['create_batch', 'list_batches', 'delete_batch'].includes(request.action)) {
+    if (['create_batch', 'list_batches', 'delete_batch', 'update_batch_home'].includes(request.action)) {
       const access = await requireAdmin(client, req);
       if (access.error) return sendJson(res, access.status || 403, { error: access.error });
 
@@ -82,7 +82,7 @@ module.exports = async function handler(req, res) {
         const pageSize = 20;
         const start = (request.page - 1) * pageSize;
         const result = await client.from('resident_feedback_batches')
-          .select('id,property_name,property_code,start_number,end_number,card_count,created_at', { count: 'exact' })
+          .select('id,property_name,property_code,start_number,end_number,card_count,created_at,bedrooms,bathrooms,square_feet', { count: 'exact' })
           .order('created_at', { ascending: false }).order('id', { ascending: false }).range(start, start + pageSize - 1);
         if (result.error) return sendJson(res, 503, { error: 'Unable to load saved batches. Please retry.' });
         return sendJson(res, 200, { ok: true, batches: result.data || [], page: request.page, total: result.count || 0, page_size: pageSize });
@@ -96,6 +96,13 @@ module.exports = async function handler(req, res) {
         }
         if (!result.data) return sendJson(res, 404, { error: 'This batch has already been deleted. Refresh the batch list.' });
         return sendJson(res, 200, { ok: true, deleted: result.data });
+      }
+
+      if (request.action === 'update_batch_home') {
+        const result = await client.from('resident_feedback_batches').update({ bedrooms: request.bedrooms, bathrooms: request.bathrooms, square_feet: request.square_feet }).eq('id', request.batch_id).select('id').maybeSingle();
+        if (result.error) return sendJson(res, 503, { error: 'Unable to save home details. Please retry.' });
+        if (!result.data) return sendJson(res, 404, { error: 'This batch no longer exists. Refresh the batch list.' });
+        return sendJson(res, 200, { ok: true });
       }
 
       const propertyResult = await client.from('portal_properties').select('id,name,property_name').eq('id', request.property_id).maybeSingle();
@@ -117,9 +124,10 @@ module.exports = async function handler(req, res) {
       });
       // A single database transaction saves the batch and all 2,000 cards.
       // Return scalar metadata, avoiding PostgREST's default 1,000-row response cap.
-      const insert = await client.rpc('create_resident_feedback_batch', {
+      const insert = await client.rpc('create_resident_feedback_batch_with_home', {
         p_batch_id: batchId, p_property_id: property.id, p_property_code: request.property_code,
-        p_start_number: request.start_number, p_token_hashes: cards.map(card => card.token_hash), p_created_by: access.user.id
+        p_start_number: request.start_number, p_token_hashes: cards.map(card => card.token_hash), p_created_by: access.user.id,
+        p_bedrooms: request.bedrooms ?? null, p_bathrooms: request.bathrooms ?? null, p_square_feet: request.square_feet ?? null
       });
       if (insert.error) {
         if (insert.error.code === '23505') return sendJson(res, 409, { error: residentFeedbackErrorMessage(insert.error.message) });
@@ -130,6 +138,11 @@ module.exports = async function handler(req, res) {
         cards: cards.map(card => ({ card_number: card.card_number, feedback_url: card.feedback_url })) });
     }
 
+    if (request.action === 'quote_context') {
+      const result = await client.rpc('get_resident_feedback_quote_context', { p_token: request.token });
+      if (result.error) return sendJson(res, 503, { error: 'Unable to load home details. You can enter them yourself.' });
+      return sendJson(res, 200, { ok: true, context: result.data || null });
+    }
     if (request.action === 'resolve') {
       const result = await client.rpc('resolve_resident_feedback_card', { p_token: request.token });
       if (result.error) {

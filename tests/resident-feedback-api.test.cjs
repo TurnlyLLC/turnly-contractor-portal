@@ -30,7 +30,7 @@ async function request(body, {signedIn=true,role='admin',rpcError=null}={}) {
 }
 
 test('batch endpoints require verified admin access',async()=>{
-  for(const action of ['list_batches','delete_batch','create_batch']) {
+  for(const action of ['list_batches','delete_batch','create_batch','update_batch_home']) {
     const body={action,batch_id:batch,confirm_delete:true,property_id:property,property_code:'VFH',start_number:1,count:2000};
     for(const [options,status] of [[{signedIn:false},401],[{role:'contractor'},403]]) {
       const result=await request(body,options);
@@ -46,7 +46,7 @@ test('API creates all 2,000 secure links through one atomic RPC',async()=>{
   assert.equal(result.payload.cards.at(-1).card_number,2099);
   assert.equal(new Set(result.payload.cards.map(c=>c.feedback_url)).size,2000);
   assert.equal(result.calls.length,1);
-  assert.equal(result.calls[0].name,'create_resident_feedback_batch');
+  assert.equal(result.calls[0].name,'create_resident_feedback_batch_with_home');
   assert.equal(result.calls[0].args.p_batch_id,result.payload.batch_id);
   for(let i=0;i<2000;i++) assert.equal(result.calls[0].args.p_token_hashes[i],createHash('sha256').update(result.payload.cards[i].feedback_url.split('/').at(-1)).digest('hex'));
 });
@@ -59,6 +59,18 @@ test('list is paginated and failed deletion reports no success',async()=>{
   assert.equal(removed.status,200);
   assert.equal(removed.calls[0].args.p_batch_id,batch);
   const failed=await request({action:'delete_batch',batch_id:batch,confirm_delete:true},{rpcError:{code:'test_failure'}});
+  assert.equal(failed.status,503);
+  assert.equal(failed.payload.ok,undefined);
+});
+
+test('quote context works without sign-in and reports lookup failures',async()=>{
+  const token='a'.repeat(64);
+  const result=await request({action:'quote_context',token},{signedIn:false});
+  assert.equal(result.status,200);
+  assert.equal(result.payload.context.property_name,'Vetra Forest Hills');
+  assert.equal(result.calls[0].name,'get_resident_feedback_quote_context');
+  assert.equal(result.calls[0].args.p_token,token);
+  const failed=await request({action:'quote_context',token},{signedIn:false,rpcError:{code:'test_failure'}});
   assert.equal(failed.status,503);
   assert.equal(failed.payload.ok,undefined);
 });

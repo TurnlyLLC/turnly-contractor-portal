@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-contractor-pwa-v20260921-feedback-batches";
+const CACHE_NAME = "turnly-contractor-pwa-v20260921-feedback-quote";
 
 const PRECACHE_URLS = [
   "/",

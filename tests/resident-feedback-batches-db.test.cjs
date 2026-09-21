@@ -29,6 +29,7 @@ test('legacy batches, atomic ream creation, deletion, number reuse and access co
     const card = (await db.query('select id from public.resident_feedback_cards where card_number=1')).rows[0];
     await db.query("insert into public.resident_feedback_responses(request_id,card_id,property_name,property_code,card_number,rating) values ($1,$2,'Vetra Forest Hills','OLD',1,5)", [randomUUID(), card.id]);
     await db.exec(fs.readFileSync(path.join(__dirname, '../supabase/migrations/20260921114448_resident_feedback_batch_management.sql'), 'utf8'));
+    await db.exec(fs.readFileSync(path.join(__dirname, '../supabase/migrations/20260921140937_resident_feedback_quote_context.sql'), 'utf8'));
     const legacy = (await db.query('select * from public.resident_feedback_batches')).rows;
     assert.equal(legacy.length, 1);
     assert.equal(legacy[0].card_count, 5);
@@ -39,6 +40,18 @@ test('legacy batches, atomic ream creation, deletion, number reuse and access co
     assert.equal((await db.query("select card_count from public.resident_feedback_batches where property_code='LEGACY'")).rows[0].card_count, 5);
     const tokens = Array.from({length:2000}, (_,i) => (i+100).toString(16).padStart(64,'0'));
     const create = 'select public.create_resident_feedback_batch($1,$2,$3,$4,$5,$6) as result';
+    const homeBatch = randomUUID();
+    const homeToken = 'b'.repeat(64);
+    await db.query('select public.create_resident_feedback_batch_with_home($1,$2,$3,$4,$5,$6,$7,$8,$9)',[homeBatch,property,'HOME',1,[hash(homeToken)],admin,0,1.5,850]);
+    const context = (await db.query('select get_resident_feedback_quote_context($1) as data',[homeToken])).rows[0].data;
+    assert.deepEqual(context,{property_name:'Vetra Forest Hills',property_code:'HOME',card_number:1,bedrooms:0,bathrooms:1.5,square_feet:850});
+    await db.query('update resident_feedback_batches set square_feet=900 where id=$1',[homeBatch]);
+    assert.equal((await db.query('select get_resident_feedback_quote_context($1) as data',[homeToken])).rows[0].data.square_feet,900);
+    const invalidHome = randomUUID();
+    await assert.rejects(db.query('select public.create_resident_feedback_batch_with_home($1,$2,$3,$4,$5,$6,$7,$8,$9)',[invalidHome,property,'BADHOME',1,[hash('invalidhome')],admin,1,1.3,850]), /check constraint/);
+    assert.equal((await db.query('select count(*)::int as n from resident_feedback_batches where id=$1',[invalidHome])).rows[0].n,0);
+    await db.query('select delete_resident_feedback_batch($1)',[homeBatch]);
+    assert.equal((await db.query('select get_resident_feedback_quote_context($1) as data',[homeToken])).rows[0].data,null);
     const result = await db.query(create, [batch,property,'VFH',1,tokens.map(hash),admin]);
     assert.equal(result.rows[0].result.card_count,2000);
     assert.equal((await db.query('select count(*)::int as n from public.resident_feedback_cards where batch_id=$1',[batch])).rows[0].n,2000);
@@ -66,6 +79,7 @@ test('legacy batches, atomic ream creation, deletion, number reuse and access co
     await assert.rejects(db.query(create,[randomUUID(),property,'DENY',1,[hash('deny')],admin]), /permission denied/);
     await assert.rejects(db.query('select * from public.resident_feedback_batches'), /permission denied/);
     await db.exec('reset role; set role anon');
+    await assert.rejects(db.query('select get_resident_feedback_quote_context($1)',[homeToken]), /permission denied/);
     await assert.rejects(db.query('select delete_resident_feedback_batch($1)',[batch]), /permission denied/);
   } finally { await db.close(); }
 });
