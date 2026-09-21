@@ -15,8 +15,17 @@ test('accepts bounded QR batches and normalizes the property code', () => {
 });
 
 test('rejects invalid batch sizes and ranges', () => {
-  assert.throws(() => validateResidentFeedbackRequest({ action: 'create_batch', property_id: propertyId, property_code: 'VFH', count: 501, start_number: 1 }), /between 1 and 500/);
+  assert.throws(() => validateResidentFeedbackRequest({ action: 'create_batch', property_id: propertyId, property_code: 'VFH', count: 2001, start_number: 1 }), /between 1 and 2000/);
+  assert.equal(validateResidentFeedbackRequest({ action: 'create_batch', property_id: propertyId, property_code: 'VFH', count: 2000, start_number: 1 }).count, 2000);
   assert.throws(() => validateResidentFeedbackRequest({ action: 'create_batch', property_id: propertyId, property_code: 'VFH', count: 5, start_number: 999999 }), /starting card number/);
+});
+
+test('batch deletion requires a specific batch and explicit confirmation', () => {
+  assert.deepEqual(validateResidentFeedbackRequest({ action: 'delete_batch', batch_id: propertyId, confirm_delete: true }), { action: 'delete_batch', batch_id: propertyId });
+  assert.throws(() => validateResidentFeedbackRequest({ action: 'delete_batch', batch_id: propertyId }), /Confirm deletion/);
+  assert.throws(() => validateResidentFeedbackRequest({ action: 'delete_batch', batch_id: 'all', confirm_delete: true }), /saved batch/);
+  assert.deepEqual(validateResidentFeedbackRequest({ action: 'list_batches' }), { action: 'list_batches', page: 1 });
+  assert.throws(() => validateResidentFeedbackRequest({ action: 'list_batches', page: -1 }), /valid batch page/);
 });
 
 test('accepts resident ratings without requiring personal or property details', () => {

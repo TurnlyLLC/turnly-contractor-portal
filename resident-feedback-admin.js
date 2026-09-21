@@ -1,10 +1,10 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
-import { buildFlyerPdf, flyerSvg, loadFlyerArtwork } from './resident-feedback-pdf.mjs?v=20260918-flyer';
+import { buildFlyerPdf, flyerSvg, loadFlyerArtwork } from './resident-feedback-pdf.mjs?v=20260921-batches';
 
 const env = window.__ENV || {};
 const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY ? createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY) : null;
 const root = document.getElementById('adminSuiteApp');
-const state = { properties: [], propertyId: '', propertyCode: '', codeEdited: false, creating: false, downloading: false, cards: [], batchPropertyName: '', batchPropertyCode: '', error: '', status: '' };
+const state = { properties: [], propertyId: '', propertyCode: '', codeEdited: false, creating: false, downloading: false, deleting: false, loadingBatches: false, batches: [], batchPage: 1, batchTotal: 0, batchPageSize: 20, batchId: '', cards: [], batchPropertyName: '', batchPropertyCode: '', error: '', status: '' };
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[char]);
 const messageNode = () => document.getElementById('residentFeedbackMessage');
 const endpointReady = () => Boolean(supabase);
@@ -51,6 +51,89 @@ async function loadProperties() {
   select.disabled = false;
   if (!state.properties.length) message('No properties are available yet. Add a property in the portal, then return here.');
   else if (note) message('');
+  await loadBatches();
+}
+
+async function batchRequest(body) {
+  const session = await supabase.auth.getSession();
+  const accessToken = session.data?.session?.access_token;
+  if (!accessToken) throw new Error('Your admin session has expired. Sign in and try again.');
+  const response = await fetch('/api/resident-feedback', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify(body)
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || !result.ok) throw new Error(result.error || 'Unable to manage saved batches. Please retry.');
+  return result;
+}
+
+function batchMessage(text, error = false) {
+  const node = document.getElementById('residentFeedbackHistoryMessage');
+  if (node) { node.textContent = text; node.classList.toggle('error', error); }
+}
+
+function renderHistory() {
+  const list = document.getElementById('residentFeedbackHistoryList');
+  if (!list) return;
+  const busy = state.creating || state.downloading || state.deleting || state.loadingBatches;
+  list.innerHTML = state.batches.map(batch => `<article class="resident-feedback-history-row">
+    <div><strong>${esc(batch.property_name)}</strong><span>${esc(batch.property_code)}-${cardNumber(batch.start_number)} through ${esc(batch.property_code)}-${cardNumber(batch.end_number)}</span>
+    <small>${Number(batch.card_count).toLocaleString()} flyers · ${Math.ceil(batch.card_count / 4).toLocaleString()} pages · ${esc(new Date(batch.created_at).toLocaleString())}</small></div>
+    <button type="button" class="resident-feedback-delete" data-delete-batch="${esc(batch.id)}" ${busy ? 'disabled' : ''} aria-label="Delete batch ${esc(batch.property_code)}-${cardNumber(batch.start_number)} through ${esc(batch.property_code)}-${cardNumber(batch.end_number)}">Delete batch</button>
+  </article>`).join('') || '<p class="resident-feedback-save-note">No saved batches.</p>';
+  document.getElementById('residentFeedbackHistoryPage').textContent = `Page ${state.batchPage} of ${Math.max(1, Math.ceil(state.batchTotal / state.batchPageSize))} · ${state.batchTotal} batches`;
+  document.getElementById('residentFeedbackHistoryPrevious').disabled = busy || state.batchPage <= 1;
+  document.getElementById('residentFeedbackHistoryNext').disabled = busy || state.batchPage * state.batchPageSize >= state.batchTotal;
+  document.getElementById('residentFeedbackHistoryRefresh').disabled = busy;
+}
+
+async function loadBatches(page = state.batchPage) {
+  if (state.loadingBatches) return;
+  state.loadingBatches = true;
+  batchMessage('Loading saved batches…');
+  renderHistory();
+  try {
+    let result = await batchRequest({ action: 'list_batches', page });
+    const lastPage = Math.max(1, Math.ceil(result.total / result.page_size));
+    if (page > lastPage) result = await batchRequest({ action: 'list_batches', page: lastPage });
+    state.batches = result.batches;
+    state.batchPage = result.page;
+    state.batchPageSize = result.page_size;
+    state.batchTotal = result.total;
+    batchMessage('');
+  } catch (error) { batchMessage(error.message, true); }
+  finally { state.loadingBatches = false; renderHistory(); }
+}
+
+async function deleteBatch(id) {
+  if (state.creating || state.downloading || state.deleting || state.loadingBatches) return;
+  const batch = state.batches.find(item => item.id === id);
+  if (!batch) return;
+  if (!window.confirm(`Delete ${batch.card_count.toLocaleString()} QR codes for ${batch.property_name}?\n\n${batch.property_code}-${cardNumber(batch.start_number)} through ${batch.property_code}-${cardNumber(batch.end_number)}\n\nThese printed QR links will stop working, and the card numbers will be available for reuse. Feedback already received will be kept. This cannot be undone.`)) return;
+  state.deleting = true;
+  renderHistory();
+  const generate = document.querySelector('#residentFeedbackGeneratorForm [type="submit"]');
+  const download = document.getElementById('residentFeedbackDownload');
+  generate.disabled = true;
+  download.disabled = true;
+  batchMessage('Deleting batch and its QR codes…');
+  try {
+    await batchRequest({ action: 'delete_batch', batch_id: id, confirm_delete: true });
+    if (state.batchId === id) {
+      state.batchId = '';
+      state.cards = [];
+      renderBatch('', '');
+      message('This batch was deleted. Its downloaded PDF now contains inactive QR codes.');
+    }
+    await loadBatches();
+    batchMessage(`Deleted ${batch.card_count.toLocaleString()} QR codes. Card numbers are available for reuse. Feedback received was kept.`);
+  } catch (error) { batchMessage(error.message, true); }
+  finally {
+    state.deleting = false;
+    generate.disabled = false;
+    download.disabled = false;
+    renderHistory();
+  }
 }
 
 function makeCardMarkup(card, propertyName, propertyCode) {
@@ -59,8 +142,9 @@ function makeCardMarkup(card, propertyName, propertyCode) {
 }
 
 async function downloadBatch({ automatic = false } = {}) {
-  if (state.downloading || (state.creating && !automatic) || !state.cards.length) return;
+  if (state.deleting || state.downloading || (state.creating && !automatic) || !state.cards.length) return;
   state.downloading = true;
+  renderHistory();
   const button = document.getElementById('residentFeedbackDownload');
   const generate = document.querySelector('#residentFeedbackGeneratorForm [type="submit"]');
   if (button) button.disabled = true;
@@ -82,13 +166,14 @@ async function downloadBatch({ automatic = false } = {}) {
     message(`Your batch is saved. ${error.message || 'Unable to prepare the PDF.'} Use Download PDF to retry without generating new codes.`, true);
   } finally {
     state.downloading = false;
+    renderHistory();
     if (button) button.disabled = false;
     if (generate) generate.disabled = state.creating;
   }
 }
 
 async function createBatch(form) {
-  if (state.creating || state.downloading) return;
+  if (state.creating || state.downloading || state.deleting) return;
   if (!endpointReady()) { message('Supabase is not configured in the portal.', true); return; }
   const property = selectedProperty();
   const count = Number(form.elements.count.value);
@@ -97,9 +182,10 @@ async function createBatch(form) {
   if (!property) { message('Choose a property to create QR cards.', true); return; }
   if (!window.qrcode || !window.PDFLib) { message('The flyer generator is still loading. Wait a moment and try again.', true); return; }
   if (!/^[A-Z0-9]{2,10}$/.test(propertyCode)) { message('Use 2–10 letters or numbers for the property code.', true); return; }
-  if (!Number.isInteger(count) || count < 1 || count > 500) { message('Choose between 1 and 500 QR cards.', true); return; }
+  if (!Number.isInteger(count) || count < 1 || count > 2000) { message('Choose between 1 and 2,000 QR cards.', true); return; }
   if (!Number.isInteger(start) || start < 1 || start + count - 1 > 999999) { message('Choose a starting number that fits within six digits.', true); return; }
   state.creating = true;
+  renderHistory();
   const button = form.querySelector('[type="submit"]');
   const downloadButton = document.getElementById('residentFeedbackDownload');
   button.disabled = true;
@@ -120,12 +206,14 @@ async function createBatch(form) {
     const result = await response.json().catch(() => ({}));
     if (!response.ok || !result.ok) throw new Error(result.error || 'Unable to create this QR batch. Check the resident feedback migration and retry.');
     state.cards = result.cards || [];
+    state.batchId = result.batch_id;
     state.batchPropertyName = result.property_name;
     state.batchPropertyCode = result.property_code;
     renderBatch(result.property_name, result.property_code);
     message(`${state.cards.length} flyers saved for ${result.property_name}. Preparing your PDF…`);
     document.getElementById('residentFeedbackBatch')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     await downloadBatch({ automatic: true });
+    await loadBatches(1);
   } catch (error) {
     const text = String(error?.message || '');
     message(text.includes('resident_feedback_cards') || text.includes('already exist')
@@ -133,6 +221,7 @@ async function createBatch(form) {
       : text || 'Unable to create this QR batch. Please try again.', true);
   } finally {
     state.creating = false;
+    renderHistory();
     button.disabled = false;
     if (downloadButton) downloadButton.disabled = false;
     button.textContent = 'Generate flyer PDF';
@@ -173,6 +262,13 @@ function bindPage() {
   });
   form.addEventListener('submit', event => { event.preventDefault(); void createBatch(form); });
   document.getElementById('residentFeedbackDownload')?.addEventListener('click', () => void downloadBatch());
+  document.getElementById('residentFeedbackHistoryList').addEventListener('click', event => {
+    const button = event.target.closest('[data-delete-batch]');
+    if (button) void deleteBatch(button.dataset.deleteBatch);
+  });
+  document.getElementById('residentFeedbackHistoryRefresh').addEventListener('click', () => void loadBatches());
+  document.getElementById('residentFeedbackHistoryPrevious').addEventListener('click', () => void loadBatches(state.batchPage - 1));
+  document.getElementById('residentFeedbackHistoryNext').addEventListener('click', () => void loadBatches(state.batchPage + 1));
   void loadProperties();
   return true;
 }
@@ -189,11 +285,11 @@ function renderAdminPage() {
     <section class="resident-feedback-generator">
       <form id="residentFeedbackGeneratorForm" class="resident-feedback-form-panel">
         <h3>Resident Feedback Flyer Generator</h3>
-        <p>Choose the property and number range. Download the Turnly flyer as a PDF, with four unique flyers on each Letter page.</p>
+        <p>One full ream: 2,000 unique flyers, four per Letter page, on 500 pages. Choose the property and starting number, then download your PDF.</p>
         <div class="resident-feedback-fields">
           <label class="wide">Property<select id="residentFeedbackProperty" name="property_id" required disabled><option>Loading properties…</option></select></label>
           <label>Property code<input id="residentFeedbackPropertyCode" name="property_code" type="text" value="" minlength="2" maxlength="10" autocomplete="off" required aria-describedby="residentFeedbackCodeHelp" /><small id="residentFeedbackCodeHelp">2–10 letters or numbers. We’ll suggest a code from the property name.</small></label>
-          <label>Number of QR cards<input id="residentFeedbackCount" name="count" type="number" min="1" max="500" step="1" value="100" required /></label>
+          <label>Number of flyers<input id="residentFeedbackCount" name="count" type="number" min="1" max="2000" step="1" value="2000" required /><small>2,000 flyers = 500 pages (1 full ream). Smaller batches are also supported.</small></label>
           <label>Starting card number<input id="residentFeedbackStartNumber" name="start_number" type="text" inputmode="numeric" pattern="[0-9]{1,6}" maxlength="6" value="001" required /></label>
         </div>
         <div class="resident-feedback-example"><span>Example card ID</span><strong id="residentFeedbackExample">VFH-001</strong></div>
@@ -209,6 +305,12 @@ function renderAdminPage() {
     <section id="residentFeedbackBatch" class="resident-feedback-batch" hidden>
       <div class="resident-feedback-batch-head"><div><h3>Your flyer PDF</h3><span id="residentFeedbackBatchSummary"></span><p class="resident-feedback-save-note">Keep the downloaded PDF before leaving this page. To print, open the PDF and choose Letter paper at Actual size (100%).</p></div><div class="resident-feedback-batch-actions"><button class="primary-action" id="residentFeedbackDownload" type="button" hidden>Download PDF</button></div></div>
       <div id="residentFeedbackCards" class="resident-feedback-cards"></div>
+    </section>
+    <section class="resident-feedback-batch" aria-labelledby="residentFeedbackHistoryTitle">
+      <div class="resident-feedback-batch-head"><div><h3 id="residentFeedbackHistoryTitle">Previous batches</h3><p class="resident-feedback-save-note">Delete a batch to remove its saved QR codes and free its card numbers. Printed links will stop working. Feedback already received is kept.</p></div><button class="primary-action" id="residentFeedbackHistoryRefresh" type="button">Refresh batches</button></div>
+      <p id="residentFeedbackHistoryMessage" class="resident-feedback-notice" role="status" aria-live="polite"></p>
+      <div id="residentFeedbackHistoryList"></div>
+      <div class="resident-feedback-history-pagination"><button class="primary-action" id="residentFeedbackHistoryPrevious" type="button" disabled>Previous</button><span id="residentFeedbackHistoryPage"></span><button class="primary-action" id="residentFeedbackHistoryNext" type="button" disabled>Next</button></div>
     </section>`;
   bindPage();
   try {

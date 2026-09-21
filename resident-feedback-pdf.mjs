@@ -90,7 +90,7 @@ export function flyerSvg(card, propertyName, propertyCode, { preview = false } =
 }
 
 function validateBatch(cards, propertyName, propertyCode) {
-  if (!Array.isArray(cards) || !cards.length || cards.length > 500) throw new Error('Generate between 1 and 500 flyers first.');
+  if (!Array.isArray(cards) || !cards.length || cards.length > 2000) throw new Error('Generate between 1 and 2,000 flyers first.');
   if (!String(propertyName || '').trim() || !/^[A-Z0-9]{2,10}$/.test(propertyCode)) throw new Error('The batch is missing its property details.');
   const numbers = new Set();
   const links = new Set();

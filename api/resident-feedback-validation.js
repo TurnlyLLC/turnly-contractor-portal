@@ -1,10 +1,22 @@
-const MAX_CARDS_PER_BATCH = 500;
+const MAX_CARDS_PER_BATCH = 2000; // Four flyers per sheet, 500 sheets per ream.
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function validateResidentFeedbackRequest(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Please check the feedback request.');
   const input = value;
   const action = String(input.action || '');
-  if (!['create_batch', 'resolve', 'submit'].includes(action)) throw new Error('Please check the feedback request.');
+  if (!['create_batch', 'list_batches', 'delete_batch', 'resolve', 'submit'].includes(action)) throw new Error('Please check the feedback request.');
+  if (action === 'list_batches') {
+    const page = input.page ?? 1;
+    if (!Number.isInteger(page) || page < 1 || page > 100000) throw new Error('Choose a valid batch page.');
+    return { action, page };
+  }
+  if (action === 'delete_batch') {
+    const batchId = String(input.batch_id || '');
+    if (!UUID.test(batchId)) throw new Error('Choose a saved batch to delete.');
+    if (input.confirm_delete !== true) throw new Error('Confirm deletion of this batch and its QR codes.');
+    return { action, batch_id: batchId };
+  }
 
   const token = input.token == null ? '' : String(input.token);
   if ((action === 'resolve' || action === 'submit') && !/^[a-f0-9]{64}$/.test(token)) throw new Error('This feedback link is not valid.');

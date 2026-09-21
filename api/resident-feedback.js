@@ -1,4 +1,4 @@
-const { createHash, randomBytes } = require('node:crypto');
+const { createHash, randomBytes, randomUUID } = require('node:crypto');
 const { createClient } = require('@supabase/supabase-js');
 const { residentFeedbackErrorMessage, validateResidentFeedbackRequest } = require('./resident-feedback-validation');
 
@@ -28,14 +28,14 @@ function normalizeRole(value) { return String(value || '').trim().toLowerCase().
 
 async function requireAdmin(client, req) {
   const token = bearerToken(req);
-  if (!token) return { error: 'Sign in with an admin account to create QR cards.', status: 401 };
+  if (!token) return { error: 'Sign in with an admin account to manage QR batches.', status: 401 };
   const { data, error } = await client.auth.getUser(token);
   const user = data?.user;
   if (error || !user) return { error: 'Your admin session has expired. Sign in and try again.', status: 401 };
   if (allowedAdminRoles.has(normalizeRole(user.app_metadata?.role))) return { user };
   const profile = await client.from('profiles').select('id,role').eq('id', user.id).maybeSingle();
   if (profile.error) return { error: 'Unable to verify admin access. Please retry.', status: 503 };
-  if (!allowedAdminRoles.has(normalizeRole(profile.data?.role))) return { error: 'Only an admin can create resident QR cards.', status: 403 };
+  if (!allowedAdminRoles.has(normalizeRole(profile.data?.role))) return { error: 'Only an admin can manage resident QR batches.', status: 403 };
   return { user };
 }
 
@@ -74,35 +74,60 @@ module.exports = async function handler(req, res) {
   const client = admin.client;
 
   try {
-    if (request.action === 'create_batch') {
+    if (['create_batch', 'list_batches', 'delete_batch'].includes(request.action)) {
       const access = await requireAdmin(client, req);
       if (access.error) return sendJson(res, access.status || 403, { error: access.error });
+
+      if (request.action === 'list_batches') {
+        const pageSize = 20;
+        const start = (request.page - 1) * pageSize;
+        const result = await client.from('resident_feedback_batches')
+          .select('id,property_name,property_code,start_number,end_number,card_count,created_at', { count: 'exact' })
+          .order('created_at', { ascending: false }).order('id', { ascending: false }).range(start, start + pageSize - 1);
+        if (result.error) return sendJson(res, 503, { error: 'Unable to load saved batches. Please retry.' });
+        return sendJson(res, 200, { ok: true, batches: result.data || [], page: request.page, total: result.count || 0, page_size: pageSize });
+      }
+
+      if (request.action === 'delete_batch') {
+        const result = await client.rpc('delete_resident_feedback_batch', { p_batch_id: request.batch_id });
+        if (result.error) {
+          console.error('Resident feedback batch deletion failed', { code: result.error.code || 'unknown' });
+          return sendJson(res, 503, { error: 'Unable to delete this batch. No partial deletion was saved. Please retry.' });
+        }
+        if (!result.data) return sendJson(res, 404, { error: 'This batch has already been deleted. Refresh the batch list.' });
+        return sendJson(res, 200, { ok: true, deleted: result.data });
+      }
+
       const propertyResult = await client.from('portal_properties').select('id,name,property_name').eq('id', request.property_id).maybeSingle();
       const property = propertyResult.data;
       if (propertyResult.error || !property) return sendJson(res, 400, { error: 'Choose an existing property and try again.' });
       const propertyName = String(property.property_name || property.name || '').trim();
       if (!propertyName) return sendJson(res, 400, { error: 'That property needs a name before QR cards can be created.' });
 
+      const batchId = randomUUID();
       const cards = Array.from({ length: request.count }, (_, index) => {
         const token = randomBytes(32).toString('hex');
         const card_number = request.start_number + index;
         return {
           token,
           card_number,
-          row: { portal_property_id: property.id, property_name: propertyName, property_code: request.property_code,
-            card_number, token_hash: tokenHash(token), created_by: access.user.id },
+          token_hash: tokenHash(token),
           feedback_url: `https://turnlypros.com/f/${token}`
         };
       });
-      const insert = await client.from('resident_feedback_cards').insert(cards.map(card => card.row)).select('id,card_number');
+      // A single database transaction saves the batch and all 2,000 cards.
+      // Return scalar metadata, avoiding PostgREST's default 1,000-row response cap.
+      const insert = await client.rpc('create_resident_feedback_batch', {
+        p_batch_id: batchId, p_property_id: property.id, p_property_code: request.property_code,
+        p_start_number: request.start_number, p_token_hashes: cards.map(card => card.token_hash), p_created_by: access.user.id
+      });
       if (insert.error) {
         if (insert.error.code === '23505') return sendJson(res, 409, { error: residentFeedbackErrorMessage(insert.error.message) });
         console.error('Resident feedback batch save failed', { code: insert.error.code || 'unknown' });
         return sendJson(res, 503, { error: 'Unable to save this QR batch. Apply the resident feedback migration and retry.' });
       }
-      const idByNumber = new Map((insert.data || []).map(row => [row.card_number, row.id]));
-      return sendJson(res, 200, { ok: true, property_name: propertyName, property_code: request.property_code,
-        cards: cards.map(card => ({ id: idByNumber.get(card.card_number), card_number: card.card_number, feedback_url: card.feedback_url })) });
+      return sendJson(res, 200, { ok: true, batch_id: batchId, property_name: insert.data?.property_name || propertyName, property_code: request.property_code,
+        cards: cards.map(card => ({ card_number: card.card_number, feedback_url: card.feedback_url })) });
     }
 
     if (request.action === 'resolve') {
