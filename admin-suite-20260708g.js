@@ -12,7 +12,7 @@ import {
   writeAdminPreviewContext
 } from "./admin-preview-context.js?v=20260908-sales-preview";
 
-import { createResidentFeedbackWidget } from "./resident-feedback-widget.js?v=20260918";
+import { createResidentFeedbackWidget } from "./resident-feedback-widget.js?v=20260921-tabs";
 
 const suiteEnv = window.__ENV || {};
 const suiteSupabase = suiteEnv.SUPABASE_URL && suiteEnv.SUPABASE_ANON_KEY
@@ -66,6 +66,7 @@ const navSections = [
       { key: "checklists", label: "Checklists", href: "checklists.html", icon: "file-check" },
       { key: "qa-analytics", label: "QA Analytics", href: "qa-analytics.html", icon: "bar-chart" },
       { key: "resident-feedback", label: "Resident Feedback", href: "resident-feedback.html", icon: "star" },
+      { key: "qr-tracker", label: "QR Tracker", href: "qr-tracker.html", icon: "layout-grid" },
       { key: "videos", label: "Video Library", href: "videos.html", icon: "video" }
     ]
   },
@@ -766,7 +767,12 @@ const pages = {
   },
   "resident-feedback": {
     title: "Resident Feedback",
-    subtitle: "Create property QR cards and review resident feedback.",
+    subtitle: "Read residents’ ratings and feedback, newest first.",
+    render: () => '<div id="residentFeedbackResponsesMount" class="resident-feedback-responses-mount"></div>'
+  },
+  "qr-tracker": {
+    title: "QR Tracker",
+    subtitle: "Generate QR flyers and manage saved batches by property.",
     render: () => '<div id="residentFeedbackAdminMount" class="resident-feedback-admin-mount"></div>'
   },
   "reports-operations": {

@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-contractor-pwa-v20260921-feedback-quote";
+const CACHE_NAME = "turnly-contractor-pwa-v20260921-feedback-tabs";
 
 const PRECACHE_URLS = [
   "/",
@@ -58,6 +58,7 @@ const PRECACHE_URLS = [
   "/sales-contracts.html",
   "/sales-tasks.html",
   "/resident-feedback.html",
+  "/qr-tracker.html",
   "/sales-portal-20260910a.css",
   "/sales-portal.js",
   "/admin-sales-portal.css",
@@ -113,6 +114,7 @@ function isAdminRuntimeAsset(request) {
     || pathname === "/admin-suite.css"
     || pathname === "/website-inquiries-widget.js"
     || pathname === "/resident-feedback-admin.js"
+    || pathname === "/resident-feedback-responses.js"
     || pathname === "/resident-feedback-widget.js"
     || pathname === "/resident-feedback.css"
     || pathname === "/admin-regions.js"
