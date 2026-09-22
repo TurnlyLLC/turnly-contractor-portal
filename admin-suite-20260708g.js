@@ -12709,7 +12709,7 @@ function assignmentForm() {
         `<label class="suite-field"><span>Preferred Response Deadline</span><input id="preferred_until" type="datetime-local" /></label>`,
         `<label class="checkbox-field assignment-toggle wide" data-assignment-recurrence-field><input id="auto_renewal" type="checkbox" /> <span>Auto renew this assignment block</span></label>`,
         `<label class="checkbox-field assignment-toggle wide" data-assignment-create-only><input id="assignmentCompleteOnCreate" type="checkbox" /> <span>Mark created assignments complete</span></label>`,
-        `<label class="checkbox-field assignment-toggle wide"><input id="preferred_first" type="checkbox" checked /> <span>Offer to preferred contractors first</span></label>`,
+        `<label class="checkbox-field assignment-toggle wide"><input id="preferred_first" type="checkbox" /> <span>Offer to preferred contractors first</span></label>`,
         preferredContractorDropdownField()
       ])}
       ${assignmentFormSection("Work Details", [
@@ -13157,10 +13157,11 @@ function assignmentBulkUnitSection() {
 function assignmentAssignedContractorField() {
   return `
     <label class="suite-field">
-      <span>Assigned Contractor</span>
-      <select id="assignmentAssignedContractor">
-        <option value="">Unassigned</option>
+      <span>Assigned Contractor (optional)</span>
+      <select id="assignmentAssignedContractor" aria-describedby="assignmentContractorHelp">
+        <option value="">Unassigned — open for pickup</option>
       </select>
+      <small id="assignmentContractorHelp">Leave unassigned with Open status so eligible contractors can pick up this job.</small>
     </label>
   `;
 }
@@ -13685,7 +13686,7 @@ function handleAssignmentChange(event) {
     renderAssignmentBulkUnitPicker();
   }
   if (event.target.matches("#assignmentAssignedContractor")) {
-    updateAssignmentAssignedContractorControls();
+    updateAssignmentAssignedContractorControls({ unassign: !event.target.value });
   }
   if (event.target.matches("#assignmentCompleteOnCreate")) {
     syncAssignmentCompleteOnCreateStatus();
@@ -14062,7 +14063,7 @@ function populateAssignmentAssignedContractorSelect() {
   if (!select) return;
   const selected = select.value;
   const options = getAssignmentContractorOptions();
-  select.innerHTML = `<option value="">Unassigned</option>${options.map((contractor) => {
+  select.innerHTML = `<option value="">Unassigned — open for pickup</option>${options.map((contractor) => {
     const label = [contractor.name, contractor.email].filter(Boolean).join(" - ");
     return `<option value="${esc(contractor.id)}">${esc(label || "Contractor")}</option>`;
   }).join("")}`;
@@ -14159,9 +14160,22 @@ function syncAssignmentCompleteOnCreateStatus() {
   if (complete && status) status.value = "completed";
 }
 
-function updateAssignmentAssignedContractorControls() {
+function updateAssignmentAssignedContractorControls({ unassign = false } = {}) {
   const contractor = readAssignedAssignmentContractor();
   const status = document.getElementById("assignment_status");
+  if (unassign && !contractor?.id) {
+    if (status) status.value = "open";
+    const completeOnCreate = document.getElementById("assignmentCompleteOnCreate");
+    if (completeOnCreate) completeOnCreate.checked = false;
+    const preferredFirst = document.getElementById("preferred_first");
+    if (preferredFirst) preferredFirst.checked = false;
+    document.querySelectorAll("[data-assignment-contractor-option]").forEach((input) => {
+      if (!input.checked) return;
+      input.checked = false;
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    updateAssignmentContractorDropdownLabel();
+  }
   if (contractor?.id && status && assignmentStatusFormValue(status.value) === "open") {
     status.value = "claimed";
   }
@@ -14481,6 +14495,8 @@ function clearAssignmentForm(options = {}) {
   if (bulkToggle) bulkToggle.checked = false;
   const completeToggle = document.getElementById("assignmentCompleteOnCreate");
   if (completeToggle) completeToggle.checked = false;
+  const preferredToggle = document.getElementById("preferred_first");
+  if (preferredToggle) preferredToggle.checked = false;
   updateAssignmentContractorDropdownLabel();
   updateAssignmentAssignedContractorControls();
   updateAssignmentRecurrenceVisibility();
@@ -14617,7 +14633,7 @@ function collectAssignmentPayloads() {
   const assignedContractor = readAssignedAssignmentContractor();
   const selectedStatus = assignmentSelectedStatusForCreate(assignedContractor);
   if (assignmentRequiresAssignedContractor(selectedStatus) && !assignedContractor?.id) {
-    throw new Error("Choose an Assigned Contractor before posting claimed, in-progress, or completed assignments.");
+    throw new Error("To let contractors pick up this job, choose Open status and leave Assigned Contractor unassigned. Claimed, in-progress, and completed assignments require a contractor.");
   }
   const directAssignment = Boolean(assignedContractor?.id);
   const preferredFirst = !directAssignment && selectedStatus === "open" && document.getElementById("preferred_first")?.checked && selectedContractors.length > 0;
