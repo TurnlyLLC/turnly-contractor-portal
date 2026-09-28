@@ -1797,7 +1797,15 @@ function renderFilters(options = {}) {
         ${icon("search")}
         <input id="salesPageSearch" type="search" value="${esc(state.search)}" placeholder="${esc(options.placeholder || "Search records...")}" />
       </label>
-      <select class="sales-filter" data-filter-owner>${ownerOptions}</seleadFilters() {
+      <select class="sales-filter" data-filter-owner>${ownerOptions}</select>
+      <select class="sales-filter" data-filter-stage>${stageOptions}</select>
+      ${options.statuses ? `<select class="sales-filter" data-filter-status>${statusOptions}</select>` : `<span></span>`}
+      ${isSalesAdmin() ? `<button class="sales-primary-button" type="button" data-open-lead>${icon("plus")}New Prospect</button>` : ""}
+    </div>
+  `;
+}
+
+function renderLeadFilters() {
   return `
     <div class="sales-lead-filter-row">
       <label class="sales-search">
@@ -1810,7 +1818,9 @@ function renderFilters(options = {}) {
 
 function renderStageTabs() {
   return `
-    <div class="sales-tabs" role="tablist" aria-label==> `
+    <div class="sales-tabs" role="tablist" aria-label="Pipeline stages">
+      <button class="sales-tab-button ${state.stageFilter === "all" ? "active" : ""}" type="button" data-set-stage-filter="all">All</button>
+      ${stageDefs.map((stage) => `
         <button class="sales-tab-button ${state.stageFilter === stage.id ? "active" : ""}" type="button" data-set-stage-filter="${stage.id}">
           ${esc(stage.label)}
         </button>
@@ -1832,13 +1842,20 @@ function renderLeadsPage() {
       <button class="sales-focus-start-button" type="button" data-enter-lead-focus ${focusRows.length ? "" : "disabled"}>
         <span>${icon("check")}</span>
         <strong>Let's Get To Work</strong>
-        <small>${focusRows.length ? `${number(focusRows.length)} total prospect${focusRows.length === 1 ? "" : "s"}` : canManageLeads ? "Upload prospects to begin" : "No prospects are available yet  <div>
+        <small>${focusRows.length ? `${number(focusRows.length)} total prospect${focusRows.length === 1 ? "" : "s"}` : canManageLeads ? "Upload prospects to begin" : "No prospects are available yet"}</small>
+      </button>
+    </section>
+    <section class="sales-leads-layout">
+      <article class="sales-panel sales-leads-panel">
+        <div class="sales-panel-header">
+          <div>
             <h2>Prospect List</h2>
             <p>Name, address, phone, stage, and next steps.</p>
           </div>
           ${canManageLeads ? `<div class="sales-row-actions">
             <button class="sales-secondary-button" type="button" data-open-import>${icon("upload")}Upload</button>
-            <button class="sales-secondary-button" type="button" data-open-letton>
+            <button class="sales-secondary-button" type="button" data-open-lead>${icon("plus")}Add Lead</button>
+            <button class="sales-danger-button" type="button" data-delete-selected-leads ${selectedCount ? "" : "disabled"}>${icon("x")}Delete Selected</button>
           </div>` : ""}
         </div>
         ${renderLeadFilters()}
@@ -1861,7 +1878,60 @@ function renderLeadTable(rows) {
   if (!rows.length) {
     return emptyState(
       "No prospects found",
-      canManageLeads ? "Upload a prospect list or create a new ps="sales-secondary-button" type="button" data-select-record="${esc(row.id)}" data-enter-lead-focus>${icon("check")}Focus</button>
+      canManageLeads ? "Upload a prospect list or create a new prospect." : "No prospects match this view yet."
+    );
+  }
+  const sortedRows = sortedLeadRows(rows);
+  const sortHeader = (key, label) => {
+    const active = state.leadSort?.key === key;
+    const direction = active ? state.leadSort.direction : "none";
+    const indicator = active ? (direction === "asc" ? "↑" : "↓") : "↕";
+    return `<th aria-sort="${direction}"><button class="sales-sort-button ${active ? "active" : ""}" type="button" data-lead-sort="${esc(key)}" aria-label="Sort by ${esc(label)} ${active && direction === "asc" ? "descending" : "ascending"}">${esc(label)} <span aria-hidden="true">${indicator}</span></button></th>`;
+  };
+  return `
+    <div class="sales-table-wrap">
+      <table class="sales-table sales-leads-table">
+        <thead>
+          <tr>
+            ${canManageLeads ? "<th></th>" : ""}
+            ${sortHeader("name", "Name")}
+            ${sortHeader("address", "Address")}
+            ${sortHeader("phone", "Phone Number")}
+            ${sortHeader("stage", "Stage")}
+            ${sortHeader("next_step", "Next Steps")}
+            ${sortHeader("notes", "Sales Notes")}
+            ${sortHeader("last_activity", "Last Activity")}
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${sortedRows.map((row) => {
+            const notes = salesNotesFor(row);
+            const notePreview = notes.replace(/\s+/g, " ").trim();
+            return `
+            <tr class="${row.id === state.selectedId ? "active" : ""}">
+              ${canManageLeads ? `<td>
+                <input type="checkbox" data-lead-select="${esc(row.id)}" aria-label="Select ${esc(recordTitle(row))}" ${state.selectedLeadIds.has(row.id) ? "checked" : ""} />
+              </td>` : ""}
+              <td><strong>${esc(recordTitle(row))}</strong></td>
+              <td>${esc(recordAddress(row) || "No address saved")}</td>
+              <td>${esc(row.contact_phone || "No phone saved")}</td>
+              <td>
+                <select class="sales-filter" data-inline-stage="${esc(row.id)}" aria-label="Update stage">
+                  ${stageDefs.map((stage) => `<option value="${stage.id}" ${stageFor(row) === stage.id ? "selected" : ""}>${esc(stage.label)}</option>`).join("")}
+                </select>
+              </td>
+              <td><strong>${esc(row.next_step || "No next step")}</strong><small>${esc(formatDateTime(taskDue(row), { empty: "" }))}</small></td>
+              <td class="sales-notes-cell">
+                <details class="sales-inline-notes">
+                  <summary>${esc(notePreview ? `${notePreview.slice(0, 96)}${notePreview.length > 96 ? "…" : ""}` : "No notes yet")}</summary>
+                  ${notes ? `<p>${esc(notes)}</p>` : ""}
+                </details>
+              </td>
+              <td><small>${esc(formatDateTime(row.last_activity_at || row.updated_at || row.created_at, { empty: "No activity" }))}</small></td>
+              <td>
+                <div class="sales-row-actions compact">
+                  <button class="sales-secondary-button" type="button" data-select-record="${esc(row.id)}" data-enter-lead-focus>${icon("check")}Focus</button>
                   <button class="sales-secondary-button" type="button" data-open-lead="${esc(row.id)}">${icon("more")}Edit</button>
                 </div>
               </td>
@@ -1902,7 +1972,22 @@ function renderFocusStageChecklist(row) {
 function renderFocusQuestionList(row) {
   const focusState = focusStateFor(row);
   const outcome = focusState.qualification_outcome || "";
-  consel)}</p>
+  const needsDetail = outcome === "partial" || outcome === "not_qualified";
+  const showDecisionMaker = focusState.questions.decision_maker === "yes";
+  const showCrewPrice = focusState.questions.cleaning_crew === "yes";
+  const showQuoteEmail = focusState.questions.wants_quote === "yes";
+  return `
+    <section class="sales-focus-info-box sales-focus-question-box">
+      <span>Qualification Questions</span>
+      <div class="sales-focus-question-list">
+        ${focusQuestionDefs.map((question, index) => {
+          const selected = focusState.questions[question.id] || "";
+          const labelId = `focus-question-${question.id}`;
+          return `
+            <div class="sales-focus-question" role="group" aria-labelledby="${esc(labelId)}">
+              <div class="sales-focus-question-copy">
+                <span class="sales-focus-question-number">${number(index + 1)}</span>
+                <p id="${esc(labelId)}">${esc(question.label)}</p>
               </div>
               <div class="sales-yesno-group">
                 ${["yes", "no"].map((value) => `
@@ -1910,7 +1995,16 @@ function renderFocusQuestionList(row) {
                     <input type="radio" name="focus_${esc(question.id)}" value="${esc(value)}" ${selected === value ? "checked" : ""} />
                     <span>${esc(titleCase(value))}</span>
                   </label>
-   ext" value="${esc(row.contact_name || "")}" />
+                `).join("")}
+              </div>
+            </div>
+          `;
+        }).join("")}
+      </div>
+      <div class="sales-focus-followup-fields">
+        <label class="sales-field sales-focus-conditional ${showDecisionMaker ? "" : "is-hidden"}" data-focus-conditional="decision_maker">
+          Decision maker name
+          <input name="contact_name" type="text" value="${esc(row.contact_name || "")}" />
         </label>
         <label class="sales-field sales-focus-conditional ${showCrewPrice ? "" : "is-hidden"}" data-focus-conditional="cleaning_crew">
           Current cleaning quote price
@@ -1923,9 +2017,31 @@ function renderFocusQuestionList(row) {
       </div>
       <div class="sales-focus-outcome-grid" role="group" aria-label="Qualification outcome">
         <label class="sales-focus-outcome-card met">
-          <input type="radio" name="focus_qualification_outcome" value="met" ${outcome === "met" ? "checked" : ales-field sales-focus-outcome-detail ${needsDetail ? "" : "is-hidden"}" data-focus-outcome-detail-wrap>
+          <input type="radio" name="focus_qualification_outcome" value="met" ${outcome === "met" ? "checked" : ""} />
+          <strong>All qualifications met</strong>
+          <small>Ready for walkthrough</small>
+        </label>
+        <label class="sales-focus-outcome-card partial">
+          <input type="radio" name="focus_qualification_outcome" value="partial" ${outcome === "partial" ? "checked" : ""} />
+          <strong>Some qualifications met</strong>
+          <small>Prompt for more details</small>
+        </label>
+        <label class="sales-focus-outcome-card no">
+          <input type="radio" name="focus_qualification_outcome" value="not_qualified" ${outcome === "not_qualified" ? "checked" : ""} />
+          <strong>Does not qualify</strong>
+          <small>Prompt for the reason</small>
+        </label>
+      </div>
+      <label class="sales-field sales-focus-outcome-detail ${needsDetail ? "" : "is-hidden"}" data-focus-outcome-detail-wrap>
         ${outcome === "not_qualified" ? "Reason lead does not qualify" : "More qualification details"}
-        <textarea name="focus_qualification_detail" rows="3" placeholder="${outcome === "not_qualified" ? "Why does this lead not meet the qualifications?" : "What still need || new Date();
+        <textarea name="focus_qualification_detail" rows="3" placeholder="${outcome === "not_qualified" ? "Why does this lead not meet the qualifications?" : "What still needs to be confirmed?"}">${esc(focusState.qualification_detail || "")}</textarea>
+      </label>
+    </section>
+  `;
+}
+
+function addHoursIso(value, hours) {
+  const date = dateValue(value) || new Date();
   date.setHours(date.getHours() + hours);
   return date.toISOString();
 }
@@ -1938,7 +2054,17 @@ function defaultWalkthroughWindows() {
   while (windows.length < 10) {
     const day = cursor.getDay();
     if (day !== 0 && day !== 6) {
-      [10, 14].forEac label: hour < 12 ? "Morning walkthrough" : "Afternoon walkthrough"
+      [10, 14].forEach((hour) => {
+        if (windows.length >= 10) return;
+        const start = new Date(cursor);
+        start.setHours(hour, 0, 0, 0);
+        const end = new Date(start);
+        end.setHours(end.getHours() + 1);
+        windows.push({
+          id: `default-${start.toISOString()}`,
+          starts_at: start.toISOString(),
+          ends_at: end.toISOString(),
+          label: hour < 12 ? "Morning walkthrough" : "Afternoon walkthrough"
         });
       });
     }
@@ -1956,7 +2082,15 @@ function parseWalkthroughWindowValue(value) {
   if (!dateValue(startsAt)) return null;
   return {
     starts_at: dateValue(startsAt).toISOString(),
-    ends_at: dateValue(endsAt)?.toISOString() || addHoursIsolter((slot) => normalize(slot.status || "open") === "open")
+    ends_at: dateValue(endsAt)?.toISOString() || addHoursIso(startsAt, 1),
+    slot_id: slotId || ""
+  };
+}
+
+function walkthroughWindowOptions(row) {
+  const now = new Date();
+  const adminWindows = (state.walkthroughAvailability || [])
+    .filter((slot) => normalize(slot.status || "open") === "open")
     .filter((slot) => dateValue(slot.starts_at) && dateValue(slot.starts_at) >= now)
     .map((slot) => ({
       id: slot.id,
@@ -1964,7 +2098,15 @@ function parseWalkthroughWindowValue(value) {
       ends_at: slot.ends_at || addHoursIso(slot.starts_at, 1),
       label: slot.label || slot.window_label || "Available walkthrough"
     }));
-  const optio    });
+  const options = adminWindows.length ? adminWindows : defaultWalkthroughWindows();
+  const currentStart = walkthroughAt(row);
+  if (currentStart && !options.some((slot) => slot.starts_at === currentStart)) {
+    options.unshift({
+      id: "current",
+      starts_at: currentStart,
+      ends_at: row?.walkthrough_end_at || addHoursIso(currentStart, 1),
+      label: "Currently selected"
+    });
   }
   return options.slice(0, 10);
 }
@@ -1986,7 +2128,9 @@ function groupWalkthroughWindows(slots) {
       });
     }
     const group = groups.get(key);
-    const end = dateValue(slot.ends_at) || dateVal+= 1;
+    const end = dateValue(slot.ends_at) || dateValue(addHoursIso(slot.starts_at, 1)) || start;
+    group.slots.push(slot);
+    if (normalize(slot.status || "open") === "open" || String(slot.id || "").startsWith("default-")) group.openCount += 1;
     if (start < group.firstStart) group.firstStart = start;
     if (end > group.lastEnd) group.lastEnd = end;
   });
@@ -1997,7 +2141,14 @@ function groupWalkthroughWindows(slots) {
 }
 
 function renderFocusWalkthroughWindows(row) {
-  constt", day: "numeric" })} at ${formatTime(selectedSlot.starts_at)}`
+  const focusState = focusStateFor(row);
+  const showSchedule = focusState.questions.wants_quality_walkthrough === "yes";
+  const selectedStart = walkthroughAt(row);
+  const groups = groupWalkthroughWindows(walkthroughWindowOptions(row));
+  const selectedSlot = groups.flatMap((group) => group.slots).find((slot) => selectedStart && slot.starts_at === selectedStart);
+  const selectedGroupKey = selectedSlot ? toDateInput(dateValue(selectedSlot.starts_at)) : "";
+  const selectedLabel = selectedSlot
+    ? `${formatDate(selectedSlot.starts_at, { weekday: "short", month: "short", day: "numeric" })} at ${formatTime(selectedSlot.starts_at)}`
     : "No walkthrough scheduled";
   return `
     <section class="sales-focus-info-box sales-focus-window-box ${showSchedule ? "" : "is-hidden"}" data-focus-walkthrough-section>
@@ -2012,7 +2163,13 @@ function renderFocusWalkthroughWindows(row) {
           <header>
             <div>
               <span>Available Times</span>
-              <strong>Schedule walkthrough</stronthat day.</span>
+              <strong>Schedule walkthrough</strong>
+            </div>
+            <button class="sales-icon-button" type="button" data-close-schedule-walkthrough aria-label="Close schedule options">${icon("x")}</button>
+          </header>
+          <div class="sales-walkthrough-picker-copy">
+            <strong>Choose an available day</strong>
+            <span>Pick a day first, then select one of the available times for that day.</span>
           </div>
           <div class="sales-walkthrough-date-grid" data-walkthrough-day-grid>
             ${groups.map((group) => {
@@ -2039,7 +2196,13 @@ function renderFocusWalkthroughWindows(row) {
                     <span>Available Times</span>
                     <strong>${esc(formatDate(group.date, { weekday: "long", month: "short", day: "numeric" }))}</strong>
                   </div>
-                  <small>${esc(nut.starts_at === selectedStart;
+                  <small>${esc(number(group.openCount))} slot${group.openCount === 1 ? "" : "s"}</small>
+                </header>
+                <div class="sales-walkthrough-time-grid">
+                  ${group.slots.map((slot) => {
+                    const start = dateValue(slot.starts_at);
+                    const end = dateValue(slot.ends_at);
+                    const checked = selectedStart && slot.starts_at === selectedStart;
                     return `
                       <label class="sales-walkthrough-time-card">
                         <input type="radio" name="walkthrough_window" value="${esc(walkthroughWindowValue(slot))}" ${checked ? "checked" : ""} />
@@ -2327,14 +2490,32 @@ function renderWalkthroughAvailabilityAdmin() {
 }
 
 function conversionRate(fromStage, toStage) {
- r = new Date(state.dateCursor);
+  const from = rowsByStage(fromStage).length;
+  const to = rowsByStage(toStage).length;
+  return from ? Math.round((to / from) * 100) : 0;
+}
+
+function calendarRangeLabel() {
+  const cursor = new Date(state.dateCursor);
   if (state.calendarMode === "day") {
     return cursor.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
   }
   if (state.calendarMode === "week") {
     return `${formatDate(startOfWeek(cursor))} - ${formatDate(endOfWeek(cursor))}`;
   }
-  return cursor.toLocaleDateString(undefined, { month: "long>
+  return cursor.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+}
+
+function renderCalendar(rows) {
+  return `
+    <div class="sales-calendar-shell">
+      <header class="sales-calendar-header">
+        <div class="sales-calendar-nav">
+          <button type="button" data-calendar-nav="prev" aria-label="Previous">${icon("left")}</button>
+          <button type="button" data-calendar-today>Today</button>
+          <button type="button" data-calendar-nav="next" aria-label="Next">${icon("chevron")}</button>
+        </div>
+        <strong class="sales-calendar-title">${esc(calendarRangeLabel())}</strong>
         <div class="sales-segmented" aria-label="Calendar view">
           ${["month", "week", "day"].map((mode) => `<button class="${state.calendarMode === mode ? "active" : ""}" type="button" data-calendar-mode="${mode}">${esc(titleCase(mode))}</button>`).join("")}
         </div>
@@ -2360,9 +2541,45 @@ function renderCalendarEvent(row) {
       <small>${esc(formatTime(walkthroughAt(row)) || "Time TBD")}</small>
       <strong>${esc(recordTitle(row))}</strong>
       <small>${esc(titleCase(status))}</small>
-    </butt            <span class="sales-status-pill ${esc(normalize(row.walkthrough_status || "scheduled"))}">${esc(titleCase(row.walkthrough_status || "scheduled"))}</span>
+    </button>
+  `;
+}
+
+function renderWeekCalendar(rows) {
+  const start = startOfWeek(state.dateCursor);
+  return `
+    <div class="sales-week-grid">
+      ${Array.from({ length: 7 }, (_, index) => {
+        const day = addDays(start, index);
+        const dayRows = eventsForDay(rows, day);
+        return `
+          <section class="sales-day-column">
+            <header><strong>${esc(day.toLocaleDateString(undefined, { weekday: "short" }))}</strong><span>${esc(formatDate(day))}</span></header>
+            ${dayRows.length ? dayRows.map(renderCalendarEvent).join("") : `<p class="sales-record-subtitle">No walkthroughs</p>`}
+          </section>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function renderDayCalendar(rows) {
+  const dayRows = eventsForDay(rows, state.dateCursor);
+  return `
+    <div class="sales-day-view">
+      ${dayRows.length ? dayRows.map((row) => `
+        <article class="sales-property-card ${row.id === state.selectedId ? "active" : ""}">
+          <header>
+            <div>
+              <h3>${esc(recordTitle(row))}</h3>
+              <p>${esc(recordAddress(row))}</p>
+            </div>
+            <span class="sales-status-pill ${esc(normalize(row.walkthrough_status || "scheduled"))}">${esc(titleCase(row.walkthrough_status || "scheduled"))}</span>
           </header>
-     Edit</button>
+          <p>${esc(formatDateTime(walkthroughAt(row)))} with ${esc(row.walkthrough_assigned_to || ownerName(row))}</p>
+          <div class="sales-row-actions">
+            <button class="sales-secondary-button" type="button" data-select-record="${esc(row.id)}">View Details</button>
+            <button class="sales-primary-button" type="button" data-open-walkthrough="${esc(row.id)}">Edit</button>
           </div>
         </article>
       `).join("") : emptyState("No walkthroughs on this day", "Use Schedule Walkthrough to add one.")}
@@ -2370,7 +2587,18 @@ function renderCalendarEvent(row) {
   `;
 }
 
-function rens-month-day ${muted ? "muted" : ""} ${sameDay(day, new Date()) ? "today" : ""}" data-calendar-day="${toDateInput(day)}">
+function renderMonthCalendar(rows) {
+  const first = startOfMonth(state.dateCursor);
+  const gridStart = addDays(first, -first.getDay());
+  return `
+    <div class="sales-month-grid">
+      ${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => `<div class="sales-month-label">${day}</div>`).join("")}
+      ${Array.from({ length: 42 }, (_, index) => {
+        const day = addDays(gridStart, index);
+        const dayRows = eventsForDay(rows, day).slice(0, 3);
+        const muted = day.getMonth() !== first.getMonth();
+        return `
+          <article class="sales-month-day ${muted ? "muted" : ""} ${sameDay(day, new Date()) ? "today" : ""}" data-calendar-day="${toDateInput(day)}">
             <time>${day.getDate()}</time>
             ${dayRows.map(renderCalendarEvent).join("")}
             ${eventsForDay(rows, day).length > dayRows.length ? `<small>+${eventsForDay(rows, day).length - dayRows.length} more</small>` : ""}
@@ -2382,7 +2610,12 @@ function rens-month-day ${muted ? "muted" : ""} ${sameDay(day, new Date()) ? "to
 }
 
 function renderWalkthroughDetail(row) {
-  if (!row) return `<aside class="sales-detail-card">${emptyState("Select a walkthrough", /h2>
+  if (!row) return `<aside class="sales-detail-card">${emptyState("Select a walkthrough", "Walkthrough details will appear here.")}</aside>`;
+  return `
+    <aside class="sales-detail-card">
+      <div class="sales-selected-heading">
+        <div>
+          <h2>Selected Event</h2>
           <p>${esc(formatDateTime(walkthroughAt(row)))}</p>
         </div>
         <span class="sales-status-pill ${esc(normalize(row.walkthrough_status || "scheduled"))}">${esc(titleCase(row.walkthrough_status || "scheduled"))}</span>
@@ -2909,11 +3142,16 @@ function renderTasksPage() {
   const walkthroughsToSchedule = openRows.filter((row) =>
     pricingFitConfirmed(row) &&
     !walkthroughAt(row) &&
-    !["walkthrofollow-ups", "calendar", "blue")}
+    !["walkthrough", "contract_out", "active", "lost"].includes(stageFor(row))
+  );
+  return `
+    <section class="sales-metric-grid">
+      ${metricCard("Due Today", number(dueToday.length), "calls and follow-ups", "calendar", "blue")}
       ${metricCard("Overdue", number(overdue.length), "past due", "clock", "yellow")}
       ${metricCard("Pricing Fit Follow-ups", number(pricingFollowUps.length), "confirm $0.25/sq ft", "check", "green")}
       ${metricCard("Walkthroughs To Schedule", number(walkthroughsToSchedule.length), "ready for management", "calendar", "cyan")}
-      ${md("High Priority", number(openRows.filter((row) => normalize(row.task_priority) === "high").length), "important follow-ups", "bell", "violet")}
+      ${metricCard("Completed This Week", number(thisWeekRows(rows.filter((row) => taskStatus(row) === "completed"), "last_activity_at").length), "finished tasks", "check", "green")}
+      ${metricCard("High Priority", number(openRows.filter((row) => normalize(row.task_priority) === "high").length), "important follow-ups", "bell", "violet")}
     </section>
     ${renderTaskFlowStrip()}
     ${renderTaskFocusLanes({ overdue, dueToday, pricingFollowUps, walkthroughsToSchedule })}
@@ -2929,14 +3167,24 @@ function renderTasksPage() {
         ${renderTaskTable(rows)}
       </article>
       ${renderTaskDetail(selected)}
-    </sectk-queue">
+    </section>
+  `;
+}
+
+function renderTaskTable(rows) {
+  if (!rows.length) return emptyState("No follow-ups found", "Create a next step from any prospect.");
+  return `
+    <div class="sales-task-queue">
       ${rows.map((row) => {
         const due = taskDueMeta(row);
         const phoneHref = contactPhoneHref(row);
         const emailHref = contactEmailHref(row);
         return `
           <article class="sales-task-item ${row.id === state.selectedId ? "active" : ""}">
-            <button class="sales-task-select" type="button" data-select-record="${esc(row.id)}"ion(row))}</strong>
+            <button class="sales-task-select" type="button" data-select-record="${esc(row.id)}">
+              <div class="sales-task-item-main">
+                <span class="sales-status-pill ${esc(due.tone)}">${esc(due.label)}</span>
+                <strong>${esc(recommendedTaskAction(row))}</strong>
                 <small>${esc(recordTitle(row))} - ${esc(recordContact(row))}</small>
               </div>
               <div class="sales-task-meta-grid">
@@ -2950,24 +3198,49 @@ function renderTasksPage() {
             <div class="sales-task-actions">
               ${phoneHref ? `<a class="sales-secondary-button" href="${esc(phoneHref)}">${icon("phone")}Call</a>` : `<button class="sales-secondary-button" type="button" disabled>${icon("phone")}Call</button>`}
               ${emailHref ? `<a class="sales-secondary-button" href="${esc(emailHref)}">${icon("mail")}Email</a>` : `<button class="sales-secondary-button" type="button" disabled>${icon("mail")}Email</button>`}
-              ${pricingFitConfirmess="sales-secondary-button" type="button" data-open-walkthrough="${esc(row.id)}">${icon("calendar")}Walkthrough</button>
-              <button class="sales-primary-button" type="button" data-oneHref = contactPhoneHref(row);
+              ${pricingFitConfirmed(row) ? "" : `<button class="sales-secondary-button" type="button" data-update-stage="${esc(row.id)}" data-stage="quote_sent">${icon("check")}Confirm Fit</button>`}
+              <button class="sales-secondary-button" type="button" data-open-walkthrough="${esc(row.id)}">${icon("calendar")}Walkthrough</button>
+              <button class="sales-primary-button" type="button" data-update-task-status="${esc(row.id)}" data-status="completed">${icon("check")}Done</button>
+            </div>
+          </article>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function renderTaskDetail(row) {
+  if (!row) return `<aside class="sales-detail-card sales-task-detail-card">${emptyState("Select a task", "Task details will appear here.")}</aside>`;
+  const phoneHref = contactPhoneHref(row);
   const emailHref = contactEmailHref(row);
   return `
     <aside class="sales-detail-card sales-task-detail-card">
-      <section class="sales-detail-hero"row))}</p>
+      <section class="sales-detail-hero">
+        <span class="sales-status-pill ${esc(taskStatus(row))}">${esc(titleCase(taskStatus(row)))}</span>
+        <h2>${esc(recommendedTaskAction(row))}</h2>
+        <p>${esc(recordTitle(row))}</p>
       </section>
       <div class="sales-detail-grid">
         <div class="sales-detail-stat"><span>Due Date</span><strong>${esc(formatDateTime(taskDue(row)))}</strong></div>
-       <div class="sales-detail-stat"><span>Decision Maker</span><strong>${esc(row.decision_maker_status || "Unknown")}</strong></div>
-        <div class="sales-detail-stat"><span>Units</span><   <strong>${esc(recommendedTaskAction(row))}</strong>
+        <div class="sales-detail-stat"><span>Priority</span><strong>${esc(titleCase(row.task_priority || "medium"))}</strong></div>
+        <div class="sales-detail-stat"><span>Contact</span><strong>${esc(recordContact(row))}</strong></div>
+        <div class="sales-detail-stat"><span>Owner</span><strong>${esc(ownerName(row))}</strong></div>
+        <div class="sales-detail-stat"><span>Stage</span><strong>${esc(stageLabel(stageFor(row)))}</strong></div>
+        <div class="sales-detail-stat"><span>Price Fit</span><strong>${esc(pricingFitText(row))}</strong></div>
+        <div class="sales-detail-stat"><span>Decision Maker</span><strong>${esc(row.decision_maker_status || "Unknown")}</strong></div>
+        <div class="sales-detail-stat"><span>Units</span><strong>${recordUnits(row) ? number(recordUnits(row)) : "Not set"}</strong></div>
+      </div>
+      <div class="sales-qualification-block">
+        <span>Recommended Next Move</span>
+        <strong>${esc(recommendedTaskAction(row))}</strong>
       </div>
       <div class="sales-qualification-block">
         <span>Next Step / Notes</span>
         <strong>${esc(row.next_step || row.lead_notes || "No task notes saved.")}</strong>
       </div>
       <div class="sales-action-stack">
-        <button class="sales-primary-button" type="button" data-update-task-statu>` : `<button class="sales-secondary-button" type="button" disabled>${icon("phone")}Call Now</button>`}
+        <button class="sales-primary-button" type="button" data-update-task-status="${esc(row.id)}" data-status="completed">${icon("check")}Mark Complete</button>
+        ${phoneHref ? `<a class="sales-secondary-button" href="${esc(phoneHref)}">${icon("phone")}Call Now</a>` : `<button class="sales-secondary-button" type="button" disabled>${icon("phone")}Call Now</button>`}
         <button class="sales-secondary-button" type="button" data-log-touch="${esc(row.id)}" data-touch-text="Call logged.">${icon("phone")}Log Call</button>
         ${emailHref ? `<a class="sales-secondary-button" href="${esc(emailHref)}">${icon("mail")}Send Email</a>` : `<button class="sales-secondary-button" type="button" disabled>${icon("mail")}Send Email</button>`}
         ${pricingFitConfirmed(row) ? "" : `<button class="sales-secondary-button" type="button" data-update-stage="${esc(row.id)}" data-stage="quote_sent">${icon("check")}Confirm $0.25/Sq Ft</button>`}
@@ -2996,7 +3269,10 @@ function renderModalShell(title, kicker, body, footer, narrow = false) {
   return `
     <div class="sales-modal">
       <div class="sales-modal-backdrop" data-close-modal></div>
-      <section class="sales-modr)}</p>
+      <section class="sales-modal-panel ${narrow ? "narrow" : ""}" role="dialog" aria-modal="true" aria-labelledby="salesModalTitle">
+        <header class="sales-modal-header">
+          <div>
+            <p>${esc(kicker)}</p>
             <h2 id="salesModalTitle">${esc(title)}</h2>
           </div>
           <button class="sales-secondary-button" type="button" data-close-modal>${icon("x")}Close</button>
@@ -3066,7 +3342,10 @@ function renderQuoteModal(row) {
             </div>
             <div class="sales-row-actions">
               <button class="sales-secondary-button" type="button" data-generate-quote-pdf>${icon("file-text")}Generate Preview</button>
-              <button class="sales-primary-button" type="button" data-email-quote-pdf>${icon("mail")}Send Quote</buttonre sending from ${esc(quoteSenderEmail())}.</p>
+              <button class="sales-primary-button" type="button" data-email-quote-pdf>${icon("mail")}Send Quote</button>
+            </div>
+          </div>
+          <p>Generate Preview fills the Turnly quote form. Send Quote opens Gmail with the email ready and downloads the PDF so it can be attached before sending from ${esc(quoteSenderEmail())}.</p>
           <div class="sales-quote-preview" data-sales-quote-preview-panel hidden>
             <div class="sales-quote-preview-bar">
               <small data-sales-quote-preview-details></small>
