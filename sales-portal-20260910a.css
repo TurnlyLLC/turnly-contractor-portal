@@ -1193,8 +1193,14 @@ button.sales-activity-row:hover {
 }
 
 .sales-inline-notes {
+  width: 260px;
   max-width: 260px;
   color: var(--sales-muted);
+}
+
+.sales-inline-notes[open] {
+  width: min(560px, 70vw);
+  max-width: 560px;
 }
 
 .sales-inline-notes summary {
@@ -1221,6 +1227,8 @@ button.sales-activity-row:hover {
 }
 
 .sales-inline-notes[open] summary {
+  overflow: visible;
+  text-overflow: clip;
   white-space: normal;
 }
 
@@ -1229,7 +1237,7 @@ button.sales-activity-row:hover {
 }
 
 .sales-inline-notes p {
-  max-width: 300px;
+  max-width: none;
   margin: 8px 0 0;
   color: #dce7f3;
   font-size: 12px;
