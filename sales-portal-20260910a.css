@@ -1082,6 +1082,37 @@ button.sales-activity-row:hover {
   line-height: 1;
 }
 
+.sales-leads-table th[data-lead-column="notes"] {
+  position: relative;
+}
+
+.sales-column-resizer {
+  position: absolute;
+  top: 0;
+  right: -5px;
+  bottom: 0;
+  z-index: 2;
+  width: 10px;
+  cursor: col-resize;
+  border-radius: 5px;
+}
+
+.sales-column-resizer:hover,
+.sales-column-resizer:focus-visible {
+  background: var(--sales-green);
+  outline: none;
+}
+
+.sales-column-resizer:focus-visible {
+  box-shadow: 0 0 0 3px rgba(22, 217, 137, 0.24);
+}
+
+.sales-column-resizing,
+.sales-column-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
 .sales-table tr {
   cursor: pointer;
 }

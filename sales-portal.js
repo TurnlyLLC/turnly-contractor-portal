@@ -366,6 +366,7 @@ const state = {
   importFileName: "",
   selectedLeadIds: new Set(),
   leadSort: { key: "last_activity", direction: "desc" },
+  leadColumnWidths: { notes: savedLeadColumnWidth("notes") },
   leadFocusMode: false,
   message: "",
   messageTone: "",
@@ -378,6 +379,7 @@ let focusSaveQueuedOptions = null;
 let quotePreviewUrl = "";
 let quotePreviewBlob = null;
 let quotePreviewFileName = "";
+let leadColumnResize = null;
 
 function ensureSidebarLayoutLock() {
   if (!document.head) return;
@@ -766,6 +768,40 @@ function sortedLeadRows(rows) {
     if (!comparison) comparison = recordTitle(a).localeCompare(recordTitle(b), undefined, { sensitivity: "base" });
     return comparison * multiplier;
   });
+}
+
+function leadColumnWidth(key) {
+  const value = Number(state.leadColumnWidths?.[key]);
+  return Math.min(900, Math.max(220, Number.isFinite(value) ? value : 260));
+}
+
+function applyLeadColumnWidth(key, width, table = document.querySelector(".sales-leads-table")) {
+  if (!table) return;
+  const widthValue = `${width}px`;
+  table.querySelectorAll(`[data-lead-column="${key}"], [data-lead-column-cell="${key}"]`).forEach((cell) => {
+    cell.style.width = widthValue;
+    cell.style.minWidth = widthValue;
+  });
+}
+
+function resizeLeadColumn(key, width) {
+  const nextWidth = Math.min(900, Math.max(220, Math.round(width)));
+  state.leadColumnWidths[key] = nextWidth;
+  applyLeadColumnWidth(key, nextWidth, leadColumnResize?.table);
+  try {
+    window.localStorage.setItem(`turnly.sales.lead-column.${key}`, String(nextWidth));
+  } catch {
+    // Storage can be unavailable in private or restricted browser contexts.
+  }
+}
+
+function savedLeadColumnWidth(key, fallback = 260) {
+  try {
+    const saved = Number(window.localStorage.getItem(`turnly.sales.lead-column.${key}`));
+    return Number.isFinite(saved) ? saved : fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 function recordContact(row) {
@@ -1882,11 +1918,18 @@ function renderLeadTable(rows) {
     );
   }
   const sortedRows = sortedLeadRows(rows);
-  const sortHeader = (key, label) => {
+  const sortHeader = (key, label, resizable = false) => {
     const active = state.leadSort?.key === key;
     const direction = active ? state.leadSort.direction : "none";
     const indicator = active ? (direction === "asc" ? "↑" : "↓") : "↕";
-    return `<th aria-sort="${direction}"><button class="sales-sort-button ${active ? "active" : ""}" type="button" data-lead-sort="${esc(key)}" aria-label="Sort by ${esc(label)} ${active && direction === "asc" ? "descending" : "ascending"}">${esc(label)} <span aria-hidden="true">${indicator}</span></button></th>`;
+    const width = resizable ? leadColumnWidth(key) : null;
+    const widthAttributes = resizable
+      ? ` data-lead-column="${esc(key)}" style="width:${width}px;min-width:${width}px"`
+      : "";
+    const resizeHandle = resizable
+      ? `<span class="sales-column-resizer" role="separator" aria-orientation="vertical" tabindex="0" data-lead-column-resize="${esc(key)}" aria-label="Resize ${esc(label)} column"></span>`
+      : "";
+    return `<th${widthAttributes} aria-sort="${direction}"><button class="sales-sort-button ${active ? "active" : ""}" type="button" data-lead-sort="${esc(key)}" aria-label="Sort by ${esc(label)} ${active && direction === "asc" ? "descending" : "ascending"}">${esc(label)} <span aria-hidden="true">${indicator}</span></button>${resizeHandle}</th>`;
   };
   return `
     <div class="sales-table-wrap">
@@ -1899,7 +1942,7 @@ function renderLeadTable(rows) {
             ${sortHeader("phone", "Phone Number")}
             ${sortHeader("stage", "Stage")}
             ${sortHeader("next_step", "Next Steps")}
-            ${sortHeader("notes", "Sales Notes")}
+            ${sortHeader("notes", "Sales Notes", true)}
             ${sortHeader("last_activity", "Last Activity")}
             <th></th>
           </tr>
@@ -1922,7 +1965,7 @@ function renderLeadTable(rows) {
                 </select>
               </td>
               <td><strong>${esc(row.next_step || "No next step")}</strong><small>${esc(formatDateTime(taskDue(row), { empty: "" }))}</small></td>
-              <td class="sales-notes-cell">
+              <td class="sales-notes-cell" data-lead-column-cell="notes" style="width:${leadColumnWidth("notes")}px;min-width:${leadColumnWidth("notes")}px">
                 <details class="sales-inline-notes">
                   <summary>${esc(notePreview ? `${notePreview.slice(0, 96)}${notePreview.length > 96 ? "…" : ""}` : "No notes yet")}</summary>
                   ${notes ? `<p>${esc(notes)}</p>` : ""}
@@ -4276,10 +4319,45 @@ function changeCalendar(direction) {
 
 function bindEvents() {
   document.addEventListener("pointerdown", (event) => {
+    const resizeHandle = event.target?.closest?.("[data-lead-column-resize]");
+    if (resizeHandle) {
+      const table = resizeHandle.closest(".sales-leads-table");
+      const key = resizeHandle.dataset.leadColumnResize || "";
+      if (!table || !key) return;
+      event.preventDefault();
+      leadColumnResize = {
+        key,
+        startX: event.clientX,
+        startWidth: leadColumnWidth(key),
+        table
+      };
+      document.body.classList.add("sales-column-resizing");
+      resizeHandle.setPointerCapture?.(event.pointerId);
+      return;
+    }
     const option = event.target?.closest?.("[data-focus-lead-form] label");
     if (option?.classList?.contains("sales-walkthrough-time-card")) return;
     const radio = option?.querySelector?.('input[type="radio"]');
     if (radio) radio.dataset.wasChecked = radio.checked ? "true" : "false";
+  });
+
+  document.addEventListener("pointermove", (event) => {
+    if (!leadColumnResize) return;
+    resizeLeadColumn(leadColumnResize.key, leadColumnResize.startWidth + event.clientX - leadColumnResize.startX);
+  });
+
+  document.addEventListener("pointerup", () => {
+    if (!leadColumnResize) return;
+    leadColumnResize = null;
+    document.body.classList.remove("sales-column-resizing");
+  });
+
+  document.addEventListener("keydown", (event) => {
+    const resizeHandle = event.target?.closest?.("[data-lead-column-resize]");
+    if (!resizeHandle || !["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+    event.preventDefault();
+    const key = resizeHandle.dataset.leadColumnResize || "";
+    resizeLeadColumn(key, leadColumnWidth(key) + (event.key === "ArrowRight" ? 24 : -24));
   });
 
   document.addEventListener("click", async (event) => {
