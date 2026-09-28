@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-contractor-pwa-v20260928-lead-notes-resize";
+const CACHE_NAME = "turnly-contractor-pwa-v20260928-lead-notes-auto-expand";
 
 const PRECACHE_URLS = [
   "/",

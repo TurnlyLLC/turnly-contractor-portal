@@ -1224,56 +1224,30 @@ button.sales-activity-row:hover {
 }
 
 .sales-inline-notes {
-  width: 260px;
-  max-width: 260px;
+  width: 100%;
+  max-width: none;
   color: var(--sales-muted);
-}
-
-.sales-inline-notes[open] {
-  width: min(560px, 70vw);
-  max-width: 560px;
-}
-
-.sales-inline-notes summary {
-  overflow: hidden;
-  color: #e8f2fb;
-  cursor: pointer;
-  font-size: 12px;
-  line-height: 1.45;
-  list-style: none;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.sales-inline-notes summary::-webkit-details-marker {
-  display: none;
-}
-
-.sales-inline-notes summary::before {
-  content: "▸";
-  display: inline-block;
-  margin-right: 5px;
-  color: var(--sales-green);
-  transition: transform 0.15s ease;
-}
-
-.sales-inline-notes[open] summary {
-  overflow: visible;
-  text-overflow: clip;
-  white-space: normal;
-}
-
-.sales-inline-notes[open] summary::before {
-  transform: rotate(90deg);
 }
 
 .sales-inline-notes p {
   max-width: none;
-  margin: 8px 0 0;
-  color: #dce7f3;
+  margin: 0;
+  color: #e8f2fb;
   font-size: 12px;
   line-height: 1.55;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  text-overflow: ellipsis;
   white-space: pre-wrap;
+}
+
+.sales-inline-notes.is-wide p {
+  display: block;
+  overflow: visible;
+  text-overflow: clip;
+  -webkit-line-clamp: unset;
 }
 
 .sales-leads-table th:first-child,

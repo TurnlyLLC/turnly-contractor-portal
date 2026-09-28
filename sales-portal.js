@@ -380,6 +380,7 @@ let quotePreviewUrl = "";
 let quotePreviewBlob = null;
 let quotePreviewFileName = "";
 let leadColumnResize = null;
+const LEAD_NOTES_FULL_WIDTH = 420;
 
 function ensureSidebarLayoutLock() {
   if (!document.head) return;
@@ -782,6 +783,11 @@ function applyLeadColumnWidth(key, width, table = document.querySelector(".sales
     cell.style.width = widthValue;
     cell.style.minWidth = widthValue;
   });
+  if (key === "notes") {
+    table.querySelectorAll(".sales-inline-notes").forEach((notes) => {
+      notes.classList.toggle("is-wide", width >= LEAD_NOTES_FULL_WIDTH);
+    });
+  }
 }
 
 function resizeLeadColumn(key, width) {
@@ -1950,7 +1956,7 @@ function renderLeadTable(rows) {
         <tbody>
           ${sortedRows.map((row) => {
             const notes = salesNotesFor(row);
-            const notePreview = notes.replace(/\s+/g, " ").trim();
+            const notesWidth = leadColumnWidth("notes");
             return `
             <tr class="${row.id === state.selectedId ? "active" : ""}">
               ${canManageLeads ? `<td>
@@ -1966,10 +1972,9 @@ function renderLeadTable(rows) {
               </td>
               <td><strong>${esc(row.next_step || "No next step")}</strong><small>${esc(formatDateTime(taskDue(row), { empty: "" }))}</small></td>
               <td class="sales-notes-cell" data-lead-column-cell="notes" style="width:${leadColumnWidth("notes")}px;min-width:${leadColumnWidth("notes")}px">
-                <details class="sales-inline-notes">
-                  <summary>${esc(notePreview ? `${notePreview.slice(0, 96)}${notePreview.length > 96 ? "…" : ""}` : "No notes yet")}</summary>
-                  ${notes ? `<p>${esc(notes)}</p>` : ""}
-                </details>
+                <div class="sales-inline-notes ${notesWidth >= LEAD_NOTES_FULL_WIDTH ? "is-wide" : ""}">
+                  <p>${esc(notes || "No notes yet")}</p>
+                </div>
               </td>
               <td><small>${esc(formatDateTime(row.last_activity_at || row.updated_at || row.created_at, { empty: "No activity" }))}</small></td>
               <td>
