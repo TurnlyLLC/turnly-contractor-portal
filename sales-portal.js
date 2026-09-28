@@ -365,6 +365,7 @@ const state = {
   importErrors: [],
   importFileName: "",
   selectedLeadIds: new Set(),
+  leadSort: { key: "last_activity", direction: "desc" },
   leadFocusMode: false,
   message: "",
   messageTone: "",
@@ -734,6 +735,37 @@ function recordCompany(row) {
 
 function recordAddress(row) {
   return [row?.address, row?.sales_city, row?.sales_state].filter(Boolean).join(", ") || "No address entered";
+}
+
+function salesNotesFor(row) {
+  return String(row?.lead_notes || qualificationNotesText(row) || row?.default_scope || "").trim();
+}
+
+function leadSortValue(row, key) {
+  if (key === "name") return recordTitle(row);
+  if (key === "address") return recordAddress(row);
+  if (key === "phone") return row?.contact_phone || "";
+  if (key === "stage") return stageLabel(stageFor(row));
+  if (key === "next_step") return row?.next_step || "";
+  if (key === "notes") return salesNotesFor(row);
+  if (key === "last_activity") return row?.last_activity_at || row?.updated_at || row?.created_at || "";
+  return "";
+}
+
+function sortedLeadRows(rows) {
+  const { key, direction } = state.leadSort || {};
+  const multiplier = direction === "desc" ? -1 : 1;
+  return rows.slice().sort((a, b) => {
+    const aValue = leadSortValue(a, key);
+    const bValue = leadSortValue(b, key);
+    const aDate = key === "last_activity" ? sortableTime(aValue) : 0;
+    const bDate = key === "last_activity" ? sortableTime(bValue) : 0;
+    let comparison = key === "last_activity"
+      ? aDate - bDate
+      : String(aValue).localeCompare(String(bValue), undefined, { numeric: true, sensitivity: "base" });
+    if (!comparison) comparison = recordTitle(a).localeCompare(recordTitle(b), undefined, { sensitivity: "base" });
+    return comparison * multiplier;
+  });
 }
 
 function recordContact(row) {
@@ -1849,22 +1881,34 @@ function renderLeadTable(rows) {
       canManageLeads ? "Upload a prospect list or create a new prospect." : "No prospects match this view yet."
     );
   }
+  const sortedRows = sortedLeadRows(rows);
+  const sortHeader = (key, label) => {
+    const active = state.leadSort?.key === key;
+    const direction = active ? state.leadSort.direction : "none";
+    const indicator = active ? (direction === "asc" ? "↑" : "↓") : "↕";
+    return `<th aria-sort="${direction}"><button class="sales-sort-button ${active ? "active" : ""}" type="button" data-lead-sort="${esc(key)}" aria-label="Sort by ${esc(label)} ${active && direction === "asc" ? "descending" : "ascending"}">${esc(label)} <span aria-hidden="true">${indicator}</span></button></th>`;
+  };
   return `
     <div class="sales-table-wrap">
       <table class="sales-table sales-leads-table">
         <thead>
           <tr>
             ${canManageLeads ? "<th></th>" : ""}
-            <th>Name</th>
-            <th>Address</th>
-            <th>Phone Number</th>
-            <th>Stage</th>
-            <th>Next Steps</th>
+            ${sortHeader("name", "Name")}
+            ${sortHeader("address", "Address")}
+            ${sortHeader("phone", "Phone Number")}
+            ${sortHeader("stage", "Stage")}
+            ${sortHeader("next_step", "Next Steps")}
+            ${sortHeader("notes", "Sales Notes")}
+            ${sortHeader("last_activity", "Last Activity")}
             <th></th>
           </tr>
         </thead>
         <tbody>
-          ${rows.map((row) => `
+          ${sortedRows.map((row) => {
+            const notes = salesNotesFor(row);
+            const notePreview = notes.replace(/\s+/g, " ").trim();
+            return `
             <tr class="${row.id === state.selectedId ? "active" : ""}">
               ${canManageLeads ? `<td>
                 <input type="checkbox" data-lead-select="${esc(row.id)}" aria-label="Select ${esc(recordTitle(row))}" ${state.selectedLeadIds.has(row.id) ? "checked" : ""} />
@@ -1879,13 +1923,21 @@ function renderLeadTable(rows) {
               </td>
               <td><strong>${esc(row.next_step || "No next step")}</strong><small>${esc(formatDateTime(taskDue(row), { empty: "" }))}</small></td>
               <td>
+                <details class="sales-inline-notes">
+                  <summary>${esc(notePreview ? `${notePreview.slice(0, 96)}${notePreview.length > 96 ? "…" : ""}` : "No notes yet")}</summary>
+                  ${notes ? `<p>${esc(notes)}</p>` : ""}
+                </details>
+              </td>
+              <td><small>${esc(formatDateTime(row.last_activity_at || row.updated_at || row.created_at, { empty: "No activity" }))}</small></td>
+              <td>
                 <div class="sales-row-actions compact">
                   <button class="sales-secondary-button" type="button" data-select-record="${esc(row.id)}" data-enter-lead-focus>${icon("check")}Focus</button>
                   <button class="sales-secondary-button" type="button" data-open-lead="${esc(row.id)}">${icon("more")}Edit</button>
                 </div>
               </td>
             </tr>
-          `).join("")}
+          `;
+          }).join("")}
         </tbody>
       </table>
     </div>
@@ -4200,6 +4252,16 @@ function setFilter(type, value) {
   render();
 }
 
+function setLeadSort(key) {
+  if (!key) return;
+  if (state.leadSort?.key === key) {
+    state.leadSort.direction = state.leadSort.direction === "asc" ? "desc" : "asc";
+  } else {
+    state.leadSort = { key, direction: key === "last_activity" ? "desc" : "asc" };
+  }
+  render();
+}
+
 function changeCalendar(direction) {
   const cursor = new Date(state.dateCursor);
   if (state.calendarMode === "month") {
@@ -4224,6 +4286,12 @@ function bindEvents() {
     const target = event.target;
     const previewField = target.closest?.("[data-sales-preview-field]");
     if (previewField) return;
+
+    const leadSort = target.closest?.("[data-lead-sort]");
+    if (leadSort) {
+      setLeadSort(leadSort.dataset.leadSort);
+      return;
+    }
 
     const previewOpen = target.closest?.("[data-sales-preview-open]");
     if (previewOpen) {

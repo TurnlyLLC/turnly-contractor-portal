@@ -1051,6 +1051,37 @@ button.sales-activity-row:hover {
   text-transform: uppercase;
 }
 
+.sales-sort-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  letter-spacing: inherit;
+  padding: 3px 6px;
+  text-align: left;
+  text-transform: inherit;
+}
+
+.sales-sort-button:hover,
+.sales-sort-button:focus-visible,
+.sales-sort-button.active {
+  background: rgba(22, 217, 137, 0.12);
+  color: var(--sales-green);
+  outline: none;
+}
+
+.sales-sort-button span {
+  color: var(--sales-green);
+  font-size: 14px;
+  line-height: 1;
+}
+
 .sales-table tr {
   cursor: pointer;
 }
@@ -1158,7 +1189,52 @@ button.sales-activity-row:hover {
 }
 
 .sales-leads-table {
-  min-width: 860px;
+  min-width: 1180px;
+}
+
+.sales-inline-notes {
+  max-width: 260px;
+  color: var(--sales-muted);
+}
+
+.sales-inline-notes summary {
+  overflow: hidden;
+  color: #e8f2fb;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1.45;
+  list-style: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sales-inline-notes summary::-webkit-details-marker {
+  display: none;
+}
+
+.sales-inline-notes summary::before {
+  content: "▸";
+  display: inline-block;
+  margin-right: 5px;
+  color: var(--sales-green);
+  transition: transform 0.15s ease;
+}
+
+.sales-inline-notes[open] summary {
+  white-space: normal;
+}
+
+.sales-inline-notes[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.sales-inline-notes p {
+  max-width: 300px;
+  margin: 8px 0 0;
+  color: #dce7f3;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
 }
 
 .sales-leads-table th:first-child,
