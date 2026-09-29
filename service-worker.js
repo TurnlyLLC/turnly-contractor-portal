@@ -222,8 +222,16 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // Do not cache the schedule editor module. Older service-worker entries
+  // stored its compressed response body and the browser could not parse it.
+  if (new URL(request.url).pathname === "/schedule-add-assignment.js") {
+    event.respondWith(fetch(request, { cache: "no-store" }));
+    return;
+  }
+
   if (isStaticAsset(request)) {
     event.respondWith(isAdminRuntimeAsset(request) ? networkFirst(request) : staleWhileRevalidate(request));
   }
 });
+
 
