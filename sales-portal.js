@@ -489,10 +489,61 @@ function dateValue(value) {
   return date && !Number.isNaN(date.getTime()) ? date : null;
 }
 
+const DISPLAY_TIME_ZONE = "America/New_York";
+const displayTimeFormatter = new Intl.DateTimeFormat("en-US", {
+  timeZone: DISPLAY_TIME_ZONE,
+  calendar: "gregory",
+  numberingSystem: "latn",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hourCycle: "h23"
+});
+
+function displayTimeParts(value) {
+  const date = dateValue(value);
+  if (!date) return null;
+  return displayTimeFormatter.formatToParts(date).reduce((parts, part) => {
+    if (part.type !== "literal") parts[part.type] = Number(part.value);
+    return parts;
+  }, {});
+}
+
+function easternWallTimeToIso(date, time) {
+  const dateParts = String(date || "").split("-").map(Number);
+  const timeParts = String(time || "").split(":").map(Number);
+  if (dateParts.length !== 3 || timeParts.length < 2 || dateParts.some((part) => !Number.isFinite(part)) || timeParts.some((part) => !Number.isFinite(part))) return null;
+  const [year, month, day] = dateParts;
+  const [hour, minute] = timeParts;
+  const wallMs = Date.UTC(year, month - 1, day, hour, minute);
+  if (!Number.isFinite(wallMs)) return null;
+  let utcMs = wallMs;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const parts = displayTimeParts(new Date(utcMs));
+    if (!parts) return null;
+    const representedWallMs = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute);
+    utcMs += wallMs - representedWallMs;
+  }
+  const result = new Date(utcMs);
+  return Number.isNaN(result.getTime()) ? null : result.toISOString();
+}
+
+function easternDateOffset(days = 0) {
+  const now = displayTimeParts(new Date());
+  if (!now) return "";
+  const date = new Date(Date.UTC(now.year, now.month - 1, now.day + days, 12));
+  const pad = (part) => String(part).padStart(2, "0");
+  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`;
+}
+
 function formatDate(value, options = {}) {
   const date = dateValue(value);
   if (!date) return options.empty || "Not set";
   return date.toLocaleDateString(undefined, {
+    timeZone: DISPLAY_TIME_ZONE,
     weekday: options.weekday,
     month: options.month || "short",
     day: options.day || "numeric",
@@ -504,6 +555,7 @@ function formatDateTime(value, options = {}) {
   const date = dateValue(value);
   if (!date) return options.empty || "Not scheduled";
   return date.toLocaleString(undefined, {
+    timeZone: DISPLAY_TIME_ZONE,
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -515,21 +567,23 @@ function formatDateTime(value, options = {}) {
 function formatTime(value) {
   const date = dateValue(value);
   if (!date) return "";
-  return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return date.toLocaleTimeString([], { timeZone: DISPLAY_TIME_ZONE, hour: "numeric", minute: "2-digit" });
 }
 
 function toDateInput(value) {
   const date = dateValue(value);
   if (!date) return "";
+  const parts = displayTimeParts(date);
   const pad = (part) => String(part).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  return `${parts.year}-${pad(parts.month)}-${pad(parts.day)}`;
 }
 
 function toTimeInput(value) {
   const date = dateValue(value);
   if (!date) return "";
+  const parts = displayTimeParts(date);
   const pad = (part) => String(part).padStart(2, "0");
-  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return `${pad(parts.hour)}:${pad(parts.minute)}`;
 }
 
 function toDateTimeLocal(value) {
@@ -547,8 +601,7 @@ function fromDateTimeLocal(value) {
 
 function combineDateTime(date, time, fallback = "10:00") {
   if (!date) return null;
-  const parsed = new Date(`${date}T${time || fallback}`);
-  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+  return easternWallTimeToIso(date, time || fallback);
 }
 
 function startOfWeek(value = new Date()) {
@@ -2090,33 +2143,30 @@ function renderFocusQuestionList(row) {
 
 function addHoursIso(value, hours) {
   const date = dateValue(value) || new Date();
-  date.setHours(date.getHours() + hours);
+  date.setTime(date.getTime() + hours * 60 * 60 * 1000);
   return date.toISOString();
 }
 
 function defaultWalkthroughWindows() {
   const windows = [];
-  const cursor = new Date();
-  cursor.setHours(0, 0, 0, 0);
-  cursor.setDate(cursor.getDate() + 1);
+  let dayOffset = 1;
   while (windows.length < 10) {
-    const day = cursor.getDay();
+    const dateInput = easternDateOffset(dayOffset);
+    const day = new Date(`${dateInput}T12:00:00Z`).getUTCDay();
     if (day !== 0 && day !== 6) {
       [10, 14].forEach((hour) => {
         if (windows.length >= 10) return;
-        const start = new Date(cursor);
-        start.setHours(hour, 0, 0, 0);
-        const end = new Date(start);
-        end.setHours(end.getHours() + 1);
+        const startsAt = easternWallTimeToIso(dateInput, `${String(hour).padStart(2, "0")}:00`);
+        const endsAt = addHoursIso(startsAt, 1);
         windows.push({
-          id: `default-${start.toISOString()}`,
-          starts_at: start.toISOString(),
-          ends_at: end.toISOString(),
+          id: `default-${startsAt}`,
+          starts_at: startsAt,
+          ends_at: endsAt,
           label: hour < 12 ? "Morning walkthrough" : "Afternoon walkthrough"
         });
       });
     }
-    cursor.setDate(cursor.getDate() + 1);
+    dayOffset += 1;
   }
   return windows;
 }
@@ -2217,7 +2267,7 @@ function renderFocusWalkthroughWindows(row) {
           </header>
           <div class="sales-walkthrough-picker-copy">
             <strong>Choose an available day</strong>
-            <span>Pick a day first, then select one of the available times for that day.</span>
+            <span>Pick a day first, then select one of the available times for that day. All times are Eastern Time (ET).</span>
           </div>
           <div class="sales-walkthrough-date-grid" data-walkthrough-day-grid>
             ${groups.map((group) => {
@@ -2486,19 +2536,19 @@ function renderWalkthroughAvailabilityAdmin() {
     .slice()
     .sort((a, b) => sortableTime(a.starts_at) - sortableTime(b.starts_at))
     .slice(0, 24));
-  const tomorrow = toDateInput(addDays(new Date(), 1));
+  const tomorrow = easternDateOffset(1);
   return `
     <section class="sales-panel sales-availability-admin">
       <div class="sales-panel-header">
         <div>
           <h2>Walkthrough Availability</h2>
-          <p>Set the days and times that sales reps can choose in focus mode.</p>
+          <p>Set the days and times that sales reps can choose in focus mode. All times are Eastern Time (ET).</p>
         </div>
       </div>
       <form class="sales-availability-form" data-availability-form>
         ${field("availability_date", "Date", tomorrow, "date", true)}
-        ${field("availability_start_time", "Start", "10:00", "time", true)}
-        ${field("availability_end_time", "End", "11:00", "time", true)}
+        ${field("availability_start_time", "Start (ET)", "10:00", "time", true)}
+        ${field("availability_end_time", "End (ET)", "11:00", "time", true)}
         ${field("availability_label", "Window Label", "Quality walkthrough", "text")}
         <button class="sales-primary-button" type="submit">${icon("plus")}Add Window</button>
       </form>
@@ -3360,8 +3410,8 @@ function renderWalkthroughModal(row) {
         <div class="sales-form-grid">
           ${selectField("record_id", "Property / Lead", recordOptions(), selectedId, true, "span-two")}
           ${field("walkthrough_at_date", "Date", toDateInput(walkthroughAt(row)), "date", true)}
-          ${field("walkthrough_at_time", "Start Time", toTimeInput(walkthroughAt(row)) || "10:00", "time")}
-          ${field("walkthrough_end_time", "End Time", toTimeInput(row?.walkthrough_end_at) || "11:00", "time")}
+          ${field("walkthrough_at_time", "Start Time (ET)", toTimeInput(walkthroughAt(row)) || "10:00", "time")}
+          ${field("walkthrough_end_time", "End Time (ET)", toTimeInput(row?.walkthrough_end_at) || "11:00", "time")}
           ${selectField("walkthrough_status", "Status", walkthroughStatuses.map((status) => [status, titleCase(status)]), row?.walkthrough_status || "scheduled")}
           ${field("walkthrough_type", "Walkthrough Type", row?.walkthrough_type || "Property Walkthrough")}
           ${selectField("walkthrough_assigned_to_id", "Assigned Rep", repOptions(), row?.sales_owner_id || "")}
