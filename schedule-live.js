@@ -146,6 +146,7 @@ function bindScheduleEvents() {
       if (window.turnlyScheduleAssignmentEditor?.openEdit) {
         window.turnlyScheduleAssignmentEditor.openEdit(row || id);
       } else {
+        window.turnlyPendingScheduleEdit = { id, row };
         window.dispatchEvent(new CustomEvent("turnly:schedule-edit-assignment", { detail: { id, row } }));
         showMessage("Opening assignment editor...");
       }
@@ -1583,3 +1584,4 @@ if (document.readyState === "loading") {
 } else {
   initScheduleLive();
 }
+
