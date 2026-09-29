@@ -2654,15 +2654,22 @@ function reviewAssignmentIds() {
 
 function pendingQualityReviewAssignments() {
   const reviewed = reviewAssignmentIds();
-  return completedAssignments()
+  return recentCompletedAssignments(5)
     .filter((row) => row?.id && !reviewed.has(String(row.id)))
     .filter((row) => !state.qualityReviewSessionDismissedIds.has(String(row.id)))
     .sort((a, b) => dateValue(completionDateValue(b), 0) - dateValue(completionDateValue(a), 0));
 }
 
 function maybeOpenQualityReviewPrompt() {
-  if (state.qualityReviewOpen || state.requestOpen || state.assignmentDetailsOpen || state.refreshing) return;
-  const next = pendingQualityReviewAssignments()[0];
+  if (state.requestOpen || state.assignmentDetailsOpen || state.refreshing) return;
+  const pending = pendingQualityReviewAssignments();
+  if (state.qualityReviewOpen) {
+    const activeId = String(state.qualityReviewAssignmentId || "");
+    if (activeId && pending.some((row) => String(row.id || "") === activeId)) return;
+    state.qualityReviewOpen = false;
+    state.qualityReviewAssignmentId = "";
+  }
+  const next = pending[0];
   if (!next) {
     state.qualityReviewAssignmentId = "";
     state.qualityReviewMessage = "";
