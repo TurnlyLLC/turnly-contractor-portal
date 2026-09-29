@@ -160,6 +160,17 @@ function bindScheduleEvents() {
       return;
     }
 
+    const videoDeleteButton = event.target.closest("[data-schedule-video-delete]");
+    if (videoDeleteButton) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      await deleteScheduleAssignmentVideo(
+        videoDeleteButton.dataset.scheduleVideoDelete,
+        videoDeleteButton.dataset.scheduleAssignmentId || ""
+      );
+      return;
+    }
+
     const assignmentCard = event.target.closest("[data-schedule-assignment-id]");
     if (assignmentCard) {
       openScheduleAssignmentModal(assignmentCard.dataset.scheduleAssignmentId);
@@ -224,9 +235,17 @@ function bindScheduleEvents() {
 
   root.addEventListener("submit", (event) => {
     const form = event.target.closest("[data-schedule-video-upload-form]");
-    if (!form) return;
-    event.preventDefault();
-    void uploadScheduleAssignmentVideos(form);
+    if (form) {
+      event.preventDefault();
+      void uploadScheduleAssignmentVideos(form);
+      return;
+    }
+
+    const notesForm = event.target.closest("[data-schedule-assignment-notes-form]");
+    if (notesForm) {
+      event.preventDefault();
+      void saveScheduleAssignmentNotes(notesForm);
+    }
   });
 
   root.addEventListener("dragstart", handleScheduleDragStart);
@@ -810,6 +829,7 @@ function scheduleAssignmentDetail(row) {
         `).join("")}
       </div>
       ${scheduleAssignmentVideoSection(row)}
+      ${scheduleAssignmentNotesPanel(row)}
       <div class="schedule-assignment-actions">
         <button class="primary-action" type="button" data-schedule-assignment-edit="${escapeHtml(String(row.id || ""))}"><span>Edit Assignment</span></button>
       </div>
@@ -841,7 +861,7 @@ function scheduleAssignmentVideoSection(row) {
 function scheduleAssignmentVideoPanelContent(row) {
   const id = String(row.id || "");
   const videos = state.assignmentVideosById.get(id) || [];
-  const list = renderScheduleAssignmentVideoList(videos);
+  const list = renderScheduleAssignmentVideoList(videos, id);
   return `
     <div class="schedule-video-head">
       <div>
@@ -859,13 +879,34 @@ function scheduleAssignmentVideoPanelContent(row) {
         ${scheduleVideoFileField("before", "Before Video")}
         ${scheduleVideoFileField("after", "After Video")}
         <label class="suite-field schedule-video-notes-field">
-          <span>Admin Notes</span>
-          <textarea data-schedule-video-notes rows="3" placeholder="Optional note for these uploads"></textarea>
+          <span>Video Upload Notes</span>
+          <textarea data-schedule-video-notes rows="3" placeholder="Optional note attached to these uploads"></textarea>
         </label>
       </div>
       <div class="schedule-video-upload-actions">
         <p class="schedule-video-message" data-schedule-video-message aria-live="polite"></p>
         <button class="primary-action" type="submit"><span>Upload Videos</span></button>
+      </div>
+    </form>
+  `;
+}
+
+function scheduleAssignmentNotesPanel(row) {
+  const id = String(row?.id || "");
+  const notes = assignmentAdminNotes(row);
+  return `
+    <form class="schedule-assignment-notes-panel" data-schedule-assignment-notes-form="${escapeHtml(id)}">
+      <div class="schedule-assignment-notes-head">
+        <div>
+          <span>Assignment Notes</span>
+          <strong>Keep context with this assignment</strong>
+          <small>These notes stay on the assignment and are available the next time you open it.</small>
+        </div>
+      </div>
+      <textarea name="admin_notes" data-schedule-assignment-notes rows="4" maxlength="5000" placeholder="Add internal notes, QA context, or follow-up details…">${escapeHtml(notes)}</textarea>
+      <div class="schedule-assignment-notes-actions">
+        <p class="schedule-assignment-notes-message" data-schedule-assignment-notes-message aria-live="polite"></p>
+        <button class="primary-action" type="submit"><span>Save Notes</span></button>
       </div>
     </form>
   `;
@@ -882,7 +923,7 @@ function scheduleVideoFileField(phase, label) {
   `;
 }
 
-function renderScheduleAssignmentVideoList(videos = []) {
+function renderScheduleAssignmentVideoList(videos = [], assignmentId = "") {
   if (!videos.length) {
     return `<div class="schedule-video-empty">No before or after videos are attached yet.</div>`;
   }
@@ -901,7 +942,10 @@ function renderScheduleAssignmentVideoList(videos = []) {
           <strong>${escapeHtml(video.title || video.label || video.file_name || "Uploaded video")}</strong>
           <small>${escapeHtml(meta)}</small>
         </div>
-        ${playableUrl ? `<a class="secondary-action" href="${escapeHtml(playableUrl)}" target="_blank" rel="noreferrer"><span>Open</span></a>` : `<small>Preview unavailable</small>`}
+        <div class="schedule-video-chip-actions">
+          ${playableUrl ? `<a class="secondary-action" href="${escapeHtml(playableUrl)}" target="_blank" rel="noreferrer"><span>Open</span></a>` : `<small>Preview unavailable</small>`}
+          <button class="secondary-action danger-btn" type="button" data-schedule-video-delete="${escapeHtml(video.id)}" data-schedule-assignment-id="${escapeHtml(String(assignmentId || video.assignment_id || ""))}"><span>Delete</span></button>
+        </div>
       </article>
     `;
   }).join("");
@@ -1011,6 +1055,13 @@ function scheduleVideoStoragePath(video) {
   ).trim();
 }
 
+function scheduleVideoStorageObjectPath(video) {
+  const path = scheduleVideoStoragePath(video).replace(/^\/+/, "");
+  const bucket = String(video?.storage_bucket || QA_VIDEO_BUCKET).trim() || QA_VIDEO_BUCKET;
+  const prefix = `${bucket}/`;
+  return path.startsWith(prefix) ? path.slice(prefix.length) : path;
+}
+
 function updateScheduleVideoFileLabel(input) {
   const phase = input.dataset.scheduleVideoFile || "";
   const label = input.closest(".schedule-video-upload-card")?.querySelector(`[data-schedule-video-file-name="${phase}"]`);
@@ -1033,6 +1084,47 @@ async function refreshScheduleAssignmentVideos(row) {
   } catch (error) {
     console.warn("[schedule-live] Unable to load assignment videos", error);
     setScheduleVideoMessage(id, "Unable to load attached videos: " + (error?.message || "Unknown error"), true);
+  }
+}
+
+async function deleteScheduleAssignmentVideo(videoId, assignmentId = "") {
+  const id = String(videoId || "").trim();
+  if (!id || !supabase) return;
+  const key = String(assignmentId || "").trim();
+  const videos = state.assignmentVideosById.get(key) || [];
+  const video = videos.find((item) => String(item.id || "") === id);
+  if (!video) {
+    showMessage("That QA video is no longer loaded. Refresh the schedule and try again.", true);
+    return;
+  }
+
+  const label = video.title || video.label || video.file_name || "this QA video";
+  if (!window.confirm(`Delete ${label}?\n\nThis removes the video from the assignment and deletes its stored file.`)) return;
+
+  setScheduleVideoMessage(key, "Deleting QA video...");
+  try {
+    const bucket = String(video.storage_bucket || QA_VIDEO_BUCKET).trim() || QA_VIDEO_BUCKET;
+    const objectPath = scheduleVideoStorageObjectPath(video);
+    if (objectPath) {
+      const storageResult = await supabase.storage.from(bucket).remove([objectPath]);
+      if (storageResult.error) throw storageResult.error;
+    }
+
+    // property_qa_video_links uses RESTRICT on qa_video_id, so remove admin links first.
+    const linksResult = await supabase.from("property_qa_video_links").delete().eq("qa_video_id", id);
+    if (linksResult.error && !isMissingDeleteRelation(linksResult.error)) throw linksResult.error;
+
+    const deleteResult = await supabase.from("qa_videos").delete().eq("id", id).select("id").maybeSingle();
+    if (deleteResult.error) throw deleteResult.error;
+
+    const nextVideos = videos.filter((item) => String(item.id || "") !== id);
+    state.assignmentVideosById.set(key, nextVideos);
+    const assignment = state.rows.find((item) => String(item.id || "") === key);
+    if (assignment && state.detailAssignmentId === key) renderScheduleAssignmentVideoPanel(assignment);
+    setScheduleVideoMessage(key, "QA video deleted.");
+  } catch (error) {
+    console.warn("[schedule-live] Admin assignment video delete failed", error);
+    setScheduleVideoMessage(key, "Unable to delete QA video: " + (error?.message || "Unknown error"), true);
   }
 }
 
@@ -1382,6 +1474,52 @@ function assignmentNotes(row) {
   };
 }
 
+function assignmentAdminNotes(row) {
+  return String(row?.completion_notes || "").trim();
+}
+
+async function saveScheduleAssignmentNotes(form) {
+  const assignmentId = String(form.dataset.scheduleAssignmentNotesForm || "").trim();
+  const row = state.rows.find((item) => String(item.id || "") === assignmentId);
+  if (!supabase || !row) {
+    setScheduleAssignmentNotesMessage(assignmentId, "Unable to find this assignment. Refresh the schedule and try again.", true);
+    return;
+  }
+
+  const textarea = form.querySelector("[data-schedule-assignment-notes]");
+  const button = form.querySelector('button[type="submit"]');
+  const notes = String(textarea?.value || "").trim().slice(0, 5000);
+  if (button) button.disabled = true;
+  setScheduleAssignmentNotesMessage(assignmentId, "Saving notes...");
+
+  try {
+    const result = await supabase
+      .from("assignment_blocks")
+      .update({ completion_notes: notes })
+      .eq("id", assignmentId)
+      .select("*")
+      .maybeSingle();
+    if (result.error) throw result.error;
+    const updated = result.data || { ...row, completion_notes: notes };
+    state.rows = state.rows.map((item) => String(item.id || "") === assignmentId ? updated : item);
+    setScheduleAssignmentNotesMessage(assignmentId, notes ? "Notes saved." : "Notes cleared.");
+  } catch (error) {
+    console.warn("[schedule-live] Assignment notes save failed", error);
+    setScheduleAssignmentNotesMessage(assignmentId, "Unable to save notes: " + (error?.message || "Unknown error"), true);
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+function setScheduleAssignmentNotesMessage(id, text = "", isError = false) {
+  const targetId = String(id || "").replace(/"/g, "\\\"");
+  const form = document.querySelector(`[data-schedule-assignment-notes-form="${targetId}"]`);
+  const message = form?.querySelector("[data-schedule-assignment-notes-message]");
+  if (!message) return;
+  message.textContent = text;
+  message.classList.toggle("error", Boolean(isError));
+}
+
 function assignmentUnitMeta(row) {
   const metadata = assignmentMetadata(row);
   const feet = row?.unit_square_feet || metadata.unit_square_feet || metadata.square_feet || metadata.sq_ft || row?.square_feet || row?.sq_ft;
@@ -1570,6 +1708,13 @@ function injectScheduleStyles() {
       </style>
     `);
   }
+  if (!document.getElementById("scheduleLiveNotesStyles")) {
+    document.head.insertAdjacentHTML("beforeend", `
+      <style id="scheduleLiveNotesStyles">
+        .schedule-assignment-notes-panel{background:rgba(57,169,255,.055);border:1px solid rgba(57,169,255,.22);border-radius:8px;display:grid;gap:12px;margin-top:16px;padding:14px}.schedule-assignment-notes-head span{color:#66c7ff;display:block;font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}.schedule-assignment-notes-head strong{color:var(--suite-text);display:block;font-size:14px;margin-top:3px}.schedule-assignment-notes-head small{color:var(--suite-soft);display:block;font-size:12px;margin-top:4px}.schedule-assignment-notes-panel textarea{background:rgba(2,10,18,.56);border:1px solid var(--suite-border-soft);border-radius:7px;color:var(--suite-text);font:inherit;line-height:1.45;min-height:100px;padding:10px;resize:vertical;width:100%}.schedule-assignment-notes-panel textarea:focus{border-color:#66c7ff;outline:2px solid rgba(102,199,255,.18);outline-offset:1px}.schedule-assignment-notes-actions{align-items:center;display:flex;gap:12px;justify-content:space-between}.schedule-assignment-notes-message{color:var(--suite-soft);font-size:12px;margin:0}.schedule-assignment-notes-message.error{color:var(--suite-red)}.schedule-assignment-notes-actions .primary-action{min-width:120px}.schedule-video-chip-actions{align-items:center;display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}.schedule-video-chip-actions .secondary-action{min-width:70px}.schedule-video-chip-actions .danger-btn{border-color:rgba(255,91,104,.62);color:var(--suite-red)}@media(max-width:720px){.schedule-assignment-notes-actions{align-items:stretch;flex-direction:column}.schedule-assignment-notes-actions .primary-action{width:100%}.schedule-video-chip-actions{justify-content:stretch}.schedule-video-chip-actions .secondary-action{flex:1}}
+      </style>
+    `);
+  }
   if (!document.getElementById("scheduleLiveDragStyles")) {
     document.head.insertAdjacentHTML("beforeend", `
       <style id="scheduleLiveDragStyles">
@@ -1584,4 +1729,3 @@ if (document.readyState === "loading") {
 } else {
   initScheduleLive();
 }
-
