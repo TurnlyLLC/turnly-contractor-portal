@@ -3559,6 +3559,35 @@ body.admin-command-body[data-portal-role="property-manager"] select option:check
   font-weight: 900;
 }
 
+.pm-table-sort {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  gap: 6px;
+  padding: 0;
+  text-align: left;
+}
+
+.pm-table-sort:hover,
+.pm-table-sort:focus-visible,
+.pm-table-sort.active {
+  color: var(--pm-text);
+}
+
+.pm-table-sort-indicator {
+  color: var(--pm-faint);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.pm-table-sort.active .pm-table-sort-indicator {
+  color: var(--pm-green);
+}
+
 .pm-table td:first-child,
 .pm-table td:nth-child(2) {
   color: var(--pm-text);

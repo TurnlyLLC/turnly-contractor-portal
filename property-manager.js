@@ -1283,7 +1283,8 @@ function sortRequests(rows) {
       const left = bedBathSortValue(a);
       const right = bedBathSortValue(b);
       result = (left - right) * factor;
-    } else if (sortKey === "completed_date") result = compareDateFields(a, b, completionDateValue, factor);
+    } else if (sortKey === "request_type") result = compareTextFields(a, b, (row) => row?.service_type || row?.assignment_type || "Turn Service", factor);
+    else if (sortKey === "completed_date") result = compareDateFields(a, b, completionDateValue, factor);
     else result = compareDateFields(a, b, scheduledDateValue, factor);
     return result || compareDateFields(a, b, scheduledDateValue, 1) || compareTextFields(a, b, (row) => assignmentUnit(row), 1);
   });
@@ -2549,6 +2550,7 @@ function renderRequestToolbar(placeholder = "Search...", includeNew = false) {
             ${selectOption("date", "Request Date", state.filters.requestSort)}
             ${selectOption("unit", "Unit", state.filters.requestSort)}
             ${selectOption("bed_bath", "Bed / Bath", state.filters.requestSort)}
+            ${selectOption("request_type", "Request Type", state.filters.requestSort)}
             ${selectOption("scheduled_date", "Scheduled Date", state.filters.requestSort)}
             ${selectOption("completed_date", "Completed Date", state.filters.requestSort)}
           </select>
@@ -2581,6 +2583,15 @@ function filteredRequests() {
   return sortRequests(rows);
 }
 
+function requestSortHeader(key, label) {
+  const active = String(state.filters.requestSort || "scheduled_date") === key;
+  const direction = state.filters.requestSortDirection === "desc" ? "desc" : "asc";
+  const nextDirection = active && direction === "asc" ? "desc" : "asc";
+  const indicator = active ? (direction === "asc" ? "↑" : "↓") : "↕";
+  const directionLabel = active ? `${direction === "asc" ? "ascending" : "descending"}; click to reverse` : "not sorted; click to sort";
+  return `<th><button class="pm-table-sort ${active ? "active" : ""}" type="button" data-pm-request-sort-header="${esc(key)}" data-pm-request-sort-direction="${esc(nextDirection)}" aria-label="Sort by ${esc(label)}, currently ${esc(directionLabel)}"><span>${esc(label)}</span><span class="pm-table-sort-indicator" aria-hidden="true">${indicator}</span></button></th>`;
+}
+
 function renderRequestTable(rows, compactMode = false) {
   const showCompletedDates = !compactMode && state.filters.requestStatus === "completed";
   const pageSize = [10, 25].includes(Number(state.requestPageSize)) ? Number(state.requestPageSize) : 10;
@@ -2595,13 +2606,13 @@ function renderRequestTable(rows, compactMode = false) {
       <table class="pm-table">
         <thead>
           <tr>
-            <th>Unit</th>
-            <th>Bed / Bath</th>
-            ${compactMode ? "" : "<th>Request Type</th>"}
-            <th>Status</th>
-            ${showCompletedDates ? "<th>Request Date</th>" : ""}
-            <th>Scheduled</th>
-            ${showCompletedDates ? "<th>Completed Date</th>" : ""}
+            ${requestSortHeader("unit", "Unit")}
+            ${requestSortHeader("bed_bath", "Bed / Bath")}
+            ${compactMode ? "" : requestSortHeader("request_type", "Request Type")}
+            ${requestSortHeader("status", "Status")}
+            ${showCompletedDates ? requestSortHeader("date", "Request Date") : ""}
+            ${requestSortHeader("scheduled_date", "Scheduled")}
+            ${showCompletedDates ? requestSortHeader("completed_date", "Completed Date") : ""}
             <th>Actions</th>
           </tr>
         </thead>
@@ -4577,6 +4588,20 @@ document.addEventListener("click", async (event) => {
     state.filters.requestStatus = statusButton.dataset.pmRequestStatus || "open";
     state.requestPage = 1;
     state.assignmentDetailsOpen = false;
+    renderManagerPortal();
+    return;
+  }
+
+  const requestSortHeader = event.target.closest("[data-pm-request-sort-header]");
+  if (requestSortHeader) {
+    const sortKey = requestSortHeader.dataset.pmRequestSortHeader || "scheduled_date";
+    if (state.filters.requestSort === sortKey) {
+      state.filters.requestSortDirection = requestSortHeader.dataset.pmRequestSortDirection === "desc" ? "desc" : "asc";
+    } else {
+      state.filters.requestSort = sortKey;
+      state.filters.requestSortDirection = "asc";
+    }
+    state.requestPage = 1;
     renderManagerPortal();
     return;
   }
