@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-contractor-pwa-v20260929-request-sort";
+const CACHE_NAME = "turnly-contractor-pwa-v20260929-qr-tracker-policy";
 
 const PRECACHE_URLS = [
   "/",
@@ -116,6 +116,7 @@ function isAdminRuntimeAsset(request) {
     || pathname === "/resident-feedback-admin.js"
     || pathname === "/resident-feedback-responses.js"
     || pathname === "/resident-feedback-widget.js"
+    || pathname === "/assignment-qr-policy.js"
     || pathname === "/resident-feedback.css"
     || pathname === "/admin-regions.js"
     || pathname === "/admin-dashboard.css"

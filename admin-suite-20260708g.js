@@ -13,6 +13,13 @@ import {
 } from "./admin-preview-context.js?v=20260908-sales-preview";
 
 import { createResidentFeedbackWidget } from "./resident-feedback-widget.js?v=20260921-tabs";
+import {
+  applyAssignmentQrTrackerPolicy,
+  assignmentQrEligible,
+  assignmentQrTrackerId,
+  qrTrackerEligibilityMessage,
+  normalizeAssignmentQrTrackerId
+} from "./assignment-qr-policy.js?v=20260929-qr-policy";
 
 const suiteEnv = window.__ENV || {};
 const suiteSupabase = suiteEnv.SUPABASE_URL && suiteEnv.SUPABASE_ANON_KEY
@@ -322,6 +329,7 @@ const assignmentOptionalColumns = [
   "unit_id",
   "unit_number",
   "unit_name",
+  "qr_tracker_id",
   "scope",
   "supplies_notes",
   "special_instructions",
@@ -12694,6 +12702,7 @@ function assignmentForm() {
         leadInputField("property_name", "Property Name", "text", { required: true }),
         leadInputField("address", "Address", "text", { className: "wide" }),
         leadInputField("service_type", "Service Type"),
+        `<label class="suite-field"><span>QR Tracker ID</span><input id="qr_tracker_id" type="text" maxlength="64" placeholder="VFH-001" autocomplete="off" /><small>Optional. Cleaning assignments after unit 2330-2 only. Leasing and staging assignments never receive a tracker ID.</small></label>`,
         leadInputField("pay_amount", "Pay Amount", "number", { min: "0", step: "0.01" }),
         leadSelectField("assignment_status", "Status", assignmentStatusOptions, { required: true })
       ])}
@@ -13437,6 +13446,7 @@ function populateAssignmentFormForEdit(row) {
   setValue("property_name", row.property_name || "");
   setValue("address", row.address || "");
   setValue("service_type", row.service_type || "");
+  setValue("qr_tracker_id", assignmentQrTrackerId(row));
   setValue("pay_amount", row.pay_amount ?? "");
   populateAssignmentAssignedContractorSelect();
   setValue("assignmentAssignedContractor", assignmentWorkerId(row) || "");
@@ -13472,6 +13482,7 @@ function populateAssignmentFormForEdit(row) {
   setValue("assignmentUnitSearch", unitLabel);
   setValue("assignmentUnitSelect", row.unit_id || metadata.unit_id || "");
   refreshAssignmentDateTimeControls();
+  updateAssignmentQrTrackerField(row);
 }
 
 function handleAssignmentClick(event) {
@@ -13706,6 +13717,9 @@ function handleAssignmentChange(event) {
 function handleAssignmentInput(event) {
   if (event.target?.matches("#assignmentBulkUnitSearch")) {
     renderAssignmentBulkUnitPicker();
+  }
+  if (event.target?.matches("#title, #service_type, #assignmentUnitSearch, #qr_tracker_id")) {
+    updateAssignmentQrTrackerField();
   }
 }
 
@@ -14332,6 +14346,7 @@ function renderAssignmentRow(row) {
     ["Schedule", formatDateWindow(row.start_window, row.end_window), assignmentFrequencyLabel(row), "calendar"],
     ["Contractor Routing", assignmentContractorText(row), assignmentRoutingMeta(row), "users"],
     ["Contractor Pay", assignmentMoney(row.pay_amount), row.service_type || "No service type", "badge-dollar"],
+    ["QR Tracker", assignmentQrTrackerId(row) || "Not attached", assignmentQrTrackerMeta(row), "layout-grid"],
     ["Special Notes", assignmentSpecialNotes(row), assignmentSpecialNotesMeta(row), "document"]
   ];
   return `
@@ -14482,6 +14497,7 @@ function clearAssignmentForm(options = {}) {
   setValue("assignment_frequency", "one_time");
   setValue("priority", "normal");
   setValue("assignment_status", "open");
+  setValue("qr_tracker_id", "");
   setValue("assignmentAssignedContractor", "");
   setValue("assignmentBulkUnitSearch", "");
   setValue("start_window", toDatetimeInput(start));
@@ -14503,6 +14519,7 @@ function clearAssignmentForm(options = {}) {
   updateAssignmentContractorControls();
   renderAssignmentBulkUnitPicker();
   refreshAssignmentDateTimeControls();
+  updateAssignmentQrTrackerField();
   const formMessage = document.getElementById("assignmentFormMessage");
   if (formMessage) {
     formMessage.textContent = "";
@@ -14648,6 +14665,7 @@ function collectAssignmentPayloads() {
     property_name: assignmentValue("property_name"),
     address: assignmentValue("address"),
     service_type: assignmentValue("service_type"),
+    qr_tracker_id: normalizeAssignmentQrTrackerId(assignmentValue("qr_tracker_id")),
     pay_amount: Number.isFinite(payAmount) && payAmount >= 0 ? payAmount : 0,
     scope: assignmentValue("scope"),
     supplies_notes: assignmentValue("supplies_notes"),
@@ -14670,6 +14688,9 @@ function collectAssignmentPayloads() {
     created_by: assignmentState.user?.id || null
   };
   const selectedUnits = assignmentBulkUnitModeEnabled() ? selectedAssignmentBulkUnits() : [];
+  if (selectedUnits.length > 1 && assignmentValue("qr_tracker_id")) {
+    throw new Error("QR tracker IDs can only be attached while posting one clean at a time.");
+  }
   if (assignmentBulkUnitModeEnabled() && !selectedUnits.length) {
     throw new Error("Choose at least one unit before posting bulk unit assignments.");
   }
@@ -14687,7 +14708,7 @@ function collectAssignmentPayloads() {
       completed_at: status === "completed" ? window.end.toISOString() : null,
       completion_notes: status === "completed" ? "Historical completion entered from admin bulk assignment add." : ""
     }, assignedContractor);
-    return {
+    return applyAssignmentQrTrackerPolicy({
       ...payload,
       title: unitDetails ? assignmentTitleForUnit(payload.title, unitDetails.unitName, payload.property_name) : payload.title,
       pay_amount: unitPay || payload.pay_amount,
@@ -14699,7 +14720,11 @@ function collectAssignmentPayloads() {
       start_window: window.start.toISOString(),
       end_window: window.end.toISOString(),
       ...assignmentStatusPayloadForWindow(status, rowContext, window, assignedContractor)
-    };
+    }, {
+      ...payload,
+      unit_number: unitDetails?.unitNumber || "",
+      unit_name: unitDetails?.unitName || ""
+    });
   }));
 }
 
@@ -14727,6 +14752,7 @@ function collectAssignmentUpdatePayload(currentRow = {}) {
     property_name: assignmentValue("property_name"),
     address: assignmentValue("address"),
     service_type: assignmentValue("service_type"),
+    qr_tracker_id: normalizeAssignmentQrTrackerId(assignmentValue("qr_tracker_id")),
     pay_amount: Number.isFinite(payAmount) && payAmount >= 0 ? payAmount : 0,
     scope: assignmentValue("scope"),
     supplies_notes: assignmentValue("supplies_notes"),
@@ -14765,7 +14791,7 @@ function collectAssignmentUpdatePayload(currentRow = {}) {
   if (selectedPropertyId && assignmentHasPropertyOption(selectedPropertyId)) {
     payload.property_id = selectedPropertyId;
   }
-  return payload;
+  return applyAssignmentQrTrackerPolicy(payload, currentRow);
 }
 
 function assignmentBulkControlValue(id) {
@@ -15832,6 +15858,36 @@ function assignmentUnitNumber(row) {
     || metadata.unit_name
     || metadata.unit_id
     || "No unit";
+}
+
+function assignmentQrTrackerMeta(row) {
+  if (assignmentQrTrackerId(row)) return "Attached to this clean";
+  if (assignmentQrEligible(row)) return "Eligible clean · no tracker attached";
+  return "Not eligible for an assignment tracker";
+}
+
+function assignmentFormQrRow() {
+  const current = assignmentState.editingId
+    ? assignmentState.rows.find((row) => String(row.id || "") === String(assignmentState.editingId)) || {}
+    : {};
+  return {
+    ...current,
+    title: assignmentValue("title") || current.title || "",
+    service_type: assignmentValue("service_type") || current.service_type || "",
+    unit_number: assignmentValue("assignmentUnitSearch") || assignmentValue("assignmentUnitSelect") || current.unit_number || "",
+    unit_name: assignmentValue("assignmentUnitSearch") || current.unit_name || ""
+  };
+}
+
+function updateAssignmentQrTrackerField(row = null) {
+  const field = document.getElementById("qr_tracker_id");
+  if (!field) return;
+  const current = row || assignmentFormQrRow();
+  const bulkMode = assignmentBulkUnitModeEnabled();
+  const eligible = assignmentQrEligible(current) && !bulkMode;
+  field.disabled = !eligible;
+  field.closest(".suite-field")?.classList.toggle("muted-field", !eligible);
+  field.title = eligible ? "Optional QR tracker ID" : (bulkMode ? "Attach a tracker after posting the individual clean" : qrTrackerEligibilityMessage(current));
 }
 
 function assignmentUnitMeta(row) {
