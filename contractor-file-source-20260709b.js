@@ -22,6 +22,7 @@ const state = {
   optionalErrors: [],
   activeTab: "overview",
   editingProfile: false,
+  editingDocumentId: "",
   message: "",
   messageError: false,
   savingId: ""
@@ -758,11 +759,14 @@ function documentUploadForm() {
     <form class="contractor-file-form" data-document-upload-form>
       <div class="contractor-file-form-grid">
         <label><span>Document Type</span><select name="documentType">
-          <option value="agreement">Agreement</option>
-          <option value="background_check">Background Check</option>
+          <option value="contractor_agreement">Contractor Agreement</option>
+          <option value="w9">W-9</option>
           <option value="insurance">Insurance</option>
+          <option value="policy_acknowledgement">Policy Acknowledgement</option>
+          <option value="background_check">Background Check</option>
           <option value="license">License</option>
-          <option value="tax_document">Tax Document</option>
+          <option value="agreement">Other Agreement</option>
+          <option value="tax_document">Other Tax Document</option>
           <option value="other">Other</option>
         </select></label>
         <label><span>Status</span><select name="status">
@@ -779,6 +783,42 @@ function documentUploadForm() {
       </div>
       <div class="contractor-file-form-actions">
         <button class="primary-action" type="submit" ${state.savingId === "document" ? "disabled" : ""}><span>${state.savingId === "document" ? "Uploading..." : "Upload Document"}</span></button>
+      </div>
+    </form>
+  `;
+}
+
+function documentEditForm(row) {
+  const documentId = String(row?.id || "");
+  const type = String(row?.document_type || "other");
+  const status = String(row?.status || "uploaded");
+  return `
+    <form class="contractor-file-form contractor-file-document-edit" data-document-edit-form data-document-id="${esc(documentId)}">
+      <div class="contractor-file-form-grid">
+        <label><span>Document Type</span><select name="documentType">
+          ${[
+            ["contractor_agreement", "Contractor Agreement"],
+            ["w9", "W-9"],
+            ["insurance", "Insurance"],
+            ["policy_acknowledgement", "Policy Acknowledgement"],
+            ["background_check", "Background Check"],
+            ["license", "License / Certification"],
+            ["agreement", "Other Agreement"],
+            ["tax_document", "Other Tax Document"],
+            ["other", "Other"]
+          ].map(([value, label]) => `<option value="${esc(value)}" ${type === value ? "selected" : ""}>${esc(label)}</option>`).join("")}
+        </select></label>
+        <label><span>Status</span><select name="status">
+          ${["uploaded", "approved", "pending_review", "expired", "rejected"].map((value) => `<option value="${esc(value)}" ${status === value ? "selected" : ""}>${esc(title(value))}</option>`).join("")}
+        </select></label>
+        <label><span>Title</span><input name="title" value="${esc(row?.title || row?.file_name || "Document")}" required /></label>
+        <label><span>Expiration Date</span><input name="expirationDate" type="date" value="${esc(inputDate(row?.expiration_date || row?.expires_at || row?.expires_on))}" /></label>
+        <label class="contractor-file-field-full"><span>Replace File (optional)</span><input name="documentFile" type="file" /></label>
+        <label class="contractor-file-field-full"><span>Notes</span><textarea name="notes" placeholder="Document notes">${esc(row?.notes || row?.description || "")}</textarea></label>
+      </div>
+      <div class="contractor-file-form-actions">
+        <button class="secondary-action" type="button" data-document-cancel="${esc(documentId)}">Cancel</button>
+        <button class="primary-action" type="submit" ${state.savingId === `document:${documentId}` ? "disabled" : ""}><span>${state.savingId === `document:${documentId}` ? "Saving..." : "Save Changes"}</span></button>
       </div>
     </form>
   `;
@@ -886,12 +926,17 @@ function renderOnboarding() {
 
 function renderDocuments() {
   const documentTable = tableRows(state.documents, [
-    ["Document", (row) => `<strong>${esc(row.title || row.name || row.document_name || row.file_name || row.type || "Document")}</strong><small>${esc(row.notes || row.description || row.document_type || "")}</small>`],
+    ["Document", (row) => state.editingDocumentId === String(row.id || "") && row.__sourceTable === "contractor_documents"
+      ? documentEditForm(row)
+      : `<strong>${esc(row.title || row.name || row.document_name || row.file_name || row.type || "Document")}</strong><small>${esc(title(row.document_type || ""))}</small><small>${esc(row.notes || row.description || "")}</small>`],
     ["Status", (row) => esc(title(row.status || row.approval_status || row.compliance_status || "recorded"))],
     ["Expires", (row) => esc(formatDate(row.expiration_date || row.expires_at || row.expires_on, "No expiration"))],
     ["Uploaded", (row) => esc(formatDate(row.uploaded_at || row.created_at || row.updated_at))],
     ["File", (row) => storageButton(row)],
-    ["Source", (row) => esc(row.__sourceTable || "Supabase")]
+    ["Source", (row) => esc(row.__sourceTable || "Supabase")],
+    ["Actions", (row) => row.__sourceTable === "contractor_documents"
+      ? `<button class="secondary-action contractor-file-inline-action" type="button" data-document-edit="${esc(row.id)}"><span>${state.editingDocumentId === String(row.id) ? "Editing" : "Edit"}</span></button>`
+      : "-" ]
   ], "No contractor document records found yet.");
   const mediaTable = tableRows(state.media, [
     ["Media", (row) => `<strong>${esc(row.title || row.label || row.file_name || row.video_phase || row.photo_type || "Upload")}</strong><small>${esc(row.notes || row.property_name || "")}</small>`],
@@ -1528,6 +1573,53 @@ async function saveDocumentUpload(form) {
   }
 }
 
+async function saveDocumentEdit(form) {
+  const id = String(form.dataset.documentId || "");
+  const row = state.documents.find((item) => String(item.id || "") === id && item.__sourceTable === "contractor_documents");
+  if (!id || !row || state.savingId) return;
+  const replacement = form.elements.documentFile?.files?.[0] || null;
+  state.savingId = `document:${id}`;
+  render();
+  try {
+    const patch = {
+      document_type: formText(form, "documentType") || row.document_type || "other",
+      title: formText(form, "title") || row.title || row.file_name || "Document",
+      status: formText(form, "status") || row.status || "uploaded",
+      expiration_date: formText(form, "expirationDate") || null,
+      notes: formText(form, "notes"),
+      updated_at: new Date().toISOString()
+    };
+    let replacementUpload = null;
+    if (replacement) {
+      replacementUpload = await uploadContractorFile(DOCUMENT_BUCKET, replacement);
+      Object.assign(patch, {
+        storage_bucket: DOCUMENT_BUCKET,
+        storage_path: replacementUpload.path,
+        file_name: replacement.name,
+        mime_type: replacement.type || "",
+        file_size: replacement.size || 0,
+        uploaded_at: new Date().toISOString(),
+        uploaded_by: replacementUpload.userId
+      });
+    }
+    const result = await updateRowWithFallback("contractor_documents", id, patch);
+    if (result.error) {
+      if (replacementUpload) await supabase.storage.from(DOCUMENT_BUCKET).remove([replacementUpload.path]).catch(() => null);
+      throw result.error;
+    }
+    const next = result.data || { ...row, ...patch };
+    state.documents = state.documents.map((item) => String(item.id || "") === id ? { ...item, ...next, __sourceTable: "contractor_documents" } : item);
+    state.editingDocumentId = "";
+    state.savingId = "";
+    message("Contractor document updated.");
+    render();
+  } catch (error) {
+    state.savingId = "";
+    message(`Unable to update document: ${error.message}`, true);
+    render();
+  }
+}
+
 async function savePerformanceMetric(form) {
   if (state.savingId) return;
   state.savingId = "performance";
@@ -1998,7 +2090,7 @@ function injectStyles() {
     .contractor-file-workspace{display:grid;gap:14px}.contractor-file-hero{align-items:end;background:rgba(17,32,50,.92);border:1px solid var(--suite-border);border-radius:8px;display:flex;gap:16px;justify-content:space-between;padding:18px}.contractor-file-hero h1{font-size:26px;margin:12px 0 6px}.contractor-file-hero p{color:var(--suite-soft);margin:0}.contractor-file-badges{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}.contractor-file-back{display:inline-flex;width:auto}.contractor-file-quick{background:rgba(0,214,166,.1);border:1px solid rgba(0,214,166,.3);border-radius:8px;padding:14px 18px;text-align:right}.contractor-file-quick strong{color:var(--suite-green);display:block;font-size:24px}.contractor-file-quick small{color:var(--suite-soft);font-weight:800;text-transform:uppercase}.contractor-file-tabs{margin-top:2px}.contractor-file-grid{display:grid;gap:14px;grid-template-columns:repeat(2,minmax(0,1fr))}.contractor-file-panel .panel-head{padding-bottom:10px}.contractor-file-detail-grid{display:grid;gap:10px;grid-template-columns:repeat(2,minmax(0,1fr))}.contractor-file-detail-grid div{background:rgba(7,18,32,.55);border:1px solid var(--suite-border-soft);border-radius:8px;padding:10px}.contractor-file-detail-grid span{color:var(--suite-soft);display:block;font-size:11px;font-weight:900;text-transform:uppercase}.contractor-file-detail-grid strong{display:block;margin-top:4px}.contractor-file-list{display:grid;gap:8px}.contractor-file-list article{align-items:center;background:rgba(7,18,32,.55);border:1px solid var(--suite-border-soft);border-radius:8px;display:flex;justify-content:space-between;padding:10px}.contractor-file-list small,.contractor-file-table small{color:var(--suite-soft);display:block;font-size:11px;margin-top:3px}.contractor-file-empty{border:1px dashed var(--suite-border-soft);border-radius:8px;color:var(--suite-soft);padding:18px;text-align:center}.contractor-file-step-list{display:grid;gap:10px;margin-bottom:14px}.contractor-file-step{align-items:center;background:rgba(7,18,32,.55);border:1px solid var(--suite-border-soft);border-radius:8px;display:flex;gap:10px;padding:10px}.contractor-file-step>span{align-items:center;border:1px solid var(--suite-border);border-radius:999px;display:inline-flex;height:28px;justify-content:center;width:28px}.contractor-file-step.is-complete>span{background:var(--suite-green);border-color:var(--suite-green);color:#041d15}.contractor-file-step small{color:var(--suite-soft);display:block}.contractor-file-table-wrap{max-height:520px}.contractor-file-tab-body{display:grid;gap:14px}.contractor-file-form{display:grid;gap:12px}.contractor-file-form-grid{display:grid;gap:12px;grid-template-columns:repeat(2,minmax(0,1fr))}.contractor-file-form label{display:grid;gap:6px}.contractor-file-form label span{color:var(--suite-soft);font-size:11px;font-weight:900;text-transform:uppercase}.contractor-file-form input,.contractor-file-form select,.contractor-file-form textarea{background:rgba(7,18,32,.8);border:1px solid var(--suite-border-soft);border-radius:7px;color:var(--suite-text);font:inherit;min-height:38px;padding:9px 10px;width:100%}.contractor-file-form input[type=file]{padding:8px}.contractor-file-form textarea{min-height:88px;resize:vertical}.contractor-file-field-full{grid-column:1/-1}.contractor-file-form-actions{display:flex;gap:10px;justify-content:flex-end}.contractor-file-nested-form{border-top:1px solid var(--suite-border-soft);margin-top:14px;padding-top:14px}@media(max-width:1050px){.contractor-file-grid{grid-template-columns:1fr}.contractor-file-hero{align-items:start;display:grid}.contractor-file-quick{text-align:left}.contractor-file-detail-grid,.contractor-file-form-grid{grid-template-columns:1fr}.contractor-file-form-actions{justify-content:stretch}.contractor-file-form-actions .primary-action{width:100%}}
   `;
   style.textContent += `
-    .contractor-file-table input,.contractor-file-table textarea{background:rgba(7,18,32,.82);border:1px solid var(--suite-border-soft);border-radius:7px;color:var(--suite-text);font:inherit;min-height:36px;padding:8px 9px;width:100%}.contractor-file-table textarea{min-height:54px;min-width:180px;resize:vertical}.contractor-file-pay-input{min-width:105px}.contractor-file-pay-check,.contractor-file-pay-bulk input{accent-color:var(--suite-green);min-height:auto!important;width:auto!important}.contractor-file-pay-bulk{align-items:center;background:rgba(7,18,32,.55);border:1px solid var(--suite-border-soft);border-radius:8px;display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-start;margin-bottom:12px;padding:10px}.contractor-file-pay-bulk label{align-items:center;color:var(--suite-text);display:inline-flex;font-weight:900;gap:8px}.contractor-file-pay-bulk small{color:var(--suite-soft);font-weight:800}.contractor-file-pay-actions{display:flex;flex-wrap:wrap;gap:6px;min-width:190px}.contractor-file-pay-actions .primary-action,.contractor-file-pay-actions .secondary-action{min-height:34px;padding:8px 10px}.contractor-file-table [data-pay-net]{color:var(--suite-green);display:block;min-width:82px}
+    .contractor-file-document-edit{min-width:280px}.contractor-file-document-edit .contractor-file-form-grid{grid-template-columns:1fr}.contractor-file-table input,.contractor-file-table textarea{background:rgba(7,18,32,.82);border:1px solid var(--suite-border-soft);border-radius:7px;color:var(--suite-text);font:inherit;min-height:36px;padding:8px 9px;width:100%}.contractor-file-table textarea{min-height:54px;min-width:180px;resize:vertical}.contractor-file-pay-input{min-width:105px}.contractor-file-pay-check,.contractor-file-pay-bulk input{accent-color:var(--suite-green);min-height:auto!important;width:auto!important}.contractor-file-pay-bulk{align-items:center;background:rgba(7,18,32,.55);border:1px solid var(--suite-border-soft);border-radius:8px;display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-start;margin-bottom:12px;padding:10px}.contractor-file-pay-bulk label{align-items:center;color:var(--suite-text);display:inline-flex;font-weight:900;gap:8px}.contractor-file-pay-bulk small{color:var(--suite-soft);font-weight:800}.contractor-file-pay-actions{display:flex;flex-wrap:wrap;gap:6px;min-width:190px}.contractor-file-pay-actions .primary-action,.contractor-file-pay-actions .secondary-action{min-height:34px;padding:8px 10px}.contractor-file-table [data-pay-net]{color:var(--suite-green);display:block;min-width:82px}
   `;
   style.textContent += `
     .contractor-file-access-note{background:rgba(0,214,166,.1);border:1px solid rgba(0,214,166,.28);border-radius:8px;display:grid;gap:4px;line-height:1.45;padding:12px}.contractor-file-access-note strong{color:var(--suite-text)}.contractor-file-access-note span{color:var(--suite-soft);font-size:12px}.contractor-file-access-grid{display:grid;gap:12px;grid-template-columns:repeat(2,minmax(0,1fr))}.contractor-file-access-list{background:rgba(7,18,32,.55);border:1px solid var(--suite-border-soft);border-radius:8px;display:grid;gap:8px;max-height:360px;overflow:auto;padding:12px}.contractor-file-access-list h3{font-size:13px;margin:0}.contractor-file-access-check{align-items:flex-start;display:flex!important;gap:8px}.contractor-file-access-check input{accent-color:var(--suite-green);flex:0 0 auto;margin-top:3px;min-height:auto!important;width:auto!important}.contractor-file-access-check span{color:var(--suite-text)!important;display:grid!important;font-size:13px;font-weight:800;text-transform:none!important}.contractor-file-access-check small{color:var(--suite-soft);font-size:11px;font-weight:700}.contractor-file-access-pills{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.contractor-file-access-pills span{background:rgba(0,214,166,.12);border:1px solid rgba(0,214,166,.24);border-radius:999px;color:var(--suite-text);font-size:11px;font-weight:900;padding:5px 8px}@media(max-width:1050px){.contractor-file-access-grid{grid-template-columns:1fr}}
@@ -2035,6 +2127,18 @@ function bind() {
     const assignmentDelete = event.target.closest("[data-assignment-delete]");
     if (assignmentDelete) {
       void deleteContractorAssignment(assignmentDelete.dataset.assignmentDelete);
+      return;
+    }
+    const documentEdit = event.target.closest("[data-document-edit]");
+    if (documentEdit) {
+      state.editingDocumentId = String(documentEdit.dataset.documentEdit || "");
+      render();
+      return;
+    }
+    const documentCancel = event.target.closest("[data-document-cancel]");
+    if (documentCancel) {
+      state.editingDocumentId = "";
+      render();
       return;
     }
     const storage = event.target.closest("[data-open-storage-path]");
@@ -2095,6 +2199,11 @@ function bind() {
     if (form.matches("[data-document-upload-form]")) {
       event.preventDefault();
       void saveDocumentUpload(form);
+      return;
+    }
+    if (form.matches("[data-document-edit-form]")) {
+      event.preventDefault();
+      void saveDocumentEdit(form);
       return;
     }
     if (form.matches("[data-performance-form]")) {
