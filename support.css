@@ -1,0 +1,123 @@
+.support-page-body {
+  background:
+    radial-gradient(circle at 12% 4%, rgba(0, 214, 163, 0.13), transparent 34%),
+    radial-gradient(circle at 90% 18%, rgba(69, 155, 255, 0.12), transparent 32%),
+    #07111f;
+}
+
+.support-shell {
+  max-width: 1040px;
+}
+
+.support-hero {
+  overflow: hidden;
+  position: relative;
+}
+
+.support-hero::after {
+  border: 1px solid rgba(0, 214, 163, 0.24);
+  border-radius: 999px;
+  content: "";
+  height: 260px;
+  pointer-events: none;
+  position: absolute;
+  right: -100px;
+  top: -130px;
+  width: 260px;
+}
+
+.support-contact-grid {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 18px;
+}
+
+.support-contact-card {
+  background: linear-gradient(135deg, rgba(0, 214, 163, 0.13), rgba(14, 27, 42, 0.94));
+  border: 1px solid rgba(0, 214, 163, 0.34);
+  border-radius: 14px;
+  color: #f5f8fb;
+  display: grid;
+  gap: 8px;
+  padding: 22px;
+  text-decoration: none;
+  transition: border-color 160ms ease, transform 160ms ease;
+}
+
+.support-contact-card:hover,
+.support-contact-card:focus-visible {
+  border-color: #00d6a3;
+  transform: translateY(-2px);
+}
+
+.support-card-kicker {
+  color: #00d6a3;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.13em;
+}
+
+.support-contact-card strong {
+  font-size: 20px;
+  overflow-wrap: anywhere;
+}
+
+.support-contact-card > span:last-child {
+  color: #c7d6e8;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.support-card {
+  gap: 28px;
+}
+
+.support-topic-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.support-topic-grid > div {
+  background: rgba(7, 17, 31, 0.52);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 12px;
+  padding: 18px;
+}
+
+.support-topic-grid h3 {
+  color: #f8fbff;
+  font-size: 17px;
+  margin: 0 0 7px;
+}
+
+.support-topic-grid p {
+  font-size: 14px;
+  margin: 0;
+}
+
+.support-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 22px;
+  justify-content: center;
+  padding: 24px 8px 0;
+}
+
+.support-footer a {
+  color: #9fb1c5;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+@media (max-width: 680px) {
+  .support-contact-grid,
+  .support-topic-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .support-contact-card strong {
+    font-size: 18px;
+  }
+}
