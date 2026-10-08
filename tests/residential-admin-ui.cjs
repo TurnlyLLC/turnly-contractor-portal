@@ -1,0 +1,22 @@
+const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),{chromium}=require('playwright');
+const root=path.resolve(__dirname,'..'),out=path.join(root,'.tmp','residential-admin');
+const id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',customer='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+const b={id,customer_id:customer,name:'Example Customer',email:'customer@example.com',phone:'+19195550199',profile_address:'1 Profile Lane',property_address:'2 Property Lane',city:'Durham',state:'NC',zip:'27701',sqft:1800,beds:3,baths:2,quote:{service_label:'Deep clean',frequency_label:'Weekly'},service_date:'2026-10-12',arrival_start:'09:00',arrival_end:'12:00',status:'scheduled',payment_status:'card_saved',amount_cents:37800,agent_name:'Example Agent',referral_code:'TA-'+'A'.repeat(32),job:{id,status:'pending',pay_amount:0}};
+const server=http.createServer((req,res)=>{const f=path.resolve(root,'.'+new URL(req.url,'http://local').pathname);if(!f.startsWith(root+path.sep)||!fs.existsSync(f))return res.writeHead(404).end();res.setHeader('Content-Type',f.endsWith('.mjs')||f.endsWith('.js')?'text/javascript':f.endsWith('.css')?'text/css':'text/html');res.end(fs.readFileSync(f));});
+(async()=>{fs.mkdirSync(out,{recursive:true});await new Promise(r=>server.listen(0,'127.0.0.1',r));const browser=await chromium.launch({headless:true,executablePath:process.env.QA_CHROMIUM});const page=await browser.newPage({viewport:{width:1440,height:1100}}),calls=[],errors=[];page.on('pageerror',e=>errors.push(e.message));
+await page.route('**/env.js',r=>r.fulfill({contentType:'text/javascript',body:'window.__ENV={SUPABASE_URL:"https://example.supabase.co",SUPABASE_ANON_KEY:"mock"};'}));
+await page.route('https://cdn.jsdelivr.net/**',r=>r.fulfill({contentType:'text/javascript',body:'export function createClient(){return {auth:{getSession:async()=>({data:{session:{access_token:"mock"}}})}}}'}));
+await page.route('**/api/residential-booking',async route=>{const v=route.request().postDataJSON();calls.push(v);let r={ok:true};if(v.action==='admin_list')r={bookings:[b],total:1,payments_ready:true};if(v.action==='admin_clients')r={clients:[{id:customer,name:b.name,email:b.email,phone:b.phone,latest_booking:b,booking_count:1,referral_agents:{name:b.agent_name}}],total:1};if(v.action==='admin_approve_job'){b.job.status='open';b.job.pay_amount=Number(v.pay_amount);}await route.fulfill({contentType:'application/json',body:JSON.stringify(r)});});
+try{
+ await page.goto(`http://127.0.0.1:${server.address().port}/admin-residential.html`);await page.getByRole('heading',{name:'Example Customer',exact:true}).waitFor();
+ assert.match(await page.getByRole('link',{name:'Open job in Assignments'}).getAttribute('href'),new RegExp(id));
+ await page.screenshot({path:path.join(out,'jobs-desktop.png'),fullPage:true});
+ await page.getByRole('button',{name:'Clients',exact:true}).click();await page.getByRole('button',{name:'View client jobs'}).waitFor();
+ assert.match(await page.locator('#bookings').innerText(),/1 submitted booking/);
+ await page.setViewportSize({width:390,height:844});await page.screenshot({path:path.join(out,'clients-mobile.png'),fullPage:true});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+ await page.getByRole('button',{name:'View client jobs'}).click();await page.locator('[data-approve-job]').waitFor();assert.equal(calls.at(-1).customer_id,customer);
+ await page.locator('[name=pay_amount]').fill('125.50');await page.getByRole('button',{name:'Approve and release job'}).click();await page.getByText('Job approved and released to the assignment board.').waitFor();
+ assert.equal(calls.find(x=>x.action==='admin_approve_job').pay_amount,'125.50');assert.match(await page.locator('#bookings').innerText(),/\$125.50/);
+ await page.screenshot({path:path.join(out,'jobs-mobile.png'),fullPage:true});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);assert.deepEqual(errors,[]);
+ console.log('PASS residential client directory, client-job filter, assignment link, pay approval, mobile layout. Synthetic data only.');
+}finally{await browser.close();server.close();}})().catch(e=>{console.error(e);server.close();process.exitCode=1;});

@@ -46,7 +46,6 @@ const navSections = [
       { key: "sales-overview", label: "Sales Dashboard", href: "sales-overview.html", icon: "layout-grid" },
       { key: "leads", label: "Leads", href: "leads.html", icon: "users" },
       { key: "agent-referrals", label: "Agent Referrals", href: "admin-agents.html", icon: "users" },
-      { key: "residential-bookings", label: "Residential Bookings", href: "admin-residential.html", icon: "calendar" },
       { key: "walkthroughs", label: "Walkthroughs", href: "walkthroughs.html", icon: "calendar-days" },
       { key: "sales-tasks", label: "Tasks & Follow-ups", href: "sales-follow-ups.html", icon: "clipboard-list" },
       { key: "quotes", label: "Quotes", href: "quotes.html", icon: "badge-dollar" },
@@ -56,6 +55,7 @@ const navSections = [
   {
     title: "Operations",
     links: [
+      { key: "residential-bookings", label: "Residential", href: "admin-residential.html", icon: "calendar" },
       { key: "schedule", label: "Schedule", href: "schedule.html", icon: "calendar" },
       { key: "coverage-center", label: "Regions & Access", href: "coverage-center.html", icon: "shield" },
       { key: "assignments", label: "Assignments", href: "assignments.html", icon: "clipboard-list" },
@@ -124,7 +124,7 @@ const commandCenterWidgetCatalog = [
   { id: "resident-feedback", title: "Resident Feedback", icon: "star", href: "resident-feedback.html" },
   { id: "action-items", title: "Action Items", icon: "clipboard-list", href: "assignments.html" },
   { id: "property-manager-requests", title: "Property Manager Requests", icon: "building", href: "contracts.html" },
-  { id: "pending-turn-requests", title: "Pending Turn Requests", icon: "calendar", href: "assignments.html" },
+  { id: "pending-turn-requests", title: "Pending Cleaning Requests", icon: "calendar", href: "assignments.html" },
   { id: "coverage-requests", title: "Coverage Requests", icon: "shield", href: "coverage-center.html" },
   { id: "qa-alerts", title: "QA Alerts", icon: "alert", href: "qa-queue.html" },
   { id: "schedule", title: "Today's Schedule", icon: "calendar", href: "schedule.html" }
@@ -1277,7 +1277,7 @@ function renderPropertyManagerRequestsWidget() {
 }
 
 function renderPendingTurnRequestsWidget() {
-  return panel("Pending Turn Requests", `
+  return panel("Pending Cleaning Requests", `
     <div id="commandPendingTurnRequestsMessage" class="request-message" aria-live="polite"></div>
     <div id="commandPendingTurnRequestsList" class="dashboard-list">${skeletonRows(3)}</div>
     <a class="panel-bottom-link" href="assignments.html">View All Assignments ${icon("chevron-right")}</a>
@@ -1608,15 +1608,15 @@ async function loadCommandPropertyManagerRequests() {
 
 async function loadCommandPendingTurnRequests() {
   setCommandMessage("pending-turn-requests", "Syncing...");
-  const result = await fetchCommandRows("assignment_blocks", "id,title,property_name,address,service_type,status,start_window,end_window,unit_number,unit_name,priority,created_at,metadata,visibility", { order: "created_at", ascending: false, limit: 120 });
+  const result = await fetchCommandRows("assignment_blocks", "id,title,property_name,address,service_type,status,start_window,end_window,unit_number,unit_name,priority,pay_amount,created_at,metadata,visibility", { order: "created_at", ascending: false, limit: 120 });
   commandCenterState.pendingTurnRequests = result.error ? [] : result.data
     .filter(isPendingPropertyManagerTurnRequest)
     .map(mapPendingTurnRequest);
   setCommandMessage("pending-turn-requests", result.error
-    ? "Unable to load pending property manager turn requests."
+    ? "Unable to load pending turnover or residential requests."
     : commandCenterState.pendingTurnRequests.length
       ? `${commandCenterState.pendingTurnRequests.length} pending turn request${commandCenterState.pendingTurnRequests.length === 1 ? "" : "s"} needs approval.`
-      : "Synced with Supabase. No pending property manager turn requests.");
+      : "Synced with Supabase. No pending turnover or residential requests.");
   renderCommandPendingTurnRequests();
 }
 
@@ -1806,7 +1806,7 @@ function isPendingPropertyManagerTurnRequest(item) {
   const meta = assignmentMetadata(item);
   const status = normalizeToken(item.status);
   const approval = normalizeToken(meta.admin_approval_status || "");
-  return normalizeToken(meta.source) === "property-manager-turn-request"
+  return ["property-manager-turn-request", "residential-booking"].includes(normalizeToken(meta.source))
     && !["approved", "complete", "completed", "cancelled", "canceled", "declined"].includes(approval)
     && ["pending", "pending-approval", "preferred-pending"].includes(status);
 }
@@ -2081,6 +2081,10 @@ async function approveDashboardTurnRequest(button) {
 
   const currentItem = commandCenterState.pendingTurnRequests.find((item) => String(item.assignmentId || "") === String(assignmentId));
   const currentRow = currentItem?.row || {};
+  if(assignmentMetadata(currentRow).source === 'residential_booking' && !(Number(currentRow.pay_amount)>0)){
+    setCommandMessage('pending-turn-requests','Open Residential to set contractor pay and approve this job.',true);
+    button.disabled=false;button.classList.remove('is-loading');return;
+  }
   const now = new Date().toISOString();
   const user = topbarState.user || (await suiteSupabase.auth.getUser()).data?.user || null;
   const payload = {
@@ -13262,6 +13266,8 @@ function preferredContractorDropdownField() {
 }
 
 function initAssignments() {
+  const residentialJob=new URLSearchParams(location.search).get('residential_job');
+  if(/^[a-f0-9-]{36}$/i.test(residentialJob||'')){assignmentState.search=residentialJob;assignmentState.statusFilter='all';}
   const root = document.querySelector("[data-assignments-page]");
   if (!root) return;
 
@@ -14454,6 +14460,7 @@ function getFilteredAssignments() {
     if (assignmentState.contractorFilter !== "all" && assignmentState.contractorFilter !== "unassigned" && !assignmentMatchesContractor(row, assignmentState.contractorFilter)) return false;
     if (!term) return true;
     return [
+      row.id,
       row.title,
       row.property_name,
       row.address,
@@ -15235,6 +15242,10 @@ async function insertAssignmentPayloadsWithSchemaFallback(payloads) {
 }
 
 async function saveAssignmentPatchWithSchemaFallback(id, payload) {
+  const residentialRow=assignmentState.rows.find(row=>row.id===id);
+  if(residentialRow?.metadata?.source==='residential_booking' && ['open','claimed','in_progress'].includes(payload.status) && !(Number(payload.pay_amount??residentialRow.pay_amount)>0)){
+    return {data:null,error:new Error('Set the agreed contractor pay in Residential before releasing this job.')};
+  }
   const fallbackPayload = { ...payload };
   const maxAttempts = assignmentOptionalColumns.length + 2;
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {

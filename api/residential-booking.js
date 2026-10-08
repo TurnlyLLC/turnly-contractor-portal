@@ -1,22 +1,46 @@
 const S=require('../lib/residential-server.cjs');
 const {uuid,clean}=require('../lib/agent-referrals.cjs');
+const J=require('../lib/residential-jobs.cjs');
 const {quote}=require('../lib/residential-pricing.cjs');
 const CONSENT='I authorize Turnly to save my card and charge the displayed total on the morning of my selected service date (6am Eastern, or at the start of an earlier arrival window). No service charge is collected today. Changes to the price require my approval. Future recurring visits will be arranged separately.';
 module.exports=async(req,res)=>{
  if(req.method!=='POST')return S.json(res,405,{error:'Method not allowed.'});
  try{
   const input=await S.body(req),db=S.database();
-  if(['admin_list','admin_complete','admin_cancel','admin_sync'].includes(input.action)){
+  if(['admin_list','admin_clients','admin_approve_job','admin_complete','admin_cancel','admin_sync'].includes(input.action)){
    const actor=await S.admin(db,req);
+   if(input.action==='admin_clients'){
+    const page=Math.max(1,Math.floor(Number(input.page)||1));
+    let q=db.from('referral_customers').select('id,name,email,phone,created_at,referral_agents(name,referral_code)',{count:'exact'}).order('created_at',{ascending:false});
+    if(clean(input.search))q=q.ilike('name','%'+clean(input.search,100).replace(/[%,_\\]/g,'')+'%');
+    const r=await q.range((page-1)*25,page*25-1);S.checked(r);
+    const clients=await Promise.all(r.data.map(async c=>{
+      const latest=await db.from('referral_bookings').select('id,profile_address,property_address,city,state,zip,status,service_date',{count:'exact'}).eq('customer_id',c.id).order('created_at',{ascending:false}).limit(1);S.checked(latest);
+      return {...c,latest_booking:latest.data[0]||null,booking_count:latest.count};
+    }));return S.json(res,200,{clients,total:r.count,page});
+   }
    if(input.action==='admin_list'){
-    const page=Math.max(1,Math.floor(Number(input.page)||1));let q=db.from('referral_bookings').select('id,name,email,phone,profile_address,property_address,city,state,zip,beds,baths,sqft,service,frequency,quote,amount_cents,service_date,arrival_start,arrival_end,status,payment_status,agent_name,referral_code,notes,created_at,stripe_payment_intent,stripe_session,paid_at,completed_at',{count:'exact'}).order('created_at',{ascending:false});
-    if(input.status)q=q.eq('status',input.status);const r=await q.range((page-1)*25,page*25-1);S.checked(r);return S.json(res,200,{bookings:r.data,total:r.count,page,payments_ready:S.ready()});
+    const page=Math.max(1,Math.floor(Number(input.page)||1));let q=db.from('referral_bookings').select('id,customer_id,name,email,phone,profile_address,property_address,city,state,zip,beds,baths,sqft,service,frequency,quote,amount_cents,service_date,arrival_start,arrival_end,charge_at,status,payment_status,agent_name,referral_code,notes,created_at,stripe_payment_intent,stripe_session,paid_at,completed_at',{count:'exact'}).order('created_at',{ascending:false});
+    if(input.status)q=q.eq('status',input.status);
+    if(input.customer_id){if(!uuid(input.customer_id))throw S.fail('Choose a customer.');q=q.eq('customer_id',input.customer_id);}
+    const r=await q.range((page-1)*25,page*25-1);S.checked(r);
+    const bookings=await Promise.all(r.data.map(async b=>{try{return {...b,job:await J.syncBooking(db,b,actor)};}catch{return {...b,job_error:'Job synchronization needs attention. Refresh to retry.'};}}));
+    return S.json(res,200,{bookings,total:r.count,page,payments_ready:S.ready()});
    }
    if(!uuid(input.id))throw S.fail('Choose a booking.');
+   if(input.action==='admin_approve_job'){
+    const pay=Number(input.pay_amount);if(!Number.isFinite(pay)||pay<=0||pay>100000||Math.abs(Math.round(pay*100)-pay*100)>0.000001)throw S.fail('Enter the agreed contractor pay, greater than zero.');
+    const b=S.checked(await db.from('referral_bookings').select('*').eq('id',input.id).single());
+    if(b.status!=='scheduled')throw S.fail('Only a confirmed booking can be released to contractors.');
+    const job=await J.syncBooking(db,b,actor);if(!job||job.status!=='pending')throw S.fail('This job is no longer awaiting approval.');
+    S.checked(await db.from('assignment_blocks').update({pay_amount:pay,status:'open',visibility:'open',metadata:{...job.metadata,pay_review_required:false,admin_approval_status:'approved',approved_by:actor,approved_at:new Date().toISOString()}}).eq('id',b.id).eq('status','pending'));
+    return S.json(res,200,{ok:true});
+   }
    if(input.action==='admin_sync'){
     const b=S.checked(await db.from('referral_bookings').select('stripe_session,stripe_payment_intent').eq('id',input.id).single());const st=S.stripe();
     if(b.stripe_session)await S.reconcileSession(db,st,b.stripe_session);if(b.stripe_payment_intent)await S.reconcilePayment(db,st,b.stripe_payment_intent);
    }else S.checked(await db.rpc('finish_residential_booking',{p_id:input.id,p_actor:actor,p_cancel:input.action==='admin_cancel'}));
+   const updated=S.checked(await db.from('referral_bookings').select('*').eq('id',input.id).single());await J.syncBooking(db,updated,actor);
    return S.json(res,200,{ok:true});
   }
   if(['confirm','resume'].includes(input.action)){
