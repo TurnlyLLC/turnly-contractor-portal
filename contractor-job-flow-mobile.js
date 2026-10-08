@@ -233,7 +233,7 @@ function ensureChecklistDrafts(items = []) {
 
 function checklistDraftStorageKey(assignment = activeAssignment, user = activeUser) {
   if (!assignment?.id || !user?.id) return "";
-  return `turnly:checklist-draft:${assignment.id}:${user.id}`;
+  return `turnly:checklist-draft:${assignment.id}:${user.id}${assignment.metadata?.checklist_revision ? ":" + assignment.metadata.checklist_revision : ""}`;
 }
 
 function parseChecklistDate(value) {
@@ -562,52 +562,36 @@ function scheduleChecklistAutosave(delay = 500) {
 
 async function saveChecklistProgress({ showSaved = false } = {}) {
   if (!activeChecklistItems.length || !activeAssignment?.id || !activeUser?.id) return;
-
   captureChecklistInputs();
   const savedAt = new Date().toISOString();
   const responses = checklistDraftResponses();
-  const metadata = activeAssignment.metadata && typeof activeAssignment.metadata === "object"
-    ? { ...activeAssignment.metadata }
-    : {};
-  metadata.checklist_autosaved_at = savedAt;
-  metadata.checklist_autosaved_by = activeUser.id;
-  metadata.checklist_autosave_source = "contractor_pwa";
-
   saveLocalChecklistDraft(responses, savedAt);
-  activeAssignment = {
-    ...activeAssignment,
-    checklist_responses: responses,
-    metadata
-  };
-
   if (!supabase) return;
   if (checklistAutosaveInFlight) {
     checklistAutosavePending = true;
     return;
   }
-
   checklistAutosaveInFlight = true;
-  const { data, error } = await supabase
-    .from("assignment_blocks")
-    .update({
-      checklist_responses: responses,
-      metadata
-    })
-    .eq("id", activeAssignment.id)
-    .or(`claimed_by.eq.${activeUser.id},assigned_to.eq.${activeUser.id}`)
-    .in("status", ["in_progress", "claimed", "scheduled", "open"])
-    .select("id,checklist_responses,metadata,updated_at")
-    .maybeSingle();
-
-  checklistAutosaveInFlight = false;
-  if (error) {
-    console.warn("[contractor-job-flow] Unable to autosave checklist progress", error);
-    setChecklistMessage("Progress saved on this device. Supabase autosave failed: " + error.message, "error");
-  } else if (data) {
+  try {
+    await assertCurrentChecklist();
+    const metadata = { ...(activeAssignment.metadata || {}), checklist_autosaved_at: savedAt,
+      checklist_autosaved_by: activeUser.id, checklist_autosave_source: "contractor_pwa" };
+    const { data, error } = await supabase.from("assignment_blocks")
+      .update({ checklist_responses: responses, metadata })
+      .eq("id", activeAssignment.id)
+      .or(`claimed_by.eq.${activeUser.id},assigned_to.eq.${activeUser.id}`)
+      .in("status", ["in_progress", "claimed", "scheduled", "open"])
+      .eq("updated_at", activeAssignment.updated_at)
+      .select("id,checklist_responses,metadata,updated_at").maybeSingle();
+    if (error) throw error;
+    if (!data) throw new Error("This assignment changed. Reopen the job to load the current checklist before continuing.");
     activeAssignment = { ...activeAssignment, ...data };
     if (showSaved) setChecklistMessage("Progress saved.");
+  } catch (error) {
+    setChecklistMessage("Progress saved on this device. " + error.message, "error");
+  } finally {
+    checklistAutosaveInFlight = false;
   }
-
   if (checklistAutosavePending) {
     checklistAutosavePending = false;
     await saveChecklistProgress();
@@ -837,7 +821,17 @@ async function ensureAssignmentQaJob() {
   return activeQaJobId;
 }
 
+async function assertCurrentChecklist() {
+  const current = await fetchAssignment(activeAssignment.id);
+  if (!current || (current.metadata?.checklist_revision || "") !== (activeAssignment.metadata?.checklist_revision || "")) {
+    throw new Error("The checklist was changed by an admin. Reopen the job to load the new requirements.");
+  }
+  activeAssignment.updated_at = current.updated_at;
+  activeAssignment.metadata = current.metadata;
+}
+
 async function submitAssignmentForQa(responses, completedAt) {
+  await assertCurrentChecklist();
   const qaJobId = await ensureAssignmentQaJob();
   const { data, error } = await supabase.rpc("submit_assignment_for_qa", {
     target_assignment_id: activeAssignment.id,

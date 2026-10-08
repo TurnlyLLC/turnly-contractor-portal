@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-contractor-pwa-v20260929-qr-tracker-policy";
+const CACHE_NAME = "turnly-contractor-pwa-v20261008-checklists";
 
 const PRECACHE_URLS = [
   "/",
