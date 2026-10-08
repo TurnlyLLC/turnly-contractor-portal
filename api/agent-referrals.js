@@ -24,10 +24,10 @@ function capabilities(){return {email:!!(process.env.RESEND_API_KEY&&process.env
 async function settings(client){return checked(await client.from('referral_settings').select('*').eq('id',true).single());}
 async function findAgent(client,id){if(!uuid(id)) throw new Error('Choose an agent.');const a=checked(await client.from('referral_agents').select('*').eq('id',id).single());if(!a)throw new Error('Agent not found.');return a;}
 async function flyer(client,a,config){
-  if(a.status!=='active')throw new Error('Activate this agent before generating or sending a flyer.');
-  if(!config.template_path)throw new Error('Upload your flyer template before generating a personalized flyer.');
-  const blob=checked(await client.storage.from('agent-flyer-templates').download(config.template_path));
-  const bytes=await makeFlyer(await blob.arrayBuffer(),config,a.referral_code);
+  const template=config.template_path
+    ?await checked(await client.storage.from('agent-flyer-templates').download(config.template_path)).arrayBuffer()
+    :require('node:fs').readFileSync(require('node:path').join(__dirname,'../assets/agent-referral-template.png'));
+  const bytes=await makeFlyer(template,config,a.referral_code);
   const path=`${a.referral_code}/${config.updated_at.replace(/[^0-9]/g,'')}.pdf`;
   checked(await client.storage.from('agent-flyers').upload(path,bytes,{contentType:'application/pdf',upsert:true,cacheControl:'3600'}));
   const url=client.storage.from('agent-flyers').getPublicUrl(path).data.publicUrl;
@@ -40,7 +40,8 @@ async function providerFetch(url,options){
   return body;
 }
 async function sendChannel(client,a,user,channel,requestId,asset){
-  const recipient=channel==='email'?a.email:a.phone;
+  let recipient;
+  try{recipient=channel==='email'?email(a.email):phone(a.phone);}catch(error){return {channel,status:'failed',error:error.message};}
   const existing=checked(await client.from('referral_deliveries').select('*').eq('request_id',requestId).eq('channel',channel).maybeSingle());
   if(existing){if(existing.agent_id!==a.id)throw new Error('This send request belongs to another agent.');return existing;}
   const config=capabilities();
@@ -69,7 +70,7 @@ async function sendChannel(client,a,user,channel,requestId,asset){
 }
 module.exports=async function handler(req,res){
   if(req.method!=='POST'){res.setHeader('Allow','POST');return json(res,405,{error:'Method not allowed.'});}
-  const key=process.env.SUPABASE_SERVICE_ROLE_KEY||process.env.SUPABASE_SERVICE_KEY||process.env.SUPABASE_SECRET_KEY;
+  const key=process.env.SUPABASE_SERVICE_ROLE_KEY||process.env.SUPABASE_SERVICE_KEY||process.env.SUPABASE_SERVICE_ROLE||process.env.SUPABASE_SECRET_KEY;
   if(!key)return json(res,503,{error:'Referral service needs its server database connection.'});
   const client=createClient(process.env.SUPABASE_URL||'https://nwnzdoveskthebfyndcs.supabase.co',key,{auth:{persistSession:false,autoRefreshToken:false}});
   try{
@@ -91,23 +92,26 @@ module.exports=async function handler(req,res){
       return json(res,200,{ok:true});
     }
     const user=await access(client,req);
+    if(body.admin_view)requireAdmin(user);
     if(body.action==='list'){
       const page=Math.max(1,Math.floor(Number(body.page)||1));
-      let query=client.from('referral_agents').select('*',{count:'exact'}).order('created_at',{ascending:false}).order('id');
+      let query=client.from('referral_agents').select('*',{count:'exact'}).order('city_rank').order('city').order('name').order('id');
+      if(clean(body.city))query=query.eq('city',clean(body.city));
       if(body.status && body.status!=='all')query=query.eq('status',body.status);
       if(clean(body.search))query=query.ilike('name','%'+clean(body.search,100).replace(/[%,_\\]/g,'')+'%');
       const result=await query.range((page-1)*25,page*25-1);checked(result);
-      return json(res,200,{agents:result.data,total:result.count,page,admin:user.admin,settings:await settings(client),sending:capabilities()});
+      return json(res,200,{agents:result.data,total:result.count,page,admin:user.admin,settings:await settings(client),sending:capabilities(),cities:checked(await client.rpc('referral_city_counts'))});
     }
     if(body.action==='save'){
-      const row=agentInput(body.agent||{});let result;
+      const prior=body.id?await findAgent(client,body.id):{};
+      const row=agentInput({...prior,...body.agent});let result;
       if(body.id){if(!uuid(body.id))throw new Error('Invalid agent.');result=await client.from('referral_agents').update(row).eq('id',body.id).select('*').single();}
       else{requireAdmin(user);result=await client.from('referral_agents').insert({...row,created_by:user.id}).select('*').single();}
       const a=checked(result);return json(res,200,{agent:a,link:a.referral_code?referralUrl(a.referral_code):null,qr:a.referral_code?await qrImage(a.referral_code):null});
     }
     if(body.action==='import'){
       requireAdmin(user);if(!Array.isArray(body.rows)||!body.rows.length||body.rows.length>500)throw new Error('Import between 1 and 500 agents at a time.');
-      const rows=body.rows.map((row,index)=>{try{return {...agentInput({...row,status:'new',sms_consent:false}),created_by:user.id};}catch(e){throw new Error(`Row ${index+2}: ${e.message}`);}});
+      const rows=body.rows.map((row,index)=>{try{return {...agentInput({...row,status:'new',sms_consent:false}),source_key:'csv:'+createHash('sha256').update(JSON.stringify(row)).digest('hex'),created_by:user.id};}catch(e){throw new Error(`Row ${index+2}: ${e.message}`);}});
       // One transaction handles the whole upload without hundreds of network calls.
       return json(res,200,checked(await client.rpc('import_referral_agents',{p_rows:rows,p_actor:user.id})));
     }
@@ -131,13 +135,29 @@ module.exports=async function handler(req,res){
       checked(await client.from('referral_settings').update(update).eq('id',true));return json(res,200,{ok:true});
     }
     if(['flyer','send'].includes(body.action)){
-      const a=await findAgent(client,body.id);
+      let a=await findAgent(client,body.id);
+      if(!a.referral_code)a=checked(await client.from('referral_agents').update({referral_code:'TA-'+randomUUID().replace(/-/g,'').toUpperCase()}).eq('id',a.id).select('*').single());
       if(body.action==='send'&&!uuid(body.request_id))throw new Error('Invalid send request.');
       const asset=await flyer(client,a,await settings(client));
       if(body.action==='flyer')return json(res,200,{url:asset.url});
       // Each channel has an independent durable result. Never call acceptance delivery.
-      const results=[];for(const channel of ['email','sms'])results.push(await sendChannel(client,a,user,channel,body.request_id,asset));
-      return json(res,200,{results});
+      const channels=body.channels||['email','sms'];
+      if(!Array.isArray(channels)||!channels.length||channels.length>2||channels.some(c=>!['email','sms'].includes(c))||new Set(channels).size!==channels.length)throw new Error('Choose email, text, or both.');
+      const recipientAgent={...a};
+      for(const channel of channels){
+        const key=channel==='email'?'email':'phone',chosen=body[key];
+        const allowed=channel==='email'?[a.email,a.email_2,a.email_3]:[a.phone,a.phone_1,a.phone_2,a.phone_3,a.email_1_phone,a.email_2_phone,a.email_3_phone];
+        if(chosen!==undefined){if(!allowed.includes(chosen))throw new Error('Choose a saved contact for this agent.');recipientAgent[key]=chosen;}
+      }
+      const results=[];for(const channel of channels)results.push(await sendChannel(client,recipientAgent,user,channel,body.request_id,asset));
+      const successful=results.some(r=>['accepted','queued','sending','sent','delivered','read'].includes(r.status)&&r.provider_id&&!r.warning);
+      let activated=false,activation_error;
+      if(successful){
+        const saved=await client.from('referral_agents').update({status:'active'}).eq('id',a.id).select('*').single();
+        if(saved.error)activation_error='Flyer accepted by the sender, but activation could not be saved. Set the agent to Active before sharing their link.';
+        else activated=true;
+      }
+      return json(res,200,{results,activated,activation_error});
     }
     if(body.action==='delivery_status'){
       if(!uuid(body.id))throw new Error('Invalid message.');

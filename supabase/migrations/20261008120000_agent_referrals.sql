@@ -3,6 +3,12 @@ create table public.referral_agents (
   id uuid primary key default gen_random_uuid(),
   name text not null check (length(trim(name)) between 1 and 160),
   brokerage text not null default '', email text not null default '', phone text not null default '',
+  city text not null default '', address text not null default '', state text not null default '', website text not null default '', postal_code text not null default '',
+  phone_1 text not null default '', phone_2 text not null default '', phone_3 text not null default '',
+  email_2 text not null default '', email_3 text not null default '',
+  email_1_phone text not null default '', email_2_phone text not null default '', email_3_phone text not null default '',
+  source_key text unique, source_file text, source_row integer,
+  city_rank integer generated always as (case lower(city) when 'durham' then 0 when 'raleigh' then 1 when 'asheville' then 2 else 3 end) stored,
   status text not null default 'new' check(status in ('new','follow_up','not_interested','interested','active')),
   notes text not null default '', follow_up_on date,
   sms_consent boolean not null default false,
@@ -10,18 +16,20 @@ create table public.referral_agents (
   created_by uuid references auth.users(id),
   created_at timestamptz not null default now(), updated_at timestamptz not null default now()
 );
-create unique index referral_agents_email on public.referral_agents(lower(email)) where email <> '';
-create unique index referral_agents_phone on public.referral_agents(phone) where phone <> '';
+create index referral_agents_city on public.referral_agents(city_rank,city,name,id);
+-- Shared office contact details do not identify duplicate people. Import keys do.
 create index referral_agents_status on public.referral_agents(status,created_at);
 
 create function public.activate_referral_agent() returns trigger language plpgsql set search_path=public as $$
 begin
   if TG_OP='UPDATE' then
-    new.referral_code := old.referral_code;
+    new.referral_code := coalesce(old.referral_code,new.referral_code);
     new.activated_at := old.activated_at;
   end if;
   if new.status='active' and new.referral_code is null then
     new.referral_code := 'TA-' || upper(replace(gen_random_uuid()::text,'-',''));
+  end if;
+  if new.status='active' and new.activated_at is null then
     new.activated_at := now();
   end if;
   new.updated_at := now();
@@ -96,8 +104,8 @@ begin
   if jsonb_array_length(p_rows)>500 then raise exception 'Too many rows'; end if;
   for r in select value from jsonb_array_elements(p_rows) loop
     begin
-      insert into referral_agents(name,brokerage,email,phone,notes,follow_up_on,created_by)
-      values(r->>'name',r->>'brokerage',r->>'email',r->>'phone',r->>'notes',(r->>'follow_up_on')::date,p_actor);
+      insert into referral_agents(name,brokerage,email,phone,notes,city,address,state,website,postal_code,phone_1,phone_2,phone_3,email_2,email_3,email_1_phone,email_2_phone,email_3_phone,source_key,source_file,source_row,follow_up_on,created_by)
+      values(coalesce(r->>'name',''),coalesce(r->>'brokerage',''),coalesce(r->>'email',''),coalesce(r->>'phone',''),coalesce(r->>'notes',''),coalesce(r->>'city',''),coalesce(r->>'address',''),coalesce(r->>'state',''),coalesce(r->>'website',''),coalesce(r->>'postal_code',''),coalesce(r->>'phone_1',''),coalesce(r->>'phone_2',''),coalesce(r->>'phone_3',''),coalesce(r->>'email_2',''),coalesce(r->>'email_3',''),coalesce(r->>'email_1_phone',''),coalesce(r->>'email_2_phone',''),coalesce(r->>'email_3_phone',''),nullif(r->>'source_key',''),r->>'source_file',(r->>'source_row')::integer,(r->>'follow_up_on')::date,p_actor);
       v_imported:=v_imported+1;
     exception when unique_violation then v_duplicates:=v_duplicates+1;
     end;
@@ -170,4 +178,10 @@ insert into storage.buckets(id,name,public,file_size_limit,allowed_mime_types)
 values('agent-flyer-templates','agent-flyer-templates',false,2500000,array['application/pdf']),
       ('agent-flyers','agent-flyers',true,5000000,array['application/pdf'])
 on conflict(id) do nothing;
+create function public.referral_city_counts() returns table(city text,total bigint)
+language sql security invoker set search_path=public as $$
+ select city,count(*) from referral_agents group by city order by min(city_rank),city;
+$$;
+revoke all on function public.referral_city_counts() from public,anon,authenticated;
+grant execute on function public.referral_city_counts() to service_role;
 notify pgrst,'reload schema';

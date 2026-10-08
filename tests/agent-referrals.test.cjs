@@ -13,9 +13,10 @@ test('CSV preserves quoted names, multiline notes and normalizes common headers'
   const {parseAgentCsv}=await import('../agent-import.mjs');
   const rows=parseAgentCsv('First Name,Last Name,Email Address,Phone Number,Notes\r\nJane,Agent,JANE@example.com,9195550100,"Called, interested\nFollow up Friday"');
   assert.equal(rows[0].name,'Jane Agent');assert.equal(rows[0].notes,'Called, interested\nFollow up Friday');
-  const normalized=agentInput(rows[0]);assert.equal(normalized.email,'jane@example.com');assert.equal(normalized.phone,'+19195550100');
+  const normalized=agentInput(rows[0]);assert.equal(normalized.email,'JANE@example.com');assert.equal(normalized.phone,'9195550100');
   assert.throws(()=>parseAgentCsv('Name,Email\n"Jane,hello@example.com'),/closing quote/);
-  assert.throws(()=>agentInput({name:'Jane',email:'bad',status:'active'}),/email/);
+  const rich=parseAgentCsv('name,city,phone,phone_1,email_1,email_2,address,state,website\nJane,Durham,9195550100,9195550101,a@example.com,b@example.com,1 Main St,NC,https://example.com')[0];
+  assert.equal(rich.email,'a@example.com');assert.equal(rich.phone_1,'9195550101');assert.equal(agentInput(rich).address,'1 Main St');
 });
 
 test('QR encodes the exact referral URL and PDF overlay preserves the template',async()=>{
@@ -82,8 +83,13 @@ test('database preserves IDs, deduplicates customers, and earns only the first c
     await assert.rejects(db.query('select record_referral_payout($1,$2,$3)',[customer.id,'Duplicate',actor]),/earned/);
     await db.query("insert into assignment_blocks values($1,'completed',$2)",[randomUUID(),invoice]);
     assert.equal((await db.query('select count(*)::int as n from referral_ledger')).rows[0].n,1);
-    const rows=[{name:'Imported',email:'import@example.com',phone:'+19195550120',brokerage:'Example',notes:'',follow_up_on:null},{name:'Duplicate',email:'a@example.com',phone:'',brokerage:'',notes:'',follow_up_on:null}];
-    const imp=(await db.query('select import_referral_agents($1,$2) as result',[JSON.stringify(rows),actor])).rows[0].result;assert.equal(imp.imported,1);assert.equal(imp.duplicates,1);
+    const rows=[{name:'Imported',email:'a@example.com',phone:'+19195550120',city:'Raleigh',phone_1:'9195550121',email_2:'alt@example.com',source_key:'sheet:2'},{name:'Shared office',email:'a@example.com',phone:'+19195550120',city:'Durham',source_key:'sheet:3'},{name:'Western agent',city:'Asheville',source_key:'sheet:4'}];
+    const imp=(await db.query('select import_referral_agents($1,$2) as result',[JSON.stringify(rows),actor])).rows[0].result;assert.equal(imp.imported,3);assert.equal(imp.duplicates,0);
+    const repeat=(await db.query('select import_referral_agents($1,$2) as result',[JSON.stringify(rows),actor])).rows[0].result;assert.equal(repeat.imported,0);assert.equal(repeat.duplicates,3);
+    assert.deepEqual((await db.query("select city from referral_agents where source_key is not null order by city_rank,city,name,id")).rows.map(r=>r.city),['Durham','Raleigh','Asheville']);
+    const imported=(await db.query("select * from referral_agents where source_key='sheet:2'")).rows[0];assert.equal(imported.phone_1,'9195550121');assert.equal(imported.email_2,'alt@example.com');
+    const prepared=(await db.query("update referral_agents set referral_code='TA-BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB' where id=$1 returning *",[imported.id])).rows[0];assert.equal(prepared.status,'new');assert.equal(prepared.activated_at,null);
+    const later=(await db.query("update referral_agents set status='active' where id=$1 returning *",[imported.id])).rows[0];assert.ok(later.activated_at);assert.equal(later.referral_code,prepared.referral_code);
     for(let i=0;i<20;i++)assert.equal((await db.query("select allow_referral_request('test') as allowed")).rows[0].allowed,true);
     assert.equal((await db.query("select allow_referral_request('test') as allowed")).rows[0].allowed,false);
     await db.exec('set role anon');

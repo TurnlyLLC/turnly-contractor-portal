@@ -1,2 +1,2 @@
-Name,Brokerage,Email,Phone,Notes,Follow Up On
-Sample Agent,Example Realty,agent@example.com,+19195550100,Replace this example before importing,
+name,city,phone,phone_1,phone_2,phone_3,email_1,email_2,email_3,address,state,postal_code,website,brokerage,notes,follow_up_on
+Example Agent,Durham,9195550100,,,,agent@example.com,,,123 Example St,NC,27701,https://example.com,Example Realty,,
