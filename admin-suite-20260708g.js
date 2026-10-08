@@ -21,6 +21,8 @@ import {
   normalizeAssignmentQrTrackerId
 } from "./assignment-qr-policy.js?v=20260929-qr-policy";
 
+import { createAssignmentChecklistEditor } from "./assignment-checklist-editor.mjs?v=20261008-checklists";
+
 const suiteEnv = window.__ENV || {};
 const suiteSupabase = suiteEnv.SUPABASE_URL && suiteEnv.SUPABASE_ANON_KEY
   ? createClient(suiteEnv.SUPABASE_URL, suiteEnv.SUPABASE_ANON_KEY)
@@ -30,6 +32,8 @@ const residentFeedbackWidget = createResidentFeedbackWidget({ client: suiteSupab
 if (typeof window !== "undefined") {
   window.turnlyAdminSuiteHandlesAssignmentForm = true;
 }
+
+const assignmentChecklistEditor = createAssignmentChecklistEditor(suiteSupabase, flattenChecklistTemplate);
 
 const navSections = [
   {
@@ -4535,6 +4539,7 @@ function renderChecklists() {
           </div>
           <div class="panel-actions">
             <button class="secondary-action" type="button" data-checklist-refresh>${icon("refresh")}<span>Refresh</span></button>
+            <button class="secondary-action" type="button" data-checklist-duplicate><span>Duplicate Checklist</span></button>
             <button class="primary-action" type="button" data-checklist-new>${icon("plus")}<span>New Checklist</span></button>
           </div>
         </div>
@@ -5161,6 +5166,11 @@ function handleChecklistClick(event) {
     return;
   }
 
+  if (event.target.closest("[data-checklist-duplicate]")) {
+    void duplicateChecklistTemplate();
+    return;
+  }
+
   if (event.target.closest("[data-checklist-new]")) {
     startNewChecklistTemplate();
     return;
@@ -5509,6 +5519,43 @@ function selectChecklistTemplate(id) {
   showChecklistMessage(selected ? `Editing ${selected.name}.` : "Started a new unsaved checklist.");
 }
 
+async function duplicateChecklistTemplate() {
+  if (!suiteSupabase || checklistState.isSaving || checklistState.isDuplicating) return;
+  const source = cleanChecklistTemplateForSave(syncChecklistBuilderFromDom());
+  const baseName = `${source.name || "Checklist"} (Copy)`;
+  let name = baseName;
+  let suffix = 2;
+  while (checklistState.templates.some(template => template.name === name)) name = `${baseName} ${suffix++}`;
+  const sections = source.sections.map(section => ({ ...cloneChecklistSection(section), saved_module_id: "" }));
+  const payload = { name, department: source.department, subdepartment: source.subdepartment,
+    priority: source.priority, description: source.description, sections, created_by: checklistState.user?.id || null };
+  checklistState.isDuplicating = true;
+  const button = document.querySelector("[data-checklist-duplicate]");
+  if (button) button.disabled = true;
+  setChecklistSaving(true);
+  showChecklistMessage("Duplicating checklist...");
+  try {
+    const result = await suiteSupabase.from(checklistTemplatesTable).insert(payload).select("*").single();
+    if (result.error) throw result.error;
+    const saved = normalizeChecklistTemplate(result.data);
+    checklistState.templates.unshift(saved);
+    checklistState.selectedTemplateId = saved.id;
+    checklistState.builder = saved;
+    checklistState.defaultModuleCounts = {};
+    checklistState.unitModuleCounts = {};
+    checklistState.selectedUnitIds = new Set();
+    renderChecklistData();
+    document.getElementById("checklist_template_name")?.focus();
+    showChecklistMessage(`Created ${saved.name}. You can rename and edit this copy; the original checklist is unchanged.`);
+  } catch (error) {
+    showChecklistMessage("Unable to duplicate checklist: " + error.message, true);
+  } finally {
+    checklistState.isDuplicating = false;
+    if (button) button.disabled = false;
+    setChecklistSaving(false);
+  }
+}
+
 function startNewChecklistTemplate() {
   checklistState.selectedTemplateId = "";
   checklistState.builder = createBlankChecklistTemplate();
@@ -5789,7 +5836,7 @@ async function saveChecklistModule(sectionId) {
 }
 
 async function saveChecklistTemplate(options = {}) {
-  if (!suiteSupabase || checklistState.isSaving) return null;
+  if (!suiteSupabase || checklistState.isSaving || checklistState.isDuplicating) return null;
   const template = cleanChecklistTemplateForSave(syncChecklistBuilderFromDom());
   if (!template.name) {
     showChecklistMessage("Checklist name is required.", true);
@@ -12733,6 +12780,7 @@ function assignmentForm() {
         leadTextareaField("special_instructions", "Special Instructions")
       ], "assignment-notes-grid")}
       <div id="assignmentChecklistPreview" class="checklist-summary assignment-checklist-preview"></div>
+      <section id="assignmentChecklistEditor" class="assignment-form-section" hidden></section>
       ${assignmentVideoUploadSection()}
       <p id="assignmentFormMessage" class="status-message"></p>
       <div class="form-actions assignment-edit-actions">
@@ -13339,12 +13387,14 @@ function openAssignmentModal(row = null) {
   updateAssignmentContractorControls();
   renderAssignmentBulkUnitPicker();
   renderAssignmentVideoSection(row);
+  void assignmentChecklistEditor.open(row);
   modal.hidden = false;
   if (row) void refreshAssignmentDetailVideos(row);
   document.getElementById("title")?.focus();
 }
 
 function closeAssignmentModal() {
+  assignmentChecklistEditor.reset();
   const modal = document.getElementById("assignmentModal");
   if (modal) modal.hidden = true;
   assignmentState.editingId = null;
@@ -15149,15 +15199,18 @@ async function saveAssignmentForm(event) {
   if (editingId) {
     const currentRow = assignmentState.rows.find((row) => String(row.id || "") === String(editingId)) || {};
     let payload = {};
+    let checklistChange = null;
     try {
       payload = collectAssignmentUpdatePayload(currentRow);
+      checklistChange = assignmentChecklistEditor.patch(currentRow, payload, assignmentState.user?.id);
+      if (checklistChange) payload = checklistChange.payload;
     } catch (error) {
       assignmentState.isSaving = false;
       setAssignmentSaving(false);
       showAssignmentMessage(error.message, true);
       return;
     }
-    const result = await saveAssignmentPatchWithSchemaFallback(editingId, payload);
+    const result = await saveAssignmentPatchWithSchemaFallback(editingId, payload, checklistChange);
     assignmentState.isSaving = false;
     setAssignmentSaving(false);
     if (result.error) {
@@ -15241,10 +15294,18 @@ async function insertAssignmentPayloadsWithSchemaFallback(payloads) {
   return { data: null, error: new Error("Unable to save assignment because the assignment_blocks table schema is missing required columns.") };
 }
 
-async function saveAssignmentPatchWithSchemaFallback(id, payload) {
+async function saveAssignmentPatchWithSchemaFallback(id, payload, checklistChange = null) {
   const residentialRow=assignmentState.rows.find(row=>row.id===id);
   if(residentialRow?.metadata?.source==='residential_booking' && ['open','claimed','in_progress'].includes(payload.status) && !(Number(payload.pay_amount??residentialRow.pay_amount)>0)){
     return {data:null,error:new Error('Set the agreed contractor pay in Residential before releasing this job.')};
+  }
+  if (checklistChange) {
+    if (!checklistChange.expectedUpdatedAt) return { error: new Error("Reopen the assignment to load its latest checklist before saving.") };
+    // Do not drop checklist fields on schema errors or overwrite concurrent job progress.
+    const result = await suiteSupabase.from(assignmentTable).update(payload).eq("id", id)
+      .eq("updated_at", checklistChange.expectedUpdatedAt).select("*").maybeSingle();
+    if (!result.error && !result.data) return { error: new Error("This assignment changed while you were editing. Close this pane, refresh assignments, and try again.") };
+    return result;
   }
   const fallbackPayload = { ...payload };
   const maxAttempts = assignmentOptionalColumns.length + 2;

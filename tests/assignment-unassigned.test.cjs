@@ -16,7 +16,7 @@ test('new assignments can be posted unassigned, including after clearing a contr
     try {
       let body=fs.readFileSync(file);
       if(pathname==='/admin-suite-20260708g.js') body += `\nwindow.assignmentTest={collect:collectAssignmentPayloads,open:()=>{assignmentState.user={id:'admin-test'};assignmentState.properties=[{id:'property-test',name:'Test Property',property_name:'Test Property'}];assignmentState.contractors=[{id:'contractor-test',name:'Test Contractor',email:'test@example.invalid'}];openAssignmentModal();}};`;
-      res.setHeader('Content-Type',{'.js':'text/javascript','.css':'text/css'}[path.extname(file)]||'application/octet-stream');res.end(body);
+      res.setHeader('Content-Type',{'.mjs':'text/javascript','.js':'text/javascript','.css':'text/css'}[path.extname(file)]||'application/octet-stream');res.end(body);
     } catch {res.statusCode=404;res.end();}
   });
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));

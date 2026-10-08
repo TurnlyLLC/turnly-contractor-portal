@@ -3875,6 +3875,7 @@ function renderChecklists() {
           </div>
           <div class="panel-actions">
             <button class="secondary-action" type="button" data-checklist-refresh>${icon("refresh")}<span>Refresh</span></button>
+            <button class="secondary-action" type="button" data-checklist-duplicate><span>Duplicate Checklist</span></button>
             <button class="primary-action" type="button" data-checklist-new>${icon("plus")}<span>New Checklist</span></button>
           </div>
         </div>
@@ -4711,6 +4712,11 @@ function handleChecklistClick(event) {
     return;
   }
 
+  if (event.target.closest("[data-checklist-duplicate]")) {
+    void duplicateChecklistTemplate();
+    return;
+  }
+
   if (event.target.closest("[data-checklist-new]")) {
     startNewChecklistTemplate();
     return;
@@ -5097,6 +5103,43 @@ function selectChecklistTemplate(id) {
   showChecklistMessage(selected ? `Editing ${selected.name}.` : "Started a new unsaved checklist.");
 }
 
+async function duplicateChecklistTemplate() {
+  if (!suiteSupabase || checklistState.isSaving || checklistState.isDuplicating) return;
+  const source = cleanChecklistTemplateForSave(syncChecklistBuilderFromDom());
+  const baseName = `${source.name || "Checklist"} (Copy)`;
+  let name = baseName;
+  let suffix = 2;
+  while (checklistState.templates.some(template => template.name === name)) name = `${baseName} ${suffix++}`;
+  const sections = source.sections.map(section => ({ ...cloneChecklistSection(section), saved_module_id: "" }));
+  const payload = { name, department: source.department, subdepartment: source.subdepartment,
+    priority: source.priority, description: source.description, sections, created_by: checklistState.user?.id || null };
+  checklistState.isDuplicating = true;
+  const button = document.querySelector("[data-checklist-duplicate]");
+  if (button) button.disabled = true;
+  setChecklistSaving(true);
+  showChecklistMessage("Duplicating checklist...");
+  try {
+    const result = await suiteSupabase.from(checklistTemplatesTable).insert(payload).select("*").single();
+    if (result.error) throw result.error;
+    const saved = normalizeChecklistTemplate(result.data);
+    checklistState.templates.unshift(saved);
+    checklistState.selectedTemplateId = saved.id;
+    checklistState.builder = saved;
+    checklistState.defaultModuleCounts = {};
+    checklistState.unitModuleCounts = {};
+    checklistState.selectedUnitIds = new Set();
+    renderChecklistData();
+    document.getElementById("checklist_template_name")?.focus();
+    showChecklistMessage(`Created ${saved.name}. You can rename and edit this copy; the original checklist is unchanged.`);
+  } catch (error) {
+    showChecklistMessage("Unable to duplicate checklist: " + error.message, true);
+  } finally {
+    checklistState.isDuplicating = false;
+    if (button) button.disabled = false;
+    setChecklistSaving(false);
+  }
+}
+
 function startNewChecklistTemplate() {
   checklistState.selectedTemplateId = "";
   checklistState.builder = createBlankChecklistTemplate();
@@ -5458,7 +5501,7 @@ async function saveChecklistModule(sectionId) {
 }
 
 async function saveChecklistTemplate(options = {}) {
-  if (!suiteSupabase || checklistState.isSaving) return null;
+  if (!suiteSupabase || checklistState.isSaving || checklistState.isDuplicating) return null;
   const template = cleanChecklistTemplateForSave(syncChecklistBuilderFromDom());
   if (!template.name) {
     showChecklistMessage("Checklist name is required.", true);
