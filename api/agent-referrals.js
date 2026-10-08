@@ -182,9 +182,9 @@ module.exports=async function handler(req,res){
       requireAdmin(user);if(!uuid(body.customer_id)||!uuid(body.assignment_id))throw new Error('Choose a customer and their first clean.');
       const subtotal=Number(body.subtotal);if(!Number.isFinite(subtotal)||subtotal<=0||subtotal>100000||Math.round(subtotal*100)/100!==subtotal)throw new Error('Enter the cleaning subtotal, excluding tax and tips.');
       const customer=checked(await client.from('referral_customers').select('*').eq('id',body.customer_id).single());
-      if(customer.first_assignment_id||customer.payout_at)throw new Error('This customer already has a first clean linked.');
+      if(customer.first_assignment_id||customer.first_booking_id||customer.payout_at)throw new Error('This customer already has a first clean linked.');
       checked(await client.from('assignment_blocks').select('id').eq('id',body.assignment_id).single());
-      const saved=checked(await client.from('referral_customers').update({first_assignment_id:body.assignment_id,eligible_subtotal:subtotal,linked_by:user.id}).eq('id',body.customer_id).is('first_assignment_id',null).select('id'));
+      const saved=checked(await client.from('referral_customers').update({first_assignment_id:body.assignment_id,eligible_subtotal:subtotal,linked_by:user.id}).eq('id',body.customer_id).is('first_assignment_id',null).is('first_booking_id',null).select('id'));
       if(!saved.length)throw new Error('Another user already linked this customer. Refresh the record.');return json(res,200,{ok:true});
     }
     if(body.action==='record_customer_payment'){
