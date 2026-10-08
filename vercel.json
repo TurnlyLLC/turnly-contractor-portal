@@ -1,23 +1,48 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": ".",
+  "functions": {
+    "api/agent-referrals.js": {
+      "maxDuration": 60,
+      "includeFiles": "assets/agent-referral-template.png"
+    }
+  },
   "routes": [
     {
       "src": "^/service-worker\\.js$",
-      "has": [{ "type": "host", "value": "residental.turnlypros.com" }],
-      "headers": { "Cache-Control": "no-store" },
+      "has": [
+        {
+          "type": "host",
+          "value": "residental.turnlypros.com"
+        }
+      ],
+      "headers": {
+        "Cache-Control": "no-store"
+      },
       "dest": "/residential-domain-worker.js"
     },
     {
       "src": "^/(?:index\\.html)?$",
-      "has": [{ "type": "host", "value": "residental.turnlypros.com" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "residental.turnlypros.com"
+        }
+      ],
       "dest": "https://turnlypros.com/residential/index.html"
     },
     {
       "src": "^/(.*)$",
-      "has": [{ "type": "host", "value": "residental.turnlypros.com" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "residental.turnlypros.com"
+        }
+      ],
       "dest": "https://turnlypros.com/residential/$1"
     },
-    { "handle": "filesystem" }
+    {
+      "handle": "filesystem"
+    }
   ]
 }
