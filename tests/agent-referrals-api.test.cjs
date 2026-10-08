@@ -62,3 +62,40 @@ test('saved alternate recipient is allowed and arbitrary recipients are rejected
   const h=harness();const r=await h.request({action:'send',id:h.agent.id,request_id:randomUUID(),channels:['email'],email:h.agent.email_2});assert.equal(r.status,200);assert.equal(JSON.parse(h.calls[0].options.body).to[0],'alt@example.com');assert.equal(h.agent.status,'active');
   const rejected=harness();assert.equal((await rejected.request({action:'send',id:rejected.agent.id,request_id:randomUUID(),channels:['email'],email:'outside@example.com'})).status,400);assert.equal(rejected.calls.length,0);
 });
+
+test('preview sends nothing, keeps the agent inactive, and matches the eventual messages',async()=>{
+  const h=harness({role:'sales'});
+  const preview=await h.request({action:'send_preview',id:h.agent.id});
+  assert.equal(preview.status,200);
+  assert.equal(h.agent.status,'new');
+  assert.equal(h.calls.length,0);
+  assert.equal(h.deliveries.length,0);
+  assert.match(preview.payload.url,/flyer.pdf$/);
+  assert.equal((await h.request({action:'send_preview',id:h.agent.id},false)).status,401);
+  await h.request({action:'send',id:h.agent.id,request_id:randomUUID()});
+  const email=JSON.parse(h.calls[0].options.body);
+  assert.equal(email.subject,preview.payload.messages.subject);
+  assert.equal(email.text,preview.payload.messages.email);
+  assert.equal(new URLSearchParams(h.calls[1].options.body).get('Body'),preview.payload.messages.sms);
+});
+
+test('sales contact corrections preserve the referral ID and unrelated profile fields',async()=>{
+  const h=harness({role:'sales'});
+  await h.request({action:'send_preview',id:h.agent.id});
+  const code=h.agent.referral_code;
+  const saved=await h.request({action:'save',id:h.agent.id,agent:{email:'corrected@example.com',phone:'+19195550123',email_2:'other@example.com',phone_1:'+19195550456'}});
+  assert.equal(saved.status,200);
+  assert.equal(saved.payload.agent.referral_code,code);
+  assert.equal(saved.payload.agent.name,'Jane Agent');
+  assert.equal(saved.payload.agent.status,'new');
+  assert.equal(saved.payload.agent.email_2,'other@example.com');
+  await h.request({action:'send',id:h.agent.id,request_id:randomUUID()});
+  assert.equal(JSON.parse(h.calls[0].options.body).to[0],'corrected@example.com');
+  assert.equal(new URLSearchParams(h.calls[1].options.body).get('To'),'+19195550123');
+});
+
+test('email setup check is admin-only and always targets the provider simulator',async()=>{
+  const sales=harness({role:'sales'});assert.equal((await sales.request({action:'email_check'})).status,403);assert.equal(sales.calls.length,0);
+  const h=harness();assert.equal((await h.request({action:'email_check',email:'ignored@example.com'})).status,200);
+  assert.deepEqual(JSON.parse(h.calls[0].options.body).to,['delivered@resend.dev']);assert.equal(h.agent.status,'new');assert.equal(h.deliveries.length,0);
+});

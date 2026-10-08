@@ -1,6 +1,7 @@
 const { createClient }=require('@supabase/supabase-js');
 const { randomUUID,createHash }=require('node:crypto');
 const { ORIGIN,uuid,codeValid,clean,phone,email,agentInput,referralUrl,qrImage,placement,makeFlyer }=require('../lib/agent-referrals.cjs');
+const {referralMessages}=require('../lib/agent-messages.cjs');
 const admins=new Set(['admin','owner','super_admin']);
 const roles=new Set([...admins,'sales','sales_team']);
 function json(res,status,data){res.statusCode=status;res.setHeader('Content-Type','application/json');res.setHeader('Cache-Control','no-store');res.end(JSON.stringify(data));}
@@ -28,7 +29,7 @@ async function flyer(client,a,config){
     ?await checked(await client.storage.from('agent-flyer-templates').download(config.template_path)).arrayBuffer()
     :require('node:fs').readFileSync(require('node:path').join(__dirname,'../assets/agent-referral-template.png'));
   const bytes=await makeFlyer(template,config,a.referral_code);
-  const path=`${a.referral_code}/${config.updated_at.replace(/[^0-9]/g,'')}.pdf`;
+  const path=`${a.referral_code}/${config.updated_at.replace(/[^0-9]/g,'')}-booking-link-v2.pdf`;
   checked(await client.storage.from('agent-flyers').upload(path,bytes,{contentType:'application/pdf',upsert:true,cacheControl:'3600'}));
   const url=client.storage.from('agent-flyers').getPublicUrl(path).data.publicUrl;
   return {bytes,url};
@@ -36,7 +37,11 @@ async function flyer(client,a,config){
 async function providerFetch(url,options){
   const response=await fetch(url,{...options,signal:AbortSignal.timeout(18000)});
   const body=await response.json().catch(()=>({}));
-  if(!response.ok)throw Object.assign(new Error('The sending service rejected this message. Check sender setup and recipient details.'),{definitive:true});
+  if(!response.ok){
+    const provider=url.includes('resend.com')?'Email service':'Text service';
+    const detail=clean(body.message||body.error?.message||body.error,400).replace(/\b(?:re_|sk_live_|sk_test_)[A-Za-z0-9_-]+/g,'[redacted]');
+    throw Object.assign(new Error(`${provider} rejected the request (HTTP ${response.status}${body.name?' · '+clean(body.name,80):''}). ${detail||'Check sender setup and recipient details.'}`),{definitive:true});
+  }
   return body;
 }
 async function sendChannel(client,a,user,channel,requestId,asset){
@@ -54,12 +59,13 @@ async function sendChannel(client,a,user,channel,requestId,asset){
   let update;
   try{
     let result;
+    const messages=referralMessages(a,asset.url);
     if(channel==='email'){
-      result=await providerFetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${process.env.RESEND_API_KEY}`,'Content-Type':'application/json','Idempotency-Key':`agent-${record.id}`},body:JSON.stringify({from:process.env.REFERRAL_FROM_EMAIL,to:[recipient],subject:'Your Turnly referral flyer and signup link',text:`Hi ${a.name},\n\nYour personalized Turnly flyer is attached. Share this signup link with your clients:\n${referralUrl(a.referral_code)}\n\nReferral ID: ${a.referral_code}\nYou earn 10% of the eligible cleaning subtotal on each referred customer's first completed and paid clean.\n\nTurnly`,attachments:[{filename:'Turnly-referral-flyer.pdf',content:asset.bytes.toString('base64')}]})});
+      result=await providerFetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${process.env.RESEND_API_KEY.trim()}`,'Content-Type':'application/json','Idempotency-Key':`agent-${record.id}`},body:JSON.stringify({from:process.env.REFERRAL_FROM_EMAIL.trim(),to:[recipient],subject:messages.subject,text:messages.email,attachments:[{filename:'Turnly-referral-flyer.pdf',content:asset.bytes.toString('base64')}]})});
       if(!result.id)throw new Error('Sending service returned no message ID.');
       update={status:'accepted',provider_id:result.id,error:null};
     }else{
-      result=await providerFetch(`https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_ACCOUNT_SID}/Messages.json`,{method:'POST',headers:{Authorization:'Basic '+Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64'),'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({To:recipient,MessagingServiceSid:process.env.TWILIO_MESSAGING_SERVICE_SID,Body:`Turnly: Your personalized flyer: ${asset.url}\nClient signup: ${referralUrl(a.referral_code)}\nReply STOP to opt out.`}).toString()});
+      result=await providerFetch(`https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_ACCOUNT_SID}/Messages.json`,{method:'POST',headers:{Authorization:'Basic '+Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64'),'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({To:recipient,MessagingServiceSid:process.env.TWILIO_MESSAGING_SERVICE_SID,Body:messages.sms}).toString()});
       if(!result.sid)throw new Error('Sending service returned no message ID.');
       update={status:result.status||'queued',provider_id:result.sid,error:null};
     }
@@ -93,6 +99,12 @@ module.exports=async function handler(req,res){
     }
     const user=await access(client,req);
     if(body.admin_view)requireAdmin(user);
+    if(body.action==='email_check'){
+      requireAdmin(user);if(!capabilities().email)throw new Error('Configure RESEND_API_KEY and REFERRAL_FROM_EMAIL first.');
+      const result=await providerFetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${process.env.RESEND_API_KEY.trim()}`,'Content-Type':'application/json'},body:JSON.stringify({from:process.env.REFERRAL_FROM_EMAIL.trim(),to:['delivered@resend.dev'],subject:'Turnly email setup check',text:'Synthetic configuration test using Resend’s official delivery simulator.'})});
+      if(!result.id)throw new Error('The provider returned no test message ID.');
+      return json(res,200,{ok:true,message:'Resend accepted the test message to its delivery simulator. Your sender connection is working.'});
+    }
     if(body.action==='list'){
       const page=Math.max(1,Math.floor(Number(body.page)||1));
       let query=client.from('referral_agents').select('*',{count:'exact'}).order('city_rank').order('city').order('name').order('id');
@@ -134,12 +146,13 @@ module.exports=async function handler(req,res){
       const update={...pos,template_path:path,updated_at:new Date().toISOString()};if(body.pdf)update.template_name=clean(body.name,150);
       checked(await client.from('referral_settings').update(update).eq('id',true));return json(res,200,{ok:true});
     }
-    if(['flyer','send'].includes(body.action)){
+    if(['flyer','send_preview','send'].includes(body.action)){
       let a=await findAgent(client,body.id);
       if(!a.referral_code)a=checked(await client.from('referral_agents').update({referral_code:'TA-'+randomUUID().replace(/-/g,'').toUpperCase()}).eq('id',a.id).select('*').single());
       if(body.action==='send'&&!uuid(body.request_id))throw new Error('Invalid send request.');
       const asset=await flyer(client,a,await settings(client));
       if(body.action==='flyer')return json(res,200,{url:asset.url});
+      if(body.action==='send_preview')return json(res,200,{agent:a,url:asset.url,messages:referralMessages(a,asset.url),sending:capabilities()});
       // Each channel has an independent durable result. Never call acceptance delivery.
       const channels=body.channels||['email','sms'];
       if(!Array.isArray(channels)||!channels.length||channels.length>2||channels.some(c=>!['email','sms'].includes(c))||new Set(channels).size!==channels.length)throw new Error('Choose email, text, or both.');

@@ -9,6 +9,16 @@ const jsQR=require('jsqr');
 const {PDFDocument}=require('pdf-lib');
 const {agentInput,qrImage,referralUrl,makeFlyer,placement}=require('../lib/agent-referrals.cjs');
 
+test('short links losslessly preserve every referral bit and reject malformed aliases',()=>{
+  const {referralCodeFromSlug}=require('../lib/agent-referrals.cjs');
+  for(let i=0;i<100;i++){const code='TA-'+randomUUID().replaceAll('-','').toUpperCase();const url=referralUrl(code);assert.equal(referralCodeFromSlug(url.split('/').at(-1)),code);assert.ok(url.length<60);}
+  assert.equal(referralCodeFromSlug('bad'),null);
+  assert.equal(referralCodeFromSlug('A'.repeat(21)+'B'),null,'noncanonical base64 must not alias another agent');
+  const handler=require('../api/agent-link.js');let location;const res={setHeader(k,v){if(k==='Location')location=v},end(){}};
+  handler({method:'GET',url:'/api/agent-link?slug='+referralUrl('TA-'+'A'.repeat(32)).split('/').at(-1)},res);
+  assert.equal(res.statusCode,302);assert.equal(location,'https://portal.turnlypros.com/residential-referral.html?ref=TA-'+'A'.repeat(32));
+});
+
 test('CSV preserves quoted names, multiline notes and normalizes common headers',async()=>{
   const {parseAgentCsv}=await import('../agent-import.mjs');
   const rows=parseAgentCsv('First Name,Last Name,Email Address,Phone Number,Notes\r\nJane,Agent,JANE@example.com,9195550100,"Called, interested\nFollow up Friday"');
