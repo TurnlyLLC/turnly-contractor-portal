@@ -1,6 +1,9 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": ".",
+  "functions": {
+    "api/agent-referrals.js": { "maxDuration": 60 }
+  },
   "routes": [
     {
       "src": "^/service-worker\\.js$",

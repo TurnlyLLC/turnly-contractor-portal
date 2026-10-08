@@ -1,0 +1,5 @@
+const code=new URL(location.href).searchParams.get('ref')||'';
+const form=document.querySelector('#requestForm'),context=document.querySelector('#referralContext'),result=document.querySelector('#result');
+async function api(data){const response=await fetch('/api/agent-referrals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...data,code})});const body=await response.json();if(!response.ok)throw new Error(body.error||'Please try again.');return body;}
+try{const data=await api({action:'context'});context.textContent=`Referred by ${data.agent.name}. Your referral will be attached to your request.`;form.hidden=false;}catch(e){context.textContent=e.message;context.classList.add('error');}
+form.addEventListener('submit',async event=>{event.preventDefault();const button=event.submitter;button.disabled=true;result.textContent='Submitting your request…';try{await api({action:'register',...Object.fromEntries(new FormData(form))});form.hidden=true;result.textContent='Thank you! Your request has been received. Turnly will contact you about your cleaning needs.';}catch(e){result.textContent=e.message;button.disabled=false;}});

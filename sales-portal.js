@@ -53,6 +53,7 @@ const pageConfig = {
 const navItems = [
   ["dashboard", "Dashboard", "sales.html", "dashboard"],
   ["leads", "Leads", "sales-leads.html", "users"],
+  ["agents", "Agents", "sales-agents.html", "users"],
   ["walkthroughs", "Walkthroughs", "sales-walkthroughs.html", "calendar"],
   ["tasks", "Tasks & Follow-ups", "sales-tasks.html", "clipboard-check"]
 ];

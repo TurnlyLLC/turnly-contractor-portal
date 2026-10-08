@@ -1,8 +1,16 @@
 {
   "scripts": {
-    "build": "node generate-env.js"
+    "build": "node generate-env.js",
+    "test:referrals": "node --test --test-isolation=none tests/agent-referrals.test.cjs tests/agent-referrals-api.test.cjs"
   },
   "dependencies": {
-    "@supabase/supabase-js": "2.45.0"
+    "@supabase/supabase-js": "2.45.0",
+    "pdf-lib": "1.17.1",
+    "qrcode": "1.5.4"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.3.14",
+    "jsqr": "1.4.0",
+    "pngjs": "7.0.0"
   }
 }
