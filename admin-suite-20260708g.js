@@ -46,6 +46,7 @@ const navSections = [
       { key: "sales-overview", label: "Sales Dashboard", href: "sales-overview.html", icon: "layout-grid" },
       { key: "leads", label: "Leads", href: "leads.html", icon: "users" },
       { key: "agent-referrals", label: "Agent Referrals", href: "admin-agents.html", icon: "users" },
+      { key: "residential-bookings", label: "Residential Bookings", href: "admin-residential.html", icon: "calendar" },
       { key: "walkthroughs", label: "Walkthroughs", href: "walkthroughs.html", icon: "calendar-days" },
       { key: "sales-tasks", label: "Tasks & Follow-ups", href: "sales-follow-ups.html", icon: "clipboard-list" },
       { key: "quotes", label: "Quotes", href: "quotes.html", icon: "badge-dollar" },

@@ -1,7 +1,10 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": ".",
+  "crons": [{ "path": "/api/residential-charge", "schedule": "0 * * * *" }],
   "functions": {
+    "api/residential-charge.js": { "maxDuration": 300 },
+    "api/residential-booking.js": { "maxDuration": 60 },
     "api/agent-referrals.js": {
       "maxDuration": 60,
       "includeFiles": "assets/agent-referral-template.png"
