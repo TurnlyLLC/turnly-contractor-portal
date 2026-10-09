@@ -1,4 +1,5 @@
 -- Residential requests belong in Operations, not the sales pipeline.
+-- Relax only the required-value constraint. No column or existing record is removed.
 alter table public.referral_customers alter column lead_id drop not null;
 create or replace function public.register_agent_referral(p_code text,p_name text,p_email text,p_phone text,p_address text,p_city text,p_notes text)
 returns void language plpgsql security invoker set search_path=public as $$
@@ -20,12 +21,12 @@ create table public.residential_accounts (
 create table public.residential_account_tokens (
  token_hash text primary key, email text not null, name text not null default '',
  purpose text not null check(purpose in ('setup','reset')), password_hash text,
- expires_at timestamptz not null, created_at timestamptz not null default now(),
+ expires_at timestamptz not null, consumed_at timestamptz, created_at timestamptz not null default now(),
  check(purpose<>'setup' or password_hash is not null)
 );
 create table public.residential_sessions (
- token_hash text primary key, account_id uuid not null references public.residential_accounts(id) on delete cascade,
- expires_at timestamptz not null, created_at timestamptz not null default now()
+ token_hash text primary key, account_id uuid not null references public.residential_accounts(id),
+ expires_at timestamptz not null, revoked_at timestamptz, created_at timestamptz not null default now()
 );
 create index residential_sessions_account on public.residential_sessions(account_id);
 create index residential_tokens_email on public.residential_account_tokens(email);
@@ -34,14 +35,14 @@ alter table public.residential_accounts enable row level security;
 alter table public.residential_account_tokens enable row level security;
 alter table public.residential_sessions enable row level security;
 revoke all on public.residential_accounts,public.residential_account_tokens,public.residential_sessions from public,anon,authenticated;
-grant all on public.residential_accounts,public.residential_account_tokens,public.residential_sessions to service_role;
+grant select,insert,update on public.residential_accounts,public.residential_account_tokens,public.residential_sessions to service_role;
 
 -- Single-use verification/reset and session revocation are one transaction.
 create function public.finish_residential_account(p_token text,p_purpose text,p_password text default null)
 returns uuid language plpgsql security invoker set search_path=public as $$
 declare t residential_account_tokens%rowtype; a uuid;
 begin
- select * into t from residential_account_tokens where token_hash=p_token and purpose=p_purpose and expires_at>now() for update;
+ select * into t from residential_account_tokens where token_hash=p_token and purpose=p_purpose and expires_at>now() and consumed_at is null for update;
  if not found then raise exception 'This link has expired or was already used. Please request a new link.'; end if;
  perform pg_advisory_xact_lock(hashtextextended(t.email,610082100));
  if t.purpose='setup' then
@@ -51,9 +52,9 @@ begin
   if p_password is null then raise exception 'Choose a new password.'; end if;
   update residential_accounts set password_hash=p_password where email=t.email returning id into a;
   if a is null then raise exception 'Please request a new link.'; end if;
-  delete from residential_sessions where account_id=a;
+  update residential_sessions set revoked_at=now() where account_id=a and revoked_at is null;
  end if;
- delete from residential_account_tokens where email=t.email;
+ update residential_account_tokens set consumed_at=now() where email=t.email and consumed_at is null;
  return a;
 end $$;
 revoke all on function public.finish_residential_account(text,text,text) from public,anon,authenticated;
@@ -67,7 +68,6 @@ declare a residential_accounts%rowtype;
 begin
  select * into a from residential_accounts where id=p_account for update;
  if not found or a.password_hash<>p_password_hash then raise exception 'Please sign in again.'; end if;
- delete from residential_sessions where account_id=a.id and expires_at<now();
  insert into residential_sessions(token_hash,account_id,expires_at) values(p_token,a.id,now()+interval '7 days');
 end $$;
 revoke all on function public.start_residential_session(uuid,text,text) from public,anon,authenticated;

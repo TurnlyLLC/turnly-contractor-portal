@@ -82,7 +82,9 @@ test('customer tokens are single use, sessions are private, reset revokes sessio
  await db.query("select start_residential_session($1,'hash1','session')",[id]);
  await db.query("insert into residential_account_tokens(token_hash,email,purpose,expires_at) values('reset',$1,'reset',now()+interval '1 hour')",[em]);
  await db.query("select finish_residential_account('reset','reset','hash2')");
- assert.equal((await db.query('select count(*)::int n from residential_sessions')).rows[0].n,0);
+ assert.equal((await db.query('select count(*)::int n from residential_sessions where revoked_at is null')).rows[0].n,0);
+ assert.equal((await db.query('select count(*)::int n from residential_sessions')).rows[0].n,1,'revoked sessions are retained');
+ assert.equal((await db.query('select count(*)::int n from residential_account_tokens')).rows[0].n,2,'used links are retained');
  await assert.rejects(db.query("select start_residential_session($1,'hash1','stale')",[id]),/sign in/);
  for(const role of ['anon','authenticated']){await db.exec('set role '+role);await assert.rejects(db.query('select * from residential_accounts'),/permission denied/);await assert.rejects(db.query('select * from residential_sessions'),/permission denied/);await assert.rejects(db.query("select finish_residential_account('a','setup')"),/permission denied/);await db.exec('reset role');}
  const agent=(await db.query("insert into referral_agents(name,status) values('A','active') returning *")).rows[0],bid=randomUUID();

@@ -2,6 +2,8 @@
 
 Residential referral bookings and review requests create pending assignments without new sales leads. A scheduled booking (saved Stripe card) and positive agreed contractor pay are required before release. The database trigger protects release through either admin screen. Existing sales history is preserved.
 
+No migration or account endpoint deletes or truncates records. Used verification links are marked consumed; logout and password reset mark sessions revoked. Expired sessions are retained and rejected by their expiry. The `lead_id` constraint is relaxed to allow future residential records without a sales lead; the column and all existing values remain.
+
 After card confirmation, the booking receipt offers email-as-username password setup. The booking receipt token selects the stored email; a posted email cannot replace it. Resend sends a one-hour confirmation link. The customer confirms with the password they just chose. Existing accounts must sign in or use password reset; signup cannot overwrite them.
 
 `/customer.html` shows bookings matching the account's verified email, their assignment progress, and payment status. It never returns Stripe identifiers, card data, staff metadata, or another customer's records. Changes to a clean are handled by contacting Turnly. Referral attribution remains on the original booking.

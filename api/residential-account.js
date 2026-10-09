@@ -12,7 +12,7 @@ module.exports=async(req,res)=>{
    let jobs=[];if(result.data.length)jobs=S.checked(await db.from('assignment_blocks').select('id,status,assigned_to_name,claimed_by_name').in('id',result.data.map(b=>b.id)));
    return S.json(res,200,{account:{name:a.name,email:a.email},bookings:result.data.map(b=>({...b,job:jobs.find(j=>j.id===b.id)||null})),page,total:result.count});
   }
-  if(input.action==='logout'){const token=A.sessionToken(req);if(token)S.checked(await db.from('residential_sessions').delete().eq('token_hash',S.hash(token)));A.setCookie(res,'',0);return S.json(res,200,{ok:true});}
+  if(input.action==='logout'){const token=A.sessionToken(req);if(token)S.checked(await db.from('residential_sessions').update({revoked_at:new Date().toISOString()}).eq('token_hash',S.hash(token)));A.setCookie(res,'',0);return S.json(res,200,{ok:true});}
   await S.rate(db,req,'account-'+input.action);
   if(input.action==='setup'){
    const b=await S.owned(db,input);if(!['scheduled','completed'].includes(b.status))throw S.fail('Finish saving your card before creating your account.');
@@ -24,7 +24,7 @@ module.exports=async(req,res)=>{
   if(['verify','reset'].includes(input.action)){
    if(!/^[a-f0-9]{64}$/.test(input.token||''))throw S.fail('Use the full link from your account email.');
    const purpose=input.action==='verify'?'setup':'reset';
-   const t=S.checked(await db.from('residential_account_tokens').select('email,password_hash').eq('token_hash',S.hash(input.token)).eq('purpose',purpose).gt('expires_at',new Date().toISOString()).maybeSingle());
+   const t=S.checked(await db.from('residential_account_tokens').select('email,password_hash').eq('token_hash',S.hash(input.token)).eq('purpose',purpose).is('consumed_at',null).gt('expires_at',new Date().toISOString()).maybeSingle());
    if(!t)throw S.fail('This link has expired or was already used. Request a new link.');
    if(purpose==='setup'&&!await A.verifyPassword(input.password,t.password_hash))throw S.fail('Enter the password you chose after booking.');
    const hashed=purpose==='setup'?t.password_hash:await A.hashPassword(input.password);
