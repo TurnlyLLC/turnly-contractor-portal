@@ -56,6 +56,11 @@ module.exports=async(req,res)=>{
   }
   const a=await S.agent(db,input.code);
   if(input.action==='context')return S.json(res,200,{agent:{name:a.name,code:a.referral_code},payments_ready:S.ready(),property_lookup:!!process.env.RENTCAST_API_KEY,consent:CONSENT});
+  if(input.action==='address_suggestions'){
+   // Typing may generate several searches; use a separate 20-per-minute bucket.
+   await S.rate(db,req,'address-suggestions:'+Math.floor(Date.now()/60000));
+   return S.json(res,200,await require('../lib/residential-address.cjs').suggest(input));
+  }
   if(input.action==='property'){await S.rate(db,req,'property');return S.json(res,200,await require('../lib/residential-property.cjs').lookup(input));}
   if(input.action==='quote'){await S.rate(db,req,'quote');return S.json(res,200,{quote:quote(input)});}
   if(!['checkout','request'].includes(input.action))throw S.fail('Unknown booking action.');

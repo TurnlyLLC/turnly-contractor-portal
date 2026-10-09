@@ -2,7 +2,7 @@
   "scripts": {
     "build": "node generate-env.js",
     "test:referrals": "node --test --test-isolation=none tests/agent-referrals.test.cjs tests/agent-referrals-api.test.cjs",
-    "test:booking": "node --test --test-isolation=none tests/residential-booking.test.cjs tests/residential-jobs.test.cjs tests/residential-accounts.test.cjs"
+    "test:booking": "node --test --test-isolation=none tests/residential-booking.test.cjs tests/residential-jobs.test.cjs tests/residential-accounts.test.cjs tests/residential-address.test.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.45.0",

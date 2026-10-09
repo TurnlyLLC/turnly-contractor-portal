@@ -1,9 +1,12 @@
+import {setupAddress} from './residential-address.mjs?v=20261009-address';
 const $=s=>document.querySelector(s),form=$('#bookingForm'),f=form.elements;
 const code=new URL(location.href).searchParams.get('ref')||'';
-const labels=['YOUR CLEAN','YOUR DETAILS','YOUR SPACE','YOUR QUOTE','YOUR TIME','YOUR BOOKING'];
+const labels=['YOUR HOME','YOUR DETAILS','YOUR CLEAN','YOUR QUOTE','YOUR TIME','YOUR BOOKING'];
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=c=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:2}).format(c/100);
-let step=0,context=null,quote=null,busy=false,attempt=null,receiptParams=null;
+let step=0,context=null,quote=null,busy=false,attempt=null,receiptParams=null,profileEdited=false;
+const addressFlow=setupAddress({form,api,enabled:()=>!!context?.property_lookup,onChange:()=>{attempt=null;quote=null;}});
+f.profile_address.addEventListener('input',()=>{profileEdited=true;});
 const today=new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const tomorrow=new Date(today+'T12:00:00Z');tomorrow.setUTCDate(tomorrow.getUTCDate()+1);f.service_date.min=tomorrow.toISOString().slice(0,10);
 let month=new Date(tomorrow.getUTCFullYear(),tomorrow.getUTCMonth(),1);
@@ -34,10 +37,13 @@ $('#back').onclick=()=>{if(!busy)showStep(step-1);};
 function lock(value){busy=value;$('#next').disabled=value;$('#back').disabled=value;if(value)$('#next').textContent='Just a moment…';}
 form.addEventListener('submit',async e=>{
  e.preventDefault();if(busy)return;notice('');
+ if(step===0&&!addressFlow.hasAddress){notice('Choose a matching address or enter it manually.',true);$('#addressSearch').focus();return;}
+ if(step===0&&addressFlow.loading){notice('We’re finding your home details. Please wait a moment.');return;}
  const visible=$(`[data-step="${step}"]`);for(const input of visible.querySelectorAll('input,textarea')){if(!input.reportValidity())return;}
  if(step===4&&f.arrival_end.value<=f.arrival_start.value){notice('Choose an arrival window with an end time after its start time.',true);f.arrival_end.focus();return;}
  lock(true);
  try{
+  if(step===0&&!profileEdited)f.profile_address.value=[f.property_address.value,f.city.value,f.state.value,f.zip.value].join(', ');
   if(step===2){quote=(await api('quote',values())).quote;renderQuote();}
   if(step===4)renderReview();
   if(step<5){showStep(step+1);return;}
@@ -53,11 +59,10 @@ async function init(){
  $('#connectionError').hidden=true;$('#retry').disabled=true;
  try{
   const fragment=new URLSearchParams(location.hash.slice(1));if(fragment.has('booking')&&fragment.has('token')){receiptParams={id:fragment.get('booking'),token:fragment.get('token')};const r=await api('confirm',receiptParams);renderReceipt(r.booking);$('#referralBadge').textContent=`Referred by ${r.booking.agent_name}`;return;}
-  context=await api('context');$('#lookupProperty').hidden=!context.property_lookup;if(context.property_lookup)$('#propertyNote').textContent='Enter your property address, then find its home details. Please check the matching address and correct any outdated information.';$('#referralBadge').textContent=`Referred by ${context.agent.name}`;$('#consentText').textContent=context.consent;form.hidden=false;showStep(0);renderCalendar();
+  context=await api('context');$('#referralBadge').textContent=`Referred by ${context.agent.name}`;$('#consentText').textContent=context.consent;form.hidden=false;showStep(0);renderCalendar();
  }catch(e){$('#connectionError').hidden=false;$('#connectionMessage').textContent=e.name==='TimeoutError'?'The booking service took too long to respond. Please try again.':e.message;$('#referralBadge').textContent='Your fresh start with Turnly';}
  finally{$('#retry').disabled=false;}
 }
-$('#lookupProperty').onclick=async()=>{const button=$('#lookupProperty');button.disabled=true;button.textContent='Finding your home…';const original=[f.property_address.value,f.city.value,f.state.value,f.zip.value].join('|');try{const r=await api('property',values());if(original!==[f.property_address.value,f.city.value,f.state.value,f.zip.value].join('|'))return;f.property_confirmed.checked=false;if(r.found){for(const key of ['beds','baths','sqft'])if(r[key]!==null&&r[key]!==undefined)f[key].value=r[key];$('#propertyNote').textContent=`Property record: ${r.address}. Details from ${r.source}. Check that this is your home, correct any differences, and confirm the square footage you want cleaned.`;}else $('#propertyNote').textContent=r.message;}catch(e){$('#propertyNote').textContent=e.message+' You can enter the details yourself.';}finally{button.disabled=false;button.textContent='Find my home details ↗';}};
 $('#retry').onclick=init;init();
 
 function mountAccount(el,b){
