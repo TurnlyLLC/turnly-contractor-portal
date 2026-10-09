@@ -14,6 +14,6 @@ test('visit answers require conditional details and discard hidden codes',()=>{
 });
 test('account email renders branded actions, expiry, username and escaped content',()=>{
  const html=accountEmail('https://portal.turnlypros.com/customer.html#setup=example','setup','<customer>@example.com');
- assert.match(html,/Confirm my account/);assert.match(html,/one hour/);assert.match(html,/&lt;customer&gt;/);assert.doesNotMatch(html,/<customer>/);assert.match(html,/already saved/);
- assert.match(accountEmail('https://portal.turnlypros.com/customer.html#reset=example','reset','a@example.com'),/Reset my password/);
+ assert.match(html,/Verify email/);assert.match(html,/one hour/);assert.match(html,/&lt;customer&gt;/);assert.doesNotMatch(html,/<customer>/);assert.match(html,/Verify your email address/);assert.match(html,/v:roundrect/);assert.match(html,/width:200px/);assert.doesNotMatch(html,/>https:\/\/portal.turnlypros.com\/customer.html#setup=/);assert.doesNotMatch(html,/A FRESH START|service charge|fresh start/);
+ assert.match(accountEmail('https://portal.turnlypros.com/customer.html#reset=example','reset','a@example.com'),/Reset password/);
 });
