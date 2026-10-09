@@ -957,6 +957,7 @@ async function emailQuoteForRow(row) {
 
 async function selectRows(table, orderColumn, ascending = false, limit = 2000) {
   const query = supabase.from(table).select("*").order(orderColumn, { ascending }).limit(limit);
+  if (table === TABLES.leads) query.or("lead_source.is.null,lead_source.neq.residential_website_contact_form");
   const { data, error } = await query;
   if (error) throw error;
   return data || [];
