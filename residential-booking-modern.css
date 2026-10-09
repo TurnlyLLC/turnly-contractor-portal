@@ -1,0 +1,46 @@
+/* Current booking presentation is a separate asset so older PWA caches cannot
+   serve the previous stylesheet under a new query string. */
+:root{--visit-teal:#087f83;--visit-muted:#697e8b;--visit-line:#dce7e9}
+.shell{grid-template-columns:minmax(330px,.78fr) minmax(520px,1fr);box-shadow:0 22px 70px #102c4008}
+.flow{padding:38px 48px 40px}
+.story-copy{padding:54px 44px 40px}
+.story h1{font-size:clamp(34px,3.1vw,45px);line-height:1.22}
+.progress{height:5px;margin-bottom:32px;background:#edf2f3}
+.progress span{border-radius:8px;background:linear-gradient(90deg,#0b687b,#16a1a0)}
+.visit-step h2{font-size:32px;letter-spacing:-1.15px;line-height:1.25;margin-bottom:10px}
+.visit-step>.intro{font-size:14px;margin-bottom:28px;color:var(--visit-muted)}
+.visit-step .eyebrow{margin-bottom:14px}
+.visit-step .visit-question{min-width:0;border:0;padding:0;margin:0 0 25px}
+.visit-step .visit-question legend{display:flex;align-items:center;gap:10px;float:none;width:100%;padding:0;margin:0;font-size:15px;line-height:1.5;font-weight:700;letter-spacing:-.15px}
+.question-number{display:inline-flex;width:25px;height:25px;align-items:center;justify-content:center;border-radius:8px;background:#edf5f5;color:#24757b;font-size:10px;letter-spacing:.3px}
+.question-help{color:var(--visit-muted);font-size:12px;line-height:1.5;margin:6px 0 12px 35px}
+.visit-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.visit-option{position:relative;display:block;cursor:pointer;min-width:0}
+.visit-option input{position:absolute;opacity:0;width:100%;height:100%;inset:0;margin:0;z-index:1;cursor:pointer}
+.option-surface{position:relative;display:flex;align-items:center;gap:11px;min-height:77px;padding:15px 32px 15px 14px;border:1px solid var(--visit-line);border-radius:13px;background:#fff;transition:background .16s,border-color .16s,box-shadow .16s}
+.option-icon{width:30px;height:32px;flex:0 0 30px;display:grid;place-items:center;color:#6c8993}
+.option-icon svg{width:25px;height:25px}
+.option-copy{min-width:0}.option-copy strong{display:block;font-size:12px;line-height:1.45;font-weight:700;color:#16364a}.option-copy small{display:block;color:var(--visit-muted);font-size:10px;font-weight:400;line-height:1.5;margin-top:3px}
+.option-check{position:absolute;right:11px;top:13px;width:15px;height:15px;border-radius:50%;border:1px solid #ccdadf;display:grid;place-items:center;background:white}
+.option-check svg{width:11px;height:11px;opacity:0;stroke-width:2.5}
+.visit-option:hover .option-surface{border-color:#8fbfc2;background:#f8fcfc}
+.visit-option input:checked+.option-surface{border-color:var(--visit-teal);background:#eff9f8;box-shadow:0 0 0 1px var(--visit-teal)}
+.visit-option input:checked+.option-surface .option-icon{color:var(--visit-teal)}
+.visit-option input:checked+.option-surface .option-check{background:var(--visit-teal);border-color:var(--visit-teal);color:#fff}
+.visit-option input:checked+.option-surface .option-check svg{opacity:1}
+.visit-option input:focus-visible+.option-surface{outline:3px solid #1398ba;outline-offset:4px}
+.access-options{grid-template-columns:repeat(3,minmax(0,1fr))}
+.access-options .option-surface{display:block;min-height:116px;padding:15px 13px}
+.access-options .option-icon{margin-bottom:9px}
+.visit-followup{display:block;margin:-11px 0 25px;padding:16px 18px;background:#f4f9f9;border-left:3px solid #90cdcc;border-radius:0 12px 12px 0;font-size:12px;font-weight:600}
+.visit-followup input,.visit-followup textarea{background:#fff;border-color:#d2e0e2;border-radius:10px;font-weight:400}
+.visit-additional{display:block;padding-top:4px;font-size:13px;font-weight:600}
+.visit-additional>span{display:flex;align-items:center;justify-content:space-between}
+.optional-tag{font-size:10px;color:#71858f;font-weight:400;background:#f1f5f6;border-radius:6px;padding:4px 7px}
+.visit-additional textarea{margin-top:10px;border-color:var(--visit-line);border-radius:12px;background:#fbfcfc;font-weight:400;line-height:1.6;resize:vertical;min-height:92px}
+.visit-step textarea::placeholder{font-size:12px;font-weight:400;line-height:1.6;color:#8a9aa3}
+.form-actions .primary{border-radius:12px;min-height:54px;background:#0c344b;box-shadow:0 5px 12px #0c344b10}.form-actions .primary:hover{background:#10546a}
+@media(min-width:1400px){.flow{padding:40px 50px}.story-copy{padding:60px 46px 40px}}
+@media(max-width:1100px){.shell{grid-template-columns:minmax(280px,.68fr) minmax(420px,1fr)}.flow{padding:32px 28px}.story-copy{padding:44px 28px}.option-surface{gap:8px;padding-left:10px}.option-icon{width:25px;flex-basis:25px}.option-copy small{font-size:10px}}
+@media(max-width:760px){.shell{display:block}.flow{padding:26px 22px 30px}.story-copy{padding:25px 24px}.story h1{font-size:27px}.visit-step h2{font-size:27px;line-height:1.2}.visit-step>.intro{font-size:13px;margin-bottom:25px}.visit-step .visit-question{margin-bottom:24px}.visit-step .visit-question legend{font-size:14px}.question-help{font-size:11px;margin-left:0;margin-top:8px}.option-surface{display:block;min-height:112px;padding:13px 11px}.option-icon{margin-bottom:8px}.option-copy strong{font-size:12px}.access-options{grid-template-columns:1fr}.access-options .option-surface{display:flex;align-items:center;gap:12px;min-height:74px;padding:14px 34px 14px 15px}.access-options .option-icon{margin-bottom:0;flex-basis:28px}.access-options .option-check{top:28px}.visit-additional textarea{min-height:105px}.visit-followup{padding:14px}.visit-options{gap:10px}}
+@media(prefers-reduced-motion:reduce){.option-surface{transition:none}}
