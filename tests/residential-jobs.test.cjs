@@ -8,8 +8,9 @@ test('confirmed bookings become one pending assignment with correct Eastern wind
  db.job.status='claimed';db.job.assigned_to_name='Cleaner';await J.syncBooking(db,b);assert.equal(db.job.status,'claimed');assert.equal(db.job.assigned_to_name,'Cleaner');
  assert.equal(J.assignmentFor({...b,service_date:'2026-12-12'}).start_window,'2026-12-12T14:00:00.000Z');
 });
-test('unconfirmed requests never create contractor assignments',async()=>{
- for(const status of ['awaiting_card','requested','review_required','cancelled','needs_reschedule']){const b={...booking(),status},db=fixture(b);assert.equal(await J.syncBooking(db,b),null);assert.equal(db.job,null);}
+test('submitted requests enter pending review, while cancelled requests do not create new jobs',async()=>{
+ for(const status of ['awaiting_card','requested','review_required','needs_reschedule']){const b={...booking(),status},db=fixture(b);await J.syncBooking(db,b);assert.equal(db.job.status,'pending');assert.equal(db.job.visibility,'pending');}
+ const b={...booking(),status:'cancelled'},db=fixture(b);assert.equal(await J.syncBooking(db,b),null);
 });
 test('completion waits for paid status so service-morning collection is not skipped',async()=>{
  const b=booking(),db=fixture(b);await J.syncBooking(db,b);db.job.status='completed';await J.syncBooking(db,b);assert.equal(db.calls.length,0);b.payment_status='paid';await J.syncBooking(db,b);assert.equal(db.calls[0].args.p_cancel,false);assert.equal(b.status,'completed');

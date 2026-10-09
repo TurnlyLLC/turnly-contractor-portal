@@ -67,6 +67,7 @@ module.exports=async(req,res)=>{
   const status=data.quote.review_required?'review_required':checkout?'awaiting_card':'requested';
   S.checked(await db.rpc('create_residential_booking',{p_id:input.id,p_token:S.hash(input.token),p_hash:S.hash(JSON.stringify({data,status})),p_code:input.code,p_data:data,p_status:status,p_consent:checkout?CONSENT:null}));
   let b=await S.owned(db,input);
+  try{await J.syncBooking(db,b);}catch{console.error('Submitted residential assignment deferred to reconciliation.');}
   if(!checkout)return S.json(res,200,{booking:S.summary(b)});
   if(b.status!=='awaiting_card')return S.json(res,200,{booking:S.summary(b)});
   const st=S.stripe();

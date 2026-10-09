@@ -8,3 +8,10 @@ window.__ENV = {
 `;
 
 fs.writeFileSync("./env.js", envFile);
+
+if (process.env.TURNLY_EMAIL_SETUP_CHECK === '1') {
+  require('./scripts/check-referral-email.cjs')().catch(error => {
+    console.error(error.message);
+    process.exitCode = 1;
+  });
+}
