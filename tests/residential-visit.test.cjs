@@ -6,6 +6,9 @@ test('visit answers require conditional details and discard hidden codes',()=>{
  assert.throws(()=>visitDetails({...base,access_method:'code'}),/access code/);
  assert.throws(()=>visitDetails({...base,access_method:'lockbox'}),/lockbox/);
  assert.throws(()=>visitDetails({...base,parking:'invented'}),/parking/);
+ assert.throws(()=>visitDetails({...base,parking:'guest',parking_instructions:'   '}),/parking instructions/);
+ assert.equal(visitDetails({...base,parking:'guest',parking_instructions:' Use marked visitor spaces. '}).parking_instructions,'Use marked visitor spaces.');
+ assert.equal(visitDetails({...base,parking_instructions:'No longer applicable'}).parking_instructions,'');
  assert.equal(visitDetails({...base,access_code:'old secret',lockbox_code:'old secret'}).access_code,'');
  assert.equal(visitDetails({...base,access_method:'lockbox',lockbox_code:'1234'}).lockbox_code,'1234');
 });
