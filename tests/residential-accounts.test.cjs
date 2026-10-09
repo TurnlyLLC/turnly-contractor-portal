@@ -7,7 +7,7 @@ test('passwords are salted and verified with scrypt; sessions are opaque secure 
  assert.throws(()=>A.sameOrigin({headers:{origin:'https://attacker.example','content-type':'application/json'}}),/customer portal/);
 });
 function harness(){
- const seen=[],sent=[],db={from(table){const q={filters:[],select(){return q},eq(k,v){q.filters.push([k,v]);return q},gt(){return q},order(){return q},range(){return q.run()},in(k,v){q.filters.push([k,v]);return q},async run(){seen.push({table,filters:q.filters});if(table==='residential_accounts')return {data:null};if(table==='referral_bookings')return {data:[{id:'mine',email:'owner@example.com'}],count:1};if(table==='assignment_blocks')return {data:[{id:'mine',status:'pending'}]};return {data:null};},then(ok,no){return q.run().then(ok,no)},maybeSingle(){return q.run()}};return q;}};
+ const seen=[],sent=[],db={from(table){const q={filters:[],select(){return q},eq(k,v){q.filters.push([k,v]);return q},is(k,v){q.filters.push([k,v]);return q},gt(){return q},order(){return q},range(){return q.run()},in(k,v){q.filters.push([k,v]);return q},async run(){seen.push({table,filters:q.filters});if(table==='residential_accounts')return {data:null};if(table==='referral_bookings')return {data:[{id:'mine',email:'owner@example.com'}],count:1};if(table==='assignment_blocks')return {data:[{id:'mine',status:'pending'}]};return {data:null};},then(ok,no){return q.run().then(ok,no)},maybeSingle(){return q.run()}};return q;}};
  const owned={email:'booker@example.com',name:'Booker',status:'scheduled'};
  const s={...S,database:()=>db,rate:async()=>{},owned:async()=>owned};
  const a={...A,account:async()=>({id:'owner',email:'owner@example.com',name:'Owner'}),hashPassword:async()=> 'safe-hash',sendToken:async(...args)=>sent.push(args)};
@@ -17,7 +17,7 @@ function harness(){
 }
 test('account history uses the verified session email, never the posted email or customer ID',async()=>{
  const h=harness(),r=await h.call({action:'list',email:'victim@example.com',customer_id:'victim'});
- assert.equal(r.status,200);assert.deepEqual(h.seen.find(x=>x.table==='referral_bookings').filters,[['email','owner@example.com']]);assert.equal(JSON.stringify(h.seen.find(x=>x.table==='assignment_blocks').filters),JSON.stringify([['id',['mine']]]));
+ assert.equal(r.status,200);assert.equal(JSON.stringify(h.seen.find(x=>x.table==='referral_bookings').filters),JSON.stringify([['email','owner@example.com'],['assignment_deleted_at',null],['status',['scheduled','completed','cancelled']]]));assert.equal(JSON.stringify(h.seen.find(x=>x.table==='assignment_blocks').filters),JSON.stringify([['id',['mine']]]));
  assert.equal((await h.call({action:'list'},'https://attacker.example')).status,403);
 });
 test('setup uses receipt ownership and its stored email, and does not register unconfirmed bookings',async()=>{

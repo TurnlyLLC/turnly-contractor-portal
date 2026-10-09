@@ -6,9 +6,16 @@ const CONSENT='I authorize Turnly to save my card and charge the displayed total
 module.exports=async(req,res)=>{
  if(req.method!=='POST')return S.json(res,405,{error:'Method not allowed.'});
  try{
-  const input=await S.body(req),db=S.database();
-  if(['admin_list','admin_clients','admin_approve_job','admin_complete','admin_cancel','admin_sync'].includes(input.action)){
+  const input=await S.body(req);
+  if(input.action==='address_suggestions')return S.json(res,200,await require('../lib/residential-address.cjs').publicSuggest(input,req));
+  const db=S.database();
+  if(['admin_list','admin_inquiries','admin_clients','admin_approve_job','admin_complete','admin_cancel','admin_sync'].includes(input.action)){
    const actor=await S.admin(db,req);
+   if(input.action==='admin_inquiries'){
+    const page=Math.max(1,Math.floor(Number(input.page)||1));
+    const r=await db.from('residential_inquiries').select('id,payload,created_at',{count:'exact'}).order('created_at',{ascending:false}).range((page-1)*25,page*25-1);S.checked(r);
+    return S.json(res,200,{inquiries:r.data,total:r.count,page});
+   }
    if(input.action==='admin_clients'){
     const page=Math.max(1,Math.floor(Number(input.page)||1));
     let q=db.from('referral_customers').select('id,name,email,phone,created_at,referral_agents(name,referral_code)',{count:'exact'}).order('created_at',{ascending:false});
@@ -20,7 +27,7 @@ module.exports=async(req,res)=>{
     }));return S.json(res,200,{clients,total:r.count,page});
    }
    if(input.action==='admin_list'){
-    const page=Math.max(1,Math.floor(Number(input.page)||1));let q=db.from('referral_bookings').select('id,customer_id,name,email,phone,profile_address,property_address,city,state,zip,beds,baths,sqft,service,frequency,quote,amount_cents,service_date,arrival_start,arrival_end,charge_at,status,payment_status,agent_name,referral_code,notes,created_at,stripe_payment_intent,stripe_session,paid_at,completed_at',{count:'exact'}).order('created_at',{ascending:false});
+    const page=Math.max(1,Math.floor(Number(input.page)||1));let q=db.from('referral_bookings').select('id,customer_id,name,email,phone,profile_address,property_address,city,state,zip,beds,baths,sqft,service,frequency,quote,amount_cents,service_date,arrival_start,arrival_end,charge_at,status,payment_status,agent_name,referral_code,notes,visit_details,assignment_deleted_at,created_at,stripe_payment_intent,stripe_session,paid_at,completed_at',{count:'exact'}).order('created_at',{ascending:false});
     if(input.status)q=q.eq('status',input.status);
     if(input.customer_id){if(!uuid(input.customer_id))throw S.fail('Choose a customer.');q=q.eq('customer_id',input.customer_id);}
     const r=await q.range((page-1)*25,page*25-1);S.checked(r);
@@ -56,11 +63,6 @@ module.exports=async(req,res)=>{
   }
   const a=await S.agent(db,input.code);
   if(input.action==='context')return S.json(res,200,{agent:{name:a.name,code:a.referral_code},payments_ready:S.ready(),property_lookup:!!process.env.RENTCAST_API_KEY,consent:CONSENT});
-  if(input.action==='address_suggestions'){
-   // Typing may generate several searches; use a separate 20-per-minute bucket.
-   await S.rate(db,req,'address-suggestions:'+Math.floor(Date.now()/60000));
-   return S.json(res,200,await require('../lib/residential-address.cjs').suggest(input));
-  }
   if(input.action==='property'){await S.rate(db,req,'property');return S.json(res,200,await require('../lib/residential-property.cjs').lookup(input));}
   if(input.action==='quote'){await S.rate(db,req,'quote');return S.json(res,200,{quote:quote(input)});}
   if(!['checkout','request'].includes(input.action))throw S.fail('Unknown booking action.');
@@ -72,7 +74,6 @@ module.exports=async(req,res)=>{
   const status=data.quote.review_required?'review_required':checkout?'awaiting_card':'requested';
   S.checked(await db.rpc('create_residential_booking',{p_id:input.id,p_token:S.hash(input.token),p_hash:S.hash(JSON.stringify({data,status})),p_code:input.code,p_data:data,p_status:status,p_consent:checkout?CONSENT:null}));
   let b=await S.owned(db,input);
-  try{await J.syncBooking(db,b);}catch{console.error('Submitted residential assignment deferred to reconciliation.');}
   if(!checkout)return S.json(res,200,{booking:S.summary(b)});
   if(b.status!=='awaiting_card')return S.json(res,200,{booking:S.summary(b)});
   const st=S.stripe();

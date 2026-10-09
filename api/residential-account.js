@@ -8,7 +8,7 @@ module.exports=async(req,res)=>{
   if(!['setup','verify','login','forgot','reset','list','logout'].includes(input.action))throw S.fail('Unknown account action.');
   if(input.action==='list'){
    const a=await A.account(db,req),page=Math.max(1,Math.min(10000,Math.floor(Number(input.page)||1)));
-   const result=await db.from('referral_bookings').select('id,name,property_address,city,state,zip,service_date,arrival_start,arrival_end,quote,amount_cents,status,payment_status,agent_name,created_at',{count:'exact'}).eq('email',a.email).order('service_date',{ascending:false}).range((page-1)*20,page*20-1);S.checked(result);
+   const result=await db.from('referral_bookings').select('id,name,property_address,city,state,zip,service_date,arrival_start,arrival_end,quote,amount_cents,status,payment_status,agent_name,created_at',{count:'exact'}).eq('email',a.email).is('assignment_deleted_at',null).in('status',['scheduled','completed','cancelled']).order('service_date',{ascending:false}).range((page-1)*20,page*20-1);S.checked(result);
    let jobs=[];if(result.data.length)jobs=S.checked(await db.from('assignment_blocks').select('id,status,assigned_to_name,claimed_by_name').in('id',result.data.map(b=>b.id)));
    return S.json(res,200,{account:{name:a.name,email:a.email},bookings:result.data.map(b=>({...b,job:jobs.find(j=>j.id===b.id)||null})),page,total:result.count});
   }

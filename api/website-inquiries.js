@@ -86,7 +86,7 @@ async function requirePortalUser(req, client) {
     .eq("id", user.id)
     .maybeSingle();
 
-  const role = String(profile?.role || user.app_metadata?.role || user.user_metadata?.role || "").toLowerCase();
+  const role = String(profile?.role || user.app_metadata?.role || "").toLowerCase();
   if (profileError || !allowedPortalRoles.has(role)) {
     return { error: "Admin or sales access is required to view website inquiries.", status: 403 };
   }
@@ -148,7 +148,8 @@ async function listInquiries(req, res, client) {
   const { data, error } = await client
     .from("sales_leads")
     .select(inquirySelect)
-    .or("lead_source.eq.website_contact_form,lead_source.eq.residential_website_contact_form,lead_notes.ilike.%Website quote request%,lead_notes.ilike.%TurnlyPros.com%")
+    .or("lead_source.is.null,lead_source.neq.residential_website_contact_form")
+    .or("lead_source.eq.website_contact_form,lead_notes.ilike.%Website quote request%,lead_notes.ilike.%TurnlyPros.com%")
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -269,8 +270,8 @@ async function createInquiry(req, res, client) {
   };
 
   const { data, error } = await client
-    .from("sales_leads")
-    .insert(payload)
+    .from(residential ? "residential_inquiries" : "sales_leads")
+    .insert(residential ? {payload} : payload)
     .select("id,created_at")
     .single();
 

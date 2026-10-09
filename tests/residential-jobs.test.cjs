@@ -8,8 +8,9 @@ test('confirmed bookings become one pending assignment with correct Eastern wind
  db.job.status='claimed';db.job.assigned_to_name='Cleaner';await J.syncBooking(db,b);assert.equal(db.job.status,'claimed');assert.equal(db.job.assigned_to_name,'Cleaner');
  assert.equal(J.assignmentFor({...b,service_date:'2026-12-12'}).start_window,'2026-12-12T14:00:00.000Z');
 });
-test('submitted requests enter pending review, while cancelled requests do not create new jobs',async()=>{
- for(const status of ['awaiting_card','requested','review_required','needs_reschedule']){const b={...booking(),status},db=fixture(b);await J.syncBooking(db,b);assert.equal(db.job.status,'pending');assert.equal(db.job.visibility,'pending');}
+test('unfinished requests and removed bookings never create assignments',async()=>{
+ for(const status of ['awaiting_card','requested','review_required','needs_reschedule']){const b={...booking(),status},db=fixture(b);await J.syncBooking(db,b);assert.equal(db.job,null);}
+ const removed={...booking(),assignment_deleted_at:new Date().toISOString()},removedDb=fixture(removed);assert.equal(await J.syncBooking(removedDb,removed),null);assert.equal(removedDb.job,null);
  const b={...booking(),status:'cancelled'},db=fixture(b);assert.equal(await J.syncBooking(db,b),null);
 });
 test('completion waits for paid status so service-morning collection is not skipped',async()=>{
@@ -21,4 +22,9 @@ test('cancellation propagates both ways but does not rewrite an uncertain paymen
 });
 test('a colliding unrelated assignment is never modified',async()=>{
  const b=booking(),db=fixture(b);db.job={id:b.id,status:'open',metadata:{source:'other'}};await assert.rejects(J.syncBooking(db,b),/conflicts/);assert.equal(db.job.status,'open');
+});
+
+test('a retained premature assignment re-enters approval only after card confirmation',async()=>{
+ const b=booking(),db=fixture(b);db.job={id:b.id,status:'cancelled',metadata:{source:J.source,awaiting_booking:true}};
+ await J.syncBooking(db,b);assert.equal(db.job.status,'pending');assert.equal(db.job.visibility,'pending');assert.equal(db.job.metadata.awaiting_booking,false);assert.equal(db.calls.length,0);
 });

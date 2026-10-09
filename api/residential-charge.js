@@ -13,10 +13,11 @@ module.exports=async(req,res)=>{
   for(let i=0;i<rows.length;i+=4)await Promise.all(rows.slice(i,i+4).map(async b=>{
    try{
     const job=S.checked(await db.from('assignment_blocks').select('status,metadata').eq('id',b.id).maybeSingle());
-    if(job?.metadata?.source==='residential_booking'&&['cancelled','canceled','declined'].includes(job.status)){
+    const current=S.checked(await db.from('referral_bookings').select('status,assignment_deleted_at').eq('id',b.id).single());
+    if(!job||current.assignment_deleted_at||current.status!=='scheduled'||job.metadata?.source!=='residential_booking'||['cancelled','canceled','declined'].includes(job.status)){
       // A cancellation after the charge lease was acquired requires review;
       // never issue a new charge or assume a previous ambiguous attempt failed.
-      S.checked(await db.from('referral_bookings').update({status:'needs_reschedule',payment_status:'uncertain',charge_locked_at:null}).eq('id',b.id));attention++;return;
+      S.checked(await db.from('referral_bookings').update({payment_status:'uncertain',charge_locked_at:null}).eq('id',b.id));attention++;return;
     }
     let pi;
     if(b.stripe_payment_intent)pi=await st.paymentIntents.retrieve(b.stripe_payment_intent);

@@ -1,6 +1,6 @@
 const {test}=require('node:test');const assert=require('node:assert/strict');const fs=require('node:fs');const path=require('node:path');const vm=require('node:vm');const {randomUUID}=require('node:crypto');const {PGlite}=require('@electric-sql/pglite');
 const P=require('../lib/residential-pricing.cjs'),S=require('../lib/residential-server.cjs');
-const data={service:'standard',frequency:'weekly',sqft:2000,beds:3,baths:2,name:'Example Customer',email:'test@example.com',phone:'9195550188',profile_address:'1 Profile Ln, Durham NC 27701',property_address:'2 Property Ln',city:'Durham',state:'NC',zip:'27701',property_confirmed:true,service_date:'2099-10-14',arrival_start:'09:00',arrival_end:'12:00',notes:''};
+const data={pets:'no',parking:'driveway',access_method:'resident',service:'standard',frequency:'weekly',sqft:2000,beds:3,baths:2,name:'Example Customer',email:'test@example.com',phone:'9195550188',profile_address:'1 Profile Ln, Durham NC 27701',property_address:'2 Property Ln',city:'Durham',state:'NC',zip:'27701',property_confirmed:true,service_date:'2099-10-14',arrival_start:'09:00',arrival_end:'12:00',notes:''};
 test('pricing follows all PDF rates, minimums, initial visit rules and custom-review threshold',()=>{
  assert.equal(P.quote({...data,frequency:'once'}).amount_cents,26000);
  assert.equal(P.quote({...data,sqft:500}).amount_cents,17500);
@@ -21,8 +21,8 @@ test('schedule validation uses Eastern service dates and DST without charging at
 });
 async function dbFixture(){const db=new PGlite();await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create table auth.users(id uuid primary key);
 create table sales_leads(id uuid primary key default gen_random_uuid(),property_name text,name text,contact_name text,contact_email text,contact_phone text,address text,sales_city text,default_service_type text,lead_source text,lead_notes text,pipeline_stage text,next_step text,task_priority text,task_status text);
-create table quickbooks_invoice_links(id uuid primary key,quickbooks_status text,quickbooks_balance numeric,paid_at timestamptz);create table assignment_blocks(id uuid primary key,status text,pay_amount numeric,metadata jsonb,quickbooks_invoice_link_id uuid references quickbooks_invoice_links(id));create schema storage;create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);grant usage on schema public,auth,storage to service_role;grant all on all tables in schema public to service_role;`);
-for(const file of ['20261008120000_agent_referrals.sql','20261008152842_residential_bookings.sql','20261008210000_residential_customer_accounts.sql'])await db.exec(fs.readFileSync(path.join(__dirname,'../supabase/migrations',file),'utf8'));return db;}
+create table quickbooks_invoice_links(id uuid primary key,quickbooks_status text,quickbooks_balance numeric,paid_at timestamptz);create table assignment_blocks(id uuid primary key,status text,visibility text,pay_amount numeric,metadata jsonb,quickbooks_invoice_link_id uuid references quickbooks_invoice_links(id));create schema storage;create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);grant usage on schema public,auth,storage to service_role;grant all on all tables in schema public to service_role;`);
+for(const file of ['20261008120000_agent_referrals.sql','20261008152842_residential_bookings.sql','20261008210000_residential_customer_accounts.sql','20261009135355_residential_booking_completion.sql'])await db.exec(fs.readFileSync(path.join(__dirname,'../supabase/migrations',file),'utf8'));return db;}
 test('private database makes booking creation idempotent, retains agent credit and earns exactly one paid completed bonus',async()=>{
  const db=await dbFixture();try{
  const actor=randomUUID();await db.query('insert into auth.users values($1)',[actor]);const a=(await db.query("insert into referral_agents(name,status) values('Agent A','active') returning *")).rows[0],b=(await db.query("insert into referral_agents(name,status) values('Agent B','active') returning *")).rows[0];
@@ -43,6 +43,7 @@ test('charge leases only claim due confirmed visits and stop ambiguous retries b
  for(let i=0;i<4;i++){let id=randomUUID();ids.push(id);await db.query('select create_residential_booking($1,$2,$3,$4,$5,$6,$7)',[id,'hash','hash'+i,a.referral_code,JSON.stringify(S.validate(data)),'awaiting_card','Authorized']);}
  await db.query("update referral_bookings set stripe_payment_method='pm',status='scheduled',payment_status='card_saved',service_date=(now() at time zone 'America/New_York')::date,charge_at=now()-interval '1 hour' where id=any($1::uuid[])",[ids.slice(0,3)]);
  await db.query("update referral_bookings set charge_at=now()+interval '2 hours' where id=$1",[ids[1]]);await db.query("update referral_bookings set status='cancelled' where id=$1",[ids[2]]);
+ await db.query("insert into assignment_blocks(id,status,pay_amount,metadata) values($1,'pending',0,'{\"source\":\"residential_booking\"}')",[ids[0]]);
  let rows=(await db.query('select * from claim_residential_charges()')).rows;assert.equal(rows.length,1);assert.equal(rows[0].id,ids[0]);const key=rows[0].charge_key;
  assert.equal((await db.query('select * from claim_residential_charges()')).rows.length,0);
  await db.query("update referral_bookings set charge_locked_at=now()-interval '11 minutes' where id=$1",[ids[0]]);assert.equal((await db.query('select * from claim_residential_charges()')).rows[0].charge_key,key);
@@ -89,10 +90,15 @@ test('customer tokens are single use, sessions are private, reset revokes sessio
  for(const role of ['anon','authenticated']){await db.exec('set role '+role);await assert.rejects(db.query('select * from residential_accounts'),/permission denied/);await assert.rejects(db.query('select * from residential_sessions'),/permission denied/);await assert.rejects(db.query("select finish_residential_account('a','setup')"),/permission denied/);await db.exec('reset role');}
  const agent=(await db.query("insert into referral_agents(name,status) values('A','active') returning *")).rows[0],bid=randomUUID();
  await db.query('select create_residential_booking($1,$2,$3,$4,$5,$6,$7)',[bid,'hash','request',agent.referral_code,JSON.stringify(S.validate(data)),'awaiting_card','Authorized']);
- await db.query("insert into assignment_blocks(id,status,pay_amount,metadata) values($1,'pending',100,'{\"source\":\"residential_booking\"}')",[bid]);
- for(const status of ['open','preferred_pending','claimed','scheduled','in_progress','qa_pending','completed'])await assert.rejects(db.query('update assignment_blocks set status=$2 where id=$1',[bid,status]),/save its card/);
+ await assert.rejects(db.query("insert into assignment_blocks(id,status,pay_amount,metadata) values($1,'pending',100,'{\"source\":\"residential_booking\"}')",[bid]),/Finish card booking/);
  await db.query("update referral_bookings set stripe_payment_method='pm_test',status='scheduled' where id=$1",[bid]);
+ await db.query("insert into assignment_blocks(id,status,pay_amount,metadata) values($1,'pending',100,'{\"source\":\"residential_booking\"}')",[bid]);
  await assert.rejects(db.query("update assignment_blocks set status='open',pay_amount=0 where id=$1",[bid]),/contractor pay/);
  await db.query("update assignment_blocks set status='open' where id=$1",[bid]);
+ await db.query('delete from assignment_blocks where id=$1',[bid]);
+ const removed=(await db.query('select * from referral_bookings where id=$1',[bid])).rows[0];
+ assert.ok(removed.assignment_deleted_at);assert.equal(removed.status,'cancelled');
+ await assert.rejects(db.query("insert into assignment_blocks(id,status,pay_amount,metadata) values($1,'pending',100,'{\"source\":\"residential_booking\"}')",[bid]),/removed assignments/);
+ assert.equal((await db.query('select count(*)::int n from referral_bookings where id=$1',[bid])).rows[0].n,1,'billing history retained');
  }finally{await db.close();}
 });

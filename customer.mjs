@@ -30,3 +30,5 @@ addEventListener('hashchange',()=>{
  mode=link.has('setup')?'verify':'reset';token=link.get('setup')||link.get('reset');
  history.replaceState(null,'',location.pathname);form.reset();message('');showAuth();
 });
+
+addEventListener('focus',()=>{if(!$('#dashboard').hidden)load();});
