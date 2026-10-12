@@ -24,3 +24,35 @@ body.turnly-admin-suite[data-dashboard-theme="light"] :is(.empty-state,.small-em
 body.turnly-admin-suite[data-dashboard-theme="light"] .resident-feedback-intro p{color:#65768a}
 body.turnly-admin-suite[data-dashboard-theme="light"] .command-grid>.suite-panel{background:#fff;box-shadow:0 2px 8px #17304708}
 body.turnly-admin-suite[data-dashboard-theme="light"] :is(.status-message,.panel-head p){color:#65768a}
+
+/* Detail surfaces are also mounted outside .suite-main by legacy editors. */
+body.turnly-admin-suite[data-dashboard-theme="light"] {
+  --suite-green:#087e72;--suite-red:#b63745;
+  --admin-text:#173047;--admin-muted:#65768a;--admin-green:#087e72;--admin-red:#b63745;
+}
+body.turnly-admin-suite[data-dashboard-theme="light"] :is(.client-modal-panel,.property-modal-panel,.admin-sales-modal-panel,dialog) {
+  background:#fff;color:#173047;border-color:#d9e3ec;border-radius:14px;box-shadow:0 20px 70px #07182730;color-scheme:light;
+}
+body.turnly-admin-suite[data-dashboard-theme="light"] :is([role="dialog"],dialog,.property-command) :is(h1,h2,h3,h4,label,legend,.panel-heading strong) {color:#173047}
+body.turnly-admin-suite[data-dashboard-theme="light"] :is(input,select,textarea,option) {background:#fff;color:#173047;border-color:#cbd8e2;accent-color:#0c7469;color-scheme:light}
+body.turnly-admin-suite[data-dashboard-theme="light"] :is(input,textarea)::placeholder {color:#65768a;opacity:1}
+body.turnly-admin-suite[data-dashboard-theme="light"] :is(input,select,textarea):focus-visible {outline:2px solid #0c7469;outline-offset:2px;box-shadow:none}
+body.turnly-admin-suite[data-dashboard-theme="light"] :is(.assignment-form-section,.client-form-section,.property-form-card,.property-recurring-card,.sales-form-card,.client-monthly-turnovers,.assignment-edit-contractor-list,.assignment-detail-cell,.assignment-notes-preview,.assignment-board-quickbar,.assignment-thin-list-head,.assignment-list-panel .suite-toolbar,.toggle-row,.qa-review-item,.qa-review-summary) {background:#f8fafc;color:#173047;border-color:#d9e3ec}
+body.turnly-admin-suite[data-dashboard-theme="light"] :is(.assignment-list-item,.assignment-edit-contractor-option,.client-manager-menu,.assignment-video-upload-card,.assignment-video-chip) {background:#fff;color:#173047;border-color:#d9e3ec}
+body.turnly-admin-suite[data-dashboard-theme="light"] :is(.assignment-list-item,.assignment-edit-contractor-option,.client-manager-option):hover {background:#eaf3f5;border-color:#91c5bf}
+body.turnly-admin-suite[data-dashboard-theme="light"] :is(.assignment-notes-drawer summary,.assignment-board-due,.assignment-detail-cell strong,.assignment-thin-row,.client-monthly-turnovers-head,.suite-field,.checkbox-field,.toggle-row) {color:#173047}
+body.turnly-admin-suite[data-dashboard-theme="light"] :is(.assignment-short-id,.assignment-detail-cell span,.property-modal-header p,.client-modal-header p,.admin-sales-modal-header p) {color:#65768a}
+body.turnly-admin-suite[data-dashboard-theme="light"] :is(.client-modal-close,.property-modal-close,.secondary-command-btn,.secondary-btn,.new-btn,.assignment-board-quick-btn,.property-modal .panel-heading button) {background:#fff;color:#214158;border:1px solid #cbd8e2;box-shadow:none}
+body.turnly-admin-suite[data-dashboard-theme="light"] :is(.client-modal-close,.property-modal-close,.secondary-command-btn,.secondary-btn,.assignment-board-quick-btn):hover {background:#eaf3f5;color:#173047}
+body.turnly-admin-suite[data-dashboard-theme="light"] :is(.new-btn,.primary-action,.assignment-board-quick-btn.is-active,.cr-tabs button[aria-pressed="true"]) {background:#0c7469;color:#fff;border-color:#0c7469;box-shadow:none}
+body.turnly-admin-suite[data-dashboard-theme="light"] :is(.new-btn,.primary-action):hover {background:#095e56;color:#fff}
+body.turnly-admin-suite[data-dashboard-theme="light"] :is(.admin-clear-claim-row,.property-warning) {background:#fff7e6;color:#795312;border-color:#e9d8b4}
+body.turnly-admin-suite[data-dashboard-theme="light"] :is(.assignment-notes-drawer summary strong,.cr-eyebrow,.cr-feedback) {color:#087e72}
+body.turnly-admin-suite[data-dashboard-theme="light"] :is(.status-message.error,.danger-action,.cr-error) {color:#b63745}
+body.turnly-admin-suite[data-dashboard-theme="light"] :is(.client-modal-backdrop,.property-modal-backdrop,.admin-sales-modal-backdrop) {background:#07182799}
+body.turnly-admin-suite[data-dashboard-theme="light"] dialog::backdrop {background:#07182799}
+body.turnly-admin-suite[data-dashboard-theme="light"] :is(.checklist-summary,.assignment-weekday-option span) {background:#f8fafc;color:#173047;border-color:#d9e3ec}
+body.turnly-admin-suite[data-dashboard-theme="light"] .assignment-weekday-option input:checked+span {background:#e5f5ef;color:#17624d;border-color:#83b9a9}
+body.turnly-admin-suite[data-dashboard-theme="light"] :is(.assignment-bulk-unit-option,.assignment-bulk-bar,.qa-search-field,.qa-builder-toolbar,.qa-builder-section,.qa-toggle) {background:#f8fafc;color:#173047;border-color:#d9e3ec}
+body.turnly-admin-suite[data-dashboard-theme="light"] :is(.assignment-status-inline,.assignment-status-select,.assignment-page-size select) {background:#fff;color:#173047;border-color:#cbd8e2}
+body.turnly-admin-suite[data-dashboard-theme="light"] :is(.assignment-bulk-unit-option.is-selected,.qa-toggle:has(input:checked)) {background:#e5f5ef;color:#17624d;border-color:#83b9a9}
