@@ -81,11 +81,13 @@ test('assignment checklist editing and independent whole checklist duplication',
       export function createClient(){return {auth:{getUser:async()=>({data:{user:null}})},from(table){
         let mutation=null,filter={};
         const q={select(){return q},order(){return q},limit(){return q},eq(k,v){filter[k]=v;return q},single(){return q},maybeSingle(){return q},
-        update(row){mutation={kind:'update',row};return q},insert(row){mutation={kind:'insert',row};return q},then(resolve){
+        delete(){mutation={kind:'delete'};return q},update(row){mutation={kind:'update',row};return q},insert(row){mutation={kind:'insert',row};return q},then(resolve){
           if(mutation){
             if(window.db.fail)return Promise.resolve({data:null,error:{message:'Permission denied'}}).then(resolve);
             if(window.db.conflict || (filter.updated_at && filter.updated_at!==window.db.assignment.updated_at))return Promise.resolve({data:null}).then(resolve);
             window.db.writes.push({table,...mutation});
+            if(mutation.kind==='delete'){window.db.templates=window.db.templates.filter(t=>t.id!==filter.id);return Promise.resolve({data:[{id:filter.id}]}).then(resolve);}
+
             const data=table==='assignment_blocks'?(window.db.assignment={...window.db.assignment,...mutation.row,updated_at:'2026-10-08T14:00:00Z'}):{...mutation.row,id:'copy-'+window.db.writes.length};
             return Promise.resolve({data}).then(resolve);
           }
@@ -214,6 +216,25 @@ test('assignment checklist editing and independent whole checklist duplication',
       await page.getByText('Unable to duplicate checklist: Permission denied',{exact:true}).waitFor();
       assert.equal((await page.evaluate(()=>window.checklistTest.builder())).id,copy.id);
       assert.equal(await page.locator('[data-checklist-duplicate]').isEnabled(),true);
+      // Cancel, denied deletion, then a confirmed delete; assignment snapshots remain untouched.
+      const before=await page.evaluate(()=>window.db.assignment.property_checklist_items);
+      page.once('dialog',dialog=>dialog.dismiss());
+      await page.locator('[data-checklist-delete]').click();
+      assert.equal((await page.evaluate(()=>window.checklistTest.builder())).id,copy.id);
+      page.once('dialog',dialog=>dialog.accept());
+      await page.locator('[data-checklist-delete]').click();
+      await page.getByText('Unable to delete checklist: Permission denied',{exact:true}).waitFor();
+      assert.equal((await page.evaluate(()=>window.checklistTest.builder())).id,copy.id);
+      await page.evaluate(()=>window.db.fail=false);
+      page.once('dialog',dialog=>dialog.accept());
+      await page.locator('[data-checklist-delete]').click();
+      await page.getByText(`Deleted ${copy.name} from the library. Existing assignment copies were kept.`,{exact:true}).waitFor();
+      assert.equal(await page.locator('#checklistTemplateSelect').inputValue(),'');
+      assert.equal(await page.locator('[data-checklist-delete]').isDisabled(),true);
+      assert.deepEqual(await page.evaluate(()=>window.db.assignment.property_checklist_items),before);
+      assert.equal(await page.evaluate(()=>window.db.writes.at(-1).table),'checklist_templates');
+      assert.equal(await page.evaluate(()=>window.db.writes.at(-1).kind),'delete');
+
     }
     assert.deepEqual(errors,[]);
   }finally{await browser?.close();await new Promise(resolve=>server.close(resolve));}

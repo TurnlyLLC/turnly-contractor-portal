@@ -3792,6 +3792,7 @@ function renderChecklists() {
           <div class="panel-actions">
             <button class="secondary-action" type="button" data-checklist-refresh>${icon("refresh")}<span>Refresh</span></button>
             <button class="secondary-action" type="button" data-checklist-duplicate><span>Duplicate Checklist</span></button>
+            <button class="secondary-action danger-action" type="button" data-checklist-delete disabled><span>Delete Checklist</span></button>
             <button class="primary-action" type="button" data-checklist-new>${icon("plus")}<span>New Checklist</span></button>
           </div>
         </div>
@@ -4628,6 +4629,8 @@ function handleChecklistClick(event) {
     return;
   }
 
+  if (checklistState.isDeleting) return;
+  if (event.target.closest("[data-checklist-delete]")) { void deleteChecklistTemplate(); return; }
   if (event.target.closest("[data-checklist-duplicate]")) {
     void duplicateChecklistTemplate();
     return;
@@ -4894,6 +4897,8 @@ async function loadChecklistData() {
 }
 
 function renderChecklistData() {
+  const deleteButton=document.querySelector("[data-checklist-delete]");
+  if(deleteButton)deleteButton.disabled=!checklistState.templates.some(t=>t.id===checklistState.selectedTemplateId)||Boolean(checklistState.isDeleting);
   populateChecklistTemplateSelect();
   renderChecklistForm();
   renderChecklistModuleImporter();
@@ -5017,6 +5022,35 @@ function selectChecklistTemplate(id) {
   collapseChecklistSections();
   renderChecklistData();
   showChecklistMessage(selected ? `Editing ${selected.name}.` : "Started a new unsaved checklist.");
+}
+
+async function deleteChecklistTemplate() {
+  if(!suiteSupabase||checklistState.isSaving||checklistState.isDuplicating||checklistState.isApplying||checklistState.isDeleting)return;
+  const selected=checklistState.templates.find(t=>t.id===checklistState.selectedTemplateId);
+  if(!selected){showChecklistMessage("Select a saved checklist to delete.",true);return;}
+  if(!window.confirm(`Delete "${selected.name}" from the checklist library? This cannot be undone. Saved checklist copies on existing assignments will remain.`))return;
+  checklistState.isDeleting=true;
+  checklistState.isSaving=true;
+  const button=document.querySelector("[data-checklist-delete]");
+  if(button)button.disabled=true;
+  setChecklistSaving(true);
+  showChecklistMessage("Deleting checklist...");
+  try {
+    const {data,error}=await suiteSupabase.from(checklistTemplatesTable).delete().eq("id",selected.id).select("id");
+    if(error)throw error;
+    if(!data?.some(row=>row.id===selected.id))throw new Error("Deletion was not confirmed. Refresh the library and check your admin permissions.");
+    checklistState.templates=checklistState.templates.filter(t=>t.id!==selected.id);
+    checklistState.selectedTemplateId="";
+    checklistState.builder=createBlankChecklistTemplate();
+    checklistState.defaultModuleCounts={};checklistState.unitModuleCounts={};checklistState.selectedUnitIds=new Set();
+    collapseChecklistSections();renderChecklistData();
+    showChecklistMessage(`Deleted ${selected.name} from the library. Existing assignment copies were kept.`);
+  } catch(error) {
+    showChecklistMessage(error.code==='23503' ? "This checklist is still linked to a property. Change that property's checklist before deleting it from the library." : "Unable to delete checklist: "+error.message,true);
+  } finally {
+    checklistState.isDeleting=false;checklistState.isSaving=false;setChecklistSaving(false);
+    if(button)button.disabled=!checklistState.templates.some(t=>t.id===checklistState.selectedTemplateId);
+  }
 }
 
 async function duplicateChecklistTemplate() {
