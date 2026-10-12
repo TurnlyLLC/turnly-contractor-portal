@@ -1,3 +1,4 @@
+import { loadActiveCleaningContractors } from "./contractor-directory-model.mjs?v=20261012-active";
 import { isResidentialAssignment, configureResidentialForm, residentialRecurrence } from "./residential-assignment.mjs?v=20261012-editor";
 import {navSections, renderAdminNavigation} from "./admin-navigation.mjs?v=20261012-light";
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
@@ -13200,10 +13201,10 @@ function preferredContractorDropdownField() {
   const options = getAssignmentContractorOptions();
   const items = options.length
     ? options.map((option) => {
-      const meta = [option.email, option.status ? titleCase(option.status) : ""].filter(Boolean).join(" - ");
+      const meta = [option.email, option.assignable === false ? "Account signup required" : option.status ? titleCase(option.status) : ""].filter(Boolean).join(" - ");
       return `
         <label class="client-manager-option assignment-contractor-option">
-          <input type="checkbox" data-assignment-contractor-option data-contractor-id="${esc(option.id)}" data-contractor-name="${esc(option.name)}" data-contractor-email="${esc(option.email)}" />
+          <input type="checkbox" data-assignment-contractor-option ${option.assignable === false ? "disabled" : ""} data-contractor-id="${esc(option.id)}" data-contractor-name="${esc(option.name)}" data-contractor-email="${esc(option.email)}" />
           <span><strong>${esc(option.name)}</strong>${meta ? `<small>${esc(meta)}</small>` : ""}</span>
         </label>
       `;
@@ -13947,19 +13948,8 @@ function selectVisibleAssignmentBulkUnits() {
 }
 
 async function loadAssignmentContractors() {
-  const { data, error } = await suiteSupabase
-    .from("profiles")
-    .select("id,full_name,email,role,status,contractor_approved")
-    .limit(500);
-  if (error) {
-    console.warn("[admin-suite] Unable to load assignment contractors", error);
-    return [];
-  }
-  return (data || [])
-    .filter(isAssignmentContractorProfile)
-    .map(normalizeAssignmentContractorOption)
-    .filter((contractor) => contractor.name)
-    .sort((a, b) => a.name.localeCompare(b.name));
+  try { return await loadActiveCleaningContractors(suiteSupabase); }
+  catch(error) { console.warn("[assignments] Unable to load active contractor directory",error); return []; }
 }
 
 async function loadAssignmentRows() {
@@ -14028,10 +14018,10 @@ function populateAssignmentContractorMenu() {
   menu.innerHTML = options.length
     ? options.map((option) => {
       const checked = selectedIds.has(option.id) ? "checked" : "";
-      const meta = [option.email, option.status ? titleCase(option.status) : ""].filter(Boolean).join(" - ");
+      const meta = [option.email, option.assignable === false ? "Account signup required" : option.status ? titleCase(option.status) : ""].filter(Boolean).join(" - ");
       return `
         <label class="client-manager-option assignment-contractor-option">
-          <input type="checkbox" data-assignment-contractor-option data-contractor-id="${esc(option.id)}" data-contractor-name="${esc(option.name)}" data-contractor-email="${esc(option.email)}" ${checked} />
+          <input type="checkbox" data-assignment-contractor-option ${option.assignable === false ? "disabled" : ""} data-contractor-id="${esc(option.id)}" data-contractor-name="${esc(option.name)}" data-contractor-email="${esc(option.email)}" ${checked} />
           <span><strong>${esc(option.name)}</strong>${meta ? `<small>${esc(meta)}</small>` : ""}</span>
         </label>
       `;
@@ -14040,26 +14030,24 @@ function populateAssignmentContractorMenu() {
   updateAssignmentContractorDropdownLabel();
 }
 
-function populateAssignmentAssignedContractorSelect() {
-  const select = document.getElementById("assignmentAssignedContractor");
-  if (!select) return;
-  const selected = select.value;
-  const options = getAssignmentContractorOptions();
-  select.innerHTML = `<option value="">Unassigned — open for pickup</option>${options.map((contractor) => {
-    const label = [contractor.name, contractor.email].filter(Boolean).join(" - ");
-    return `<option value="${esc(contractor.id)}">${esc(label || "Contractor")}</option>`;
-  }).join("")}`;
-  if (selected && options.some((contractor) => String(contractor.id || "") === String(selected))) {
-    select.value = selected;
-  } else {
-    select.value = "";
-  }
+function currentAssignmentContractor() {
+  const row=assignmentState.rows.find(row=>row.id===assignmentState.editingId);
+  const id=row?.assigned_to||row?.claimed_by;
+  return id ? {id,name:row.assigned_to_name||row.claimed_by_name||"Current contractor",email:row.assigned_to_email||row.claimed_by_email||""} : null;
 }
-
+function populateAssignmentAssignedContractorSelect() {
+  const select=document.getElementById("assignmentAssignedContractor");if(!select)return;
+  const selected=select.value;
+  const options=[...getAssignmentContractorOptions()];
+  const current=currentAssignmentContractor();
+  if(current&&!options.some(c=>c.id===current.id))options.push({...current,retained:true});
+  select.innerHTML=`<option value="">Unassigned — open for pickup</option>${options.map(c=>`<option value="${esc(c.id)}" ${c.assignable===false||c.retained?'disabled':''}>${esc([c.name,c.email,c.retained?'Current assignment only':c.assignable===false?'Account signup required':''].filter(Boolean).join(' - '))}</option>`).join('')}`;
+  select.value=options.some(c=>c.id===selected)?selected:"";
+}
 function readAssignedAssignmentContractor() {
-  const contractorId = assignmentValue("assignmentAssignedContractor");
-  if (!contractorId) return null;
-  return getAssignmentContractorOptions().find((contractor) => String(contractor.id || "") === String(contractorId)) || null;
+  const id=assignmentValue("assignmentAssignedContractor");if(!id)return null;
+  const current=currentAssignmentContractor();
+  return getAssignmentContractorOptions().find(c=>c.id===id&&c.assignable!==false)||(current?.id===id?current:null);
 }
 
 function assignmentAssignedContractorPayload(contractor, options = {}) {
@@ -14172,7 +14160,7 @@ function populateAssignmentContractorFilter() {
   const filter = document.getElementById("assignmentContractorFilter");
   if (!filter) return;
   const selected = assignmentState.contractorFilter;
-  filter.innerHTML = `<option value="all">All Contractors</option><option value="unassigned">Unassigned</option>${getAssignmentContractorOptions().map((contractor) => `<option value="${esc(contractor.id)}">${esc(contractor.name)}</option>`).join("")}`;
+  filter.innerHTML = `<option value="all">All Contractors</option><option value="unassigned">Unassigned</option>${getAssignmentContractorOptions().map((contractor) => `<option value="${esc(contractor.id)}">${esc([contractor.name, contractor.email].filter(Boolean).join(" - "))}</option>`).join("")}`;
   const valid = new Set(["all", "unassigned", ...getAssignmentContractorOptions().map((contractor) => contractor.id)]);
   if (!valid.has(selected)) assignmentState.contractorFilter = "all";
   filter.value = assignmentState.contractorFilter;

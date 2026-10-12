@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-contractor-pwa-v20261012-residential-editor";
+const CACHE_NAME = "turnly-contractor-pwa-v20261012-active-contractors";
 
 const PRECACHE_URLS = [
   "/",
@@ -109,7 +109,8 @@ function isStaticAsset(request) {
 
 function isAdminRuntimeAsset(request) {
   const pathname = new URL(request.url).pathname;
-  return pathname === "/residential-assignment.mjs"
+  return pathname === "/contractor-directory-model.mjs"
+    || pathname === "/residential-assignment.mjs"
     || pathname === "/residential-assignment.css"
     || pathname === "/schedule-visibility.mjs"
     || pathname === "/admin-walkthroughs.css"

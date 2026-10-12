@@ -18,6 +18,7 @@ window.checklistTest={
  setupTemplates(templates){checklistState.user={id:'admin-test'};checklistState.templates=templates;checklistState.builder=normalizeChecklistTemplate(templates[0]);checklistState.selectedTemplateId=templates[0].id;renderChecklistData();},
  builder:()=>checklistState.builder,
  open(row){assignmentState.user={id:'admin-test'};assignmentState.rows=[row];assignmentState.properties=[{id:'property-one',name:'Test Property',property_name:'Test Property'}];assignmentState.contractors=[];openAssignmentModal(row);},
+ contractors(list){assignmentState.contractors=list;populateAssignmentContractorFilter();populateAssignmentAssignedContractorSelect();populateAssignmentContractorMenu();},
  payload:()=>collectAssignmentUpdatePayload(assignmentState.rows[0]),
  patch:()=>{try{return assignmentChecklistEditor.patch(assignmentState.rows[0],{status:assignmentState.rows[0].status,metadata:assignmentState.rows[0].metadata},'admin-test');}catch(error){return {error:error.message};}}
 };`;
@@ -115,6 +116,18 @@ test('assignment checklist editing and independent whole checklist duplication',
     await page.evaluate(()=>window.checklistTest.open(window.db.assignment));
     await page.locator('#assignmentChecklistSelect').waitFor();
     assert.match(await page.locator('#assignmentChecklistEditor').innerText(),/Deep Clean/);
+
+    // Only directory options populate all contractor controls; an existing worker is retained safely.
+    await page.evaluate(()=>window.checklistTest.contractors([{id:'active',name:'Active Cleaner',email:'active@example.com',assignable:true},{id:'invite',name:'Invited Cleaner',assignable:false}]));
+    assert.deepEqual(await page.locator('#assignmentContractorFilter option').evaluateAll(options=>options.map(o=>o.value)),['all','unassigned','active','invite']);
+    assert.equal(await page.locator('#assignmentAssignedContractor option[value="invite"]').evaluate(el=>el.disabled),true);
+    assert.equal(await page.locator('[data-assignment-contractor-option][data-contractor-id="invite"]').isDisabled(),true);
+    await page.evaluate(()=>{window.db.assignment.assigned_to='old-worker';window.db.assignment.assigned_to_name='Former worker';window.checklistTest.open(window.db.assignment)});
+    await page.locator('#assignmentChecklistSelect').waitFor();
+    assert.equal(await page.locator('#assignmentAssignedContractor').inputValue(),'old-worker');
+    assert.equal((await page.evaluate(()=>window.checklistTest.payload())).assigned_to,'old-worker');
+    await page.evaluate(()=>{delete window.db.assignment.assigned_to;delete window.db.assignment.assigned_to_name;window.checklistTest.open(window.db.assignment)});
+    await page.locator('#assignmentChecklistSelect').waitFor();
 
     // A concurrent contractor update must not be overwritten or reported as saved.
     await page.locator('#assignmentChecklistSelect').selectOption('template-one');
