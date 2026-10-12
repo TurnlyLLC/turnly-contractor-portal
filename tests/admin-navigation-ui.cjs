@@ -37,7 +37,7 @@ const server=http.createServer((req,res)=>{const file=path.resolve(root,'.'+new 
    const style=await menuStyle();assert.equal(style[''].backgroundColor,'rgb(7, 24, 39)');if(!baseline)baseline=style;else assert.deepEqual(style,baseline,`${file}: identical menu styling`);
    if(['admin.html','dashboard.html'].includes(file)){
     const cards=page.locator('.command-grid > .suite-panel');
-    for(const card of await cards.all()){const style=await card.evaluate(el=>{const s=getComputedStyle(el);return {image:s.backgroundImage,shadow:s.boxShadow};});assert.equal(style.image,'none');assert.equal(style.shadow,'rgba(23, 48, 71, 0.03) 0px 2px 8px 0px');}
+    for(const card of await cards.all()){const style=await card.evaluate(el=>{const s=getComputedStyle(el);return {image:s.backgroundImage,shadow:s.boxShadow};});assert.ok(style.image.includes('radial-gradient')); assert.equal(style.shadow,'rgba(23, 48, 71, 0.03) 0px 2px 8px 0px');}
    }
    if(['admin.html','dashboard.html','assignments.html','directory.html','sales-overview.html','admin-agents.html','finance.html'].includes(file)){fs.mkdirSync(path.join(root,'.tmp/admin-theme'),{recursive:true});await page.screenshot({path:path.join(root,'.tmp/admin-theme',file+'.png')});}
    console.log(`PASS ${file}: light workspace, navy menu, ${expected.length} links`);

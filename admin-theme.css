@@ -57,15 +57,29 @@ body.turnly-admin-suite[data-dashboard-theme="light"] :is(.assignment-bulk-unit-
 body.turnly-admin-suite[data-dashboard-theme="light"] :is(.assignment-status-inline,.assignment-status-select,.assignment-page-size select) {background:#fff;color:#173047;border-color:#cbd8e2}
 body.turnly-admin-suite[data-dashboard-theme="light"] :is(.assignment-bulk-unit-option.is-selected,.qa-toggle:has(input:checked)) {background:#e5f5ef;color:#17624d;border-color:#83b9a9}
 
-/* Flat white dashboard cards, without the legacy colored glow layers. */
+/* Dashboard widgets share the Website Inquiries surface and spacing. */
+body.turnly-admin-suite[data-dashboard-theme="light"] .command-grid {
+  --widget-bg:radial-gradient(circle at 0 0,rgba(37,99,235,.15),transparent 36%),linear-gradient(150deg,#fff,#f6f9ff);
+  --widget-border:rgba(37,99,235,.16);
+}
 body.turnly-admin-suite[data-dashboard-theme="light"] .command-grid > .suite-panel,
-body.turnly-admin-suite[data-dashboard-theme="light"] .command-grid > .suite-panel:not(.website-inquiries-card),
-body.turnly-admin-suite[data-dashboard-theme="light"] .command-grid > .website-inquiries-card {
-  background:#fff;border-color:#d9e3ec;box-shadow:0 2px 8px #17304708;
+body.turnly-admin-suite[data-dashboard-theme="light"] .command-grid > .suite-panel:not(.website-inquiries-card) {
+  --wi-bg:var(--widget-bg);--wi-border:var(--widget-border);
+  background:var(--widget-bg);border:1px solid var(--widget-border);border-radius:14px;box-shadow:0 2px 8px #17304708;
 }
 body.turnly-admin-suite[data-dashboard-theme="light"] .command-grid > .suite-panel::before,
 body.turnly-admin-suite[data-dashboard-theme="light"] .command-grid > .suite-panel:not(.website-inquiries-card)::before {display:none}
+body.turnly-admin-suite[data-dashboard-theme="light"] .command-grid > .suite-panel:not(.website-inquiries-card) > .panel-head {padding:22px 22px 12px}
+body.turnly-admin-suite[data-dashboard-theme="light"] .command-grid .panel-title-icon {width:46px;height:46px;border-radius:18px;background:linear-gradient(135deg,rgba(56,189,248,.25),rgba(34,197,94,.16));border-color:rgba(125,211,252,.26);color:#2563eb;box-shadow:none}
+body.turnly-admin-suite[data-dashboard-theme="light"] .command-grid .panel-title-copy h2 {font-size:21px;line-height:1.15;letter-spacing:-.02em}
+body.turnly-admin-suite[data-dashboard-theme="light"] .command-grid :is(.resident-feedback-widget-list,.dashboard-list,.manager-request-list) {padding:0 18px 18px;gap:12px}
+body.turnly-admin-suite[data-dashboard-theme="light"] .resident-feedback-widget-toolbar {padding:0 22px 12px;gap:12px}
+body.turnly-admin-suite[data-dashboard-theme="light"] .resident-feedback-widget-toolbar .request-message {padding:0}
+body.turnly-admin-suite[data-dashboard-theme="light"] .command-grid :is(.resident-feedback-widget-card,.dashboard-item-row,.manager-request-row,.skeleton-list>div),
+body.turnly-admin-suite[data-dashboard-theme="light"] .command-grid > .suite-panel:not(.website-inquiries-card) :is(.dashboard-item-row,.manager-request-row) {background:rgba(255,255,255,.84);border:1px solid rgba(15,23,42,.08);border-radius:20px;box-shadow:none;padding:15px}
+body.turnly-admin-suite[data-dashboard-theme="light"] .command-grid :is(.resident-feedback-widget-card,.dashboard-item-row,.manager-request-row):hover {background:#fff;border-color:rgba(56,189,248,.34)}
+body.turnly-admin-suite[data-dashboard-theme="light"] .command-grid > .suite-panel:not(.website-inquiries-card) :is(.empty-state,.small-empty-state),
+body.turnly-admin-suite[data-dashboard-theme="light"] .resident-feedback-widget-empty {background:rgba(255,255,255,.06);border:1px dashed rgba(148,163,184,.28);border-radius:22px;box-shadow:none;min-height:170px;padding:28px 18px;text-align:center}
+body.turnly-admin-suite[data-dashboard-theme="light"] .command-grid .empty-icon {box-shadow:none;background:rgba(56,189,248,.13);border-color:rgba(56,189,248,.22);color:#2563eb;border-radius:18px}
 body.turnly-admin-suite[data-dashboard-theme="light"] .command-customize-bar {background:#fff;box-shadow:none;border-color:#d9e3ec}
-body.turnly-admin-suite[data-dashboard-theme="light"] :is(.panel-title-icon,.empty-icon,.metric-icon) {box-shadow:none;background-image:none}
-body.turnly-admin-suite[data-dashboard-theme="light"] .command-grid > .suite-panel:not(.website-inquiries-card) :is(.dashboard-item-row,.manager-request-row) {box-shadow:none;background:#f8fafc}
-body.turnly-admin-suite[data-dashboard-theme="light"] .command-grid > .suite-panel:not(.website-inquiries-card) :is(.empty-state,.small-empty-state) {background:#f8fafc;box-shadow:none}
+@media(max-width:720px){body.turnly-admin-suite[data-dashboard-theme="light"] .command-grid :is(.resident-feedback-widget-list,.dashboard-list,.manager-request-list){padding-inline:14px}body.turnly-admin-suite[data-dashboard-theme="light"] .resident-feedback-widget-toolbar {padding-inline:18px}}
