@@ -1,6 +1,6 @@
 /* One sidebar presentation for every admin shell, including standalone tools. */
 body .suite-sidebar.admin-shared-sidebar{--nav-bg:#071827;--nav-text:#eaf6ff;--nav-muted:#9cbcd1;--nav-accent:#59dfbc;--nav-border:#264455;box-sizing:border-box;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:14px;line-height:1.4;background:var(--nav-bg);color:var(--nav-text);border:0;border-right:1px solid var(--nav-border);box-shadow:none;padding:18px 13px 16px;align-self:start;min-width:0;position:sticky;top:0;height:100dvh;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#456074 transparent}
-body[data-dashboard-theme="light"] .suite-sidebar.admin-shared-sidebar{--nav-bg:#f8fbfd;--nav-text:#253a51;--nav-muted:#5c7086;--nav-accent:#087e72;--nav-border:#d6e2ea;color-scheme:light}
+body[data-dashboard-theme] .suite-sidebar.admin-shared-sidebar{background:#071827;color-scheme:dark}
 body .suite-sidebar.admin-shared-sidebar *{box-sizing:border-box}
 body .suite-sidebar.admin-shared-sidebar .suite-brand{display:flex;align-items:center;gap:12px;min-height:50px;margin:0;padding:0 9px 18px;text-decoration:none;color:var(--nav-text)}
 body .suite-sidebar.admin-shared-sidebar .brand-mark{display:block;background:url('/favicon-32x32.png?v=20260624t') center/contain no-repeat;width:38px;height:38px;min-width:38px;border:0;border-radius:50%;box-shadow:none}

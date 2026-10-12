@@ -31,8 +31,12 @@ const server=http.createServer((req,res)=>{const file=path.resolve(root,'.'+new 
    assert.equal(await nav.locator('.nav-section-links[hidden]').count(),0,`${file}: all sections expanded`);
    for(const link of await nav.locator('a').all())assert.ok(await link.isVisible(),`${file}: visible link`);
    assert.equal(await nav.locator('a .suite-icon svg').count(),expected.length);
-   const style=await menuStyle();if(!baseline)baseline=style;else assert.deepEqual(style,baseline,`${file}: identical menu styling`);
-   console.log(`PASS ${file}: ${expected.length} links`);
+   assert.equal(await page.locator('body').getAttribute('data-dashboard-theme'),'light',`${file}: light default`);
+   assert.equal(await page.locator('body').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(243, 246, 250)',`${file}: light canvas`);
+   for(const heading of await page.locator('.suite-main h1,.suite-main h2').all()) assert.equal(await heading.evaluate(el=>getComputedStyle(el).color),'rgb(23, 48, 71)',`${file}: readable headings`);
+   const style=await menuStyle();assert.equal(style[''].backgroundColor,'rgb(7, 24, 39)');if(!baseline)baseline=style;else assert.deepEqual(style,baseline,`${file}: identical menu styling`);
+   if(['admin.html','assignments.html','directory.html','sales-overview.html','admin-agents.html','finance.html'].includes(file)){fs.mkdirSync(path.join(root,'.tmp/admin-theme'),{recursive:true});await page.screenshot({path:path.join(root,'.tmp/admin-theme',file+'.png')});}
+   console.log(`PASS ${file}: light workspace, navy menu, ${expected.length} links`);
   }
   await page.goto(`http://127.0.0.1:${server.address().port}/admin-residential.html`);
   await page.locator('.suite-nav').waitFor();await page.getByRole('button',{name:'Sales',exact:true}).click();
