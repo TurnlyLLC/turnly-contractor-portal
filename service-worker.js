@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-contractor-pwa-v20261012-walkthroughs";
+const CACHE_NAME = "turnly-contractor-pwa-v20261012-schedule-cancelled";
 
 const PRECACHE_URLS = [
   "/",
@@ -109,7 +109,8 @@ function isStaticAsset(request) {
 
 function isAdminRuntimeAsset(request) {
   const pathname = new URL(request.url).pathname;
-  return pathname === "/admin-walkthroughs.css"
+  return pathname === "/schedule-visibility.mjs"
+    || pathname === "/admin-walkthroughs.css"
     || pathname === "/admin-theme.css"
     || pathname === "/admin-navigation.mjs"
     || pathname === "/admin-navigation.css"
