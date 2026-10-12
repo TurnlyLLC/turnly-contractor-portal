@@ -1,0 +1,19 @@
+/* Shared navigation for the standalone admin tools. Sales portal styles stay separate. */
+.admin-shared-sidebar { align-self:start; min-width:0; }
+.admin-shared-sidebar nav.suite-nav { display:grid; gap:8px; overflow:visible; }
+.admin-shared-sidebar .nav-section-group,
+.admin-shared-sidebar .nav-section-links { display:grid; gap:4px; }
+.admin-shared-sidebar .nav-section-links[hidden] { display:none; }
+.admin-shared-sidebar .nav-section-title { display:flex; justify-content:space-between; width:100%; padding:8px 10px; margin-top:10px; border:0; background:transparent; color:#a3b6c9; font-size:11px; font-weight:800; letter-spacing:1px; text-transform:uppercase; }
+.admin-shared-sidebar nav a.suite-nav-link { display:flex; align-items:center; padding:9px 10px; min-height:36px; font-size:13px; white-space:normal; }
+.admin-shared-sidebar .nav-section-title:hover,
+.admin-shared-sidebar nav a:hover { background:#1b3842; color:#fff; }
+.admin-shared-sidebar :is(a,button):focus-visible { outline:2px solid #59dfbc; outline-offset:2px; }
+.admin-nav-legal { display:flex; gap:12px; flex-wrap:wrap; margin-top:20px; padding-top:16px; border-top:1px solid #2b4056; font-size:11px; }
+@media(min-width:981px) {
+  .suite-sidebar,.admin-shared-sidebar { position:sticky; top:0; height:100dvh; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; }
+}
+@media(max-width:950px) {
+  .admin-shared-sidebar { width:100%; }
+  .admin-shared-sidebar nav.suite-nav { grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); align-items:start; }
+}
