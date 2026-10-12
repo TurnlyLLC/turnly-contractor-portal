@@ -1,4 +1,4 @@
-import {navSections, renderAdminNavigation} from "./admin-navigation.mjs?v=20261012-nav-style";
+import {navSections, renderAdminNavigation} from "./admin-navigation.mjs?v=20261012-light";
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 import {
   adminPreviewPortalOptions,
@@ -838,7 +838,7 @@ function getPageKey() {
   return map[file] || file.replace(/\.html$/, "");
 }
 
-const dashboardThemeStorageKey = "turnlyAdminDashboardTheme";
+const dashboardThemeStorageKey = "turnlyAdminDashboardThemeV2";
 
 function navSectionKey(title) {
   return String(title || "")
@@ -849,9 +849,9 @@ function navSectionKey(title) {
 
 function readDashboardTheme() {
   try {
-    return localStorage.getItem(dashboardThemeStorageKey) === "light" ? "light" : "dark";
+    return localStorage.getItem(dashboardThemeStorageKey) === "dark" ? "dark" : "light";
   } catch {
-    return "dark";
+    return "light";
   }
 }
 

@@ -111,7 +111,7 @@ export function renderStandaloneAdminSidebar(activeKey){
   return `<aside class="suite-sidebar admin-shared-sidebar"><a class="suite-brand" href="admin.html" aria-label="Turnly admin"><span class="brand-mark" aria-hidden="true"></span><strong>Turnly</strong></a>${renderAdminNavigation(activeKey)}<div class="suite-legal-links"><a href="privacy-policy.html" target="_blank" rel="noopener">Privacy Policy</a><a href="terms-and-conditions.html" target="_blank" rel="noopener">Terms</a></div></aside>`;
 }
 export function bindStandaloneAdminNavigation(root=document){
-  try{document.body.dataset.dashboardTheme=localStorage.getItem('turnlyAdminDashboardTheme')==='light'?'light':'dark';}catch{}
+  try{document.body.dataset.dashboardTheme=localStorage.getItem('turnlyAdminDashboardThemeV2')==='dark'?'dark':'light';}catch{}
   root.addEventListener('click',event=>{
     const toggle=event.target.closest('.admin-shared-sidebar [data-nav-section-toggle]');
     if(!toggle)return;
