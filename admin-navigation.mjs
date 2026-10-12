@@ -68,7 +68,6 @@ export const navSections = [
     links: [
       { key: "qa-queue", label: "QA Queue", href: "qa-queue.html", icon: "message-square" },
       { key: "checklists", label: "Checklists", href: "checklists.html", icon: "file-check" },
-      { key: "qa-analytics", label: "QA Analytics", href: "qa-analytics.html", icon: "bar-chart" },
       { key: "resident-feedback", label: "Resident Feedback", href: "resident-feedback.html", icon: "star" },
       { key: "qr-tracker", label: "QR Tracker", href: "qr-tracker.html", icon: "layout-grid" },
       { key: "videos", label: "Video Library", href: "videos.html", icon: "video" }

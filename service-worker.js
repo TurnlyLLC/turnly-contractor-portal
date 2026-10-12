@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-contractor-pwa-v20261012-checklist-delete";
+const CACHE_NAME = "turnly-contractor-pwa-v20261012-remove-analytics";
 
 const PRECACHE_URLS = [
   "/",

@@ -30,6 +30,7 @@
     }
   },
   "routes": [
+    { "src": "^/qa-analytics(?:\\.html)?/?$", "status": 308, "headers": { "Location": "/qa-queue.html" } },
     {
       "src": "^/r/([A-Za-z0-9_-]{22})$",
       "dest": "/api/agent-link?slug=$1"
