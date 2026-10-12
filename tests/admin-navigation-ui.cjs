@@ -35,7 +35,11 @@ const server=http.createServer((req,res)=>{const file=path.resolve(root,'.'+new 
    assert.equal(await page.locator('body').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(243, 246, 250)',`${file}: light canvas`);
    for(const heading of await page.locator('.suite-main h1,.suite-main h2').all()) assert.equal(await heading.evaluate(el=>getComputedStyle(el).color),'rgb(23, 48, 71)',`${file}: readable headings`);
    const style=await menuStyle();assert.equal(style[''].backgroundColor,'rgb(7, 24, 39)');if(!baseline)baseline=style;else assert.deepEqual(style,baseline,`${file}: identical menu styling`);
-   if(['admin.html','assignments.html','directory.html','sales-overview.html','admin-agents.html','finance.html'].includes(file)){fs.mkdirSync(path.join(root,'.tmp/admin-theme'),{recursive:true});await page.screenshot({path:path.join(root,'.tmp/admin-theme',file+'.png')});}
+   if(['admin.html','dashboard.html'].includes(file)){
+    const cards=page.locator('.command-grid > .suite-panel');
+    for(const card of await cards.all()){const style=await card.evaluate(el=>{const s=getComputedStyle(el);return {image:s.backgroundImage,shadow:s.boxShadow};});assert.equal(style.image,'none');assert.equal(style.shadow,'rgba(23, 48, 71, 0.03) 0px 2px 8px 0px');}
+   }
+   if(['admin.html','dashboard.html','assignments.html','directory.html','sales-overview.html','admin-agents.html','finance.html'].includes(file)){fs.mkdirSync(path.join(root,'.tmp/admin-theme'),{recursive:true});await page.screenshot({path:path.join(root,'.tmp/admin-theme',file+'.png')});}
    console.log(`PASS ${file}: light workspace, navy menu, ${expected.length} links`);
   }
   await page.goto(`http://127.0.0.1:${server.address().port}/admin-residential.html`);
