@@ -24,6 +24,9 @@
     },
     "api/residential-jobs.js": {
       "maxDuration": 300
+    },
+    "api/contractor-review.js": {
+      "maxDuration": 300
     }
   },
   "routes": [

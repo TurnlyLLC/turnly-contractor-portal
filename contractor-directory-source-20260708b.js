@@ -1,6 +1,6 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
-import { createContractorReview } from "./contractor-review-center.js?v=20261012";
+import { createContractorReview } from "./contractor-review-center.js?v=20261012b";
 
 const env = window.__ENV || {};
 const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY

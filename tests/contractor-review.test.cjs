@@ -56,6 +56,22 @@ test('review decisions are atomic, audited, private, and preserve contractor his
     assert.equal((await db.query('select onboarding_override from profiles where id=$1',[contractor])).rows[0].onboarding_override,false);
     await assert.rejects(db.query(account,[admin,contractor,'override','Forged admin']),/permission denied/);
     await assert.rejects(db.query(review,[admin,doc,'approved','',timestamp]),/permission denied/);
+    await db.exec('reset role');
+    await db.exec(fs.readFileSync(path.join(__dirname,'../supabase/migrations/20261012124010_mobile_contractor_deletion_reviews.sql'),'utf8'));
+    await db.exec('set role service_role');
+    const deletion='select review_contractor_deletion($1,$2,$3,$4,$5)',requested=new Date().toISOString();
+    await assert.rejects(db.query(deletion,[contractor,contractor,requested,'begin','Requested removal']),/admin/);
+    await assert.rejects(db.query(deletion,[admin,contractor,requested,'complete','Requested removal']),/not started/);
+    await db.query(deletion,[admin,contractor,requested,'begin','Requested removal']);
+    assert.equal((await db.query('select status from profiles where id=$1',[contractor])).rows[0].status,'deletion_pending');
+    await assert.rejects(db.query(deletion,[admin,contractor,requested,'decline','Changed decision']),/already started/);
+    await db.query(deletion,[admin,contractor,requested,'complete','Requested removal']);
+    await db.query(deletion,[admin,contractor,requested,'begin','Retry after timeout']);
+    assert.equal((await db.query('select status from profiles where id=$1',[contractor])).rows[0].status,'deleted');
+    assert.equal((await db.query('select count(*)::int n from contractor_documents')).rows[0].n,1);
+    assert.equal((await db.query('select count(*)::int n from contractors')).rows[0].n,1);
+    await db.exec('reset role;set role authenticated');
+    await assert.rejects(db.query(deletion,[admin,contractor,requested,'begin','Forged admin']),/permission denied/);
     await db.exec('reset role;set role anon');
     await assert.rejects(db.query(account,[admin,contractor,'approve','']),/permission denied/);
   } finally {await db.close();}
