@@ -22,17 +22,18 @@ module.exports=async(req,res)=>{
     if(clean(input.search))q=q.ilike('name','%'+clean(input.search,100).replace(/[%,_\\]/g,'')+'%');
     const r=await q.range((page-1)*25,page*25-1);S.checked(r);
     const clients=await Promise.all(r.data.map(async c=>{
-      const latest=await db.from('referral_bookings').select('id,profile_address,property_address,city,state,zip,status,service_date',{count:'exact'}).eq('customer_id',c.id).order('created_at',{ascending:false}).limit(1);S.checked(latest);
+      const latest=await db.from('referral_bookings').select('id,profile_address,property_address,city,state,zip,status,service_date',{count:'exact'}).eq('customer_id',c.id).is('assignment_deleted_at',null).neq('status','cancelled').order('created_at',{ascending:false}).limit(1);S.checked(latest);
       return {...c,latest_booking:latest.data[0]||null,booking_count:latest.count};
     }));return S.json(res,200,{clients,total:r.count,page});
    }
    if(input.action==='admin_list'){
     const page=Math.max(1,Math.floor(Number(input.page)||1));let q=db.from('referral_bookings').select('id,customer_id,name,email,phone,profile_address,property_address,city,state,zip,beds,baths,sqft,service,frequency,quote,amount_cents,service_date,arrival_start,arrival_end,charge_at,status,payment_status,agent_name,referral_code,notes,visit_details,assignment_deleted_at,created_at,stripe_payment_intent,stripe_session,paid_at,completed_at',{count:'exact'}).order('created_at',{ascending:false});
+    q=q.is('assignment_deleted_at',null).neq('status','cancelled');
     if(input.status)q=q.eq('status',input.status);
     if(input.customer_id){if(!uuid(input.customer_id))throw S.fail('Choose a customer.');q=q.eq('customer_id',input.customer_id);}
     const r=await q.range((page-1)*25,page*25-1);S.checked(r);
     const bookings=await Promise.all(r.data.map(async b=>{try{return {...b,job:await J.syncBooking(db,b,actor)};}catch{return {...b,job_error:'Job synchronization needs attention. Refresh to retry.'};}}));
-    return S.json(res,200,{bookings,total:r.count,page,payments_ready:S.ready()});
+    return S.json(res,200,{bookings:bookings.filter(b=>!['cancelled','canceled','declined'].includes(b.job?.status)),total:r.count,page,payments_ready:S.ready()});
    }
    if(!uuid(input.id))throw S.fail('Choose a booking.');
    if(input.action==='admin_approve_job'){
