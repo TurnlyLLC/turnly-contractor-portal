@@ -463,11 +463,6 @@ const pages = {
     subtitle: "Ensure work meets your standards with comprehensive quality assurance",
     render: () => renderQuality("qa-reviews")
   },
-  "qa-analytics": {
-    title: "Quality",
-    subtitle: "Ensure work meets your standards with comprehensive quality assurance",
-    render: () => renderQuality("qa-analytics")
-  },
   "videos": {
     title: "Quality",
     subtitle: "Ensure work meets your standards with comprehensive quality assurance",
@@ -5599,7 +5594,6 @@ function renderPerformance() {
 
 function renderQuality(active) {
   if (active === "videos") return renderVideoLibrary();
-  if (active === "qa-analytics") return renderQaAnalytics();
   if (active === "qa-reviews") return renderQaReviews();
   return renderQaQueue();
 }
@@ -5608,7 +5602,6 @@ function qualityTabs(active) {
   return tabs([
     ["qa-queue", "QA Queue", "qa-queue.html"],
     ["qa-reviews", "QA Reviews", "qa-reviews.html"],
-    ["qa-analytics", "QA Analytics", "qa-analytics.html"],
     ["videos", "Video Library", "videos.html"]
   ], active);
 }
@@ -5705,29 +5698,6 @@ function renderQaReviews() {
   `;
 }
 
-function renderQaAnalytics() {
-  return `
-    ${qualityTabs("qa-analytics")}
-    <section class="metric-strip six">
-      ${metric("Total Reviews", "-", "No data yet", "calendar", "purple")}
-      ${metric("Average Score", "-", "No data yet", "star", "yellow")}
-      ${metric("Pass Rate (>= 80%)", "-", "No data yet", "check", "green")}
-      ${metric("Needs Improvement", "-", "No data yet", "alert", "red")}
-      ${metric("Re-Review Rate", "-", "No data yet", "activity", "blue")}
-      ${metric("Avg. Time to Review", "-", "No data yet", "clock", "yellow")}
-    </section>
-    <section class="analytics-layout">
-      ${panel("QA Score Over Time", axisChart("No data to display", "Review scores over time will appear here once data is available."))}
-      ${panel("Score Distribution", `${donut("No data", "")}${statLegend([["", "-", "blue"], ["", "-", "green"], ["", "-", "yellow"], ["", "-", "orange"], ["", "-", "red"]])}`)}
-      ${filters("Filters", [inputControl("Date Range", "Select date range", "date"), selectControl("Service Type", ["All Service Types"]), selectControl("Location", ["All Locations"]), inputControl("Contractor", "Search contractors..."), selectControl("Reviewer", ["All Reviewers"]), inputControl("Score Range", "Min"), selectControl("Review Status", ["All Statuses"])])}
-      ${panel("Scores by Service Type", emptyState("grid", "No data yet", "Scores by service type will appear here once data is available."), { action: { label: "View all service types", tone: "secondary" } })}
-      ${panel("Top Strengths", emptyState("star", "No data yet", "Top strengths will appear here once data is available."), { action: { label: "View all categories", tone: "secondary" } })}
-      ${panel("Top Opportunities", emptyState("target", "No data yet", "Top opportunities will appear here once data is available."), { action: { label: "View all categories", tone: "secondary" } })}
-      ${tableFrame(["Contractor", "Total Reviews", "Average Score", "Pass Rate (>= 80%)", "Needs Improvement", "Re-Review Rate", "Trend (90 Days)", "Actions"], emptyState("user", "No data yet", "Contractor performance data will appear here once data is available."), { className: "span-wide" })}
-      ${panel("Insights", emptyState("activity", "No insights yet", "Insights and recommendations will appear here once data is available."))}
-    </section>
-  `;
-}
 
 function initQaQueue() {
   const root = document.getElementById("adminSuiteApp");

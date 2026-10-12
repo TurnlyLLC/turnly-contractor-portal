@@ -60,8 +60,7 @@ function injectQualityTabs() {
 
   const hasQualityTabs = Boolean(
     tabs.querySelector('a[href="qa-queue.html"]') ||
-    tabs.querySelector('a[href="qa-reviews.html"]') ||
-    tabs.querySelector('a[href="qa-analytics.html"]')
+    tabs.querySelector('a[href="qa-reviews.html"]')
   );
   if (!hasQualityTabs) return;
 
