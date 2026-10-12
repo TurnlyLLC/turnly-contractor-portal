@@ -11,7 +11,7 @@ const server=http.createServer((req,res)=>{const file=path.resolve(root,'.'+new 
  await page.route('**/mock-profiles',r=>r.fulfill({json:profiles}));
  await page.route('**/admin-suite-20260708g.js*',r=>r.fulfill({contentType:'text/javascript',body:`document.getElementById('adminSuiteApp').innerHTML='<main style="padding:26px"><div class="page-heading"><h1></h1><p></p></div><div class="suite-content"></div></main>';`}));
  for(const file of ['app.js','qa-checklists-nav-20260715a.js'])await page.route(`**/${file}*`,r=>r.fulfill({contentType:'text/javascript',body:''}));
- await page.route('**/api/contractor-review',async route=>{const input=route.request().postDataJSON();calls.push(input);let data={ok:true};if(input.action==='list')data={documents,profiles};if(input.action==='review_document'){documents[0].status=input.status;documents[0].review_notes=input.reason;}if(['approve','override','remove_override'].includes(input.action)){const p=profiles.find(p=>p.id===input.id);p.contractor_approved=input.action!=='remove_override';p.status=p.contractor_approved?'active':'pending';p.onboarding_override=input.action==='override';p.onboarding_override_reason=input.reason;}await route.fulfill({json:data});});
+ await page.route('**/api/contractor-review',async route=>{const input=route.request().postDataJSON();calls.push(input);let data={ok:true};if(input.action==='list')data={documents,profiles,mobile:[{userId:profiles[1].id,name:'Alex Taylor',deletionRequested:'2026-10-12T09:00:00Z',complete:false,doneCount:0,requiredCount:1,needsReview:1}]};if(input.action==='mobile_account')data={complete:true,items:[{id:'native-1',title:'Insurance certificate',required:true,state:'in_review',submission:{id:'submission-1',hasFile:true,fileName:'insurance.pdf'}}]};if(input.action==='review_document'){documents[0].status=input.status;documents[0].review_notes=input.reason;}if(['approve','override','remove_override'].includes(input.action)){const p=profiles.find(p=>p.id===input.id);p.contractor_approved=input.action!=='remove_override';p.status=p.contractor_approved?'active':'pending';p.onboarding_override=input.action==='override';p.onboarding_override_reason=input.reason;}await route.fulfill({json:data});});
  try{
   await page.goto(`http://127.0.0.1:${server.address().port}/directory.html`);
   await page.locator('.cr-queue-row').getByText('Jordan Morgan',{exact:true}).waitFor();
@@ -20,7 +20,7 @@ const server=http.createServer((req,res)=>{const file=path.resolve(root,'.'+new 
   await page.screenshot({path:path.join(out,'directory-desktop.png'),fullPage:true});
   await page.locator('.cr-queue').getByRole('button',{name:'Review account'}).click();
   await page.locator('[data-cr-review-document] textarea').fill('Signature and date verified');
-  await page.getByRole('button',{name:'Approve document',exact:true}).click();
+  await page.locator('[data-cr-review-document]').getByRole('button',{name:'Approve document',exact:true}).click();
   await page.locator('dialog').waitFor({state:'hidden'});
   assert.equal(calls.find(c=>c.action==='review_document').updated_at,documents[0].updated_at);
   await page.locator('.cr-queue').getByRole('button',{name:'Review account'}).click();
@@ -37,6 +37,16 @@ const server=http.createServer((req,res)=>{const file=path.resolve(root,'.'+new 
   await page.locator('[data-cr-override] textarea').fill('Recheck onboarding before next assignment');
   await page.getByRole('button',{name:'Remove override',exact:true}).click();await page.locator('dialog').waitFor({state:'hidden'});
   await page.getByRole('button',{name:/Pending signups/}).click();await page.locator('.cr-queue-row').getByText('Jordan Morgan',{exact:true}).waitFor();
+  await page.getByRole('button',{name:/Deletion requests/}).click();
+  await page.getByRole('button',{name:'Review deletion',exact:true}).click();
+  await page.locator('[data-cr-deletion-review] textarea').fill('Contractor requested account removal');
+  await page.getByRole('button',{name:'Approve deletion',exact:true}).click();
+  await page.getByText('Confirm the requested account deletion before approving it.').waitFor();
+  assert.equal(calls.some(c=>c.action==='approve_deletion'),false);
+  await page.locator('[name=confirm]').check();
+  await page.getByRole('button',{name:'Approve deletion',exact:true}).click();
+  await page.locator('dialog').waitFor({state:'hidden'});
+  assert.equal(calls.find(c=>c.action==='approve_deletion').confirm,true);
   assert.deepEqual(errors,[]);console.log('PASS pending signup visibility, document review, override/revocation, keyboard dialog and mobile layout. Synthetic data only.');
  }finally{await browser.close();server.close();}
 })().catch(e=>{console.error(e);server.close();process.exitCode=1;});
