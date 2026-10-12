@@ -1,3 +1,4 @@
+import { isResidentialAssignment, configureResidentialForm, residentialRecurrence } from "./residential-assignment.mjs?v=20261012-editor";
 import {navSections, renderAdminNavigation} from "./admin-navigation.mjs?v=20261012-light";
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 import {
@@ -22,7 +23,7 @@ import {
   normalizeAssignmentQrTrackerId
 } from "./assignment-qr-policy.js?v=20260929-qr-policy";
 
-import { createAssignmentChecklistEditor } from "./assignment-checklist-editor.mjs?v=20261008-checklists";
+import { createAssignmentChecklistEditor } from "./assignment-checklist-editor.mjs?v=20261012-editor-20261008-checklists";
 
 const suiteEnv = window.__ENV || {};
 const suiteSupabase = suiteEnv.SUPABASE_URL && suiteEnv.SUPABASE_ANON_KEY
@@ -12689,7 +12690,7 @@ function assignmentForm() {
       ], "assignment-notes-grid")}
       <div id="assignmentChecklistPreview" class="checklist-summary assignment-checklist-preview"></div>
       <section id="assignmentChecklistEditor" class="assignment-form-section" hidden></section>
-      ${assignmentVideoUploadSection()}
+
       <p id="assignmentFormMessage" class="status-message"></p>
       <div class="form-actions assignment-edit-actions">
         <button id="assignmentDeleteBtn" type="button" class="secondary-action danger-action assignment-delete-action" data-assignment-delete-current hidden>${icon("trash")}<span data-assignment-delete-label>Delete Assignment</span></button>
@@ -13290,6 +13291,7 @@ function openAssignmentModal(row = null) {
   if (row) {
     populateAssignmentFormForEdit(row);
   }
+  configureResidentialForm(row);
   updateAssignmentModalMode();
   updateAssignmentRecurrenceVisibility();
   updateAssignmentContractorControls();
@@ -13297,7 +13299,7 @@ function openAssignmentModal(row = null) {
   renderAssignmentVideoSection(row);
   void assignmentChecklistEditor.open(row);
   modal.hidden = false;
-  if (row) void refreshAssignmentDetailVideos(row);
+  // Videos remain available from Schedule and QA, not the Assignments editor.
   document.getElementById("title")?.focus();
 }
 
@@ -14326,6 +14328,7 @@ function renderAssignmentRow(row) {
           <h3>${esc(row.title || "Untitled Assignment")}</h3>
           <div class="assignment-badge-row">
             ${statusBadge(overdue ? "overdue" : row.status || "open")}
+            ${!(row.property_checklist_items?.length || row.checklist_items?.length) ? `<button type="button" class="assignment-checklist-warning" title="No checklist attached. Open this assignment to select one." aria-label="No checklist attached. Open assignment to select a checklist." data-assignment-open="${id}">ⓘ No checklist</button>` : ""}
             <span class="status-badge ${statusClassName(row.priority || "normal")}">${esc(titleCase(row.priority || "Normal"))}</span>
             ${row.auto_renewal ? `<span class="status-badge status-open">Auto Renewal</span>` : ""}
           </div>
@@ -14696,7 +14699,9 @@ function collectAssignmentPayloads() {
 }
 
 function collectAssignmentUpdatePayload(currentRow = {}) {
-  const frequency = assignmentFrequencyKey(assignmentValue("assignment_frequency") || currentRow.recurrence_frequency || currentRow.assignment_type || "one_time");
+  const residential = isResidentialAssignment(currentRow);
+  const recurrence = residentialRecurrence(assignmentValue("assignment_frequency"));
+  const frequency = assignmentFrequencyKey((residential ? recurrence.frequency : assignmentValue("assignment_frequency")) || currentRow.recurrence_frequency || currentRow.assignment_type || "one_time");
   const start = parseDate(assignmentValue("start_window"));
   const end = parseDate(assignmentValue("end_window"));
   if (!start || !end) throw new Error("Start Window and End Window are required.");
@@ -14716,7 +14721,7 @@ function collectAssignmentUpdatePayload(currentRow = {}) {
   if (statusError) throw new Error(statusError);
   const payload = {
     title: assignmentValue("title"),
-    property_name: assignmentValue("property_name"),
+    property_name: residential ? `Residential - ${assignmentValue("property_name")}` : assignmentValue("property_name"),
     address: assignmentValue("address"),
     service_type: assignmentValue("service_type"),
     qr_tracker_id: normalizeAssignmentQrTrackerId(assignmentValue("qr_tracker_id")),
@@ -14728,7 +14733,7 @@ function collectAssignmentUpdatePayload(currentRow = {}) {
     ...assignmentStatusPayload(selectedStatus, statusRow),
     assignment_type: frequency,
     recurrence_frequency: frequency,
-    recurrence_interval: currentRow.recurrence_interval || 1,
+    recurrence_interval: residential ? recurrence.interval : currentRow.recurrence_interval || 1,
     recurrence_end_date: frequency === "one_time" ? null : assignmentValue("recurrence_end_date") || currentRow.recurrence_end_date || null,
     auto_renewal: frequency !== "one_time" && Boolean(document.getElementById("auto_renewal")?.checked),
     preferred_first: preferredFirst,
@@ -14758,6 +14763,7 @@ function collectAssignmentUpdatePayload(currentRow = {}) {
   if (selectedPropertyId && assignmentHasPropertyOption(selectedPropertyId)) {
     payload.property_id = selectedPropertyId;
   }
+  if (residential) {payload.metadata.customer_name=assignmentValue("property_name"); payload.priority=currentRow.priority||"normal";}
   return applyAssignmentQrTrackerPolicy(payload, currentRow);
 }
 
@@ -15437,7 +15443,9 @@ function nextAssignmentWindow(row) {
   const end = parseDate(row.end_window);
   const frequency = assignmentFrequencyKey(row.recurrence_frequency || row.assignment_type);
   if (!start || !end || frequency === "one_time") return null;
-  return advanceAssignmentWindow(start, end, frequency);
+  let next=advanceAssignmentWindow(start,end,frequency);
+  for(let i=1;i<Math.max(1,Number(row.recurrence_interval)||1);i++)next=advanceAssignmentWindow(next.start,next.end,frequency);
+  return next;
 }
 
 function parseAssignmentRecurrenceEnd(value, frequency, start) {
@@ -15468,7 +15476,7 @@ function updateAssignmentRecurrenceVisibility() {
   if (frequency === "weekly") ensureDefaultAssignmentWeekday();
   const endDate = document.getElementById("recurrence_end_date");
   if (endDate) {
-    endDate.required = isRecurring;
+    endDate.required = isRecurring && !document.getElementById("assignmentForm")?.classList.contains("residential-assignment-form");
     if (isRecurring && !endDate.value) {
       endDate.value = toDateInput(parseAssignmentRecurrenceEnd("", frequency, parseDate(assignmentValue("start_window")) || new Date()));
     }

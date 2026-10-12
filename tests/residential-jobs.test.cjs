@@ -1,7 +1,7 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),{randomUUID}=require('node:crypto');
 const J=require('../lib/residential-jobs.cjs');
 const booking=()=>({id:randomUUID(),name:'Test Customer',status:'scheduled',payment_status:'card_saved',property_address:'1 Test Lane',city:'Durham',state:'NC',zip:'27701',sqft:1800,beds:3,baths:2,service_date:'2026-10-12',arrival_start:'09:00:00',arrival_end:'12:00:00',quote:{service_label:'Deep clean'},frequency:'weekly',notes:'Use side entrance.'});
-function fixture(b){let job=null;const calls=[];return {calls,get job(){return job},set job(v){job=v},from(table){assert.equal(table,'assignment_blocks');let op='read',value;const q={select(){return q},eq(){return q},upsert(v,opts){assert.equal(opts.ignoreDuplicates,true);op='insert';value=v;return q},update(v){op='update';value=v;return q},async run(){if(op==='insert'&&!job)job=structuredClone(value);if(op==='update')Object.assign(job,value);return {data:job}},single(){return q.run()},maybeSingle(){return q.run()},then(ok,no){return q.run().then(ok,no)}};return q},async rpc(name,args){calls.push({name,args});b.status=args.p_cancel?'cancelled':'completed';return {data:null}}};}
+function fixture(b,templates=[]){let job=null;const calls=[];return {calls,get job(){return job},set job(v){job=v},from(table){if(table==='checklist_templates')return {select:async()=>({data:templates})};assert.equal(table,'assignment_blocks');let op='read',value;const q={select(){return q},eq(){return q},upsert(v,opts){assert.equal(opts.ignoreDuplicates,true);op='insert';value=v;return q},update(v){op='update';value=v;return q},async run(){if(op==='insert'&&!job)job=structuredClone(value);if(op==='update')Object.assign(job,value);return {data:job}},single(){return q.run()},maybeSingle(){return q.run()},then(ok,no){return q.run().then(ok,no)}};return q},async rpc(name,args){calls.push({name,args});b.status=args.p_cancel?'cancelled':'completed';return {data:null}}};}
 test('confirmed bookings become one pending assignment with correct Eastern window and no private billing fields',async()=>{
  const b=booking(),db=fixture(b);await J.syncBooking(db,b);assert.equal(db.job.id,b.id);assert.equal(db.job.status,'pending');assert.equal(db.job.visibility,'pending');assert.equal(db.job.pay_amount,0);assert.equal(db.job.start_window,'2026-10-12T13:00:00.000Z');
  assert.equal(db.job.metadata.source,'residential_booking');assert.equal(db.job.email,undefined);assert.equal(db.job.stripe_customer,undefined);
@@ -27,4 +27,24 @@ test('a colliding unrelated assignment is never modified',async()=>{
 test('a retained premature assignment re-enters approval only after card confirmation',async()=>{
  const b=booking(),db=fixture(b);db.job={id:b.id,status:'cancelled',metadata:{source:J.source,awaiting_booking:true}};
  await J.syncBooking(db,b);assert.equal(db.job.status,'pending');assert.equal(db.job.visibility,'pending');assert.equal(db.job.metadata.awaiting_booking,false);assert.equal(db.calls.length,0);
+});
+
+test('residential checklist matches exact counts, preserves an attached checklist, and never guesses',async()=>{
+ const {matchingResidentialChecklist,residentialRecurrence}=await import('../residential-assignment.mjs');
+ const t={id:'three-two',name:'3 Bed / 2 Bath',sections:[{id:'kitchen',title:'Kitchen',items:[{id:'counter',label:'Clean counters',type:'check'}]}]};
+ assert.equal(matchingResidentialChecklist([t],3,2),t);
+ assert.equal(matchingResidentialChecklist([t],13,2),null);
+ assert.equal(matchingResidentialChecklist([t],null,2),null);
+ assert.equal(matchingResidentialChecklist([t,{...t,id:'duplicate'}],3,2),null);
+ assert.equal(matchingResidentialChecklist([{...t,name:'3 bedrooms 2.5 bathrooms'}],3,2),null);
+ assert.ok(matchingResidentialChecklist([{...t,name:'3 bedrooms 2.5 bathrooms'}],3,2.5));
+ assert.deepEqual(residentialRecurrence('biweekly'),{frequency:'weekly',interval:2});
+ const b=booking(),db=fixture(b,[t]);await J.syncBooking(db,b);
+ assert.equal(db.job.metadata.checklist_template_id,t.id);
+ assert.equal(db.job.metadata.beds,3);assert.equal(db.job.metadata.customer_name,b.name);
+ assert.equal(db.job.property_checklist_items[0].task,'Clean counters');
+ db.job.property_checklist_items=[{task:'Admin customized'}];await J.syncBooking(db,b);
+ assert.equal(db.job.property_checklist_items[0].task,'Admin customized');
+ const unmatched=fixture(b,[{...t,name:'12 bed 2 bath'}]);await J.syncBooking(unmatched,b);
+ assert.deepEqual(unmatched.job.property_checklist_items,[]);
 });

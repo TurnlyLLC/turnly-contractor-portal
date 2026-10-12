@@ -18,6 +18,7 @@ window.checklistTest={
  setupTemplates(templates){checklistState.user={id:'admin-test'};checklistState.templates=templates;checklistState.builder=normalizeChecklistTemplate(templates[0]);checklistState.selectedTemplateId=templates[0].id;renderChecklistData();},
  builder:()=>checklistState.builder,
  open(row){assignmentState.user={id:'admin-test'};assignmentState.rows=[row];assignmentState.properties=[{id:'property-one',name:'Test Property',property_name:'Test Property'}];assignmentState.contractors=[];openAssignmentModal(row);},
+ payload:()=>collectAssignmentUpdatePayload(assignmentState.rows[0]),
  patch:()=>{try{return assignmentChecklistEditor.patch(assignmentState.rows[0],{status:assignmentState.rows[0].status,metadata:assignmentState.rows[0].metadata},'admin-test');}catch(error){return {error:error.message};}}
 };`;
 
@@ -60,7 +61,7 @@ test('assignment checklist editing and independent whole checklist duplication',
     if(url.pathname==='/'){
       const page=url.searchParams.get('page')||'assignments';
       const bundle=url.searchParams.get('bundle')||'admin-suite-20260708g.js';
-      res.setHeader('Content-Type','text/html');return res.end(`<link rel="stylesheet" href="/admin-suite.css"><body class="turnly-admin-suite" data-admin-page="${page}"><div id="adminSuiteApp"></div><script>window.__ENV={SUPABASE_URL:'https://test.invalid',SUPABASE_ANON_KEY:'test'};</script><script type="module" src="/${bundle}"></script>`);
+      res.setHeader('Content-Type','text/html');return res.end(`<link rel="stylesheet" href="/admin-suite.css"><link rel="stylesheet" href="/residential-assignment.css"><body class="turnly-admin-suite" data-admin-page="${page}"><div id="adminSuiteApp"></div><script>window.__ENV={SUPABASE_URL:'https://test.invalid',SUPABASE_ANON_KEY:'test'};</script><script type="module" src="/${bundle}"></script>`);
     }
     const file=path.resolve(root,'.'+url.pathname);
     if(!file.startsWith(root+path.sep)){res.statusCode=403;return res.end();}
@@ -141,6 +142,40 @@ test('assignment checklist editing and independent whole checklist duplication',
     await page.setViewportSize({width:390,height:844});
     assert.ok(await page.locator('#assignmentChecklistSelect').isVisible());
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth),false);
+
+    // Residential editor has focused fields and automatically selects an exact bed/bath checklist.
+    await page.setViewportSize({width:1440,height:1100});
+    await page.evaluate(()=>{
+      window.db.assignment={id:'residential-one',title:'Home clean',status:'open',property_name:'Residential - Jane Doe',address:'1 Test Lane',service_type:'Deep clean',pay_amount:80,start_window:'2026-10-12T13:00:00Z',end_window:'2026-10-12T17:00:00Z',metadata:{source:'residential_booking',customer_name:'Jane Doe',beds:3,baths:2},property_checklist_items:[]};
+      window.db.templates.push({...window.db.templates[0],id:'residential-template',name:'3 Bed / 2 Bath'});
+      window.checklistTest.open(window.db.assignment);
+    });
+    await page.locator('#assignmentChecklistSelect').waitFor();
+    assert.equal(await page.locator('#assignmentChecklistSelect').inputValue(),'residential-template');
+    assert.equal(await page.locator('#property_name').inputValue(),'Jane Doe');
+    assert.equal(await page.locator('#service_type').evaluate(el=>el.tagName),'SELECT');
+    assert.equal(await page.locator('#priority').isVisible(),false);
+    assert.equal(await page.locator('#propertySelect').isVisible(),false);
+    assert.equal(await page.locator('#scope').isVisible(),false);
+    assert.equal(await page.locator('[data-assignment-video-upload]').count(),0);
+    assert.deepEqual(await page.locator('#assignment_frequency option').allTextContents(),['One time','Weekly','Bi-weekly','Monthly']);
+    await page.locator('#assignment_frequency').selectOption('biweekly');
+    const residentialPayload=await page.evaluate(()=>window.checklistTest.payload());
+    assert.equal(residentialPayload.recurrence_frequency,'weekly');
+    assert.equal(residentialPayload.recurrence_interval,2);
+    assert.equal(residentialPayload.property_name,'Residential - Jane Doe');
+    assert.equal(residentialPayload.metadata.customer_name,'Jane Doe');
+    assert.equal(residentialPayload.start_window,'2026-10-12T13:00:00.000Z');
+    const matched=await page.evaluate(()=>window.checklistTest.patch());
+    assert.equal(matched.payload.metadata.checklist_template_id,'residential-template');
+    await page.evaluate(()=>{window.db.assignment.metadata.beds=8;window.checklistTest.open(window.db.assignment)});
+    await page.locator('#assignmentChecklistSelect').waitFor();
+    assert.equal(await page.locator('#assignmentChecklistSelect').inputValue(),'');
+    assert.equal(await page.evaluate(()=>window.checklistTest.patch()),null);
+    await page.evaluate(()=>{window.db.assignment.metadata={};window.db.assignment.recurrence_frequency='daily';window.checklistTest.open(window.db.assignment)});
+    assert.equal(await page.locator('#priority').isVisible(),true);
+    assert.equal(await page.locator('#service_type').evaluate(el=>el.tagName),'INPUT');
+    assert.equal(await page.locator('#assignment_frequency').inputValue(),'daily');
 
     for(const bundle of ['admin-suite-20260710a.js','admin-suite-20260708g.js']){
       await page.goto(base+'?page=checklists&bundle='+bundle);

@@ -1,3 +1,4 @@
+import { isResidentialAssignment, residentialCounts, matchingResidentialChecklist } from "./residential-assignment.mjs?v=20261012-editor";
 const itemsOf = (row) => Array.isArray(row?.checklist_items) ? row.checklist_items : [];
 const metaOf = (row) => row?.metadata && typeof row.metadata === 'object' ? row.metadata : {};
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -68,7 +69,10 @@ export function createAssignmentChecklistEditor(client, flatten) {
       const templates = library.data || [];
       const name = (source === 'Attached to this request' ? meta.checklist_template_name : '') || templates.find(t => t.id === templateId)?.name
         || (items.length ? 'Saved assignment checklist' : 'No checklist attached');
-      state = { row: fresh, templates, items, name, templateId, selected: '' };
+      const counts=residentialCounts(fresh);
+      const autoTemplate=isResidentialAssignment(fresh)&&!items.length&&!hasProgress(fresh)&&!checklistLocked(fresh)?matchingResidentialChecklist(templates,counts.beds,counts.baths):null;
+      const automatic=autoTemplate&&flatten(autoTemplate).length?autoTemplate:null;
+      state = { row: fresh, templates, items, name, templateId, selected: automatic?.id || '' };
       target.innerHTML = `<h3>Contractor Checklist</h3>
         <p><strong>${esc(name)}</strong> · ${items.length} item${items.length === 1 ? '' : 's'}</p>
         <p>${esc(items.length ? source : 'Choose a saved checklist for this request.')}</p>
@@ -76,10 +80,10 @@ export function createAssignmentChecklistEditor(client, flatten) {
         ${checklistLocked(fresh) ? '<p>This checklist is read-only because the assignment is completed, submitted for review, or cancelled.</p>' : `
         <label class="suite-field"><span>Change checklist</span><select id="assignmentChecklistSelect">
           <option value="">Keep current checklist</option>
-          ${templates.map(t => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('')}
+          ${templates.map(t => `<option value="${esc(t.id)}" ${automatic?.id===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}
         </select></label>
         <p>${templates.length ? 'Applies only to this request. Save Changes to update the contractor’s requirements.' : 'Create and save a checklist on the Checklists page first.'}</p>
-        <div id="assignmentChecklistReplacement"></div>`}`;
+        <div id="assignmentChecklistReplacement">${automatic ? `<p>Matched to ${esc(counts.beds)} beds / ${esc(counts.baths)} baths. Save Changes to attach this checklist.</p>${preview(flatten(automatic), "Matched checklist", true)}` : isResidentialAssignment(fresh)&&!items.length ? "<p>No matching checklist. This assignment currently has no checklist attached.</p>" : ""}</div>`}`;
       document.getElementById('assignmentChecklistSelect')?.addEventListener('change', (event) => {
         state.selected = event.target.value;
         const selected = templates.find(t => t.id === state.selected);
