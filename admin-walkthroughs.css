@@ -1,0 +1,36 @@
+body[data-admin-page="walkthroughs"] .admin-sales-host{gap:24px;--admin-sales-radius:12px}
+body[data-admin-page="walkthroughs"] .walkthrough-section-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.walkthrough-section-heading h2{margin:0 0 6px;font-size:21px}.walkthrough-section-heading p{margin:0;color:#65768a;font-size:13px}
+body[data-admin-page="walkthroughs"] .walkthrough-workspace{grid-template-columns:minmax(0,1fr) minmax(280px,340px);align-items:start}
+body[data-admin-page="walkthroughs"] .admin-sales-detail{position:static;min-width:0}
+body[data-admin-page="walkthroughs"] .admin-sales-calendar-shell{overflow:auto}
+body[data-admin-page="walkthroughs"] .admin-sales-week-grid{min-width:700px}
+body[data-admin-page="walkthroughs"] .admin-sales-panel{min-width:0;box-shadow:0 2px 8px #17304708}
+body[data-admin-page="walkthroughs"] .walkthrough-availability{scroll-margin-top:24px;padding:24px}
+body[data-admin-page="walkthroughs"] .admin-sales-availability-form{background:#f8fafc;border:1px solid #d9e3ec;border-radius:12px;padding:18px;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+body[data-admin-page="walkthroughs"] .admin-sales-availability-form>label:nth-child(4){grid-column:span 2}
+body[data-admin-page="walkthroughs"] .admin-sales-availability-list{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:12px;margin-top:20px}
+body[data-admin-page="walkthroughs"] .admin-sales-availability-card{display:block;padding:0;overflow:hidden;background:#fff}
+body[data-admin-page="walkthroughs"] .admin-sales-availability-card summary{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px;cursor:pointer;list-style:none}
+body[data-admin-page="walkthroughs"] .admin-sales-availability-card summary::-webkit-details-marker{display:none}
+body[data-admin-page="walkthroughs"] .admin-sales-availability-card summary:hover{background:#f8fafc}
+body[data-admin-page="walkthroughs"] .admin-sales-availability-card summary:focus-visible{outline:2px solid #0c7469;outline-offset:-3px}
+body[data-admin-page="walkthroughs"] .availability-day-count{font-size:12px;font-weight:700;background:#eaf5f2;color:#17624d;border:1px solid #c4e3dc;border-radius:20px;padding:6px 10px;white-space:nowrap}
+body[data-admin-page="walkthroughs"] .admin-sales-availability-slots{padding:0 16px 16px;gap:0;align-content:start}
+body[data-admin-page="walkthroughs"] .admin-sales-availability-slot{grid-template-columns:minmax(155px,1fr) 110px auto;gap:10px;border:0;border-top:1px solid #e3eaf0;border-radius:0;padding:14px 0;background:transparent;align-items:center}
+body[data-admin-page="walkthroughs"] .admin-sales-availability-slot strong{white-space:nowrap;font-size:13px}
+body[data-admin-page="walkthroughs"] .admin-sales-availability-slot small{font-size:12px;line-height:1.5}
+body[data-admin-page="walkthroughs"] .admin-sales-availability-slot select{min-width:0;width:100%;padding:8px}
+body[data-admin-page="walkthroughs"] .admin-sales-availability-slot .admin-sales-danger{padding:8px;color:#a43542;background:#fff5f5;border-color:#efd0d5;font-size:12px}
+body[data-admin-page="walkthroughs"] .admin-sales-primary{background:#0c7469;color:#fff;border-color:#0c7469;box-shadow:none}
+body[data-admin-page="walkthroughs"] .admin-sales-metrics{gap:12px}
+@media(max-width:1250px){body[data-admin-page="walkthroughs"] .walkthrough-workspace{grid-template-columns:1fr}body[data-admin-page="walkthroughs"] .admin-sales-availability-list{grid-template-columns:1fr}}
+@media(max-width:650px){body[data-admin-page="walkthroughs"] .walkthrough-availability{padding:16px}body[data-admin-page="walkthroughs"] .admin-sales-availability-form{grid-template-columns:1fr;padding:14px}body[data-admin-page="walkthroughs"] .admin-sales-availability-form>label:nth-child(4){grid-column:auto}body[data-admin-page="walkthroughs"] .admin-sales-availability-slot{grid-template-columns:1fr auto}body[data-admin-page="walkthroughs"] .admin-sales-availability-slot>div{grid-column:1/-1}body[data-admin-page="walkthroughs"] .admin-sales-availability-card summary{padding:14px;gap:8px}body[data-admin-page="walkthroughs"] .admin-sales-availability-card h3{font-size:14px}body[data-admin-page="walkthroughs"] .admin-sales-calendar-header{flex-wrap:wrap}}
+body[data-admin-page="walkthroughs"] .suite-topbar{position:relative;top:auto}
+body[data-admin-page="walkthroughs"] .admin-sales-title{display:none}
+body[data-admin-page="walkthroughs"] .admin-sales-page-head{justify-content:flex-end;margin:0}
+body[data-admin-page="walkthroughs"] .walkthrough-workspace{grid-template-columns:1fr}
+body[data-admin-page="walkthroughs"] .admin-sales-week-grid{grid-template-columns:repeat(7,minmax(105px,1fr));min-width:735px}
+body[data-admin-page="walkthroughs"][data-dashboard-theme="light"] :is(.admin-sales-panel,.admin-sales-detail,.admin-sales-metric){background:#fff;box-shadow:0 2px 8px #17304708;border-color:#d9e3ec}
+body[data-admin-page="walkthroughs"][data-dashboard-theme="light"] :is(.admin-sales-day-column header,.admin-sales-month-cell header,.admin-sales-calendar-event){color:#173047}
+body[data-admin-page="walkthroughs"] .admin-sales-day-column header{flex-direction:column;gap:4px}

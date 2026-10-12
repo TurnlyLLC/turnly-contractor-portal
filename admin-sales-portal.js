@@ -1663,32 +1663,35 @@ function renderWalkthroughsPage() {
       ${metricCard("Confirmed", number(rows.filter((row) => normalize(row.walkthrough_status) === "confirmed").length), "ready for visit", "check")}
       ${metricCard("Today", number(today.length), "appointments today", "clock", "yellow")}
       ${metricCard("This Week", number(thisWeekRows(rows, "walkthrough_at").length), "scheduled this week", "calendar", "cyan")}
-      ${metricCard("Open Slots", number(state.availability.filter((slot) => normalize(slot.status) === "open").length), "available windows", "clock")}
+      ${metricCard("Open Slots", number(state.availability.filter((slot) => normalize(slot.status) === "open" && latestMs(slot.ends_at) > Date.now()).length), "available windows", "clock")}
       ${metricCard("Completed", number(rows.filter((row) => normalize(row.walkthrough_status) === "completed").length), "finished walkthroughs", "clipboard", "violet")}
     </section>
-    ${renderAvailabilityPanel()}
-    <section class="admin-sales-workspace">
+    <div class="walkthrough-section-heading"><div><h2>Appointment calendar</h2><p>Select an appointment to see its details. All times are Eastern Time.</p></div><a class="admin-sales-secondary" href="#walkthroughAvailability">Manage availability ↓</a></div>
+    <section class="admin-sales-workspace walkthrough-workspace">
       <article class="admin-sales-panel">
         ${renderGenericFilters("Search walkthroughs...", walkthroughStatuses)}
         ${renderCalendar(rows)}
       </article>
       ${renderWalkthroughDetail(selected)}
     </section>
+    ${renderAvailabilityPanel()}
   `;
 }
 
 function renderAvailabilityPanel() {
+  const now = Date.now();
+  const expanded = new Set([...document.querySelectorAll("details[data-availability-day][open]")].map(el => el.dataset.availabilityDay));
   const groups = groupAvailabilitySlots(state.availability
     .slice()
-    .sort((a, b) => latestMs(a.starts_at) - latestMs(b.starts_at))
-    .slice(0, 28));
+    .sort((a, b) => latestMs(a.starts_at) - latestMs(b.starts_at)));
+  groups.sort((a,b) => Number(latestMs(a.lastEnd) <= now) - Number(latestMs(b.lastEnd) <= now) || latestMs(a.firstStart)-latestMs(b.firstStart));
   const tomorrow = easternDateOffset(1);
   return `
-    <section class="admin-sales-panel">
+    <section class="admin-sales-panel walkthrough-availability" id="walkthroughAvailability">
       <div class="admin-sales-panel-header">
         <div>
-          <h2>Walkthrough Availability</h2>
-          <p>These windows are what sales reps see when they choose a walkthrough time. All times are Eastern Time (ET).</p>
+          <h2>Manage availability</h2>
+          <p>Set the hours sales reps can book. Expand a date to manage its slots. Past dates appear last. All times are Eastern Time (ET).</p>
         </div>
       </div>
       <form class="admin-sales-availability-form" data-admin-sales-availability-form>
@@ -1700,14 +1703,14 @@ function renderAvailabilityPanel() {
       </form>
       <div class="admin-sales-availability-list">
         ${groups.length ? groups.map((group) => `
-          <article class="admin-sales-availability-card">
-            <header>
+          <details class="admin-sales-availability-card" data-availability-day="${esc(group.date)}" ${expanded.has(String(group.date)) ? "open" : ""}>
+            <summary>
               <div>
                 <h3>${esc(formatDate(group.date, { weekday: "short", month: "short", day: "numeric", year: "numeric" }))}</h3>
                 <p>${esc(formatTime(group.firstStart))} - ${esc(formatTime(group.lastEnd))}</p>
               </div>
-              <span>${esc(number(group.openCount))} open slot${group.openCount === 1 ? "" : "s"}</span>
-            </header>
+              <span class="availability-day-count">${latestMs(group.lastEnd) <= now ? "Past date" : `${esc(number(group.openCount))} open slots`} <span aria-hidden="true">⌄</span></span>
+            </summary>
             <div class="admin-sales-availability-slots">
               ${group.slots.map((slot) => {
                 const start = dateValue(slot.starts_at);
@@ -1718,16 +1721,16 @@ function renderAvailabilityPanel() {
                       <strong>${esc(start && end ? `${formatTime(start)} - ${formatTime(end)}` : "Time TBD")}</strong>
                       <small>${esc(slot.label || "Available walkthrough")}</small>
                     </div>
-                    <select class="admin-sales-filter" data-admin-sales-availability-status="${esc(slot.id)}">
+                    <select class="admin-sales-filter" aria-label="Slot status for ${esc(formatTime(start))}" data-admin-sales-availability-status="${esc(slot.id)}">
                       ${availabilityStatuses.map((status) => `<option value="${esc(status)}" ${normalize(slot.status || "open") === status ? "selected" : ""}>${esc(titleCase(status))}</option>`).join("")}
                     </select>
-                    <button class="admin-sales-danger" type="button" data-admin-sales-delete-availability="${esc(slot.id)}">${icon("x")}Remove</button>
+                    <button class="admin-sales-danger" type="button" aria-label="Remove slot at ${esc(formatTime(start))}" data-admin-sales-delete-availability="${esc(slot.id)}">${icon("x")}Remove</button>
                   </article>
                 `;
               }).join("")}
             </div>
-          </article>
-        `).join("") : `<p class="admin-sales-record-subtitle">No admin availability windows are set yet.</p>`}
+          </details>
+        `).join("") : `<p class="admin-sales-record-subtitle">No availability yet. Add a date and time range above to open booking slots for your sales team.</p>`}
       </div>
     </section>
   `;
