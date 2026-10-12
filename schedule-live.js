@@ -1,3 +1,4 @@
+import { visibleScheduleAssignment } from "./schedule-visibility.mjs?v=20261012-cancelled";
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
 const env = window.__ENV || {};
@@ -281,7 +282,7 @@ async function loadScheduleRows() {
   }
 
   state.rows = (data || [])
-    .filter((row) => parseDate(row.start_window))
+    .filter((row) => visibleScheduleAssignment(row) && parseDate(row.start_window))
     .sort((a, b) => dateValue(a.start_window) - dateValue(b.start_window));
   showMessage(state.rows.length
     ? `${state.rows.length.toLocaleString()} assignment job${state.rows.length === 1 ? "" : "s"} synced from Supabase.`
@@ -568,6 +569,7 @@ function shiftedAssignmentWindow(row, targetDate) {
 }
 
 function renderSchedule() {
+  state.rows = state.rows.filter(visibleScheduleAssignment);
   updateControls();
   populateFilters();
   renderSummary();
