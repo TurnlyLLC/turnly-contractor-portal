@@ -1,103 +1,21 @@
-const { test } = require('node:test');
-const assert = require('node:assert/strict');
-const http = require('node:http');
-const fs = require('node:fs');
-const path = require('node:path');
-const { chromium } = require('playwright');
-const root = path.resolve(__dirname, '..');
-
-test('feedback pages show full answers, paginate, retry, protect access, and link to QR tools', { timeout: 60000 }, async () => {
-  const server = http.createServer((req, res) => {
-    const pathname = new URL(req.url, 'http://localhost').pathname;
-    if (pathname === '/env.js') { res.setHeader('Content-Type', 'text/javascript'); return res.end("window.__ENV={SUPABASE_URL:'https://example.invalid',SUPABASE_ANON_KEY:'test'};"); }
-    const file = path.resolve(root, '.' + pathname);
-    if (!file.startsWith(root + path.sep)) { res.statusCode = 403; return res.end(); }
-    try {
-      res.setHeader('Content-Type', { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.png': 'image/png' }[path.extname(file)] || 'application/octet-stream');
-      res.end(fs.readFileSync(file));
-    } catch { res.statusCode = 404; res.end(); }
-  });
-  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-  let browser;
-  try {
-    browser = await chromium.launch({ headless: true, ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {}) });
-    const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
-    const errors = [];
-    page.on('pageerror', error => errors.push(error.message));
-    // Keep the actual page and shared navigation; isolate unrelated portal modules.
-    for (const file of ['app.js', 'admin-account-approvals.js', 'admin-pipeline.js', 'qa-checklists-nav-20260715a.js']) {
-      await page.route(`**/${file}?*`, route => route.fulfill({ contentType: 'text/javascript', body: '' }));
-    }
-    await page.route('https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm', route => route.fulfill({ contentType: 'text/javascript', body: `
-      window.feedbackTest={admin:true,fail:false,total:26,calls:[],listeners:[]};
-      export function createClient(){return {
-        auth:{getUser:async()=>({data:{user:null}}),onAuthStateChange:fn=>{window.feedbackTest.listeners.push(fn);}},
-        rpc:async()=>({data:window.feedbackTest.admin}),
-        from:table=>({select:(fields,options)=>({order:function(){return this;},limit:async()=>({data:[]}),range:async(from,to)=>{
-          const s=window.feedbackTest;s.calls.push({table,fields,options,from,to});
-          if(s.fail)return {error:{message:'offline'}};
-          return {count:s.total,data:Array.from({length:Math.max(0,Math.min(to+1,s.total)-from)},(_,i)=>({
-            id:String(from+i+1),property_name:'Sample Community',property_code:'SC',card_number:from+i+1,
-            created_at:'2026-09-21T12:00:00Z',rating:from+i===0?1:5,
-            message:from+i===1?'':'Areas: Kitchen, Bathrooms\\n\\nFull response '+(from+i+1)+' <script>window.injected=true</script>'
-          }))};
-        }})})
-      };}` }));
-    await page.goto(`http://127.0.0.1:${server.address().port}/resident-feedback.html`);
-    await page.waitForFunction(() => document.querySelectorAll('.resident-response-card').length === 25);
-    assert.equal(await page.title(), 'Resident Feedback | Turnly Admin');
-    assert.equal(await page.locator('#residentFeedbackGeneratorForm').count(), 0);
-    assert.match(await page.locator('.resident-response-card').first().innerText(), /Areas: Kitchen, Bathrooms\n\nFull response 1/);
-    assert.match(await page.locator('.resident-response-card').first().innerText(), /1 \/ 5/);
-    assert.match(await page.locator('.resident-response-card').nth(1).innerText(), /Rating only/);
-    assert.equal(await page.evaluate(() => window.injected), undefined);
-    assert.equal(await page.locator('#residentResponsePage').innerText(), '1–25 of 26');
-    assert.equal(await page.locator('a[href="qr-tracker.html"]').count(), 2);
-    assert.equal(await page.locator('a[href="resident-feedback.html"].active').count(), 1);
-    await page.getByRole('button', { name: 'Next', exact: true }).click();
-    await page.waitForFunction(() => document.getElementById('residentResponsePage').textContent === '26–26 of 26');
-    assert.equal(await page.locator('.resident-response-card').count(), 1);
-    assert.match(await page.locator('.resident-response-card').innerText(), /SC-026/);
-    assert.equal(await page.locator('#residentResponseNext').isDisabled(), true);
-    await page.getByRole('button', { name: 'Previous', exact: true }).click();
-    await page.waitForFunction(() => document.querySelectorAll('.resident-response-card').length === 25);
-    const query = await page.evaluate(() => window.feedbackTest.calls[0]);
-    assert.equal(query.table, 'resident_feedback_responses');
-    assert.deepEqual(query.options, {count:'exact'});
-    assert.equal(query.from, 0); assert.equal(query.to, 24);
-    await page.evaluate(() => { window.feedbackTest.fail = true; });
-    await page.getByRole('button', {name:'Refresh',exact:true}).click();
-    await page.waitForFunction(() => document.getElementById('residentResponseStatus').textContent.includes('Unable to load'));
-    assert.equal(await page.locator('.resident-response-card').count(), 0);
-    await page.evaluate(() => { window.feedbackTest.fail = false; window.feedbackTest.total = 0; });
-    await page.getByRole('button', {name:'Refresh',exact:true}).click();
-    await page.getByRole('heading', {name:'No resident feedback yet',exact:true}).waitFor();
-    await page.evaluate(() => { window.feedbackTest.total = 1; });
-    await page.getByRole('button', {name:'Refresh',exact:true}).click();
-    await page.waitForFunction(() => document.querySelectorAll('.resident-response-card').length === 1);
-    if (process.env.FEEDBACK_QA_DIR) {
-      fs.mkdirSync(process.env.FEEDBACK_QA_DIR,{recursive:true});
-      await page.screenshot({path:path.join(process.env.FEEDBACK_QA_DIR,'feedback-desktop.png'),fullPage:true});
-    }
-    await page.setViewportSize({width:390,height:844});
-    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),true);
-    if (process.env.FEEDBACK_QA_DIR) await page.screenshot({path:path.join(process.env.FEEDBACK_QA_DIR,'feedback-mobile.png'),fullPage:true});
-    await page.evaluate(() => { window.feedbackTest.listeners.forEach(fn=>fn('SIGNED_OUT')); });
-    assert.equal(await page.locator('.resident-response-card').count(),0);
-    await page.evaluate(() => { window.feedbackTest.admin=false; });
-    const callsBefore = await page.evaluate(() => window.feedbackTest.calls.length);
-    await page.getByRole('button',{name:'Refresh',exact:true}).click();
-    await page.waitForFunction(() => document.getElementById('residentResponseStatus').textContent.includes('Sign in with an admin'));
-    assert.equal(await page.evaluate(() => window.feedbackTest.calls.length),callsBefore);
-    await page.goto(`http://127.0.0.1:${server.address().port}/qr-tracker.html`);
-    await page.locator('#residentFeedbackGeneratorForm').waitFor();
-    assert.equal(await page.title(),'QR Tracker | Turnly Admin');
-    assert.equal(await page.locator('#residentFeedbackResponsesMount').count(),0);
-    assert.equal(await page.locator('a[href="qr-tracker.html"].active').count(),1);
-    await page.getByRole('heading',{name:'Previous batches',exact:true}).waitFor();
-    assert.deepEqual(errors,[]);
-  } finally {
-    await browser?.close();
-    await new Promise(resolve => server.close(resolve));
-  }
+const {test}=require('node:test'),assert=require('node:assert/strict'),http=require('node:http'),fs=require('node:fs'),path=require('node:path'),{chromium}=require('playwright');
+const root=path.resolve(__dirname,'..');
+test('feedback workspace separates owners, filters, links, handles errors and fits mobile',{timeout:60000},async()=>{
+ const server=http.createServer((req,res)=>{const file=path.resolve(root,'.'+new URL(req.url,'http://local').pathname);if(!file.startsWith(root+path.sep))return res.writeHead(403).end();try{res.setHeader('Content-Type',/\.m?js$/.test(file)?'text/javascript':file.endsWith('.css')?'text/css':'text/html');res.end(fs.readFileSync(file));}catch{res.writeHead(404).end();}});await new Promise(r=>server.listen(0,'127.0.0.1',r));
+ const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_PATH});try{const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.route('**/env.js',r=>r.fulfill({contentType:'text/javascript',body:'window.__ENV={SUPABASE_URL:"https://test.invalid",SUPABASE_ANON_KEY:"test"};'}));
+ for(const file of ['app.js','admin-account-approvals.js','admin-pipeline.js','qa-checklists-nav-20260715a.js'])await page.route('**/'+file+'?*',r=>r.fulfill({contentType:'text/javascript',body:''}));
+ await page.route('https://cdn.jsdelivr.net/**',r=>r.fulfill({contentType:'text/javascript',body:'export function createClient(){return {from(){const q={select(){return q},eq(){return q},order(){return q},limit(){return q},maybeSingle(){return q},then(fn){return Promise.resolve({data:[]}).then(fn)}};return q;},auth:{getUser:async()=>({data:{user:null}}),getSession:async()=>({data:{session:{access_token:"test"}}}),onAuthStateChange:fn=>{window.signOut=()=>fn("SIGNED_OUT")}}}}'}));
+ const data={properties:[{id:'p',name:'Vetra Forest Hills',address:'2029 Bedford St',city:'Durham'}],customers:[{id:'c',name:'Jane Customer',email:'jane@example.com'}],responses:[{id:'1',portal_property_id:'p',property_name:'Vetra',property_code:'VFH',card_number:1,rating:5,message:'Areas: Appliances\n\nThe kitchen looked amazing!',created_at:'2026-09-21T14:04:00Z'},{id:'2',customer_id:'c',rating:2,message:'Please check floors',created_at:'2026-10-12T14:00:00Z'},{id:'3',property_name:'Unknown',rating:3,message:'<script>bad</script>',created_at:'2026-10-11T14:00:00Z'}]};let fail=false;
+ await page.route('**/api/admin-resident-feedback',route=>{const input=route.request().postDataJSON();if(fail)return route.fulfill({status:503,json:{error:'Please retry.'}});if(input.action==='link'){const row=data.responses.find(r=>r.id===input.id);row.customer_id=input.segment==='residential'?input.owner_id:null;row.portal_property_id=input.segment==='commercial'?input.owner_id:null;return route.fulfill({json:{ok:true}});}return route.fulfill({json:data});});
+ await page.goto('http://127.0.0.1:'+server.address().port+'/resident-feedback.html');await page.getByText('The kitchen looked amazing!',{exact:false}).waitFor();
+ assert.equal(await page.locator('.feedback-group').count(),1);assert.equal(await page.getByText('Jane Customer',{exact:true}).count(),0);
+ await page.locator('[data-feedback-segment="residential"]').click();await page.getByText('Please check floors',{exact:true}).waitFor();
+ await page.locator('#feedbackRating').selectOption('5');assert.equal(await page.locator('.feedback-entry').count(),0);await page.locator('#feedbackRating').selectOption('all');
+ await page.locator('[data-feedback-segment="unlinked"]').click();await page.locator('[data-feedback-link="3"]').click();await page.locator('#feedbackLinkSegment').selectOption('residential');await page.locator('#feedbackLinkOwner').selectOption('c');await page.locator('#feedbackLinkSave').click();await page.waitForFunction(()=>document.querySelectorAll('.feedback-entry').length===2);
+ assert.equal(await page.locator('.feedback-group').count(),1);assert.equal(await page.locator('#residentResponseList script').count(),0);
+ await page.locator('[data-feedback-segment="commercial"]').click();fs.mkdirSync(path.join(root,'.tmp','feedback'),{recursive:true});await page.screenshot({path:path.join(root,'.tmp','feedback','desktop.png'),fullPage:true});
+ await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await page.screenshot({path:path.join(root,'.tmp','feedback','mobile.png'),fullPage:true});
+ fail=true;await page.locator('#residentResponseRefresh').click();await page.getByText('Please retry.',{exact:true}).waitFor();fail=false;await page.locator('#residentResponseRefresh').click();await page.getByText('The kitchen looked amazing!',{exact:false}).waitFor();await page.evaluate(()=>window.signOut());assert.equal(await page.locator('.feedback-entry').count(),0);assert.deepEqual(errors,[]);
+ }finally{await browser.close();await new Promise(r=>server.close(r));}
 });
