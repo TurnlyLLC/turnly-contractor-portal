@@ -1,19 +1,21 @@
-/* Shared navigation for the standalone admin tools. Sales portal styles stay separate. */
-.admin-shared-sidebar { align-self:start; min-width:0; }
-.admin-shared-sidebar nav.suite-nav { display:grid; gap:8px; overflow:visible; }
-.admin-shared-sidebar .nav-section-group,
-.admin-shared-sidebar .nav-section-links { display:grid; gap:4px; }
-.admin-shared-sidebar .nav-section-links[hidden] { display:none; }
-.admin-shared-sidebar .nav-section-title { display:flex; justify-content:space-between; width:100%; padding:8px 10px; margin-top:10px; border:0; background:transparent; color:#a3b6c9; font-size:11px; font-weight:800; letter-spacing:1px; text-transform:uppercase; }
-.admin-shared-sidebar nav a.suite-nav-link { display:flex; align-items:center; padding:9px 10px; min-height:36px; font-size:13px; white-space:normal; }
-.admin-shared-sidebar .nav-section-title:hover,
-.admin-shared-sidebar nav a:hover { background:#1b3842; color:#fff; }
-.admin-shared-sidebar :is(a,button):focus-visible { outline:2px solid #59dfbc; outline-offset:2px; }
-.admin-nav-legal { display:flex; gap:12px; flex-wrap:wrap; margin-top:20px; padding-top:16px; border-top:1px solid #2b4056; font-size:11px; }
-@media(min-width:981px) {
-  .suite-sidebar,.admin-shared-sidebar { position:sticky; top:0; height:100dvh; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; }
-}
-@media(max-width:950px) {
-  .admin-shared-sidebar { width:100%; }
-  .admin-shared-sidebar nav.suite-nav { grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); align-items:start; }
-}
+/* One sidebar presentation for every admin shell, including standalone tools. */
+body .suite-sidebar.admin-shared-sidebar{--nav-bg:#071827;--nav-text:#eaf6ff;--nav-muted:#9cbcd1;--nav-accent:#59dfbc;--nav-border:#264455;box-sizing:border-box;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:14px;line-height:1.4;background:var(--nav-bg);color:var(--nav-text);border:0;border-right:1px solid var(--nav-border);box-shadow:none;padding:18px 13px 16px;align-self:start;min-width:0;position:sticky;top:0;height:100dvh;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#456074 transparent}
+body[data-dashboard-theme="light"] .suite-sidebar.admin-shared-sidebar{--nav-bg:#f8fbfd;--nav-text:#253a51;--nav-muted:#5c7086;--nav-accent:#087e72;--nav-border:#d6e2ea;color-scheme:light}
+body .suite-sidebar.admin-shared-sidebar *{box-sizing:border-box}
+body .suite-sidebar.admin-shared-sidebar .suite-brand{display:flex;align-items:center;gap:12px;min-height:50px;margin:0;padding:0 9px 18px;text-decoration:none;color:var(--nav-text)}
+body .suite-sidebar.admin-shared-sidebar .brand-mark{display:block;background:url('/favicon-32x32.png?v=20260624t') center/contain no-repeat;width:38px;height:38px;min-width:38px;border:0;border-radius:50%;box-shadow:none}
+body .suite-sidebar.admin-shared-sidebar .suite-brand strong{font:900 24px/1 Inter,ui-sans-serif,system-ui,sans-serif;letter-spacing:0;text-transform:none;color:var(--nav-text)}
+body .suite-sidebar.admin-shared-sidebar .suite-nav{display:grid;grid-template-columns:1fr;grid-auto-flow:row;gap:6px;margin:0;padding:0;overflow:visible}
+body .suite-sidebar.admin-shared-sidebar .nav-section-group,body .suite-sidebar.admin-shared-sidebar .nav-section-links{display:grid;gap:6px}
+body .suite-sidebar.admin-shared-sidebar .nav-section-links[hidden]{display:none}
+body .suite-sidebar.admin-shared-sidebar .nav-section-title{display:flex;align-items:center;justify-content:space-between;gap:8px;width:calc(100% - 20px);min-height:20px;margin:20px 10px 8px;padding:0;border:0;border-radius:0;background:transparent;color:var(--nav-muted);font:800 11px/1.4 Inter,ui-sans-serif,system-ui,sans-serif;letter-spacing:1.5px;text-transform:uppercase;text-align:left;cursor:pointer;box-shadow:none}
+body .suite-sidebar.admin-shared-sidebar .suite-nav-link{display:grid;grid-template-columns:18px minmax(0,1fr) auto;align-items:center;gap:10px;min-width:0;min-height:40px;margin:0;padding:8px 10px;border:1px solid transparent;border-radius:8px;background:transparent;box-shadow:none;color:var(--nav-text);font:650 13px/1.4 Inter,ui-sans-serif,system-ui,sans-serif;letter-spacing:0;white-space:normal;text-decoration:none;transition:background 160ms ease,border-color 160ms ease}
+body .suite-sidebar.admin-shared-sidebar .suite-nav-link:hover{background:color-mix(in srgb,var(--nav-accent) 9%,transparent);border-color:color-mix(in srgb,var(--nav-accent) 30%,transparent)}
+body .suite-sidebar.admin-shared-sidebar .suite-nav-link.active{color:var(--nav-accent);background:color-mix(in srgb,var(--nav-accent) 13%,transparent);border:1px solid color-mix(in srgb,var(--nav-accent) 65%,transparent);box-shadow:none}
+body .suite-sidebar.admin-shared-sidebar .suite-icon{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;color:currentColor}
+body .suite-sidebar.admin-shared-sidebar .suite-icon svg{display:block;width:100%;height:100%}
+body .suite-sidebar.admin-shared-sidebar :is(a,button):focus-visible{outline:2px solid var(--nav-accent);outline-offset:2px}
+body .suite-sidebar.admin-shared-sidebar .suite-legal-links{display:flex;flex-wrap:wrap;gap:12px;margin:20px 4px 0;padding-top:16px;border-top:1px solid var(--nav-border)}
+body .suite-sidebar.admin-shared-sidebar .suite-legal-links a{color:var(--nav-muted);font:650 11px/1.4 Inter,ui-sans-serif,system-ui,sans-serif;text-decoration:none}
+body .admin-suite-shell,body .layout:has(>.admin-shared-sidebar){grid-template-columns:232px minmax(0,1fr)}
+@media(max-width:980px){body .admin-suite-shell,body .layout:has(>.admin-shared-sidebar){grid-template-columns:1fr}body .suite-sidebar.admin-shared-sidebar{position:relative;height:auto;max-height:none;width:100%;padding:14px 12px 16px;overflow:visible;border-right:0;border-bottom:1px solid var(--nav-border)}body .suite-sidebar.admin-shared-sidebar .suite-nav{grid-template-columns:repeat(auto-fit,minmax(160px,1fr));align-items:start}}

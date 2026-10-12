@@ -18,6 +18,11 @@ const server=http.createServer((req,res)=>{const file=path.resolve(root,'.'+new 
  await page.route('**/api/**',r=>r.fulfill({json:{agents:[],total:0,cities:[],admin:false,customers:[],bookings:[],clients:[],payments_ready:false,settings:{},sending:{}}}));
  await page.route('http://127.0.0.1:**/*',async r=>{const name=new URL(r.request().url()).pathname.slice(1);if(extras.has(name))return r.fulfill({contentType:'text/javascript',body:''});return r.fallback();});
  await page.addInitScript(()=>localStorage.setItem('turnlyAdminCollapsedNavSections','["sales","operations","quality","reports"]'));
+ const menuStyle=()=>page.locator('.admin-shared-sidebar').evaluate(sidebar=>{
+   const properties=['fontFamily','fontSize','fontWeight','lineHeight','color','backgroundColor','backgroundImage','padding','margin','border','borderRadius','display','gap','gridTemplateColumns'];
+   return Object.fromEntries(['','.suite-brand','.nav-section-title','.suite-nav-link:not(.active)','.suite-nav-link:not(.active) .suite-icon','.suite-legal-links'].map(selector=>{const el=selector?sidebar.querySelector(selector):sidebar;const style=getComputedStyle(el);return [selector,Object.fromEntries(properties.map(key=>[key,style[key]]))];}));
+ });
+ let baseline;
  try{
   for(const file of pages){
    await page.goto(`http://127.0.0.1:${server.address().port}/${file}`);
@@ -25,6 +30,8 @@ const server=http.createServer((req,res)=>{const file=path.resolve(root,'.'+new 
    assert.deepEqual(await nav.locator('a').evaluateAll(a=>a.map(n=>n.getAttribute('href'))),expected,`${file}: identical ordered links`);
    assert.equal(await nav.locator('.nav-section-links[hidden]').count(),0,`${file}: all sections expanded`);
    for(const link of await nav.locator('a').all())assert.ok(await link.isVisible(),`${file}: visible link`);
+   assert.equal(await nav.locator('a .suite-icon svg').count(),expected.length);
+   const style=await menuStyle();if(!baseline)baseline=style;else assert.deepEqual(style,baseline,`${file}: identical menu styling`);
    console.log(`PASS ${file}: ${expected.length} links`);
   }
   await page.goto(`http://127.0.0.1:${server.address().port}/admin-residential.html`);
@@ -37,6 +44,13 @@ const server=http.createServer((req,res)=>{const file=path.resolve(root,'.'+new 
   await page.setViewportSize({width:390,height:844});
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
   await page.screenshot({path:path.join(root,'.tmp/admin-navigation/residential-mobile.png'),fullPage:true});
+  await page.setViewportSize({width:1440,height:1000});
+  await page.addInitScript(()=>localStorage.setItem('turnlyAdminDashboardTheme','light'));
+  let lightStyle;
+  for(const file of ['admin-residential.html','admin-agents.html','checklists.html','admin.html']){
+   await page.goto(`http://127.0.0.1:${server.address().port}/${file}`);await page.locator('.suite-nav').waitFor();
+   const style=await menuStyle();if(!lightStyle)lightStyle=style;else assert.deepEqual(style,lightStyle,`${file}: light theme matches`);
+  }
   console.log(`PASS ${pages.length} admin pages, ${expected.length} destinations, collapse reset, current-page marker, mobile overflow`);
  }finally{await browser.close();server.close();}
 })().catch(e=>{console.error(e);server.close();process.exitCode=1;});
