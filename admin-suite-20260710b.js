@@ -1,3 +1,4 @@
+import {navSections, renderAdminNavigation} from "./admin-navigation.mjs?v=20261012-nav";
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
 const suiteEnv = window.__ENV || {};
@@ -5,65 +6,7 @@ const suiteSupabase = suiteEnv.SUPABASE_URL && suiteEnv.SUPABASE_ANON_KEY
   ? createClient(suiteEnv.SUPABASE_URL, suiteEnv.SUPABASE_ANON_KEY)
   : null;
 
-const navSections = [
-  {
-    title: "",
-    links: [
-      { key: "dashboard", label: "Dashboard", href: "dashboard.html", icon: "home" },
-      { key: "command-center", label: "Command Center", href: "admin.html", icon: "layout-grid" }
-    ]
-  },
-  {
-    title: "Sales",
-    links: [
-      { key: "leads", label: "Leads", href: "leads.html", icon: "triangle" },
-      { key: "walkthroughs", label: "Walkthroughs", href: "walkthroughs.html", icon: "calendar-days" },
-      { key: "quotes", label: "Quotes", href: "quotes.html", icon: "badge-dollar" },
-      { key: "contracts-pending", label: "Contracts Pending", href: "contracts-pending.html", icon: "file-signature" }
-    ]
-  },
-  {
-    title: "Operations",
-    links: [
-      { key: "schedule", label: "Schedule", href: "schedule.html", icon: "calendar" },
-      { key: "coverage-center", label: "Regions & Access", href: "coverage-center.html", icon: "shield" },
-      { key: "assignments", label: "Assignments", href: "assignments.html", icon: "clipboard-list" },
-      { key: "property-units", label: "Property Units", href: "property-units.html", icon: "building" }
-    ]
-  },
-  {
-    title: "Contractors",
-    links: [
-      { key: "directory", label: "Directory", href: "directory.html", icon: "users" }
-    ]
-  },
-  {
-    title: "Quality",
-    links: [
-      { key: "qa-queue", label: "QA Queue", href: "qa-queue.html", icon: "message-square" },
-      { key: "checklists", label: "Checklists", href: "checklists.html", icon: "file-check" },
-      { key: "qa-analytics", label: "QA Analytics", href: "qa-analytics.html", icon: "bar-chart" },
-      { key: "videos", label: "Video Library", href: "videos.html", icon: "video" }
-    ]
-  },
-  {
-    title: "Clients",
-    links: [
-      { key: "client-directory", label: "Client Directory", href: "client-directory.html", icon: "building" },
-      { key: "contracts", label: "Contracts", href: "contracts.html", icon: "briefcase" }
-    ]
-  },
-  {
-    title: "Reports",
-    links: [
-      { key: "reports-sales", label: "Sales", href: "reports-sales.html", icon: "wallet" },
-      { key: "contractor-feedback", label: "Contractor Feedback", href: "contractor-feedback.html", icon: "star" },
-      { key: "reports-operations", label: "Operations", href: "reports-operations.html", icon: "settings" },
-      { key: "contractor-performance", label: "Contractor Performance", href: "contractor-performance.html", icon: "trophy" },
-      { key: "growth", label: "Growth", href: "growth.html", icon: "trending-up" }
-    ]
-  }
-];
+
 
 const stageLabels = [
   ["new_leads", "New Lead", "green"],
@@ -659,7 +602,6 @@ function getPageKey() {
   return map[file] || file.replace(/\.html$/, "");
 }
 
-const navCollapseStorageKey = "turnlyAdminCollapsedNavSections";
 const dashboardThemeStorageKey = "turnlyAdminDashboardTheme";
 
 function navSectionKey(title) {
@@ -667,31 +609,6 @@ function navSectionKey(title) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
-}
-
-function readStoredCollapsedNavSections() {
-  try {
-    return new Set(JSON.parse(localStorage.getItem(navCollapseStorageKey) || "[]"));
-  } catch {
-    return new Set();
-  }
-}
-
-function readCollapsedNavSections(activeKey) {
-  const collapsedSections = readStoredCollapsedNavSections();
-  const activeSection = navSections.find((section) => section.links.some((link) => link.key === activeKey));
-  if (activeSection?.title) {
-    collapsedSections.delete(navSectionKey(activeSection.title));
-  }
-  return collapsedSections;
-}
-
-function saveCollapsedNavSections(collapsedSections) {
-  try {
-    localStorage.setItem(navCollapseStorageKey, JSON.stringify(Array.from(collapsedSections)));
-  } catch {
-    // Collapse state is helpful, not required.
-  }
 }
 
 function readDashboardTheme() {
@@ -9993,39 +9910,13 @@ function axisChart(title, text) {
 }
 
 function renderSidebar(activeKey) {
-  const collapsedSections = readCollapsedNavSections(activeKey);
   return `
     <aside class="suite-sidebar">
       <a class="suite-brand" href="admin.html" aria-label="Turnly admin">
         <span class="brand-mark" aria-hidden="true"></span>
         <strong>Turnly</strong>
       </a>
-      <nav class="suite-nav" aria-label="Admin navigation">
-        ${navSections.map((section) => {
-          const key = navSectionKey(section.title);
-          const sectionId = key ? `nav-section-${key}` : "";
-          const isCollapsed = key && collapsedSections.has(key);
-          return `
-            <div class="nav-section-group ${isCollapsed ? "collapsed" : ""}">
-              ${section.title ? `
-                <button class="nav-section-title" type="button" data-nav-section-toggle="${esc(key)}" aria-expanded="${isCollapsed ? "false" : "true"}" aria-controls="${esc(sectionId)}">
-                  <span>${esc(section.title)}</span>
-                  ${icon("chevron-right", "nav-section-arrow")}
-                </button>
-              ` : ""}
-              <div class="nav-section-links" ${sectionId ? `id="${esc(sectionId)}" data-nav-section="${esc(key)}"` : ""} ${isCollapsed ? "hidden" : ""}>
-                ${section.links.map((link) => `
-                  <a class="suite-nav-link ${activeKey === link.key ? "active" : ""}" href="${link.href || "#"}">
-                    ${icon(link.icon)}
-                    <span>${esc(link.label)}</span>
-                    ${renderNavNotificationBadge(link.key)}
-                  </a>
-                `).join("")}
-              </div>
-            </div>
-          `;
-        }).join("")}
-      </nav>
+      ${renderAdminNavigation(activeKey,{icon,badge:renderNavNotificationBadge})}
       <div class="suite-legal-links" aria-label="Turnly legal links">
         <a href="/privacy-policy.html" target="_blank" rel="noopener">Privacy Policy</a>
         <a href="/terms-and-conditions.html" target="_blank" rel="noopener">Terms</a>
@@ -10515,7 +10406,6 @@ function initNavSectionToggles() {
       const key = toggle.dataset.navSectionToggle;
       const links = document.querySelector(`[data-nav-section="${key}"]`);
       const isExpanded = toggle.getAttribute("aria-expanded") === "true";
-      const collapsedSections = readStoredCollapsedNavSections();
 
       toggle.setAttribute("aria-expanded", isExpanded ? "false" : "true");
       toggle.closest(".nav-section-group")?.classList.toggle("collapsed", isExpanded);
@@ -10523,12 +10413,6 @@ function initNavSectionToggles() {
         links.hidden = isExpanded;
       }
 
-      if (isExpanded) {
-        collapsedSections.add(key);
-      } else {
-        collapsedSections.delete(key);
-      }
-      saveCollapsedNavSections(collapsedSections);
     });
   });
 }

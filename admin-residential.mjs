@@ -1,3 +1,6 @@
+import {renderStandaloneAdminSidebar,bindStandaloneAdminNavigation} from "./admin-navigation.mjs?v=20261012-nav";
+document.getElementById("adminNavigation").outerHTML=renderStandaloneAdminSidebar("residential-bookings");
+bindStandaloneAdminNavigation();
 import {createClient} from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/+esm';
 const env=window.__ENV||{},client=env.SUPABASE_URL&&env.SUPABASE_ANON_KEY?createClient(env.SUPABASE_URL,env.SUPABASE_ANON_KEY):null;
 const $=s=>document.querySelector(s),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
