@@ -56,3 +56,16 @@ body.turnly-admin-suite[data-dashboard-theme="light"] .assignment-weekday-option
 body.turnly-admin-suite[data-dashboard-theme="light"] :is(.assignment-bulk-unit-option,.assignment-bulk-bar,.qa-search-field,.qa-builder-toolbar,.qa-builder-section,.qa-toggle) {background:#f8fafc;color:#173047;border-color:#d9e3ec}
 body.turnly-admin-suite[data-dashboard-theme="light"] :is(.assignment-status-inline,.assignment-status-select,.assignment-page-size select) {background:#fff;color:#173047;border-color:#cbd8e2}
 body.turnly-admin-suite[data-dashboard-theme="light"] :is(.assignment-bulk-unit-option.is-selected,.qa-toggle:has(input:checked)) {background:#e5f5ef;color:#17624d;border-color:#83b9a9}
+
+/* Flat white dashboard cards, without the legacy colored glow layers. */
+body.turnly-admin-suite[data-dashboard-theme="light"] .command-grid > .suite-panel,
+body.turnly-admin-suite[data-dashboard-theme="light"] .command-grid > .suite-panel:not(.website-inquiries-card),
+body.turnly-admin-suite[data-dashboard-theme="light"] .command-grid > .website-inquiries-card {
+  background:#fff;border-color:#d9e3ec;box-shadow:0 2px 8px #17304708;
+}
+body.turnly-admin-suite[data-dashboard-theme="light"] .command-grid > .suite-panel::before,
+body.turnly-admin-suite[data-dashboard-theme="light"] .command-grid > .suite-panel:not(.website-inquiries-card)::before {display:none}
+body.turnly-admin-suite[data-dashboard-theme="light"] .command-customize-bar {background:#fff;box-shadow:none;border-color:#d9e3ec}
+body.turnly-admin-suite[data-dashboard-theme="light"] :is(.panel-title-icon,.empty-icon,.metric-icon) {box-shadow:none;background-image:none}
+body.turnly-admin-suite[data-dashboard-theme="light"] .command-grid > .suite-panel:not(.website-inquiries-card) :is(.dashboard-item-row,.manager-request-row) {box-shadow:none;background:#f8fafc}
+body.turnly-admin-suite[data-dashboard-theme="light"] .command-grid > .suite-panel:not(.website-inquiries-card) :is(.empty-state,.small-empty-state) {background:#f8fafc;box-shadow:none}
