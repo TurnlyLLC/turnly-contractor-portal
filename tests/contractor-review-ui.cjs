@@ -1,0 +1,42 @@
+// Local browser checks with synthetic people and files; no live approvals or messages.
+const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
+const {chromium}=require('playwright');
+const root=path.resolve(__dirname,'..'),out=path.join(root,'.tmp','contractor-review');
+const profiles=[{id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',role:'contractor',status:'pending',full_name:'Jordan Morgan',email:'jordan@example.com',contractor_approved:false},{id:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',role:'contractor',status:'active',full_name:'Alex Taylor',email:'alex@example.com',contractor_approved:true}];
+const documents=[{id:'cccccccc-cccc-4ccc-8ccc-cccccccccccc',profile_id:profiles[0].id,title:'Contractor agreement',document_type:'agreement',status:'uploaded',storage_path:'file.pdf',uploaded_at:'2026-10-12T10:00:00Z',updated_at:'2026-10-12T10:00:00Z'}];
+const server=http.createServer((req,res)=>{const file=path.resolve(root,'.'+new URL(req.url,'http://local').pathname);if(!file.startsWith(root+path.sep)||!fs.existsSync(file))return res.writeHead(404).end();res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html');res.end(fs.readFileSync(file));});
+(async()=>{fs.mkdirSync(out,{recursive:true});await new Promise(r=>server.listen(0,'127.0.0.1',r));const browser=await chromium.launch({headless:true,executablePath:process.env.QA_CHROMIUM});const page=await browser.newPage({viewport:{width:1440,height:1050}}),calls=[],errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.route('**/env.js',r=>r.fulfill({contentType:'text/javascript',body:'window.__ENV={SUPABASE_URL:"https://example.supabase.co",SUPABASE_ANON_KEY:"test"};'}));
+ await page.route('https://cdn.jsdelivr.net/**',r=>r.fulfill({contentType:'text/javascript',body:`export function createClient(){return {auth:{getSession:async()=>({data:{session:{access_token:'test'}}})},from(table){const q={select(){return q},limit:async()=>({data:table==='profiles'?await (await fetch('/mock-profiles')).json():[]})};return q}}}`}));
+ await page.route('**/mock-profiles',r=>r.fulfill({json:profiles}));
+ await page.route('**/admin-suite-20260708g.js*',r=>r.fulfill({contentType:'text/javascript',body:`document.getElementById('adminSuiteApp').innerHTML='<main style="padding:26px"><div class="page-heading"><h1></h1><p></p></div><div class="suite-content"></div></main>';`}));
+ for(const file of ['app.js','qa-checklists-nav-20260715a.js'])await page.route(`**/${file}*`,r=>r.fulfill({contentType:'text/javascript',body:''}));
+ await page.route('**/api/contractor-review',async route=>{const input=route.request().postDataJSON();calls.push(input);let data={ok:true};if(input.action==='list')data={documents,profiles};if(input.action==='review_document'){documents[0].status=input.status;documents[0].review_notes=input.reason;}if(['approve','override','remove_override'].includes(input.action)){const p=profiles.find(p=>p.id===input.id);p.contractor_approved=input.action!=='remove_override';p.status=p.contractor_approved?'active':'pending';p.onboarding_override=input.action==='override';p.onboarding_override_reason=input.reason;}await route.fulfill({json:data});});
+ try{
+  await page.goto(`http://127.0.0.1:${server.address().port}/directory.html`);
+  await page.locator('.cr-queue-row').getByText('Jordan Morgan',{exact:true}).waitFor();
+  assert.equal(await page.locator('#contractorStatusFilter').inputValue(),'all');
+  assert.match(await page.locator('#contractorRows tr').first().innerText(),/Jordan Morgan/);
+  await page.screenshot({path:path.join(out,'directory-desktop.png'),fullPage:true});
+  await page.locator('.cr-queue').getByRole('button',{name:'Review account'}).click();
+  await page.locator('[data-cr-review-document] textarea').fill('Signature and date verified');
+  await page.getByRole('button',{name:'Approve document',exact:true}).click();
+  await page.locator('dialog').waitFor({state:'hidden'});
+  assert.equal(calls.find(c=>c.action==='review_document').updated_at,documents[0].updated_at);
+  await page.locator('.cr-queue').getByRole('button',{name:'Review account'}).click();
+  await page.locator('[data-cr-override] textarea').fill('Established employee since 2024');
+  await page.getByRole('button',{name:'Grant override and job access'}).click();
+  await page.locator('dialog').waitFor({state:'hidden'});
+  await page.getByRole('button',{name:/Staff overrides/}).click();
+  await page.locator('.cr-queue').getByRole('button',{name:'Review account'}).click();
+  await page.getByRole('button',{name:'Remove override',exact:true}).waitFor();
+  await page.screenshot({path:path.join(out,'review-desktop.png'),fullPage:true});
+  await page.setViewportSize({width:390,height:844});
+  await page.screenshot({path:path.join(out,'review-mobile.png'),fullPage:true});
+  assert.equal(await page.locator('dialog').evaluate(el=>el.scrollWidth>el.clientWidth),false);
+  await page.locator('[data-cr-override] textarea').fill('Recheck onboarding before next assignment');
+  await page.getByRole('button',{name:'Remove override',exact:true}).click();await page.locator('dialog').waitFor({state:'hidden'});
+  await page.getByRole('button',{name:/Pending signups/}).click();await page.locator('.cr-queue-row').getByText('Jordan Morgan',{exact:true}).waitFor();
+  assert.deepEqual(errors,[]);console.log('PASS pending signup visibility, document review, override/revocation, keyboard dialog and mobile layout. Synthetic data only.');
+ }finally{await browser.close();server.close();}
+})().catch(e=>{console.error(e);server.close();process.exitCode=1;});
