@@ -1,4 +1,4 @@
-import {navSections, renderAdminNavigation} from "./admin-navigation.mjs?v=20261012-nav";
+import {navSections, renderAdminNavigation} from "./admin-navigation.mjs?v=20261012-nav-style";
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 import {
   adminPreviewPortalOptions,
@@ -16170,7 +16170,7 @@ function axisChart(title, text) {
 
 function renderSidebar(activeKey) {
   return `
-    <aside class="suite-sidebar">
+    <aside class="suite-sidebar admin-shared-sidebar">
       <a class="suite-brand" href="admin.html" aria-label="Turnly admin">
         <span class="brand-mark" aria-hidden="true"></span>
         <strong>Turnly</strong>
