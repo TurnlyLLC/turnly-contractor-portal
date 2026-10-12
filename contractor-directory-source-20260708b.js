@@ -1,5 +1,7 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
+import { createContractorReview } from "./contractor-review-center.js?v=20261012";
+
 const env = window.__ENV || {};
 const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
   ? createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY)
@@ -12,11 +14,13 @@ const state = {
   search: "",
   managerSearch: "",
   team: "contractor",
-  status: "active",
+  status: "all",
   managerStatus: "active",
   loading: false,
   saving: false
 };
+
+const reviews = createContractorReview({ supabase, getPeople: () => state.people, onSaved: () => loadPeople(false) });
 
 const sources = [
   { table: "profiles", select: "*" },
@@ -269,6 +273,7 @@ function propertyMatchesSaved(option = {}, allowedIds = [], allowedNames = []) {
 }
 
 function accessSummary(person = {}) {
+  if (person.team === "contractor" && (!person.approved || person.status !== "active")) return "Approval required";
   if (person.team !== "contractor") return "-";
   const propertyCount = uniqueList([...person.allowedPropertyIds, ...person.allowedPropertyNames]).length;
   const regionCount = uniqueList(person.allowedRegions).length;
@@ -321,6 +326,7 @@ function workspaceMarkup() {
         ${metric("Pending", "pendingTotal", "needs approval", "yellow", "PA")}
         ${metric("Inactive", "inactiveTotal", "not active", "red", "IA")}
       </section>
+      ${reviews.markup()}
       <section class="directory-layout">
         <div class="suite-stack span-main">
           <section class="table-card contractor-directory-card">
@@ -328,7 +334,7 @@ function workspaceMarkup() {
               <div class="toolbar-left">
                 <input id="contractorSearch" class="inline-search" type="search" placeholder="Search contractors..." autocomplete="off" />
                 <label class="suite-field compact-field"><span>Team</span><select id="contractorTeamFilter"><option value="contractor" selected>Contractors</option><option value="sales">Sales Team</option><option value="all">All Contractor/Sales</option></select></label>
-                <label class="suite-field compact-field"><span>Status</span><select id="contractorStatusFilter"><option value="active">Active</option><option value="pending_approval">Pending Approval</option><option value="inactive">Inactive</option><option value="all">All Statuses</option></select></label>
+                <label class="suite-field compact-field"><span>Status</span><select id="contractorStatusFilter"><option value="all">All Statuses</option><option value="pending_approval">Pending Approval</option><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
               </div>
               <div class="toolbar-right">
                 <button id="contractorRefresh" class="secondary-action" type="button"><span>Refresh</span></button>
@@ -455,7 +461,7 @@ async function loadAccessOptions() {
     .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
 }
 
-async function loadPeople() {
+async function loadPeople(refreshReviews = true) {
   if (!supabase || state.loading) return;
   state.loading = true;
   setMessage("Loading contractor directory...");
@@ -470,8 +476,9 @@ async function loadPeople() {
       const existing = unique.get(key);
       if (!existing || person.source === "profiles") unique.set(key, person);
     });
-    state.people = Array.from(unique.values()).sort((a, b) => a.name.localeCompare(b.name));
+    state.people = Array.from(unique.values()).sort((a, b) => Number(b.status === "pending_approval") - Number(a.status === "pending_approval") || a.name.localeCompare(b.name));
     render();
+    if (refreshReviews) await reviews.load();
     setMessage(`${state.people.length} directory ${state.people.length === 1 ? "entry" : "entries"} synced from Supabase.`);
   } catch (error) {
     console.warn("[contractor-directory] load failed", error);
@@ -524,8 +531,8 @@ function renderRows() {
   const empty = document.getElementById("contractorEmpty");
   if (!body) return;
   body.innerHTML = rows.map((person) => {
-    const approve = person.team === "contractor" && !person.approved
-      ? `<button class="primary-action" type="button" data-approve="${esc(person.key)}"><span>Approve</span></button>`
+    const approve = person.team === "contractor"
+      ? `<button class="secondary-action cr-review-link" type="button" data-review-account="${esc(person.key)}"><span>Review account</span></button>`
       : "";
     const fileLink = person.team === "contractor"
       ? `<a class="secondary-action" href="${esc(contractorFileUrl(person))}"><span>File</span></a>`
@@ -584,6 +591,7 @@ function render() {
   renderMetrics();
   renderRows();
   renderPropertyManagerRows();
+  reviews.render();
 }
 
 function field(id, label, type, value = "", extra = "") {
@@ -997,27 +1005,6 @@ async function saveContractor(event) {
   setMessage(`${value("contractorName") || "Account"} was saved.`);
 }
 
-async function approvePerson(person) {
-  if (!person || state.saving) return;
-  state.saving = true;
-  setMessage(`Approving ${person.name}...`);
-  const now = new Date().toISOString();
-  const payload = { status: "active", contractor_approved: true, approval_status: "approved", invited_by_admin: true, invited_at: now, contractor_approved_at: now };
-  const result = await writeFallback(person.source, payload, person.id);
-  if (!result.error && person.profileId && person.source !== "profiles") {
-    await writeFallback("profiles", payload, person.profileId);
-  }
-  if (result.error) {
-    state.saving = false;
-    setMessage("Unable to approve contractor: " + result.error.message, true);
-    return;
-  }
-  await syncInvite({ ...person.raw, email: person.email, full_name: person.name, name: person.name, phone: person.phone, team: "contractor", contractor_approved: true, company_name: person.company, service_type: person.service, market: person.location }, person.profileId || (person.source === "profiles" ? person.id : ""));
-  state.saving = false;
-  await loadPeople();
-  setMessage(`${person.name} is approved and available for assignments.`);
-}
-
 async function resetContractorPassword(event) {
   event.preventDefault();
   if (!supabase || state.saving) return;
@@ -1100,8 +1087,8 @@ function bind(root) {
     if (event.target.closest("[data-modal-close]")) return closeModal();
     const edit = event.target.closest("[data-edit]");
     if (edit) return openModal(state.people.find((person) => person.key === edit.dataset.edit));
-    const approve = event.target.closest("[data-approve]");
-    if (approve) return void approvePerson(state.people.find((person) => person.key === approve.dataset.approve));
+    const review = event.target.closest("[data-review-account]");
+    if (review) return reviews.openPerson(state.people.find((person) => person.key === review.dataset.reviewAccount));
     const resetPassword = event.target.closest("[data-reset-password]");
     if (resetPassword) return openPasswordModal(state.people.find((person) => person.key === resetPassword.dataset.resetPassword));
   });
@@ -1115,6 +1102,7 @@ function start() {
   const root = install();
   if (!root) return;
   bind(root);
+  reviews.bind(root);
   if (!supabase) {
     setMessage("Supabase config is missing. Add env.js values before using the directory.", true);
     return;

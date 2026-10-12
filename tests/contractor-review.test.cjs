@@ -1,0 +1,62 @@
+const {test}=require('node:test');
+const assert=require('node:assert/strict');
+const {randomUUID}=require('node:crypto');
+const {PGlite}=require('@electric-sql/pglite');
+const fs=require('node:fs');
+const path=require('node:path');
+const {access,run}=require('../api/contractor-review.js');
+
+test('admin review authorizes the stored profile, never user metadata',async()=>{
+  const db={auth:{getUser:async()=>({data:{user:{id:randomUUID(),user_metadata:{role:'admin'}}}})},from:()=>({select(){return this},eq(){return this},maybeSingle:async()=>({data:{role:'contractor',status:'active'}})})};
+  await assert.rejects(access(db,{headers:{}}),e=>e.status===401);
+  await assert.rejects(access(db,{headers:{authorization:'Bearer valid'}}),e=>e.status===403);
+  await assert.rejects(run({},randomUUID(),{action:'override',id:randomUUID(),reason:''}),/reason/);
+});
+
+test('review decisions are atomic, audited, private, and preserve contractor history',async()=>{
+  const db=new PGlite(),admin=randomUUID(),contractor=randomUUID(),doc=randomUUID();
+  try{
+    await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;
+      create schema auth;
+      create function auth.uid() returns uuid language sql as $$select nullif(current_setting('test.uid',true),'')::uuid$$;
+      create table profiles(id uuid primary key,role text,status text,contractor_approved boolean default false,approval_status text,contractor_approved_by uuid,contractor_approved_at timestamptz);
+      create function public.current_profile_is_admin() returns boolean language sql security definer set search_path=public as $$select exists(select 1 from profiles where id=auth.uid() and role='admin')$$;
+      create table contractors(id uuid primary key,profile_id uuid,contractor_approved boolean,approval_status text,status text);
+      create table contractor_documents(id uuid primary key,status text,storage_path text,expiration_date date,updated_at timestamptz default now());
+      create table admin_audit_log(id uuid default gen_random_uuid(),actor_id uuid,action text,entity text,entity_id text,before_value text,after_value text,source text);
+      grant usage on schema public,auth to authenticated,anon,service_role;
+      grant select,update,insert on profiles to authenticated;
+      grant all on all tables in schema public to service_role;`);
+    await db.query("insert into profiles(id,role,status,contractor_approved) values ($1,'admin','active',true),($2,'contractor','pending',false)",[admin,contractor]);
+    await db.query("insert into contractors values ($1,$2,false,'pending','pending')",[randomUUID(),contractor]);
+    await db.query("insert into contractor_documents(id,status,storage_path) values ($1,'uploaded','test/file.pdf')",[doc]);
+    await db.exec(fs.readFileSync(path.join(__dirname,'../supabase/migrations/20261012120543_contractor_review_center.sql'),'utf8'));
+    await db.exec('set role service_role');
+    const timestamp=(await db.query('select updated_at from contractor_documents where id=$1',[doc])).rows[0].updated_at;
+    const account='select review_contractor_account($1,$2,$3,$4)';
+    const review='select review_contractor_document($1,$2,$3,$4,$5)';
+    await assert.rejects(db.query(account,[contractor,contractor,'override','Established employee']),/admin/);
+    await assert.rejects(db.query(account,[admin,contractor,'override','']),/reason/);
+    await assert.rejects(db.query(review,[admin,doc,'approved','',null]),/changed/);
+    await assert.rejects(db.query(review,[admin,doc,'rejected','',timestamp]),/reason/);
+    await db.query(review,[admin,doc,'approved','Verified file',timestamp]);
+    assert.equal((await db.query('select reviewed_by from contractor_documents where id=$1',[doc])).rows[0].reviewed_by,admin);
+    await db.query(account,[admin,contractor,'override','Established employee with work history']);
+    const approved=(await db.query('select * from profiles where id=$1',[contractor])).rows[0];
+    assert.equal(approved.contractor_approved,true);assert.equal(approved.onboarding_override,true);
+    assert.equal((await db.query('select status from contractors')).rows[0].status,'active');
+    assert.equal((await db.query('select count(*)::int as n from contractor_documents')).rows[0].n,1);
+    await db.query(account,[admin,contractor,'remove_override','Needs onboarding review']);
+    assert.equal((await db.query('select contractor_approved from profiles where id=$1',[contractor])).rows[0].contractor_approved,false);
+    await db.query(account,[admin,contractor,'approve','']);
+    assert.equal((await db.query('select count(*)::int as n from admin_audit_log')).rows[0].n,4);
+    await db.exec("reset role;set role authenticated");
+    await db.query("select set_config('test.uid',$1,false)",[contractor]);
+    await db.query('update profiles set onboarding_override=true,onboarding_override_reason=$1 where id=$2',['Self bypass',contractor]);
+    assert.equal((await db.query('select onboarding_override from profiles where id=$1',[contractor])).rows[0].onboarding_override,false);
+    await assert.rejects(db.query(account,[admin,contractor,'override','Forged admin']),/permission denied/);
+    await assert.rejects(db.query(review,[admin,doc,'approved','',timestamp]),/permission denied/);
+    await db.exec('reset role;set role anon');
+    await assert.rejects(db.query(account,[admin,contractor,'approve','']),/permission denied/);
+  } finally {await db.close();}
+});
