@@ -1,0 +1,4 @@
+/* Residential jobs use a focused editor; hidden fields retain existing values. */
+body[data-admin-page="assignments"] .residential-assignment-form :is(.assignment-notes-grid,[data-assignment-recurrence-field],[data-assignment-weekday-field],#assignmentChecklistPreview,#assignmentUnitField){display:none!important}
+body[data-admin-page="assignments"] .assignment-checklist-warning{display:inline-flex;align-items:center;gap:4px;border:1px solid #e2a5ae;border-radius:20px;padding:4px 8px;background:#fff0f2;color:#ab263b;font-family:inherit;font-size:11px;font-weight:700;line-height:1.4;cursor:pointer}
+body[data-admin-page="assignments"] .assignment-checklist-warning:focus-visible{outline:2px solid #ab263b;outline-offset:2px}
