@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-contractor-pwa-v20261012-remove-analytics";
+const CACHE_NAME = "turnly-contractor-pwa-v20261012-feedback-groups";
 
 const PRECACHE_URLS = [
   "/",
@@ -109,7 +109,9 @@ function isStaticAsset(request) {
 
 function isAdminRuntimeAsset(request) {
   const pathname = new URL(request.url).pathname;
-  return pathname === "/contractor-directory-model.mjs"
+  return pathname === "/feedback-groups.mjs"
+    || pathname === "/feedback-groups.css"
+    || pathname === "/contractor-directory-model.mjs"
     || pathname === "/residential-assignment.mjs"
     || pathname === "/residential-assignment.css"
     || pathname === "/schedule-visibility.mjs"

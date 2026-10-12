@@ -1,101 +1,28 @@
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
-
-const env = window.__ENV || {};
-const client = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
-  ? createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY) : null;
-const fields = 'id,created_at,property_name,property_code,card_number,rating,message';
-const pageSize = 25;
-const state = { rows: [], page: 1, total: 0, loading: false, error: '', request: 0 };
-const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[char]);
-const root = document.getElementById('adminSuiteApp');
-
-function renderRows() {
-  const list = document.getElementById('residentResponseList');
-  if (!list) return;
-  const status = document.getElementById('residentResponseStatus');
-  status.textContent = state.error || (state.loading ? 'Loading resident feedback…' : `${state.total.toLocaleString()} response${state.total === 1 ? '' : 's'} · Newest first`);
-  status.classList.toggle('error', Boolean(state.error));
-  list.setAttribute('aria-busy', String(state.loading));
-  list.innerHTML = state.rows.map(row => {
-    const rating = Math.max(0, Math.min(5, Number(row.rating) || 0));
-    const date = new Date(row.created_at);
-    return `<article class="resident-response-card">
-      <header><div><h3>${esc(row.property_name)}</h3><p>Card ${esc(row.property_code)}-${esc(String(row.card_number).padStart(3, '0'))}</p></div>
-        <div class="resident-response-rating"><span class="resident-feedback-rating" aria-hidden="true">${'★'.repeat(rating)}<span>${'★'.repeat(5 - rating)}</span></span><strong>${rating} / 5</strong></div>
-      </header>
-      <p class="resident-response-date"><time datetime="${esc(row.created_at)}">${esc(date.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }))}</time></p>
-      <h4>Resident’s feedback</h4>
-      ${row.message ? `<blockquote>${esc(row.message)}</blockquote>` : '<p class="resident-response-no-comment">Rating only — no written feedback provided.</p>'}
-    </article>`;
-  }).join('') || `<div class="resident-response-empty"><h3>${state.loading ? 'Loading responses…' : state.error ? 'Feedback could not be loaded' : 'No resident feedback yet'}</h3><p>${state.loading ? 'Checking for submitted answers.' : state.error ? 'Use Refresh to try again.' : 'Submitted ratings and comments will appear here when residents complete a QR feedback form.'}</p></div>`;
-  document.getElementById('residentResponsePage').textContent = state.total
-    ? `${((state.page - 1) * pageSize + 1).toLocaleString()}–${Math.min(state.page * pageSize, state.total).toLocaleString()} of ${state.total.toLocaleString()}` : '';
-  document.getElementById('residentResponsePrevious').disabled = state.loading || state.page <= 1 || Boolean(state.error);
-  document.getElementById('residentResponseNext').disabled = state.loading || state.page * pageSize >= state.total || Boolean(state.error);
-  document.getElementById('residentResponseRefresh').disabled = state.loading;
+import {createClient} from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+import {organizeFeedback,filterFeedback} from './feedback-groups.mjs?v=20261012-groups';
+const env=window.__ENV||{},client=env.SUPABASE_URL&&env.SUPABASE_ANON_KEY?createClient(env.SUPABASE_URL,env.SUPABASE_ANON_KEY):null;
+const state={rows:[],properties:[],customers:[],segment:'commercial',search:'',rating:'all',owner:'all',page:1,loading:false,error:'',request:0};
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+const $=id=>document.getElementById(id),pageSize=20;
+async function request(body){const session=await client?.auth.getSession();const token=session?.data?.session?.access_token;if(!token)throw Error('Sign in with an admin account to view feedback.');const response=await fetch('/api/admin-resident-feedback',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify(body)});const data=await response.json();if(!response.ok)throw Error(data.error||'Unable to load feedback.');return data;}
+function ownerOptions(){const unique=new Map(state.rows.filter(r=>r.segment===state.segment).map(r=>[r.groupKey,r]));$('feedbackOwner').innerHTML='<option value="all">All '+(state.segment==='residential'?'customers':'properties')+'</option>'+[...unique.values()].sort((a,b)=>a.ownerName.localeCompare(b.ownerName)).map(r=>`<option value="${esc(r.groupKey)}">${esc([r.ownerName,r.ownerDetail].filter(Boolean).join(' · '))}</option>`).join('');$('feedbackOwner').value=state.owner;}
+function render(){
+ if(!$('residentResponseList'))return;
+ $('residentResponseStatus').textContent=state.error||(state.loading?'Loading feedback…':'Ratings and comments, organized by property and customer.');
+ $('residentResponseStatus').classList.toggle('error',!!state.error);$('residentResponseRefresh').disabled=state.loading;
+ for(const button of document.querySelectorAll('[data-feedback-segment]')){const segment=button.dataset.feedbackSegment;button.setAttribute('aria-pressed',String(segment===state.segment));button.querySelector('span').textContent=state.rows.filter(r=>r.segment===segment).length;}
+ const rows=filterFeedback(state.rows,state),rated=rows.filter(r=>Number(r.rating)>0),avg=rated.length?(rated.reduce((sum,r)=>sum+Number(r.rating),0)/rated.length).toFixed(1):'—';
+ $('feedbackMetrics').innerHTML=`<div><span>Responses</span><strong>${rows.length}</strong></div><div><span>Average rating</span><strong>${avg}<small> / 5</small></strong></div><div><span>Low ratings · 1–3 stars</span><strong>${rows.filter(r=>Number(r.rating)<=3).length}</strong></div>`;
+ state.page=Math.min(state.page,Math.max(1,Math.ceil(rows.length/pageSize)));const slice=rows.slice((state.page-1)*pageSize,state.page*pageSize),groups=new Map();for(const row of slice){if(!groups.has(row.groupKey))groups.set(row.groupKey,[]);groups.get(row.groupKey).push(row);}
+ $('residentResponseList').innerHTML=[...groups.values()].map(group=>`<section class="feedback-group"><header><div><span class="feedback-eyebrow">${state.segment==='residential'?'Residential customer':state.segment==='commercial'?'Commercial property':'Needs linking'}</span><h2>${esc(group[0].ownerName)}</h2><p>${esc(group[0].ownerDetail||'')}</p></div><span class="feedback-count">${rows.filter(r=>r.groupKey===group[0].groupKey).length} response(s)</span></header>${group.map(row=>{const rating=Math.max(0,Math.min(5,Math.round(Number(row.rating)||0)));return `<article class="feedback-entry"><div class="feedback-entry-meta"><strong class="feedback-stars" aria-label="${rating} out of 5 stars">${'★'.repeat(rating)}<span>${'☆'.repeat(5-rating)}</span><small>${rating}/5</small></strong><time>${esc(new Date(row.created_at).toLocaleString([],{dateStyle:'medium',timeStyle:'short'}))}</time><span>QR ${esc(row.tracker)}</span></div><div class="feedback-comment">${row.message?`<p>${esc(row.message)}</p>`:'<p class="feedback-muted">Rating only · no written comment</p>'}</div><button type="button" class="feedback-link-button" data-feedback-link="${esc(row.id)}">${state.segment==='unlinked'?'Link property/customer':'Change link'}</button></article>`;}).join('')}</section>`).join('')||`<div class="feedback-empty"><strong>${state.loading?'Loading feedback…':state.error?'Feedback unavailable':'No '+(state.segment==='unlinked'?'unlinked':state.segment)+' feedback'+(state.search||state.rating!=='all'||state.owner!=='all'?' matches your filters':' yet')}</strong><p>${state.error?'Use Refresh to try again.':state.segment==='residential'?'Feedback linked to a residential customer will appear here.':'Try another filter or check back after new feedback is submitted.'}</p></div>`;
+ $('residentResponseList').setAttribute('aria-busy',String(state.loading));$('residentResponsePage').textContent=rows.length?`${(state.page-1)*pageSize+1}–${Math.min(state.page*pageSize,rows.length)} of ${rows.length}`:'';
+ $('residentResponsePrevious').disabled=state.page<=1||state.loading;$('residentResponseNext').disabled=state.page*pageSize>=rows.length||state.loading;
 }
-
-async function load(page = 1) {
-  const request = ++state.request;
-  state.loading = true;
-  state.error = '';
-  state.rows = [];
-  renderRows();
-  try {
-    if (!client) throw new Error('Feedback service is unavailable. Refresh to try again.');
-    const admin = await client.rpc('current_profile_is_admin');
-    if (request !== state.request) return;
-    if (admin.error) throw new Error('Unable to verify admin access. Sign in again or refresh to retry.');
-    if (admin.data !== true) throw new Error('Sign in with an admin account to view resident feedback.');
-    const query = currentPage => client.from('resident_feedback_responses').select(fields, { count: 'exact' })
-      .order('created_at', { ascending: false }).order('id', { ascending: false })
-      .range((currentPage - 1) * pageSize, currentPage * pageSize - 1);
-    let result = await query(page);
-    if (request !== state.request) return;
-    if (result.error) throw new Error('Unable to load resident feedback. Refresh to try again.');
-    const lastPage = Math.max(1, Math.ceil((result.count || 0) / pageSize));
-    if (page > lastPage) {
-      page = lastPage;
-      result = await query(page);
-      if (request !== state.request) return;
-      if (result.error) throw new Error('Unable to load resident feedback. Refresh to try again.');
-    }
-    state.rows = result.data || [];
-    state.total = result.count || 0;
-    state.page = page;
-  } catch (error) {
-    if (request !== state.request) return;
-    state.rows = [];
-    state.total = 0;
-    state.page = 1;
-    state.error = error.message || 'Unable to load resident feedback.';
-  } finally {
-    if (request === state.request) { state.loading = false; renderRows(); }
-  }
-}
-
-function mountPage() {
-  const mount = root?.querySelector('#residentFeedbackResponsesMount');
-  if (!mount || mount.dataset.rendered === 'true') return false;
-  mount.dataset.rendered = 'true';
-  mount.innerHTML = `<section aria-labelledby="residentResponseTitle">
-    <div class="resident-response-toolbar"><div><h2 id="residentResponseTitle">Resident responses</h2><p id="residentResponseStatus" class="resident-feedback-notice" role="status" aria-live="polite"></p></div><div class="resident-feedback-batch-actions"><a class="secondary-action" href="qr-tracker.html">QR Tracker</a><button class="primary-action" id="residentResponseRefresh" type="button">Refresh</button></div></div>
-    <div id="residentResponseList" class="resident-response-list"></div>
-    <nav class="resident-response-pagination" aria-label="Feedback pages"><button class="secondary-action" id="residentResponsePrevious" type="button" disabled>Previous</button><span id="residentResponsePage"></span><button class="secondary-action" id="residentResponseNext" type="button" disabled>Next</button></nav>
-  </section>`;
-  document.getElementById('residentResponseRefresh').addEventListener('click', () => void load());
-  document.getElementById('residentResponsePrevious').addEventListener('click', () => void load(state.page - 1));
-  document.getElementById('residentResponseNext').addEventListener('click', () => void load(state.page + 1));
-  void load();
-  return true;
-}
-
-client?.auth.onAuthStateChange(event => {
-  if (event === 'SIGNED_OUT') {
-    ++state.request;
-    Object.assign(state, { rows: [], total: 0, page: 1, loading: false, error: 'Sign in with an admin account to view resident feedback.' });
-    renderRows();
-  }
-});
-const observer = new MutationObserver(() => { if (mountPage()) observer.disconnect(); });
-if (!mountPage() && root) observer.observe(root, { childList: true, subtree: true });
+async function load(){const ticket=++state.request;state.loading=true;state.error='';render();try{const data=await request({action:'list'});if(ticket!==state.request)return;state.properties=data.properties;state.customers=data.customers;state.rows=organizeFeedback(data);state.owner='all';ownerOptions();}catch(e){if(ticket!==state.request)return;state.error=e.message;state.rows=[];}finally{if(ticket===state.request){state.loading=false;render();}}}
+function openLink(id){const row=state.rows.find(r=>r.id===id);if(!row)return;const dialog=$('feedbackLinkDialog');dialog.dataset.responseId=id;$('feedbackLinkName').textContent=`Link feedback from ${row.tracker}`;$('feedbackLinkSegment').value=row.segment==='residential'?'residential':'commercial';linkChoices(row.ownerId);$('feedbackLinkError').textContent='';dialog.showModal();}
+function linkChoices(selected=''){const residential=$('feedbackLinkSegment').value==='residential';const owners=residential?state.customers:state.properties;$('feedbackLinkOwner').innerHTML='<option value="">Choose '+(residential?'a customer':'a property')+'</option>'+owners.map(o=>`<option value="${esc(o.id)}">${esc([o.property_name||o.name,residential?o.email:[o.address,o.city].filter(Boolean).join(', ')].filter(Boolean).join(' · '))}</option>`).join('');$('feedbackLinkOwner').value=selected;}
+function mount(){const node=$('residentFeedbackResponsesMount');if(!node||node.dataset.rendered)return false;node.dataset.rendered='true';node.innerHTML=`<section class="feedback-workspace"><div class="feedback-toolbar"><div><h2>Customer & resident feedback</h2><p id="residentResponseStatus" role="status" aria-live="polite"></p></div><div><a class="secondary-action" href="qr-tracker.html">QR Tracker</a><button class="primary-action" id="residentResponseRefresh">Refresh</button></div></div><div class="feedback-segments" role="group" aria-label="Feedback type"><button data-feedback-segment="commercial">Commercial <span>0</span></button><button data-feedback-segment="residential">Residential <span>0</span></button><button data-feedback-segment="unlinked">Needs linking <span>0</span></button></div><div id="feedbackMetrics" class="feedback-metrics"></div><div class="feedback-filters"><label>Search<input type="search" id="feedbackSearch" placeholder="Property, customer, QR or comment"></label><label>Property / customer<select id="feedbackOwner"><option value="all">All properties</option></select></label><label>Rating<select id="feedbackRating"><option value="all">All ratings</option><option value="low">1–3 stars</option><option value="5">5 stars</option><option value="4">4 stars</option><option value="3">3 stars</option><option value="2">2 stars</option><option value="1">1 star</option></select></label></div><div id="residentResponseList"></div><nav class="resident-response-pagination" aria-label="Feedback pages"><button class="secondary-action" id="residentResponsePrevious">Previous</button><span id="residentResponsePage"></span><button class="secondary-action" id="residentResponseNext">Next</button></nav></section><dialog id="feedbackLinkDialog" class="feedback-link-dialog"><form id="feedbackLinkForm"><h2 id="feedbackLinkName">Link feedback</h2><p>Choose the property or customer this response belongs to.</p><label>Type<select id="feedbackLinkSegment"><option value="commercial">Commercial property</option><option value="residential">Residential customer</option></select></label><label>Property / customer<select id="feedbackLinkOwner" required></select></label><p id="feedbackLinkError" role="alert"></p><div><button type="button" class="secondary-action" id="feedbackLinkCancel">Cancel</button><button class="primary-action" id="feedbackLinkSave">Save link</button></div></form></dialog>`;
+ $('residentResponseRefresh').onclick=load;document.querySelectorAll('[data-feedback-segment]').forEach(button=>button.onclick=()=>{state.segment=button.dataset.feedbackSegment;state.owner='all';state.page=1;ownerOptions();render();});
+ $('feedbackSearch').oninput=e=>{state.search=e.target.value;state.page=1;render();};$('feedbackRating').onchange=e=>{state.rating=e.target.value;state.page=1;render();};$('feedbackOwner').onchange=e=>{state.owner=e.target.value;state.page=1;render();};$('residentResponsePrevious').onclick=()=>{state.page--;render();};$('residentResponseNext').onclick=()=>{state.page++;render();};$('residentResponseList').onclick=e=>{const button=e.target.closest('[data-feedback-link]');if(button)openLink(button.dataset.feedbackLink);};$('feedbackLinkSegment').onchange=()=>linkChoices();$('feedbackLinkCancel').onclick=()=>$('feedbackLinkDialog').close();$('feedbackLinkForm').onsubmit=async e=>{e.preventDefault();$('feedbackLinkSave').disabled=true;try{const segment=$('feedbackLinkSegment').value;await request({action:'link',id:$('feedbackLinkDialog').dataset.responseId,segment,owner_id:$('feedbackLinkOwner').value});$('feedbackLinkDialog').close();state.segment=segment;state.page=1;await load();}catch(error){$('feedbackLinkError').textContent=error.message;}finally{$('feedbackLinkSave').disabled=false;}};void load();return true;}
+client?.auth.onAuthStateChange(event=>{if(event==='SIGNED_OUT'){state.request++;Object.assign(state,{rows:[],properties:[],customers:[],loading:false,error:'Sign in with an admin account to view feedback.'});$('feedbackLinkDialog')?.close();ownerOptions();render();}});
+const observer=new MutationObserver(()=>{if(mount())observer.disconnect();});if(!mount())observer.observe(document.getElementById('adminSuiteApp'),{childList:true,subtree:true});
