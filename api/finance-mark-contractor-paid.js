@@ -1,3 +1,4 @@
+const {completedStatuses,isCompletedForPayout}=require("../lib/contractor-pay-eligibility.cjs");
 const {
   getSupabaseAdmin,
   readJsonBody,
@@ -63,6 +64,7 @@ async function updateAssignmentWithFallback(supabase, id, payload) {
       .from("assignment_blocks")
       .update(patch)
       .eq("id", id)
+      .in("status", completedStatuses)
       .select("*")
       .maybeSingle();
     if (!result.error) return result;
@@ -106,6 +108,8 @@ module.exports = async function handler(req, res) {
   if (loadError) return sendJson(res, 500, { error: loadError.message });
   if (!row) return sendJson(res, 404, { error: "Assignment was not found." });
 
+  if (!isCompletedForPayout(row)) return sendJson(res, 409, { error: "Only completed assignments can be marked paid. Refresh the payout queue." });
+
   const now = new Date().toISOString();
   const amount = paymentAmount(row, body.amount);
   const metadata = readMetadata(row);
@@ -139,5 +143,6 @@ module.exports = async function handler(req, res) {
   });
 
   if (result.error) return sendJson(res, 500, { error: result.error.message });
+  if (!result.data) return sendJson(res, 409, { error: "The assignment changed and is no longer eligible. Refresh the payout queue." });
   return sendJson(res, 200, { ok: true, assignment: result.data });
 };
