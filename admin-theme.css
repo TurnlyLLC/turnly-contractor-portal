@@ -83,3 +83,15 @@ body.turnly-admin-suite[data-dashboard-theme="light"] .resident-feedback-widget-
 body.turnly-admin-suite[data-dashboard-theme="light"] .command-grid .empty-icon {box-shadow:none;background:rgba(56,189,248,.13);border-color:rgba(56,189,248,.22);color:#2563eb;border-radius:18px}
 body.turnly-admin-suite[data-dashboard-theme="light"] .command-customize-bar {background:#fff;box-shadow:none;border-color:#d9e3ec}
 @media(max-width:720px){body.turnly-admin-suite[data-dashboard-theme="light"] .command-grid :is(.resident-feedback-widget-list,.dashboard-list,.manager-request-list){padding-inline:14px}body.turnly-admin-suite[data-dashboard-theme="light"] .resident-feedback-widget-toolbar {padding-inline:18px}}
+/* Expense import uses the same light card surface as the Finance workspace. */
+body.turnly-admin-suite[data-dashboard-theme="light"] .finance-expense-import {
+  background:#fff;border:1px solid #d9e3ec;border-radius:14px;padding:22px;
+  gap:16px;box-shadow:none;
+}
+body.turnly-admin-suite[data-dashboard-theme="light"] .finance-expense-import strong {color:#173047;font-size:16px;margin-bottom:8px}
+body.turnly-admin-suite[data-dashboard-theme="light"] .finance-expense-import p {color:#52677f;line-height:1.6;max-width:1000px}
+body.turnly-admin-suite[data-dashboard-theme="light"] .finance-expense-import textarea {
+  background:#f8fafc;border-color:#cbd8e2;border-radius:10px;min-height:150px;padding:14px 16px;line-height:1.6;
+}
+body.turnly-admin-suite[data-dashboard-theme="light"] .finance-expense-import textarea:focus {background:#fff;border-color:#0c7469;outline:2px solid #0c746920;outline-offset:2px}
+@media(max-width:640px){body.turnly-admin-suite[data-dashboard-theme="light"] .finance-expense-import{padding:16px}body.turnly-admin-suite[data-dashboard-theme="light"] .finance-expense-import .primary-action{width:100%;justify-content:center}}
