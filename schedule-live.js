@@ -1,3 +1,5 @@
+import { createAssignmentChecklistEditor } from "./assignment-checklist-editor.mjs?v=20261013-schedule";
+import { residentialChecklistItems } from "./residential-assignment.mjs?v=20261012-editor";
 import { visibleScheduleAssignment } from "./schedule-visibility.mjs?v=20261012-cancelled";
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
@@ -5,6 +7,8 @@ const env = window.__ENV || {};
 const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
   ? createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY)
   : null;
+
+const scheduleChecklistEditor = createAssignmentChecklistEditor(supabase, residentialChecklistItems);
 
 const QA_VIDEO_BUCKET = "qa-videos";
 const QA_VIDEO_MAX_BYTES = 524288000;
@@ -235,6 +239,12 @@ function bindScheduleEvents() {
   });
 
   root.addEventListener("submit", (event) => {
+    const checklistForm = event.target.closest("[data-schedule-checklist-form]");
+    if (checklistForm) {
+      event.preventDefault();
+      void saveScheduleChecklist(checklistForm);
+      return;
+    }
     const form = event.target.closest("[data-schedule-video-upload-form]");
     if (form) {
       event.preventDefault();
@@ -786,10 +796,12 @@ function openScheduleAssignmentModal(id) {
   body.innerHTML = scheduleAssignmentDetail(row);
   modal.hidden = false;
   modal.querySelector("[data-schedule-detail-close]")?.focus();
+  void scheduleChecklistEditor.open(row);
   void refreshScheduleAssignmentVideos(row);
 }
 
 function closeScheduleAssignmentModal() {
+  scheduleChecklistEditor.reset();
   const modal = document.getElementById("scheduleAssignmentModal");
   if (modal) modal.hidden = true;
   state.detailAssignmentId = "";
@@ -830,6 +842,11 @@ function scheduleAssignmentDetail(row) {
           </div>
         `).join("")}
       </div>
+      <form class="schedule-checklist-panel" data-schedule-checklist-form data-assignment-id="${escapeHtml(String(row.id))}">
+        <div id="assignmentChecklistEditor"></div>
+        <p role="status" data-checklist-message></p>
+        <button class="primary-action" type="submit">Save Changes</button>
+      </form>
       ${scheduleAssignmentVideoSection(row)}
       ${scheduleAssignmentNotesPanel(row)}
       <div class="schedule-assignment-actions">
@@ -849,6 +866,32 @@ function scheduleAssignmentDetail(row) {
       </div>
     </section>
   `;
+}
+
+async function saveScheduleChecklist(form) {
+  const id = form.dataset.assignmentId;
+  const row = state.rows.find(item => String(item.id) === id);
+  const button = form.querySelector('button[type="submit"]');
+  const message = form.querySelector('[data-checklist-message]');
+  if (!row || button.disabled) return;
+  button.disabled = true;
+  message.textContent = 'Saving checklist…';
+  try {
+    const user = await scheduleUser();
+    if (!user) throw new Error('Please sign in again.');
+    const change = scheduleChecklistEditor.patch(row, {}, user.id);
+    if (!change) { message.textContent = 'Choose a checklist to add or replace the attached checklist.'; return; }
+    let query = supabase.from('assignment_blocks').update(change.payload).eq('id', id);
+    query = change.expectedUpdatedAt ? query.eq('updated_at', change.expectedUpdatedAt) : query.is('updated_at', null);
+    const { data, error } = await query.select('*').maybeSingle();
+    if (error) throw error;
+    if (!data) throw new Error('This assignment changed. Close and reopen it before saving again.');
+    Object.assign(row, data);
+    if (state.detailAssignmentId === id && form.isConnected) await scheduleChecklistEditor.open(row);
+    message.textContent = 'Checklist saved. The contractor will see it on this assignment.';
+  } catch (error) {
+    message.textContent = 'Unable to save checklist: ' + (error?.message || 'Please try again.');
+  } finally { button.disabled = false; }
 }
 
 function scheduleAssignmentVideoSection(row) {

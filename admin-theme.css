@@ -95,3 +95,7 @@ body.turnly-admin-suite[data-dashboard-theme="light"] .finance-expense-import te
 }
 body.turnly-admin-suite[data-dashboard-theme="light"] .finance-expense-import textarea:focus {background:#fff;border-color:#0c7469;outline:2px solid #0c746920;outline-offset:2px}
 @media(max-width:640px){body.turnly-admin-suite[data-dashboard-theme="light"] .finance-expense-import{padding:16px}body.turnly-admin-suite[data-dashboard-theme="light"] .finance-expense-import .primary-action{width:100%;justify-content:center}}
+
+/* Schedule checklist review and selection */
+.schedule-checklist-panel{padding:20px;border:1px solid #d5e2ed;border-radius:14px;background:#fff;color:#19344c;display:grid;gap:12px}
+.schedule-checklist-panel h3{margin:0 0 12px}.schedule-checklist-panel p{line-height:1.5}.schedule-checklist-panel select{width:100%;padding:12px;border:1px solid #c7d8e6;border-radius:10px;background:#fff;color:#19344c}.schedule-checklist-panel details{padding:14px;border:1px solid #d5e2ed;border-radius:10px;margin:12px 0}.schedule-checklist-panel summary{cursor:pointer;font-weight:600}.schedule-checklist-panel li{margin:10px 0;line-height:1.5}.schedule-checklist-panel .primary-action{justify-self:start}
