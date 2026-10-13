@@ -1,3 +1,4 @@
+const {isCompletedForPayout}=require("../lib/contractor-pay-eligibility.cjs");
 const {
   getSupabaseAdmin,
   loadTurnlyAccountingData,
@@ -190,10 +191,7 @@ function assignmentContractorPay(row = {}, unit = null) {
 
 function isOwedContractorPay(row = {}) {
   if (assignmentIsPaid(row)) return false;
-  const status = normalizeToken(row.status || "");
-  const payStatus = assignmentPaymentStatus(row);
-  return ["completed", "complete", "closed", "done", "qa_pending"].includes(status)
-    || ["approved_for_pay", "ready_for_payout", "pending_payout", "unpaid"].includes(payStatus);
+  return isCompletedForPayout(row);
 }
 
 function contractorPayItems(assignments = [], properties = [], units = []) {
