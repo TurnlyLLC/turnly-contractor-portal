@@ -1,0 +1,16 @@
+const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),{PGlite}=require('@electric-sql/pglite');
+test('rebooking copies the verified home, saves authorization, links app ownership and deduplicates retries',async()=>{
+ const d=new PGlite();try{
+ await d.exec(`create role anon;create role authenticated;create role service_role;create table referral_customers(id uuid primary key,first_assignment_id uuid,payout_at timestamptz);create table referral_agents(id uuid primary key);create schema auth;create table auth.users(id uuid primary key);`);
+ const schema=fs.readFileSync('supabase/migrations/20261008152842_residential_bookings.sql','utf8').split('create function public.create_residential_booking')[0];await d.exec(schema);
+ await d.exec(`alter table referral_bookings add assignment_deleted_at timestamptz,add visit_details jsonb,add gift_applied_cents int default 0;create table assignment_blocks(id uuid primary key);create table residential_referral_links(booking_id uuid primary key,user_id uuid,method text);`);
+ await d.exec(fs.readFileSync('docs/customer-portal.sql','utf8'));
+ const id='11111111-1111-4111-8111-111111111111',uid='22222222-2222-4222-8222-222222222222';
+ await d.exec(`insert into referral_agents values('${uid}');insert into referral_customers(id) values('${uid}');insert into referral_bookings(id,token_hash,request_hash,customer_id,agent_id,agent_name,referral_code,name,email,phone,profile_address,property_address,city,state,zip,beds,baths,sqft,service,frequency,quote,amount_cents,service_date,arrival_start,arrival_end,charge_at,status,stripe_customer,stripe_payment_method,payment_status,visit_details) values('${id}','hash','old','${uid}','${uid}','Agent','DIRECT','Owner','owner@example.test','9195550100','1 Test','1 Test','Raleigh','NC','27601',3,2,1800,'standard','once','{}',26000,'2099-10-20','09:00','12:00','2099-10-20T10:00Z','scheduled','cus_test','pm_test','card_saved','{"parking":"driveway"}');insert into residential_referral_links values('${id}','${uid}','email');`);
+ const data={token_hash:'newhash',service_date:'2099-11-10',arrival_start:'09:00',arrival_end:'12:00',quote:{service:'deep',amount_cents:39000,review_required:false},notes:'Hallway',consent_text:'Authorized test'};
+ const call=(email,user,req='request')=>d.query('select customer_portal_rebook($1,$2,$3,$4,$5) id',[id,email,user,req,JSON.stringify(data)]);
+ await assert.rejects(call('attacker@example.test',null));const result=await call(null,uid);const next=result.rows[0].id;assert.equal((await call(null,uid)).rows[0].id,next);assert.equal((await d.query('select count(*)::int n from referral_bookings')).rows[0].n,2);
+ const b=(await d.query('select * from referral_bookings where id=$1',[next])).rows[0];assert.equal(b.amount_cents,39000);assert.equal(b.service,'deep');assert.equal(b.stripe_payment_method,'pm_test');assert.equal(b.gift_applied_cents,0);assert.equal(b.consent_text,'Authorized test');assert.deepEqual(b.visit_details,{parking:'driveway'});assert.equal((await d.query('select user_id from residential_referral_links where booking_id=$1',[next])).rows[0].user_id,uid);
+ data.service_date='2000-01-01';await assert.rejects(call(null,uid,'different'));assert.equal((await d.query('select count(*)::int n from referral_bookings')).rows[0].n,2);
+ }finally{await d.close();}
+});
