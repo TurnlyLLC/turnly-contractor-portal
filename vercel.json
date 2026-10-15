@@ -46,6 +46,9 @@
     "api/gift-reconcile.js": {
       "maxDuration": 300,
       "includeFiles": "assets/gift-card-template.pdf"
+    },
+    "api/customer-portal.js": {
+      "maxDuration": 60
     }
   },
   "routes": [
