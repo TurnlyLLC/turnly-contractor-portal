@@ -1,5 +1,7 @@
 {
-  "github": { "silent": true },
+  "github": {
+    "silent": true
+  },
   "buildCommand": "npm run build",
   "outputDirectory": ".",
   "crons": [
@@ -10,6 +12,10 @@
     {
       "path": "/api/residential-jobs",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/gift-reconcile",
+      "schedule": "*/10 * * * *"
     }
   ],
   "functions": {
@@ -28,10 +34,28 @@
     },
     "api/contractor-review.js": {
       "maxDuration": 300
+    },
+    "api/gift-cards.js": {
+      "maxDuration": 60,
+      "includeFiles": "assets/gift-card-template.pdf"
+    },
+    "api/residential-webhook.js": {
+      "maxDuration": 60,
+      "includeFiles": "assets/gift-card-template.pdf"
+    },
+    "api/gift-reconcile.js": {
+      "maxDuration": 300,
+      "includeFiles": "assets/gift-card-template.pdf"
     }
   },
   "routes": [
-    { "src": "^/qa-analytics(?:\\.html)?/?$", "status": 308, "headers": { "Location": "/qa-queue.html" } },
+    {
+      "src": "^/qa-analytics(?:\\.html)?/?$",
+      "status": 308,
+      "headers": {
+        "Location": "/qa-queue.html"
+      }
+    },
     {
       "src": "^/r/([A-Za-z0-9_-]{22})$",
       "dest": "/api/agent-link?slug=$1"

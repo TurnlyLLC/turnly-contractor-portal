@@ -19,9 +19,14 @@ module.exports=async(req,res)=>{
       // never issue a new charge or assume a previous ambiguous attempt failed.
       S.checked(await db.from('referral_bookings').update({payment_status:'uncertain',charge_locked_at:null}).eq('id',b.id));attention++;return;
     }
+    if(b.gift_applied_cents){
+     const r=S.checked(await db.from('gift_reservations').select('status,gift_cards(status)').eq('booking_id',b.id).single());
+     if(r.status!=='reserved'||r.gift_cards?.status!=='active')throw new Error('Gift card needs review.');
+     if(b.amount_cents===b.gift_applied_cents){S.checked(await db.from('referral_bookings').update({payment_status:'paid',paid_at:new Date().toISOString(),charge_locked_at:null}).eq('id',b.id));processed++;return;}
+    }
     let pi;
     if(b.stripe_payment_intent)pi=await st.paymentIntents.retrieve(b.stripe_payment_intent);
-    else try{pi=await st.paymentIntents.create({amount:b.amount_cents,currency:'usd',customer:b.stripe_customer,payment_method:b.stripe_payment_method,off_session:true,confirm:true,receipt_email:b.email,description:`Turnly ${b.quote.service_label} · ${b.service_date}`,metadata:{booking_id:b.id,agent_id:b.agent_id,referral_code:b.referral_code,charge_key:b.charge_key}},{idempotencyKey:`residential-charge-${b.charge_key}`});}
+    else try{pi=await st.paymentIntents.create({amount:b.amount_cents-(b.gift_applied_cents||0),currency:'usd',customer:b.stripe_customer,payment_method:b.stripe_payment_method,off_session:true,confirm:true,receipt_email:b.email,description:`Turnly ${b.quote.service_label} · ${b.service_date}`,metadata:{booking_id:b.id,agent_id:b.agent_id||'',referral_code:b.referral_code,charge_key:b.charge_key}},{idempotencyKey:`residential-charge-${b.charge_key}`});}
     catch(e){if(e.payment_intent)pi=e.payment_intent;else throw e;}
     S.checked(await db.from('referral_bookings').update({stripe_payment_intent:pi.id}).eq('id',b.id));
     await S.reconcilePayment(db,st,pi.id);processed++;
