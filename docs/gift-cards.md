@@ -19,3 +19,11 @@ Terms version 2026-10-15.1 is recorded with purchaser acceptance time. Keep that
 Verification: local PostgreSQL-compatible ledger tests, payment-validation tests, booking regressions, desktop/mobile purchase and booking browser journeys using mocked providers, full-page PDF visual review and QR decode. These tests do not make a live purchase or deliver a real customer email. Complete an owner-controlled end-to-end live purchase before advertising broadly.
 
 Migration 20261015152655_turnly_gift_cards.sql was applied through the connected Supabase migration service. docs/gift-cards.sql is the matching test fixture. Gift-table RLS-without-policies advisor notices are intentional: anonymous and signed-in clients have no table privileges, and all operations use authorized server endpoints. Other project advisor warnings predate this program.
+
+## Admin management update — October 15, 2026
+
+Gift Cards in the Sales sidebar now offers separate card and purchase views. Search across purchaser name, email, partial/full card code and order ID; filter status and inclusive Eastern-time purchase dates; sort newest/oldest and page 25/50/100 records. Pending/expired purchases use checkout creation time. Summary totals cover the complete filtered result, not only the visible page. Paid order value is gross before refunds; card balances remain the authoritative available value.
+
+Open any card or purchase for its codes, balances, delivery state and a paginated 20-event timeline. Existing server-authorized reconciliation/refund actions remain available. The search RPC is service-role only, SECURITY INVOKER, parameterized and bounded to 100 rows; pg_trgm indexes support name/email/code matching. No customer data was changed. Migration 20261015154534_gift_card_admin_search uses the existing public.pg_trgm extension. The docs SQL fixture excludes the extension-specific indexes for PGlite.
+
+Validation: 21 database/payment regression tests, admin browser tests with mocked authenticated records, production RPC/privilege checks and live unauthenticated denial. No real purchase or refund was initiated during this update.

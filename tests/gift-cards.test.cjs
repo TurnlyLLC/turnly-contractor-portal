@@ -53,3 +53,23 @@ test('gift ledger: idempotent issuance, partial redemption, double-spend prevent
 test('PDF uses supplied full-page art, produces one page per card and distinct QR payloads',async()=>{
  const {PDFDocument}=require('pdf-lib');const bytes=await G.pdf([{code:'ABCDEFGHIJKLMNOPQRSTUVWX'},{code:'1234567890ABCDEFGHIJKLMN'}]);const doc=await PDFDocument.load(bytes);assert.equal(doc.getPageCount(),2);assert.equal(doc.getPage(0).getWidth(),612);assert.ok(bytes.length>1000000);
 });
+
+test('admin search: purchaser, partial code, Eastern date boundaries, totals, stable pagination and private access',async()=>{
+ const db=await dbFixture();try{
+ await db.exec(fs.readFileSync(path.join(__dirname,'../docs/gift-card-search.sql'),'utf8'));
+ const order=randomUUID(),other=randomUUID();
+ for(const [id,name,em,paid] of [[order,"Alex O'Neil",'alex@example.com','2026-10-16T03:59:59Z'],[other,'Jamie','jamie@example.com','2026-10-16T04:00:00Z']]){
+ await db.query("insert into gift_orders(id,token_hash,request_hash,email,name,quantity,amount_cents,terms_version,status,paid_at) values($1,'h','h',$2,$3,1,10000,'v','paid',$4)",[id,em,name,paid]);
+ }
+ await db.query("insert into gift_cards(order_id,ordinal,code,balance_cents,reserved_cents) values($1,1,'ABCDEFGHIJKLMNOPQRSTUVWX',7000,2000),($2,1,'1234567890ABCDEFGHIJKLMN',10000,0)",[order,other]);
+ const search=async(mode='cards',q='',status='',from=null,to=null,page=1,size=25)=> (await db.query('select gift_admin_search($1,$2,$3,$4,$5,$6,$7,$8) r',[mode,q,status,from,to,page,size,'newest'])).rows[0].r;
+ let r=await search('cards',"O'Neil");assert.equal(r.total,1);assert.equal(r.summary.remaining,7000);assert.equal(r.summary.reserved,2000);assert.equal(r.summary.available,5000);
+ assert.equal((await search('cards','ALEX@')).total,1);assert.equal((await search('cards','stuvwx')).total,1);assert.equal((await search('cards','ABCDEF GHIJKL MNOPQR STUVWX')).total,1);
+ assert.equal((await search('cards','%')).total,0);assert.equal((await search('cards','_')).total,0);assert.equal((await search('cards',order)).total,1);
+ assert.equal((await search('cards','','','2026-10-15','2026-10-15')).total,1);assert.equal((await search('cards','','','2026-10-16','2026-10-16')).total,1);
+ r=await search('cards','','',null,null,1,1);assert.equal(r.rows.length,1);assert.equal(r.total,2);assert.equal(r.summary.remaining,17000);assert.notEqual(r.rows[0].id,(await search('cards','','',null,null,2,1)).rows[0].id);
+ assert.equal((await search('orders','stuvwx')).rows[0].id,order);assert.equal((await search('orders','Jamie')).summary.paid,10000);assert.equal((await search('cards','','spent')).total,0);
+ await assert.rejects(search('cards','','','2026-10-16','2026-10-15'),/Start date/);
+ await db.exec('set role anon');await assert.rejects(search(),/permission denied/);await db.exec('reset role;set role authenticated');await assert.rejects(search(),/permission denied/);await db.exec('reset role;set role service_role');assert.equal((await search()).total,2);
+ }finally{await db.close();}
+});
