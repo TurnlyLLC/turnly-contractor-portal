@@ -68,6 +68,39 @@
       "has": [
         {
           "type": "host",
+          "value": "res.turnlypros.com"
+        }
+      ],
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "dest": "/residential-domain-worker.js"
+    },
+    {
+      "src": "^/(?:index\\.html)?$",
+      "has": [
+        {
+          "type": "host",
+          "value": "res.turnlypros.com"
+        }
+      ],
+      "dest": "https://turnlypros.com/residential/index.html"
+    },
+    {
+      "src": "^/(.*)$",
+      "has": [
+        {
+          "type": "host",
+          "value": "res.turnlypros.com"
+        }
+      ],
+      "dest": "https://turnlypros.com/residential/$1"
+    },
+    {
+      "src": "^/service-worker\\.js$",
+      "has": [
+        {
+          "type": "host",
           "value": "residental.turnlypros.com"
         }
       ],

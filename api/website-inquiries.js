@@ -5,6 +5,7 @@ const allowedOrigins = new Set([
   "https://turnlypros.com",
   "https://www.turnlypros.com",
   "https://residental.turnlypros.com",
+  "https://res.turnlypros.com",
   "https://portal.turnlypros.com",
   "http://localhost:3000",
   "http://127.0.0.1:3000"
@@ -188,7 +189,7 @@ async function createInquiry(req, res, client) {
     return;
   }
   // Classify on the server; the public form cannot supply an arbitrary lead source.
-  const residential = req.headers.origin === "https://residental.turnlypros.com" || body.client_type === "residential";
+  const residential = ["https://residental.turnlypros.com", "https://res.turnlypros.com"].includes(req.headers.origin) || body.client_type === "residential";
   const name = text(body.name, 160);
   const email = text(body.email, 254);
   const phone = text(body.phone, 80);
