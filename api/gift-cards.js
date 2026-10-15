@@ -15,6 +15,21 @@ module.exports=async(req,res)=>{
    }
    if(i.action==='admin_orders'){const r=await db.from('gift_orders').select('id,email,name,quantity,amount_cents,status,email_status,created_at').order('created_at',{ascending:false}).limit(100);return S.json(res,200,{orders:S.checked(r)});}
    if(i.action==='admin_history'){if(!uuid(i.id))throw S.fail('Choose a card.');return S.json(res,200,{events:S.checked(await db.from('gift_events').select('*').eq('card_id',i.id).order('created_at',{ascending:false}))});}
+   if(i.action==='admin_search'){
+    const r=S.checked(await db.rpc('gift_admin_search',{p_mode:i.mode==='orders'?'orders':'cards',p_search:clean(i.search,160),p_status:clean(i.status,30),p_from:i.from||null,p_to:i.to||null,p_page:Math.max(1,Math.floor(Number(i.page)||1)),p_size:[25,50,100].includes(Number(i.size))?Number(i.size):25,p_sort:i.sort==='oldest'?'oldest':'newest'}));
+    return S.json(res,200,r);
+   }
+   if(i.action==='admin_detail'){
+    if(!uuid(i.id))throw S.fail('Choose a record.');
+    let orderId=i.id,card=null;
+    if(i.mode!=='orders'){card=S.checked(await db.from('gift_cards').select('*').eq('id',i.id).single());orderId=card.order_id;}
+    const order=S.checked(await db.from('gift_orders').select('id,name,email,quantity,amount_cents,status,email_status,created_at,paid_at').eq('id',orderId).single());
+    const cards=S.checked(await db.from('gift_cards').select('id,code,status,balance_cents,reserved_cents,ordinal').eq('order_id',orderId).order('ordinal'));
+    const page=Math.max(1,Math.floor(Number(i.page)||1));let q=db.from('gift_events').select('*',{count:'exact'}).eq('order_id',orderId);
+    if(card)q=q.eq('card_id',card.id);
+    const r=await q.order('created_at',{ascending:false}).order('id').range((page-1)*20,page*20-1);S.checked(r);
+    return S.json(res,200,{order,cards,card,events:r.data,total:r.count,page});
+   }
    if(i.action==='admin_retry'){
     const o=S.checked(await db.from('gift_orders').select('*').eq('id',i.id).single());
     if(!o.stripe_session)throw S.fail('This order never entered checkout.');await G.fulfill(db,S.stripe(),o.stripe_session);await G.deliveryStatus(db,o);return S.json(res,200,{ok:true});
