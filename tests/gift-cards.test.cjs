@@ -73,3 +73,20 @@ test('admin search: purchaser, partial code, Eastern date boundaries, totals, st
  await db.exec('set role anon');await assert.rejects(search(),/permission denied/);await db.exec('reset role;set role authenticated');await assert.rejects(search(),/permission denied/);await db.exec('reset role;set role service_role');assert.equal((await search()).total,2);
  }finally{await db.close();}
 });
+
+
+test('direct guest booking is idempotent, needs no account, restricts NC and denies public RPC access',async()=>{
+ const db=await dbFixture();try{
+ await db.exec(fs.readFileSync(path.join(__dirname,'../docs/direct-booking.sql'),'utf8'));
+ const id=randomUUID(), d=S.validate(data);
+ const create=(bid=id,hash='request',state='NC')=>db.query('select create_direct_booking($1,$2,$3,$4,$5,$6)',[bid,'token',hash,JSON.stringify({...d,state}),'awaiting_card','Authorized']);
+ await create();await create();
+ const rows=(await db.query('select * from referral_bookings')).rows;
+ assert.equal(rows.length,1);assert.equal(rows[0].agent_id,null);assert.equal(rows[0].agent_name,'Turnly Residential');assert.equal(rows[0].status,'awaiting_card');assert.equal(rows[0].gift_applied_cents,0);
+ assert.equal((await db.query('select count(*)::int n from auth.users')).rows[0].n,0);
+ await assert.rejects(create(id,'different'),/changed/);
+ await assert.rejects(create(randomUUID(),'request','SC'),/only in NC/);
+ await db.exec('set role anon');await assert.rejects(create(),/permission denied/);
+ await db.exec('reset role;set role authenticated');await assert.rejects(create(),/permission denied/);
+ }finally{await db.close();}
+});
