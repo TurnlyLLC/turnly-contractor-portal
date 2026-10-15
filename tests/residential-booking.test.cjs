@@ -14,7 +14,7 @@ test('pricing follows all PDF rates, minimums, initial visit rules and custom-re
  assert.equal(S.validate({...data,amount_cents:1,quote:{amount_cents:1}}).amount_cents,26000,'client price cannot override server quote');
 });
 test('schedule validation uses Eastern service dates and DST without charging at checkout',()=>{
- const now=new Date('2026-10-08T14:00:00Z');assert.equal(new Date(P.schedule({...data,service_date:'2026-10-09'},now).charge_at).toISOString(),'2026-10-09T10:00:00.000Z');
+ const now=new Date('2026-10-07T14:00:00Z');assert.equal(new Date(P.schedule({...data,service_date:'2026-10-09'},now).charge_at).toISOString(),'2026-10-09T10:00:00.000Z');
  assert.equal(new Date(P.schedule({...data,service_date:'2026-12-09'},now).charge_at).toISOString(),'2026-12-09T11:00:00.000Z');
  assert.throws(()=>P.schedule({...data,service_date:'2026-10-08'},now));assert.throws(()=>P.schedule({...data,arrival_end:'08:00'},now));assert.throws(()=>P.schedule({...data,service_date:'2027-02-30'},now));
  assert.throws(()=>S.validate({...data,property_confirmed:false}));assert.throws(()=>S.validate({...data,baths:1.3}));
@@ -101,4 +101,28 @@ test('customer tokens are single use, sessions are private, reset revokes sessio
  await assert.rejects(db.query("insert into assignment_blocks(id,status,pay_amount,metadata) values($1,'pending',100,'{\"source\":\"residential_booking\"}')",[bid]),/removed assignments/);
  assert.equal((await db.query('select count(*)::int n from referral_bookings where id=$1',[bid])).rows[0].n,1,'billing history retained');
  }finally{await db.close();}
+});
+
+
+test('36-hour notice is measured from earliest arrival, including DST transitions',()=>{
+ const slot={...data,service_date:'2026-10-10',arrival_start:'09:00',arrival_end:'12:00'};
+ assert.doesNotThrow(()=>P.schedule(slot,new Date('2026-10-09T01:00:00Z')));
+ assert.throws(()=>P.schedule(slot,new Date('2026-10-09T01:00:00.001Z')),/36 hours/);
+ assert.throws(()=>P.schedule({...slot,arrival_start:'08:59'},new Date('2026-10-09T01:00:00Z')),/36 hours/);
+ for(const [day,now] of [['2026-11-01','2026-10-31T02:00:00Z'],['2027-03-14','2027-03-13T01:00:00Z']]){
+  assert.doesNotThrow(()=>P.schedule({...slot,service_date:day},new Date(now)));
+  assert.throws(()=>P.schedule({...slot,service_date:day},new Date(Date.parse(now)+1)),/36 hours/);
+ }
+ assert.throws(()=>P.schedule({...slot,service_date:'2027-03-14',arrival_start:'02:30'},new Date('2027-03-10T00:00:00Z')),/does not exist/);
+});
+
+
+test('browser notice rules agree with the server at the 36-hour boundary',async()=>{
+ const U=await import('../residential-notice.mjs');
+ const now=Date.parse('2026-10-09T01:00:00Z');
+ assert.equal(U.earliestDay(now),'2026-10-10');
+ assert.equal(U.hasNotice('2026-10-10','09:00',now),true);
+ assert.equal(U.hasNotice('2026-10-10','09:00',now+1),false);
+ assert.equal(U.hasNotice('2026-10-10','08:59',now),false);
+ assert.equal(U.hasNotice('2027-03-14','02:30',now),false);
 });
