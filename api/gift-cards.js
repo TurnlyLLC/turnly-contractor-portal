@@ -62,7 +62,7 @@ module.exports=async(req,res)=>{
   else{
    if(Date.now()-Date.parse(o.created_at)>23*3600000)throw S.fail('This checkout expired. Refresh to start again.',409);
    const receipt=`${S.ORIGIN}/gift-cards.html#order=${i.id}&token=${encodeURIComponent(i.token)}`;
-   session=await st.checkout.sessions.create({mode:'payment',customer_email:em,payment_method_types:['card'],client_reference_id:o.id,metadata:{purpose:'turnly_gift_cards',order_id:o.id,terms_version:G.TERMS},payment_intent_data:{metadata:{purpose:'turnly_gift_cards',order_id:o.id}},line_items:[{quantity,price_data:{currency:'usd',unit_amount:10000,product_data:{name:'Turnly $100 Gift Card',description:'NC service areas only. No expiration. One unique card per $100.'}}}],success_url:receipt,cancel_url:receipt+'&cancelled=1'},{idempotencyKey:`gift-checkout-${o.id}`});
+   session=await st.checkout.sessions.create({mode:'payment',customer_email:em,allowed_payment_method_types:['card'],client_reference_id:o.id,metadata:{purpose:'turnly_gift_cards',order_id:o.id,terms_version:G.TERMS},payment_intent_data:{metadata:{purpose:'turnly_gift_cards',order_id:o.id}},line_items:[{quantity,price_data:{currency:'usd',unit_amount:10000,product_data:{name:'Turnly $100 Gift Card',description:'NC service areas only. No expiration. One unique card per $100.'}}}],success_url:receipt,cancel_url:receipt+'&cancelled=1'},{idempotencyKey:`gift-checkout-${o.id}`});
    S.checked(await db.from('gift_orders').update({stripe_session:session.id}).eq('id',o.id));
   }
   return S.json(res,200,{url:session.url});
