@@ -1,4 +1,5 @@
 const S=require('../lib/residential-server.cjs');
+const G=require('../lib/gift-cards.cjs');
 module.exports=async(req,res)=>{
  if(req.method!=='POST')return S.json(res,405,{error:'Method not allowed.'});
  if(!process.env.STRIPE_WEBHOOK_SECRET)return S.json(res,503,{error:'Webhook is not configured.'});
@@ -9,7 +10,8 @@ module.exports=async(req,res)=>{
  }catch{return S.json(res,400,{error:'Invalid webhook signature.'});}
  try{
   const db=S.database(),obj=event.data.object;
-  if(event.type==='checkout.session.completed')await S.reconcileSession(db,st,obj.id);
+  if(event.type==='checkout.session.completed'){if(!await G.fulfill(db,st,obj.id))await S.reconcileSession(db,st,obj.id);}
+  else if(await G.purchaseEvent(db,st,obj)){}
   else if(event.type.startsWith('payment_intent.'))await S.reconcilePayment(db,st,obj.id);
   else if(['charge.refunded','charge.dispute.created','charge.dispute.closed'].includes(event.type)){
    let pi=obj.payment_intent;if(!pi&&obj.charge){const c=await st.charges.retrieve(typeof obj.charge==='string'?obj.charge:obj.charge.id);pi=c.payment_intent;}
