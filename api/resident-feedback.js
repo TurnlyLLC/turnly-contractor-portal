@@ -2,7 +2,7 @@ const { createHash, randomBytes, randomUUID } = require('node:crypto');
 const { createClient } = require('@supabase/supabase-js');
 const { residentFeedbackErrorMessage, validateResidentFeedbackRequest } = require('./resident-feedback-validation');
 
-const allowedOrigins = new Set(['https://turnlypros.com', 'https://www.turnlypros.com', 'https://portal.turnlypros.com', 'https://turnlyllc.github.io', 'http://localhost:4173', 'http://localhost:5500', 'http://127.0.0.1:5500']);
+const allowedOrigins = new Set(['https://turnlypros.com', 'https://www.turnlypros.com', 'https://portal.turnlypros.com', 'https://res.turnlypros.com', 'https://residental.turnlypros.com', 'https://turnlyllc.github.io', 'http://localhost:4173', 'http://localhost:5500', 'http://127.0.0.1:5500']);
 const allowedAdminRoles = new Set(['admin', 'owner', 'super_admin']);
 
 function sendJson(res, statusCode, body) {

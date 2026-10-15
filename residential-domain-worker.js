@@ -1,6 +1,6 @@
 // Retire the portal worker on the customer-facing domain only.
 // This lets visitors who previously saw the login page load the public site.
-if (self.location.hostname === "residental.turnlypros.com") {
+if (["residental.turnlypros.com", "res.turnlypros.com"].includes(self.location.hostname)) {
   self.addEventListener("install", (event) => {
     event.waitUntil(self.skipWaiting());
   });
