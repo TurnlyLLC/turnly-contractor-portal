@@ -76,7 +76,7 @@ const stageDefs = [
 
 const focusStageDefs = [
   { id: "contacted", label: "Contacted", detail: "A real contact attempt happened." },
-  { id: "pricing_confirmed", label: "Pricing Confirmed", detail: "$0.25/sq ft has been discussed." },
+  { id: "pricing_confirmed", label: "Pricing Confirmed", detail: "the residential estimate has been discussed." },
   { id: "walkthrough_set", label: "Walkthrough Set", detail: "A walkthrough window is selected." },
   { id: "follow_up_needed", label: "Follow Up Needed", detail: "Keep this prospect in the work queue." },
   { id: "not_interested", label: "Not Interested", detail: "The prospect declined moving forward." },
@@ -91,7 +91,7 @@ const focusQuestionDefs = [
   { id: "decision_maker", label: "Are you talking to the decision maker?" },
   { id: "cleaning_crew", label: "Do they currently have a cleaning crew in place?" },
   { id: "wants_quote", label: "Would they like a quote from another cleaning crew?" },
-  { id: "price_acceptable", label: "Is the quoted price of $0.25 / sq ft acceptable?" },
+  { id: "price_acceptable", label: "Is the quoted price of the residential estimate acceptable?" },
   { id: "wants_quality_walkthrough", label: "Would they like an in-person walkthrough demonstration of our quality control processes?" }
 ];
 const SALES_FOCUS_PLACE_STORAGE_PREFIX = "turnlySalesFocusPlace:v1";
@@ -103,7 +103,7 @@ const taskStatuses = ["open", "in_progress", "pending", "completed"];
 const priorities = ["low", "medium", "high"];
 const salesTaskTypes = [
   "Call decision maker",
-  "Confirm $0.25/sq ft",
+  "Confirm the residential estimate",
   "Follow up on pricing fit",
   "Schedule walkthrough",
   "Prepare management handoff",
@@ -112,11 +112,11 @@ const salesTaskTypes = [
 ];
 const services = [
   "Turnover Cleaning",
-  "Model / Leasing Office",
+  "Recurring Home Cleaning",
   "Move-in Cleaning",
-  "Trash-Out",
+  "Move-out Cleaning",
   "Before / After Video",
-  "Common Area Cleaning"
+  "Deep Cleaning"
 ];
 const painPoints = [
   "Quality issues",
@@ -215,6 +215,7 @@ const coreColumns = new Set([
 ]);
 
 const leadColumnSet = new Set([
+  "business_segment",
   "created_by",
   "client_id",
   "property_name",
@@ -1051,6 +1052,9 @@ function contractStatusFromStage(stage) {
 
 async function saveRecord(id, payload, activityText = "") {
   if (!supabase) throw new Error("Supabase config is missing.");
+  if (id && !state.leads.some(row => row.id === id && row.business_segment === 'residential')) {
+    throw new Error('This lead is not in the residential workspace. Refresh and try again.');
+  }
   const basePayload = compactPayload({
     ...payload,
     last_activity_at: new Date().toISOString()
@@ -1065,10 +1069,12 @@ async function saveRecord(id, payload, activityText = "") {
         .from(SALES_TABLES.leads)
         .update(leadPayload)
         .eq("id", leadId)
+        .eq("business_segment", "residential")
         .select("*")
         .maybeSingle();
       if (result.error) throw result.error;
       savedLead = result.data;
+      if (!savedLead) throw new Error("Lead is no longer available in this workspace.");
     } else {
       savedLead = state.leads.find((row) => row.id === leadId) || null;
     }
@@ -1078,7 +1084,7 @@ async function saveRecord(id, payload, activityText = "") {
     }
     const result = await supabase
       .from(SALES_TABLES.leads)
-      .insert([{ ...leadPayload, created_by: state.user?.id || null }])
+      .insert([{ ...leadPayload, business_segment: "residential", created_by: state.user?.id || null }])
       .select("*")
       .single();
     if (result.error) throw result.error;
@@ -1160,6 +1166,7 @@ async function requireSalesAccess() {
   }
 
   state.profile = effectiveProfile || { role };
+  if (role !== "admin") state.ownerFilter = "mine";
   return true;
 }
 
@@ -1182,7 +1189,11 @@ async function loadWalkthroughAvailability() {
 async function loadSalesCollection(tableName) {
   const rows=[];
   for(let offset=0;;offset+=500){
-    const result=await supabase.from(tableName).select('*').order('id',{ascending:true}).range(offset,offset+499);
+    const isLead = tableName === SALES_TABLES.leads;
+    const result = await supabase.from(tableName)
+      .select(isLead ? '*' : '*,sales_leads!inner(business_segment)')
+      .eq(isLead ? 'business_segment' : 'sales_leads.business_segment', 'residential')
+      .order('id',{ascending:true}).range(offset,offset+499);
     if(result.error)throw result.error;
     rows.push(...(result.data||[]));
     if((result.data||[]).length<500)return {data:rows};
@@ -1273,8 +1284,8 @@ function renderSidebar() {
       <a class="sales-brand" href="sales.html" aria-label="Turnly sales dashboard">
         <span class="sales-brand-mark">T</span>
         <span>
-          <strong>Turnly CRM</strong>
-          <small>SALES WORKSPACE</small>
+          <strong>Turnly Residential CRM</strong>
+          <small>RESIDENTIAL WORKSPACE</small>
         </span>
       </a>
       <p class="sales-side-kicker">Workspace</p>
@@ -1417,7 +1428,8 @@ function baseFilteredRows(rows = state.rows) {
   return rows.filter((row) => {
     if (state.ownerFilter !== "all") {
       if (state.ownerFilter === "unassigned" && row.sales_owner_id) return false;
-      if (state.ownerFilter !== "unassigned" && row.sales_owner_id !== state.ownerFilter) return false;
+      if (state.ownerFilter === "mine" && row.sales_owner_id !== state.user?.id) return false;
+      if (!["unassigned", "mine"].includes(state.ownerFilter) && row.sales_owner_id !== state.ownerFilter) return false;
     }
     if (state.stageFilter !== "all" && stageFor(row) !== state.stageFilter) return false;
     if (state.statusFilter !== "all") {
@@ -1522,7 +1534,7 @@ function renderDashboardPage() {
     <section class="sales-metric-grid">
       ${metricCard("Total Prospects", number(total), `${number(rowsByStage("new_leads").length)} new this cycle`, "users", "green")}
       ${metricCard("New This Week", number(newWeek), "created this week", "plus", "green")}
-      ${metricCard("Pricing Confirmed", number(pricingConfirmedCount), "$0.25/sq ft fit accepted", "check", "yellow")}
+      ${metricCard("Pricing Confirmed", number(pricingConfirmedCount), "Estimate accepted", "check", "yellow")}
       ${metricCard("Walkthroughs Set", number(walkthroughCount), "ready for management", "calendar", "cyan")}
       ${metricCard("Management Review", number(managementReviewCount), "ready to close", "clipboard-check", "violet")}
       ${metricCard("Win Rate", `${winRate}%`, `${number(won)} won opportunities`, "trophy", "violet")}
@@ -1650,7 +1662,7 @@ function renderFunnel() {
   const funnelStages = [
     { id: "new_leads", label: "New Prospects", detail: "Need first touch", tone: "green" },
     { id: "contacted", label: "Contacted", detail: "Conversation started", tone: "cyan" },
-    { id: "quote_sent", label: "Pricing Confirmed", detail: "$0.25/sq ft accepted", tone: "yellow" },
+    { id: "quote_sent", label: "Pricing Confirmed", detail: "the residential estimate accepted", tone: "yellow" },
     { id: "walkthrough", label: "Walkthrough Set", detail: "Ready for management", tone: "blue" },
     { id: "contract_out", label: "Management Review", detail: "Management closing", tone: "violet" },
     { id: "active", label: "Won", detail: "Active client", tone: "green" }
@@ -1694,7 +1706,7 @@ function renderConversionDonut() {
   const rate = Math.round((idealCandidates / total) * 1000) / 10;
   const legendRows = [
     { label: "Ideal candidates", value: `${number(idealCandidates)} (${rate}%)`, tone: "green" },
-    { label: "$0.25/sq ft confirmed", value: number(pricingFit), tone: "yellow" },
+    { label: "the residential estimate confirmed", value: number(pricingFit), tone: "yellow" },
     { label: "Walkthroughs set", value: number(walkthroughSet), tone: "blue" },
     { label: "Management review", value: number(managementReview), tone: "violet" },
     { label: "Needs qualification", value: number(needsQualification), tone: "cyan" },
@@ -1839,7 +1851,7 @@ function emptyState(title, text) {
 
 function renderFilters(options = {}) {
   const stageOptions = `<option value="all">All Stages</option>${stageDefs.map((stage) => `<option value="${stage.id}" ${state.stageFilter === stage.id ? "selected" : ""}>${esc(stage.label)}</option>`).join("")}`;
-  const ownerOptions = `<option value="all">All Reps</option><option value="unassigned" ${state.ownerFilter === "unassigned" ? "selected" : ""}>Unassigned</option>${state.reps.map((rep) => `<option value="${rep.id}" ${state.ownerFilter === rep.id ? "selected" : ""}>${esc(rep.full_name || rep.email || "Sales user")}</option>`).join("")}`;
+  const ownerOptions = `<option value="all">All operators</option><option value="mine" ${state.ownerFilter === "mine" ? "selected" : ""}>My leads</option><option value="unassigned" ${state.ownerFilter === "unassigned" ? "selected" : ""}>Unassigned</option>${state.reps.map((rep) => `<option value="${rep.id}" ${state.ownerFilter === rep.id ? "selected" : ""}>${esc(rep.full_name || rep.email || "Sales user")}</option>`).join("")}`;
   const statusOptions = options.statuses
     ? `<option value="all">All Statuses</option>${options.statuses.map((status) => `<option value="${status}" ${state.statusFilter === status ? "selected" : ""}>${esc(titleCase(status))}</option>`).join("")}`
     : "";
@@ -1919,6 +1931,7 @@ function renderLeadsPage() {
             <span>Select all visible</span>
           </label>
           <strong>${number(selectedCount)} selected</strong>
+          <button type="button" class="sales-primary-button" data-assign-selected ${selectedCount ? "" : "disabled"}>Assign / split leads</button>
         </div>` : ""}
         ${renderLeadTable(rows)}
       </article>
@@ -1957,6 +1970,7 @@ function renderLeadTable(rows) {
             ${sortHeader("name", "Name")}
             ${sortHeader("address", "Address")}
             ${sortHeader("phone", "Phone Number")}
+            <th>Operator</th>
             ${sortHeader("stage", "Stage")}
             ${sortHeader("next_step", "Next Steps")}
             ${sortHeader("notes", "Sales Notes", true)}
@@ -1976,6 +1990,7 @@ function renderLeadTable(rows) {
               <td><strong>${esc(recordTitle(row))}</strong></td>
               <td>${esc(recordAddress(row) || "No address saved")}</td>
               <td>${esc(row.contact_phone || "No phone saved")}</td>
+              <td><strong>${esc(ownerName(row))}</strong>${canManageLeads ? `<button type="button" class="sales-secondary-button" data-assign-lead="${esc(row.id)}">Assign</button>` : ""}</td>
               <td>
                 <select class="sales-filter" data-inline-stage="${esc(row.id)}" aria-label="Update stage">
                   ${stageDefs.map((stage) => `<option value="${stage.id}" ${stageFor(row) === stage.id ? "selected" : ""}>${esc(stage.label)}</option>`).join("")}
@@ -2351,15 +2366,14 @@ function renderQualificationWorksheet(row) {
       <div class="sales-section-title">
         <div>
           <h2>Qualification Worksheet</h2>
-          <p>Capture property fit, decision maker, service needs, $0.25/sq ft acceptance, and timing.</p>
+          <p>Capture property fit, decision maker, service needs, estimate acceptance, and timing.</p>
         </div>
         <button class="sales-primary-button" type="submit">${icon("check")}Save Qualification</button>
       </div>
       <div class="sales-qualification-grid">
         <section class="sales-qualification-block">
           <span>Property Fit</span>
-          ${selectField("property_class", "Property Class", [["", "Not set"], ["A", "Class A"], ["B", "Class B"], ["C", "Class C"], ["Mixed", "Mixed"], ["Other", "Other"]], row.property_class || "")}
-          ${field("prospect_unit_count", "Approx. Unit Count", row.prospect_unit_count || "", "number")}
+          ${selectField("property_class", "Home type", [["", "Not set"], ["House", "House"], ["Condo", "Condo"], ["Townhome", "Townhome"], ["Apartment", "Apartment"], ["Other", "Other"]], row.property_class || "")}
         </section>
         <section class="sales-qualification-block">
           <span>Decision Maker</span>
@@ -2369,13 +2383,12 @@ function renderQualificationWorksheet(row) {
         <section class="sales-qualification-block">
           <span>Service Needs</span>
           <div class="sales-check-row">${checkboxList("service_needs", services, savedServices)}</div>
-          ${field("average_turns_per_month", "Average Turns / Month", row.average_turns_per_month || "")}
         </section>
         <section class="sales-qualification-block">
           <span>Pain Points, Timing & Pricing Fit</span>
           <div class="sales-check-row">${checkboxList("sales_pain_points", painPoints, savedPain)}</div>
           ${field("desired_start_date", "Desired Start Date", toDateInput(row.desired_start_date), "date")}
-          ${field("budget_range", "$0.25/Sq Ft Fit", row.budget_range || "")}
+          ${field("budget_range", "Estimate Fit", row.budget_range || "")}
           ${field("opportunity_score", "Opportunity Score", row.opportunity_score || "", "number")}
         </section>
         <section class="sales-qualification-block span-two">
@@ -2416,19 +2429,19 @@ function renderLeadDetail(row) {
       <div class="sales-detail-grid">
         <div class="sales-detail-stat"><span>Contact</span><strong>${esc(recordContact(row))}</strong></div>
         <div class="sales-detail-stat"><span>Phone</span><strong>${esc(row.contact_phone || "Not saved")}</strong></div>
-        <div class="sales-detail-stat"><span>Units</span><strong>${recordUnits(row) ? number(recordUnits(row)) : "Not set"}</strong></div>
+        <div class="sales-detail-stat"><span>Operator</span><strong>${esc(ownerName(row))}</strong></div>
         <div class="sales-detail-stat"><span>Value</span><strong>${money(recordValue(row), true)}</strong></div>
       </div>
       <div class="sales-score">
         <div class="sales-score-ring" style="--score:${Math.max(0, Math.min(100, score || 0))}%"><strong>${score || "--"}</strong></div>
         <div class="sales-score-copy">
           <strong>${score >= 75 ? "High Opportunity" : score >= 45 ? "Developing Opportunity" : "Needs Qualification"}</strong>
-          <p>${esc(qualificationNotesText(row) || row.lead_notes || "Capture fit, decision maker, timing, $0.25/sq ft acceptance, and service needs.")}</p>
+          <p>${esc(qualificationNotesText(row) || row.lead_notes || "Capture fit, decision maker, timing, estimate acceptance, and service needs.")}</p>
         </div>
       </div>
       <div class="sales-detail-grid">
-        <div class="sales-detail-stat"><span>Class</span><strong>${esc(row.property_class || "Not set")}</strong></div>
-        <div class="sales-detail-stat"><span>$0.25/Sq Ft Fit</span><strong>${esc(row.budget_range || "Not set")}</strong></div>
+        <div class="sales-detail-stat"><span>Home type</span><strong>${esc(row.property_class || "Not set")}</strong></div>
+        <div class="sales-detail-stat"><span>Estimate Fit</span><strong>${esc(row.budget_range || "Not set")}</strong></div>
         <div class="sales-detail-stat"><span>Decision Maker</span><strong>${esc(row.decision_maker_status || "Unknown")}</strong></div>
         <div class="sales-detail-stat"><span>Start Timeline</span><strong>${esc(formatDate(row.desired_start_date, { empty: "Not set" }))}</strong></div>
       </div>
@@ -2442,7 +2455,7 @@ function renderLeadDetail(row) {
       </div>
       <div class="sales-action-stack">
         <button class="sales-primary-button" type="button" data-open-walkthrough="${esc(row.id)}">${icon("calendar")}Schedule Walkthrough</button>
-        <button class="sales-secondary-button" type="button" data-update-stage="${esc(row.id)}" data-stage="quote_sent">${icon("check")}Confirm $0.25/Sq Ft Fit</button>
+        <button class="sales-secondary-button" type="button" data-update-stage="${esc(row.id)}" data-stage="quote_sent">${icon("check")}Confirm Estimate Fit</button>
         <button class="sales-secondary-button" type="button" data-update-stage="${esc(row.id)}" data-stage="contract_out">${icon("clipboard-check")}Send to Management</button>
         <button class="sales-secondary-button" type="button" data-open-task="${esc(row.id)}">${icon("clipboard-check")}Create Follow-up</button>
         <button class="sales-secondary-button" type="button" data-open-lead="${esc(row.id)}">${icon("users")}Edit Prospect</button>
@@ -2469,7 +2482,7 @@ function renderWalkthroughsPage() {
       ${metricCard("Today", number(todayRows.length), "on today's calendar", "clock", "yellow")}
       ${metricCard("Completed", number(rows.filter((row) => normalize(row.walkthrough_status) === "completed").length), "ready for management", "clipboard-check", "violet")}
       ${metricCard("This Week", number(thisWeekRows(rows, "walkthrough_at").length), "scheduled this week", "calendar", "cyan")}
-      ${metricCard("Pricing Fit", number(rowsByStage("quote_sent").length), "$0.25/sq ft confirmed", "check", "green")}
+      ${metricCard("Pricing Fit", number(rowsByStage("quote_sent").length), "the residential estimate confirmed", "check", "green")}
     </section>
     ${renderWalkthroughAvailabilityAdmin()}
     <section class="sales-workspace">
@@ -2684,7 +2697,7 @@ function renderWalkthroughDetail(row) {
         <div class="sales-detail-stat"><span>Contact</span><strong>${esc(recordContact(row))}</strong></div>
         <div class="sales-detail-stat"><span>Assigned To</span><strong>${esc(row.walkthrough_assigned_to || ownerName(row))}</strong></div>
         <div class="sales-detail-stat"><span>Type</span><strong>${esc(row.walkthrough_type || "Property Walkthrough")}</strong></div>
-        <div class="sales-detail-stat"><span>Units</span><strong>${recordUnits(row) ? number(recordUnits(row)) : "Not set"}</strong></div>
+        <div class="sales-detail-stat"><span>Operator</span><strong>${esc(ownerName(row))}</strong></div>
       </div>
       <div class="sales-qualification-block">
         <span>Walkthrough Notes</span>
@@ -2912,7 +2925,7 @@ function pricingFitConfirmed(row) {
 }
 
 function pricingFitText(row) {
-  if (pricingFitConfirmed(row)) return row?.budget_range || "Confirmed at $0.25/sq ft";
+  if (pricingFitConfirmed(row)) return row?.budget_range || "Confirmed at the residential estimate";
   return row?.budget_range || "Needs confirmation";
 }
 
@@ -2936,7 +2949,7 @@ function recommendedTaskAction(row) {
   if (savedTask) return savedTask;
   const stage = stageFor(row);
   if (stage === "new_leads") return "Call decision maker";
-  if (!pricingFitConfirmed(row)) return "Confirm $0.25/sq ft";
+  if (!pricingFitConfirmed(row)) return "Confirm the residential estimate";
   if (!walkthroughAt(row) && !["walkthrough", "contract_out", "active", "lost"].includes(stage)) return "Schedule walkthrough";
   if (stage === "walkthrough") return "Prepare management walkthrough";
   if (stage === "contract_out") return "Management is closing";
@@ -3081,7 +3094,7 @@ async function emailQuoteForRow(row) {
 }
 
 function renderTaskFilters() {
-  const ownerOptions = `<option value="all">All Reps</option><option value="unassigned" ${state.ownerFilter === "unassigned" ? "selected" : ""}>Unassigned</option>${state.reps.map((rep) => `<option value="${rep.id}" ${state.ownerFilter === rep.id ? "selected" : ""}>${esc(rep.full_name || rep.email || "Sales user")}</option>`).join("")}`;
+  const ownerOptions = `<option value="all">All operators</option><option value="mine" ${state.ownerFilter === "mine" ? "selected" : ""}>My leads</option><option value="unassigned" ${state.ownerFilter === "unassigned" ? "selected" : ""}>Unassigned</option>${state.reps.map((rep) => `<option value="${rep.id}" ${state.ownerFilter === rep.id ? "selected" : ""}>${esc(rep.full_name || rep.email || "Sales user")}</option>`).join("")}`;
   const stageOptions = `<option value="all">All Stages</option>${stageDefs.map((stage) => `<option value="${stage.id}" ${state.stageFilter === stage.id ? "selected" : ""}>${esc(stage.label)}</option>`).join("")}`;
   const statusOptions = `<option value="all">All Task Statuses</option>${taskStatuses.map((status) => `<option value="${status}" ${state.statusFilter === status ? "selected" : ""}>${esc(titleCase(status))}</option>`).join("")}`;
   return `
@@ -3100,8 +3113,8 @@ function renderTaskFilters() {
 
 function renderTaskFlowStrip() {
   const steps = [
-    { label: "Identify", detail: "Find ideal apartment prospects.", count: rowsByStage("new_leads").length, iconName: "users" },
-    { label: "Confirm Price", detail: "Make sure $0.25/sq ft works.", count: rowsByStage("quote_sent").length, iconName: "check" },
+    { label: "Identify", detail: "Find residential cleaning prospects.", count: rowsByStage("new_leads").length, iconName: "users" },
+    { label: "Confirm Price", detail: "Make sure the residential estimate works.", count: rowsByStage("quote_sent").length, iconName: "check" },
     { label: "Set Walkthrough", detail: "Put management on site.", count: rowsByStage("walkthrough").length, iconName: "calendar" }
   ];
   return `
@@ -3132,7 +3145,7 @@ function renderTaskFocusLanes(groups) {
     },
     {
       title: "Confirm Price Fit",
-      detail: "Prospects that still need $0.25/sq ft confirmation.",
+      detail: "Prospects that still need estimate confirmation.",
       total: groups.pricingFollowUps.length,
       rows: groups.pricingFollowUps.slice(0, 4),
       empty: "No price-fit follow-ups waiting.",
@@ -3204,7 +3217,7 @@ function renderTasksPage() {
     <section class="sales-metric-grid">
       ${metricCard("Due Today", number(dueToday.length), "calls and follow-ups", "calendar", "blue")}
       ${metricCard("Overdue", number(overdue.length), "past due", "clock", "yellow")}
-      ${metricCard("Pricing Fit Follow-ups", number(pricingFollowUps.length), "confirm $0.25/sq ft", "check", "green")}
+      ${metricCard("Pricing Fit Follow-ups", number(pricingFollowUps.length), "confirm the residential estimate", "check", "green")}
       ${metricCard("Walkthroughs To Schedule", number(walkthroughsToSchedule.length), "ready for management", "calendar", "cyan")}
       ${metricCard("Completed This Week", number(thisWeekRows(rows.filter((row) => taskStatus(row) === "completed"), "last_activity_at").length), "finished tasks", "check", "green")}
       ${metricCard("High Priority", number(openRows.filter((row) => normalize(row.task_priority) === "high").length), "important follow-ups", "bell", "violet")}
@@ -3284,7 +3297,7 @@ function renderTaskDetail(row) {
         <div class="sales-detail-stat"><span>Stage</span><strong>${esc(stageLabel(stageFor(row)))}</strong></div>
         <div class="sales-detail-stat"><span>Price Fit</span><strong>${esc(pricingFitText(row))}</strong></div>
         <div class="sales-detail-stat"><span>Decision Maker</span><strong>${esc(row.decision_maker_status || "Unknown")}</strong></div>
-        <div class="sales-detail-stat"><span>Units</span><strong>${recordUnits(row) ? number(recordUnits(row)) : "Not set"}</strong></div>
+        <div class="sales-detail-stat"><span>Operator</span><strong>${esc(ownerName(row))}</strong></div>
       </div>
       <div class="sales-qualification-block">
         <span>Recommended Next Move</span>
@@ -3299,7 +3312,7 @@ function renderTaskDetail(row) {
         ${phoneHref ? `<a class="sales-secondary-button" href="${esc(phoneHref)}">${icon("phone")}Call Now</a>` : `<button class="sales-secondary-button" type="button" disabled>${icon("phone")}Call Now</button>`}
         <button class="sales-secondary-button" type="button" data-log-touch="${esc(row.id)}" data-touch-text="Call logged.">${icon("phone")}Log Call</button>
         ${emailHref ? `<a class="sales-secondary-button" href="${esc(emailHref)}">${icon("mail")}Send Email</a>` : `<button class="sales-secondary-button" type="button" disabled>${icon("mail")}Send Email</button>`}
-        ${pricingFitConfirmed(row) ? "" : `<button class="sales-secondary-button" type="button" data-update-stage="${esc(row.id)}" data-stage="quote_sent">${icon("check")}Confirm $0.25/Sq Ft</button>`}
+        ${pricingFitConfirmed(row) ? "" : `<button class="sales-secondary-button" type="button" data-update-stage="${esc(row.id)}" data-stage="quote_sent">${icon("check")}Confirm Estimate</button>`}
         <button class="sales-secondary-button" type="button" data-open-walkthrough="${esc(row.id)}">${icon("calendar")}Schedule Walkthrough</button>
         <button class="sales-secondary-button" type="button" data-open-task="${esc(row.id)}">${icon("clipboard-check")}Reschedule / Edit</button>
         <button class="sales-secondary-button" type="button" data-open-lead="${esc(row.id)}">${icon("users")}Open Prospect</button>
@@ -3310,6 +3323,7 @@ function renderTaskDetail(row) {
 
 function renderModal() {
   if (!state.modal) return "";
+  if (state.modal.type === "assignment") return renderAssignmentModal();
   if (state.modal.type === "import") return renderImportModal();
   if (state.modal.type === "walkthrough") return renderWalkthroughModal(recordById(state.modal.id));
   if (state.modal.type === "quote") return renderQuoteModal(recordById(state.modal.id));
@@ -3347,6 +3361,8 @@ function renderLeadModal(row) {
         <div class="sales-form-grid">
           ${field("property_name", "Name", row ? recordTitle(row) : "", "text", true)}
           ${field("contact_phone", "Phone Number", row?.contact_phone || "")}
+          ${field("contact_name", "Contact name", row?.contact_name || "")}
+          ${field("contact_email", "Email", row?.contact_email || "", "email")}
           ${field("address", "Address", row?.address || "", "text", false, "span-two")}
           ${selectField("pipeline_stage", "Stage", stageDefs.map((stage) => [stage.id, stage.label]), stageFor(row))}
           ${field("next_step", "Next Step", row?.next_step || "", "text", false, "span-two")}
@@ -3372,7 +3388,7 @@ function renderWalkthroughModal(row) {
           ${field("walkthrough_end_time", "End Time (ET)", toTimeInput(row?.walkthrough_end_at) || "11:00", "time")}
           ${selectField("walkthrough_status", "Status", walkthroughStatuses.map((status) => [status, titleCase(status)]), row?.walkthrough_status || "scheduled")}
           ${field("walkthrough_type", "Walkthrough Type", row?.walkthrough_type || "Property Walkthrough")}
-          ${selectField("walkthrough_assigned_to_id", "Assigned Rep", repOptions(), row?.sales_owner_id || "")}
+          ${selectField("walkthrough_assigned_to_id", "Assigned operator", repOptions(), row?.sales_owner_id || "")}
           ${field("walkthrough_location", "Location / Meeting Link", row?.walkthrough_location || row?.address || "", "text", false, "span-two")}
           ${textAreaField("walkthrough_notes", "Walkthrough Notes", row?.walkthrough_notes || "", "span-two")}
         </div>
@@ -3574,6 +3590,8 @@ async function handleLeadForm(form) {
     property_name: propertyName,
     name: propertyName,
     contact_phone: values.contact_phone?.trim() || "",
+    contact_name: values.contact_name?.trim() || "",
+    contact_email: values.contact_email?.trim() || "",
     address: values.address?.trim() || "",
     pipeline_stage: values.pipeline_stage || "new_leads",
     next_step: values.next_step?.trim() || "",
@@ -3581,7 +3599,7 @@ async function handleLeadForm(form) {
     lead_notes: values.lead_notes?.trim() || "",
     default_scope: values.lead_notes?.trim() || ""
   };
-  if (!id) Object.assign(payload, ownerPayload(state.user?.id || ""));
+  if (!id) Object.assign(payload, ownerPayload(""));
 
   await persistForm(form, id, payload, id ? "Prospect updated." : "Prospect created.");
 }
@@ -3674,9 +3692,9 @@ async function autosaveFocusLead(options = {}) {
     };
 
     if (stageSet.has("pricing_confirmed") || questions.price_acceptable === "yes") {
-      payload.budget_range = "Confirmed at $0.25/sq ft";
+      payload.budget_range = "Confirmed at the residential estimate";
     } else if (questions.price_acceptable === "no") {
-      payload.budget_range = "Not acceptable at $0.25/sq ft";
+      payload.budget_range = "Not acceptable at the residential estimate";
     } else {
       payload.budget_range = "";
     }
@@ -3812,8 +3830,6 @@ async function handleQualificationForm(form) {
 
   const payload = {
     property_class: values.property_class || "",
-    prospect_unit_count: cleanInt(values.prospect_unit_count),
-    average_turns_per_month: values.average_turns_per_month?.trim() || "",
     decision_maker_status: values.decision_maker_status || "",
     current_vendor: values.current_vendor?.trim() || "",
     desired_start_date: values.desired_start_date || null,
@@ -3993,6 +4009,9 @@ function payloadFromUpload(row, rowNumber) {
   const leadNotes = valueFrom(row, "lead_notes");
   return {
     payload: {
+      business_segment: "residential",
+      contact_email: valueFrom(row, "contact_email"),
+      contact_name: valueFrom(row, "contact_name"),
       property_name: propertyName,
       name: propertyName,
       contact_phone: valueFrom(row, "contact_phone"),
@@ -4003,8 +4022,8 @@ function payloadFromUpload(row, rowNumber) {
       next_step_due_at: fromDateTimeLocal(valueFrom(row, "next_step_due_at")) || dateOnlyIso(valueFrom(row, "next_step_due_at")),
       lead_notes: leadNotes,
       default_scope: leadNotes,
-      sales_owner_id: state.user?.id || null,
-      sales_owner_name: currentName(),
+      sales_owner_id: null,
+      sales_owner_name: "",
       last_activity_at: new Date().toISOString()
     }
   };
@@ -4069,7 +4088,7 @@ async function updateStage(id, stage) {
     const row = recordById(id);
     const payload = { pipeline_stage: stage };
     if (stage === "quote_sent" && !pricingFitConfirmed(row)) {
-      payload.budget_range = "Confirmed at $0.25/sq ft";
+      payload.budget_range = "Confirmed at the residential estimate";
     }
     await saveRecord(id, payload, `Moved to ${stageLabel(stage)}.`);
     await refreshData(false);
@@ -4267,7 +4286,7 @@ async function deleteSelectedLeads() {
     setMessage("Only admins can delete sales leads.", "error");
     return;
   }
-  const ids = [...state.selectedLeadIds].filter(Boolean);
+  const ids = [...state.selectedLeadIds].filter(id => state.leads.some(row => row.id === id && row.business_segment === "residential"));
   if (!ids.length || !supabase) return;
   const confirmed = window.confirm(`Delete ${ids.length} selected lead${ids.length === 1 ? "" : "s"} and attached sales follow-ups?`);
   if (!confirmed) return;
@@ -4277,19 +4296,8 @@ async function deleteSelectedLeads() {
   render();
 
   try {
-    const childDeletes = [
-      SALES_TABLES.activities,
-      SALES_TABLES.tasks,
-      SALES_TABLES.walkthroughs,
-      SALES_TABLES.quotes,
-      SALES_TABLES.contracts
-    ];
-    for (const tableName of childDeletes) {
-      const result = await supabase.from(tableName).delete().in("lead_id", ids);
-      if (result.error) throw result.error;
-    }
-
-    const result = await supabase.from(SALES_TABLES.leads).delete().in("id", ids);
+    // The database cascades related records atomically, scoped to residential leads.
+    const result = await supabase.from(SALES_TABLES.leads).delete().eq('business_segment','residential').in('id',ids);
     if (result.error) throw result.error;
 
     if (ids.includes(state.selectedId)) state.selectedId = null;
@@ -4375,6 +4383,13 @@ function bindEvents() {
 
   document.addEventListener("click", async (event) => {
     const target = event.target;
+    const assignOne = target.closest?.('[data-assign-lead]');
+    if (assignOne || target.closest?.('[data-assign-selected]')) {
+      if (!isSalesAdmin()) return;
+      const ids = assignOne ? [assignOne.dataset.assignLead] : [...state.selectedLeadIds];
+      state.modal = {type:'assignment', ids:ids.filter(id=>recordById(id))};
+      render(); return;
+    }
     const previewField = target.closest?.("[data-sales-preview-field]");
     if (previewField) return;
 
@@ -4761,6 +4776,9 @@ function bindEvents() {
   });
 
   document.addEventListener("submit", async (event) => {
+    if (event.target.matches('[data-assignment-form]')) {
+      event.preventDefault(); await handleAssignmentForm(event.target); return;
+    }
     const form = event.target;
     if (form.matches("[data-lead-form]")) {
       event.preventDefault();
@@ -4815,7 +4833,7 @@ if (await requireSalesAccess()) {
 function renderCrmOverview(){
  const rows=baseFilteredRows(),open=rows.filter(r=>!['active','lost'].includes(stageFor(r))),won=rows.filter(r=>stageFor(r)==='active');
  const due=rows.filter(r=>taskDue(r)&&new Date(taskDue(r))<new Date()&&taskStatus(r)!=='completed');
- return `<div class="crm-welcome"><div><p class="crm-eyebrow">YOUR SALES WORKSPACE</p><h2>Make the next move.</h2><p>Every relationship has a next step. Here’s where to focus today.</p></div><a href="crm-pipeline.html" class="sales-primary-button">View pipeline ${icon('right')}</a></div>
+ return `<div class="crm-welcome"><div><p class="crm-eyebrow">YOUR RESIDENTIAL WORKSPACE</p><h2>Make the next move.</h2><p>Every relationship has a next step. Here’s where to focus today.</p></div><a href="crm-pipeline.html" class="sales-primary-button">View pipeline ${icon('right')}</a></div>
  <section class="sales-metric-grid crm-four">${metricCard('Open pipeline',money(open.reduce((s,r)=>s+recordValue(r),0),true),`${open.length} open opportunities`,'dollar')}${metricCard('Active relationships',number(rows.length),'Prospects across your workspace','users','blue')}${metricCard('Follow-ups overdue',number(due.length),'Needs your attention','clipboard-check','yellow')}${metricCard('Won business',money(won.reduce((s,r)=>s+recordValue(r),0),true),`${won.length} won opportunities`,'trophy')}</section>
  <section class="crm-overview-grid"><article class="sales-panel"><div class="sales-panel-header"><div><h2>Pipeline at a glance</h2><p>Opportunity volume by stage</p></div><a class="sales-link-action" href="crm-pipeline.html">Open board →</a></div><div class="crm-stage-summary">${stageDefs.map(st=>{const items=rows.filter(r=>stageFor(r)===st.id);return `<a href="crm-pipeline.html" class="crm-stage-row"><span>${esc(st.label)}</span><div class="crm-bar"><i style="width:${rows.length?Math.round(items.length/rows.length*100):0}%"></i></div><strong>${items.length}</strong></a>`;}).join('')}</div></article><article class="sales-panel"><div class="sales-panel-header"><div><h2>Your next conversations</h2><p>Upcoming property walkthroughs</p></div><a class="sales-link-action" href="sales-walkthroughs.html">Calendar →</a></div>${renderUpcomingWalkthroughs(4)}</article></section>
  <section class="sales-two-column"><article class="sales-panel"><div class="sales-panel-header"><div><h2>Follow-up queue</h2><p>Keep every opportunity moving</p></div><a href="sales-tasks.html" class="sales-link-action">All tasks →</a></div>${renderProspectWorkQueue()}</article><article class="sales-panel"><div class="sales-panel-header"><div><h2>Activity feed</h2><p>The latest updates from your team</p></div></div>${renderRecentActivity()}</article></section>`;
@@ -4829,5 +4847,49 @@ function renderCrmContacts(){
  return `<section class="crm-contact-layout"><article class="sales-panel">${renderFilters({placeholder:'Search name, email, phone, or property...'})}<div class="sales-table-wrap"><table class="sales-table"><thead><tr><th>Contact</th><th>Company / property</th><th>Email & phone</th><th>Owner</th><th>Stage</th></tr></thead><tbody>${rows.map(r=>`<tr><td><button class="crm-text-button" data-select-record="${esc(r.id)}">${esc(recordContact(r)||recordTitle(r))}</button></td><td><strong>${esc(recordTitle(r))}</strong><small>${esc(recordCompany(r))}</small></td><td><span>${esc(r.contact_email||'No email saved')}</span><small>${esc(r.contact_phone||'No phone saved')}</small></td><td>${esc(ownerName(r))}</td><td><span class="sales-status-pill ${esc(stageFor(r))}">${esc(stageLabel(stageFor(r)))}</span></td></tr>`).join('')||'<tr><td colspan="5">No contacts match this view.</td></tr>'}</tbody></table></div></article>${selected?renderLeadDetail(selected):''}</section>`;
 }
 function renderCrmTeam(){
- return `<article class="sales-panel"><div class="sales-panel-header"><div><h2>Team performance</h2><p>Based on assigned opportunities. Team access is managed by your administrator.</p></div></div><div class="sales-table-wrap"><table class="sales-table"><thead><tr><th>Team member</th><th>Role</th><th>Open opportunities</th><th>Open value</th><th>Won</th><th>Status</th></tr></thead><tbody>${state.reps.map(rep=>{const rows=state.rows.filter(r=>r.sales_owner_id===rep.id),open=rows.filter(r=>!['active','lost'].includes(stageFor(r)));return `<tr><td><strong>${esc(rep.full_name||'Team member')}</strong><small>${esc(rep.email)}</small></td><td>${esc(titleCase(rep.role))}</td><td>${open.length}</td><td>${money(open.reduce((s,r)=>s+recordValue(r),0),true)}</td><td>${rows.filter(r=>stageFor(r)==='active').length}</td><td>${esc(rep.status||'Not set')}</td></tr>`;}).join('')||'<tr><td colspan="6">No team members are visible to this account.</td></tr>'}</tbody></table></div></article><div class="crm-onboarding"><h2>Ready for your sales team</h2><p>Use the playbook to learn the workflow, then assign each opportunity an owner and a next step.</p><a class="sales-primary-button" href="crm-guide.html">Open team playbook →</a></div>`;
+ return `<article class="sales-panel"><div class="sales-panel-header"><div><h2>Team performance</h2><p>Based on assigned opportunities. Team access is managed by your administrator.</p></div></div><div class="sales-table-wrap"><table class="sales-table"><thead><tr><th>Team member</th><th>Role</th><th>Open opportunities</th><th>Open value</th><th>Won</th><th>Status</th></tr></thead><tbody>${state.reps.map(rep=>{const rows=state.rows.filter(r=>r.sales_owner_id===rep.id),open=rows.filter(r=>!['active','lost'].includes(stageFor(r)));return `<tr><td><strong>${esc(rep.full_name||'Team member')}</strong><small>${esc(rep.email)}</small></td><td>${esc(titleCase(rep.role))}</td><td>${open.length}</td><td>${money(open.reduce((s,r)=>s+recordValue(r),0),true)}</td><td>${rows.filter(r=>stageFor(r)==='active').length}</td><td>${esc(rep.status||'Not set')}</td></tr>`;}).join('')||'<tr><td colspan="6">No team members are visible to this account.</td></tr>'}</tbody></table></div></article><div class="crm-onboarding"><h2>Ready for your sales team</h2><p>Open Prospects to assign or evenly split selected residential leads between operators. Use the playbook for the daily workflow.</p><a class="sales-primary-button" href="sales-leads.html">Assign residential leads →</a> <a class="sales-secondary-button" href="crm-guide.html">Team playbook →</a></div>`;
+}
+
+
+function activeCrmOperators() {
+  return state.reps.filter(rep => ['admin','sales','sales_team'].includes(normalize(rep.role)) && normalize(rep.status) === 'active');
+}
+function assignmentPlan(ids, operatorIds, onlyUnassigned) {
+  const operators = [...new Set(operatorIds)].filter(id=>activeCrmOperators().some(rep=>rep.id===id));
+  if (!operators.length || operators.length !== new Set(operatorIds).size) throw new Error('Choose active sales operators.');
+  const rows = [...new Set(ids)].map(recordById);
+  if (!rows.length || rows.length > 2000 || rows.some(row=>!row || row.business_segment !== 'residential')) throw new Error('Select 1–2000 residential leads.');
+  return rows.filter(row=>!onlyUnassigned || !row.sales_owner_id).sort((a,b)=>a.id.localeCompare(b.id))
+    .map((row,index)=>({leadId:row.id,operatorId:operators[index % operators.length]}));
+}
+function renderAssignmentModal() {
+  const rows=(state.modal.ids||[]).map(recordById).filter(Boolean),assigned=rows.filter(row=>row.sales_owner_id).length;
+  return renderModalShell('Assign residential leads','Operator allocation',`
+    <form data-assignment-form><div class="sales-modal-body">
+      <p><strong>${rows.length} selected leads</strong> · ${assigned} already assigned.</p>
+      <p>Choose one operator to assign all eligible leads, or several to split this selection evenly. Existing workloads are not rebalanced.</p>
+      <fieldset class="crm-operator-options"><legend>Assign to operators</legend>
+        ${activeCrmOperators().map(rep=>`<label><input type="checkbox" name="operator" value="${esc(rep.id)}"><span><strong>${esc(rep.full_name||rep.email)}</strong><small>${esc(rep.email)} · ${state.rows.filter(row=>row.sales_owner_id===rep.id && !['active','lost'].includes(stageFor(row))).length} open leads</small></span></label>`).join('') || '<p>No active operators. Add a sales-team account in the admin portal first.</p>'}
+      </fieldset>
+      <label class="crm-preserve-owner"><input type="checkbox" name="only_unassigned" checked> Only assign unassigned leads</label>
+      <p>Uncheck this option to reassign selected leads that already have an owner. Each change is recorded in activity history.</p>
+    </div>${modalFooter('Apply assignment')}</form>`, '', true);
+}
+async function handleAssignmentForm(form) {
+  if (!isSalesAdmin()) return setInlineFormMessage(form,'Only administrators can assign leads.','error');
+  const button=form.querySelector('[type="submit"]');
+  if (button?.disabled) return;
+  if (button) button.disabled=true;
+  try {
+    const ids=state.modal?.ids||[], operators=[...form.querySelectorAll('[name="operator"]:checked')].map(input=>input.value);
+    const onlyUnassigned=form.querySelector('[name="only_unassigned"]').checked;
+    const plan=assignmentPlan(ids,operators,onlyUnassigned);
+    if (!plan.length) throw new Error('No eligible leads. Uncheck “Only assign unassigned leads” to reassign existing owners.');
+    const {data,error}=await supabase.rpc('assign_residential_leads',{p_lead_ids:ids,p_operator_ids:operators,p_only_unassigned:onlyUnassigned});
+    if (error) throw error;
+    state.modal=null; state.selectedLeadIds.clear();
+    await refreshData(false);
+    setMessage(`${Number(data)||0} residential lead assignments updated.`, 'success');
+  } catch(error) { setInlineFormMessage(form,error.message,'error'); }
+  finally { if(button) button.disabled=false; }
 }
