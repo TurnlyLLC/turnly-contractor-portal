@@ -1,3 +1,4 @@
+const {requireCrmSession}=require('../lib/crm-access.cjs');
 const { createClient }=require('@supabase/supabase-js');
 const { randomUUID,createHash }=require('node:crypto');
 const { ORIGIN,uuid,codeValid,clean,phone,email,agentInput,referralUrl,qrImage,placement,makeFlyer }=require('../lib/agent-referrals.cjs');
@@ -18,6 +19,7 @@ async function access(client,req){
   if(auth.error||!auth.data?.user) throw Object.assign(new Error('Your session expired. Sign in again.'),{status:401});
   const profile=checked(await client.from('profiles').select('role,status').eq('id',auth.data.user.id).maybeSingle());
   if(!profile||!roles.has(profile.role)||['inactive','disabled','suspended','rejected'].includes(profile.status)) throw Object.assign(new Error('Active admin or sales access is required.'),{status:403});
+  await requireCrmSession(client,auth.data.user.id,token);
   return {id:auth.data.user.id,admin:admins.has(profile.role)};
 }
 function requireAdmin(user){if(!user.admin) throw Object.assign(new Error('Only admins can import leads, configure flyers, or manage referral payments.'),{status:403});}

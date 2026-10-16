@@ -1,3 +1,4 @@
+const {requireCrmSession}=require('../lib/crm-access.cjs');
 const { createClient } = require("@supabase/supabase-js");
 
 const defaultSupabaseUrl = "https://nwnzdoveskthebfyndcs.supabase.co";
@@ -92,6 +93,7 @@ async function requirePortalUser(req, client) {
     return { error: "Admin or sales access is required to view website inquiries.", status: 403 };
   }
 
+  await requireCrmSession(client,user.id,token);
   return { user, profile };
 }
 

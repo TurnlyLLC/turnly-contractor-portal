@@ -5,12 +5,9 @@ form.addEventListener('submit',async event=>{
  event.preventDefault();button.disabled=true;message.textContent='';
  try{
   if(!client)throw new Error('The workspace is temporarily unavailable. Please contact your administrator.');
-  const {data,error}=await client.auth.signInWithPassword({email:form.email.value.trim(),password:form.password.value});
-  if(error||!data?.user)throw new Error('Unable to sign in. Check your email and password and try again.');
-  const result=await client.from('profiles').select('role,status').eq('id',data.user.id).maybeSingle();
-  if(result.error||!result.data||!['admin','sales','sales_team'].includes(String(result.data.role).toLowerCase())||['inactive','disabled','suspended','rejected'].includes(String(result.data.status).toLowerCase())){
-   await client.auth.signOut();throw new Error('This account does not have active CRM access. Contact your administrator.');
-  }
-  location.assign('sales.html');
+  const response=await fetch('/api/crm-team',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'login',username:form.email.value.trim(),password:form.password.value})});
+  const result=await response.json();if(!response.ok)throw new Error(result.error||'Unable to sign in.');
+  const {error}=await client.auth.setSession(result.session);if(error)throw error;
+  form.password.value='';location.assign(result.must_change_password?'crm-password.html':'sales.html');
  }catch(error){message.textContent=error.message;}finally{button.disabled=false;}
 });

@@ -70,6 +70,8 @@ export const PLAYBOOK = [
     'If you do not know an answer, say so and ask admin@turnlypros.com. Never invent a guarantee, testimonial, discount, appointment, certification or refund promise.'
   ]},
   {title:'Operator ownership and handoffs', paragraphs:[
+    'In Team, admins can add a member with a name and username, choose or generate a temporary password, and copy the login details to share privately. The member must choose a new password on first login. Edit names or usernames, reset passwords, deactivate access, or reactivate with a fresh temporary password. Your existing admin email still works; use Set username on your own card to add a username.',
+    'Use Assign leads on a member’s Team card, choose how many unassigned prospects to allocate, and review the exact counts before applying. Select several members to split the batch evenly. Inactive members cannot receive new assignments; View leads lets you review and reassign their existing work.',
     'Admins select prospects and use Assign / split leads to assign one operator or split a selection evenly. Existing owners stay in place unless reassignment is explicitly selected. Work in batches of up to 2,000 leads.',
     'Use My leads, Unassigned, prospect-type, city and operator filters. Prospect pages show 50 records at a time; Select all visible selects the current page. Assignment history records the change.',
     'Keep primary phone/email and brokerage details current in Edit. The contact card also shows all imported alternate phone numbers and emails, their supplied associations, website, address and source notes. CRM edits do not erase the original referral records.',
