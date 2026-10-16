@@ -1150,8 +1150,12 @@ async function requireSalesAccess() {
     return false;
   }
 
+  const {data:crmAccess,error:crmError}=await supabase.rpc('crm_access_state');
+  if(crmError||!crmAccess?.active||!crmAccess.session_valid){window.location.href='sales-login.html';return false;}
+  if(crmAccess.must_change_password){window.location.href='crm-password.html';return false;}
   state.profile = effectiveProfile || { role };
   if (role !== "admin") state.ownerFilter = "mine";
+  else {const owner=new URLSearchParams(window.location.search||'').get('owner');if(owner)state.ownerFilter=owner;}
   return true;
 }
 
@@ -1194,18 +1198,7 @@ async function loadRows() {
 }
 
 async function loadReps() {
-  const { data, error } = await supabase
-    .from(PROFILES_TABLE)
-    .select("id,full_name,email,role,status")
-    .in("role", ["admin", "sales", "sales_team"])
-    .order("full_name", { ascending: true });
-
-  if (error) {
-    state.reps = [];
-    return;
-  }
-
-  state.reps = data || [];
+ const result=await crmTeamRequest('list');state.reps=result.members||[];
 }
 
 async function refreshData(showLoading = true) {
@@ -1216,6 +1209,7 @@ async function refreshData(showLoading = true) {
   }
 
   try {
+    if(!await requireSalesAccess()){state.rows=[];state.leads=[];return;}
     await Promise.all([loadRows(), loadReps()]);
     state.loading = false;
     state.message = "";
@@ -3063,6 +3057,7 @@ function renderTaskDetail(row) {
 
 function renderModal() {
   if (!state.modal) return "";
+  if (state.modal.type.startsWith("team")) return renderTeamModal();
   if (state.modal.type === "assignment") return renderAssignmentModal();
   if (state.modal.type === "import") return renderImportModal();
   if (state.modal.type === "walkthrough") return renderWalkthroughModal(recordById(state.modal.id));
@@ -4096,6 +4091,18 @@ function changeCalendar(direction) {
 }
 
 function bindEvents() {
+  document.addEventListener('click',async event=>{
+    const button=event.target.closest?.('[data-team-create],[data-team-edit],[data-team-reset],[data-team-deactivate],[data-team-reactivate],[data-team-assign],[data-team-copy]');if(!button)return;
+    if(!isSalesAdmin())return;
+    if(button.hasAttribute('data-team-copy')){try{await navigator.clipboard.writeText(`Turnly Residential CRM\nhttps://sales.turnlypros.com\nUsername: ${state.modal.username}\nTemporary password: ${state.modal.temporary_password}\nChoose a new password at first sign-in.`);document.querySelector('#crmCredentialMessage').textContent='Copied. Share privately with this member.';}catch{document.querySelector('#crmCredentialMessage').textContent='Select and copy the details above.';}return;}
+    if(button.dataset.teamAssign){state.modal={type:'assignment',fromTeam:true,operatorId:button.dataset.teamAssign,ids:state.rows.filter(r=>!r.sales_owner_id&&r.business_segment==='residential'&&!r.do_not_contact&&!['active','lost'].includes(stageFor(r))).sort((a,b)=>a.id.localeCompare(b.id)).slice(0,50).map(r=>r.id)};render();updateAssignmentPreview(document.querySelector('[data-assignment-form]'));return;}
+    const action=button.hasAttribute('data-team-create')?'create':button.dataset.teamEdit?'edit':button.dataset.teamReset?'reset':button.dataset.teamDeactivate?'deactivate':'reactivate';
+    state.modal={type:'teamMember',action,userId:button.dataset.teamEdit||button.dataset.teamReset||button.dataset.teamDeactivate||button.dataset.teamReactivate};render();
+  });
+  document.addEventListener('input',event=>{if(event.target.id==='crmTeamSearch'){state.teamSearch=event.target.value;render();}const form=event.target.closest?.('[data-assignment-form]');if(form)updateAssignmentPreview(form);});
+  document.addEventListener('change',event=>{const form=event.target.closest?.('[data-assignment-form]');if(form)updateAssignmentPreview(form);});
+  document.addEventListener('submit',event=>{if(event.target.matches('[data-team-form]')){event.preventDefault();handleTeamForm(event.target);}});
+
   document.addEventListener("pointerdown", (event) => {
     const resizeHandle = event.target?.closest?.("[data-lead-column-resize]");
     if (resizeHandle) {
@@ -4599,6 +4606,7 @@ if (await requireSalesAccess()) {
     restoreSalesFocusPlace();
   }
   await refreshData();
+  setInterval(async()=>{if(!await requireSalesAccess()){state.rows=[];state.leads=[];state.reps=[];}},60000);
 }
 
 function renderCrmOverview() {
@@ -4619,13 +4627,40 @@ function renderCrmContacts(){
  const rows=baseFilteredRows(),selected=rows.find(r=>r.id===state.selectedId);
  return `<section class="crm-contact-layout"><article class="sales-panel">${renderFilters({placeholder:'Search name, email, phone, or property...'})}<div class="sales-table-wrap"><table class="sales-table"><thead><tr><th>Contact</th><th>Company / property</th><th>Email & phone</th><th>Owner</th><th>Stage</th></tr></thead><tbody>${rows.map(r=>`<tr><td><button class="crm-text-button" data-select-record="${esc(r.id)}">${esc(recordContact(r)||recordTitle(r))}</button></td><td><strong>${esc(recordTitle(r))}</strong><small>${esc(recordCompany(r))}</small></td><td><span>${esc(r.contact_email||'No email saved')}</span><small>${esc(r.contact_phone||'No phone saved')}</small></td><td>${esc(ownerName(r))}</td><td><span class="sales-status-pill ${esc(stageFor(r))}">${esc(stageLabel(stageFor(r)))}</span></td></tr>`).join('')||'<tr><td colspan="5">No contacts match this view.</td></tr>'}</tbody></table></div></article>${selected?renderLeadDetail(selected):''}</section>`;
 }
+async function crmTeamRequest(action,values={}) {
+ const {data}=await supabase.auth.getSession();if(!data?.session)throw new Error('Please sign in again.');
+ const response=await fetch('/api/crm-team',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+data.session.access_token},body:JSON.stringify({action,...values})});
+ const result=await response.json();if(!response.ok)throw new Error(result.error||'Unable to update team access.');return result;
+}
 function renderCrmTeam(){
- return `<article class="sales-panel"><div class="sales-panel-header"><div><h2>Team performance</h2><p>Based on assigned opportunities. Team access is managed by your administrator.</p></div></div><div class="sales-table-wrap"><table class="sales-table"><thead><tr><th>Team member</th><th>Role</th><th>Open opportunities</th><th>Open value</th><th>Won</th><th>Status</th></tr></thead><tbody>${state.reps.map(rep=>{const rows=state.rows.filter(r=>r.sales_owner_id===rep.id),open=rows.filter(r=>!['active','lost'].includes(stageFor(r)));return `<tr><td><strong>${esc(rep.full_name||'Team member')}</strong><small>${esc(rep.email)}</small></td><td>${esc(titleCase(rep.role))}</td><td>${open.length}</td><td>${money(open.reduce((s,r)=>s+recordValue(r),0),true)}</td><td>${rows.filter(r=>stageFor(r)==='active').length}</td><td>${esc(rep.status||'Not set')}</td></tr>`;}).join('')||'<tr><td colspan="6">No team members are visible to this account.</td></tr>'}</tbody></table></div></article><div class="crm-onboarding"><h2>Ready for your sales team</h2><p>Open Prospects to assign or evenly split selected residential leads between operators. Use the playbook for the daily workflow.</p><a class="sales-primary-button" href="sales-leads.html">Assign residential leads →</a> <a class="sales-secondary-button" href="crm-guide.html">Team playbook →</a></div>`;
+ const admin=isSalesAdmin(),search=normalize(state.teamSearch),members=state.reps.filter(p=>!search||normalize(`${p.full_name} ${p.username||''} ${p.status}`).includes(search));
+ return `<div class="crm-welcome"><div><p class="crm-eyebrow">YOUR PEOPLE. THEIR PIPELINE.</p><h2>Build your sales team.</h2><p>${admin?'Create usernames, manage access and put leads in the right hands. No email addresses needed.':'Your team account and assigned opportunities.'}</p></div>${admin?'<button class="sales-primary-button" data-team-create>Add team member</button>':''}</div>
+ <section class="sales-panel"><div class="sales-panel-header"><div><h2>Team members</h2><p>${state.reps.filter(p=>p.status==='active'&&p.enabled!==false).length} active · ${state.rows.filter(r=>!r.sales_owner_id).length} unassigned prospects</p></div><input id="crmTeamSearch" type="search" aria-label="Search team members" placeholder="Search name or username" value="${esc(state.teamSearch||'')}"></div>
+ <div class="crm-team-grid">${members.map(p=>{const own=state.rows.filter(r=>r.sales_owner_id===p.id),open=own.filter(r=>!['active','lost'].includes(stageFor(r))),active=p.status==='active'&&p.enabled!==false;return `<article class="crm-member-card"><div class="crm-member-head"><span class="sales-avatar">${esc(initials(p.full_name||'Team member'))}</span><div><h3>${esc(p.full_name||'Team member')}</h3><p>${p.username?'@'+esc(p.username):'Username not set'} · ${p.role==='admin'?'Administrator':'Sales member'}</p></div></div><span class="crm-member-status ${active?'':'inactive'}">${!active?'Inactive':p.must_change_password?'Password setup required':'Active'}</span><div class="crm-member-stats"><span><strong>${open.length}</strong>Open leads</span><span><strong>${own.filter(r=>stageFor(r)==='active').length}</strong>Purchased / booked</span></div><div class="crm-member-actions"><a class="sales-secondary-button" href="sales-leads.html?owner=${encodeURIComponent(p.id)}">View leads</a>${admin&&active?`<button class="sales-primary-button" data-team-assign="${esc(p.id)}">Assign leads</button>`:''}${admin&&(p.role!=='admin'||p.id===state.user?.id)?`<button class="sales-secondary-button" data-team-edit="${esc(p.id)}">${p.username?'Edit member':'Set username'}</button>`:''}${admin&&p.role!=='admin'&&p.username?`${active?`<button class="sales-secondary-button" data-team-reset="${esc(p.id)}">Reset password</button><button class="crm-danger-button" data-team-deactivate="${esc(p.id)}">Deactivate</button>`:`<button class="sales-primary-button" data-team-reactivate="${esc(p.id)}">Reactivate</button><a class="sales-secondary-button" href="sales-leads.html?owner=${encodeURIComponent(p.id)}">Reassign their leads</a>`}`:''}</div></article>`;}).join('')||'<p>No team members match this search.</p>'}</div></section>
+ ${admin?'<div class="crm-onboarding"><h2>A simple start for every member</h2><p>1. Add a name and username. 2. Share their temporary password privately. 3. Assign leads. They will choose their own password at first sign-in. Password resets require a new password again; deactivation preserves their notes and lead ownership until you reassign them.</p></div>':''}`;
+}
+function renderTeamModal(){
+ const m=state.modal,p=state.reps.find(p=>p.id===m.userId)||{};
+ if(m.type==='teamCredentials')return renderModalShell('Login details ready','Share privately',`<div class="sales-modal-body"><p>Copy these details now. The temporary password is not saved in this page and cannot be viewed again after closing.</p><label>Username<input readonly value="${esc(m.username)}"></label><label>Temporary password<input readonly value="${esc(m.temporary_password)}" autocomplete="off"></label><p>Sign in at <strong>sales.turnlypros.com</strong>. The member must choose a new password before accessing leads.</p><button class="sales-primary-button" data-team-copy>Copy login details</button><p id="crmCredentialMessage" role="status"></p></div>`,'',true);
+ const action=m.action||'create',edit=action==='edit',create=action==='create',deactivate=action==='deactivate';
+ return renderModalShell(create?'Add team member':edit?'Edit team member':deactivate?'Deactivate member':action==='reactivate'?'Reactivate member':'Reset password','Team access',`<form data-team-form><div class="sales-modal-body">${create||edit?`${field('full_name','Full name',p.full_name||'')}${field('username','Username',p.username||'')}<p>3–32 letters, numbers, dots, underscores or hyphens. Usernames are not case-sensitive.</p>`:`<h3>${esc(p.full_name||p.username)}</h3><p>${deactivate?'This immediately blocks CRM access. Notes and lead ownership stay intact so you can reassign their work.':'Existing sessions will lose access. Share the new temporary password privately; they must replace it at sign-in.'}</p>`}${!edit&&!deactivate?'<label>Temporary password (optional)<input name="temporary_password" type="password" autocomplete="new-password" minlength="12" maxlength="128" placeholder="Leave blank to generate a strong password"></label><p>Use at least 12 characters if you choose your own.</p>':''}</div>${modalFooter(create?'Create member':edit?'Save member':deactivate?'Deactivate member':'Create temporary password')}</form>`,'',true);
+}
+async function handleTeamForm(form){
+ const button=form.querySelector('[type="submit"]');if(button.disabled)return;button.disabled=true;
+ try{const m=state.modal,values=Object.fromEntries(new FormData(form));const result=await crmTeamRequest(m.action||'create',{...values,user_id:m.userId});
+ state.modal=null;await refreshData(false);
+ if(result.temporary_password){state.modal={type:'teamCredentials',username:result.username,temporary_password:result.temporary_password};render();}else setMessage('Team member updated.','success');
+ }catch(e){setInlineFormMessage(form,e.message,'error');}finally{button.disabled=false;}
+}
+function updateAssignmentPreview(form){
+ const output=form.querySelector('[data-assignment-preview]');if(!output)return;
+ const ids=[...form.querySelectorAll('[name="operator"]:checked')].map(i=>i.value),only=form.querySelector('[name="only_unassigned"]').checked;
+ if(state.modal.fromTeam){const count=Math.max(1,Math.min(2000,Number(form.querySelector('[name="batch_count"]').value)||1));state.modal.ids=state.rows.filter(r=>r.business_segment==='residential'&&!r.sales_owner_id&&!r.do_not_contact&&!['active','lost'].includes(stageFor(r))).sort((a,b)=>a.id.localeCompare(b.id)).slice(0,count).map(r=>r.id);}
+ try{const plan=assignmentPlan(state.modal.ids,ids,only);output.innerHTML=`<strong>Assignment preview · ${plan.length} leads</strong>${ids.map(id=>`<p>${esc(state.reps.find(p=>p.id===id)?.full_name||'Member')}: <strong>${plan.filter(r=>r.operatorId===id).length}</strong> leads</p>`).join('')}`;}catch(e){output.textContent=ids.length?e.message:'Choose a sales member to preview the assignment.';}
 }
 
-
 function activeCrmOperators() {
-  return state.reps.filter(rep => ['admin','sales','sales_team'].includes(normalize(rep.role)) && normalize(rep.status) === 'active');
+  return state.reps.filter(rep => ['admin','sales','sales_team'].includes(normalize(rep.role)) && normalize(rep.status) === 'active' && rep.enabled !== false);
 }
 function assignmentPlan(ids, operatorIds, onlyUnassigned) {
   const operators = [...new Set(operatorIds)].filter(id=>activeCrmOperators().some(rep=>rep.id===id));
@@ -4639,13 +4674,14 @@ function renderAssignmentModal() {
   const rows=(state.modal.ids||[]).map(recordById).filter(Boolean),assigned=rows.filter(row=>row.sales_owner_id).length;
   return renderModalShell('Assign residential leads','Operator allocation',`
     <form data-assignment-form><div class="sales-modal-body">
-      <p><strong>${rows.length} selected leads</strong> · ${assigned} already assigned.</p>
-      <p>Choose one operator to assign all eligible leads, or several to split this selection evenly. Existing workloads are not rebalanced.</p>
+      ${state.modal.fromTeam?`<label>How many unassigned leads?<input type="number" name="batch_count" min="1" max="2000" value="${rows.length||1}"></label><p>From open, contactable, unassigned residential prospects. Up to 2,000 at a time.</p>`:`<p><strong>${rows.length} selected leads</strong> · ${assigned} already assigned.</p>`}
+      <p>Choose one member, or select several to split the leads evenly.</p>
       <fieldset class="crm-operator-options"><legend>Assign to operators</legend>
-        ${activeCrmOperators().map(rep=>`<label><input type="checkbox" name="operator" value="${esc(rep.id)}"><span><strong>${esc(rep.full_name||rep.email)}</strong><small>${esc(rep.email)} · ${state.rows.filter(row=>row.sales_owner_id===rep.id && !['active','lost'].includes(stageFor(row))).length} open leads</small></span></label>`).join('') || '<p>No active operators. Add a sales-team account in the admin portal first.</p>'}
+        ${activeCrmOperators().map(rep=>`<label><input type="checkbox" name="operator" value="${esc(rep.id)}" ${state.modal.operatorId===rep.id?'checked':''}><span><strong>${esc(rep.full_name||rep.email)}</strong><small>${rep.username?'@'+esc(rep.username):'Sales member'} · ${state.rows.filter(row=>row.sales_owner_id===rep.id && !['active','lost'].includes(stageFor(row))).length} open leads</small></span></label>`).join('') || '<p>No active operators. Add a member in the Team tab first.</p>'}
       </fieldset>
-      <label class="crm-preserve-owner"><input type="checkbox" name="only_unassigned" checked> Only assign unassigned leads</label>
-      <p>Uncheck this option to reassign selected leads that already have an owner. Each change is recorded in activity history.</p>
+      <label class="crm-preserve-owner" ${state.modal.fromTeam?'hidden':''}><input type="checkbox" name="only_unassigned" checked> Only assign unassigned leads</label>
+      ${state.modal.fromTeam?'':'<p>Uncheck to reassign existing owners. Changes are recorded in activity history.</p>'}
+      <div class="crm-assignment-preview" data-assignment-preview role="status">Choose a sales member to preview the assignment.</div>
     </div>${modalFooter('Apply assignment')}</form>`, '', true);
 }
 async function handleAssignmentForm(form) {
@@ -4654,6 +4690,7 @@ async function handleAssignmentForm(form) {
   if (button?.disabled) return;
   if (button) button.disabled=true;
   try {
+    if(state.modal.fromTeam)updateAssignmentPreview(form);
     const ids=state.modal?.ids||[], operators=[...form.querySelectorAll('[name="operator"]:checked')].map(input=>input.value);
     const onlyUnassigned=form.querySelector('[name="only_unassigned"]').checked;
     const plan=assignmentPlan(ids,operators,onlyUnassigned);
