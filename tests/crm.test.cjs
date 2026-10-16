@@ -15,9 +15,9 @@ test('CRM access requires a permitted saved staff profile, never editable user m
 test('pipeline and contacts use real records, escape content, and filter by ownership and contact details',()=>{
  const c=fixture(),t=c.T;t.state.profile={role:'sales'};t.state.rows=[{id:'a',property_name:'<script>alert(1)</script>',contact_email:'person@example.com',contact_phone:'9195550100',sales_owner_id:'one',pipeline_stage:'contacted',lead_value:1200},{id:'b',property_name:'Other',sales_owner_id:'two',pipeline_stage:'active',lead_value:900}];
  t.state.search='person@example.com';assert.equal(t.baseFilteredRows().length,1);let html=t.renderCrmContacts();assert.ok(!html.includes('<script>'));assert.ok(html.includes('&lt;script&gt;'));assert.ok(html.includes('person@example.com'));
- t.state.search='';t.state.ownerFilter='one';html=t.renderCrmPipeline();assert.ok(html.includes('1 opportunities'));assert.ok(html.includes('data-crm-stage="a"'));assert.ok(!html.includes('data-crm-stage="b"'));assert.ok(!html.includes('New Prospect</button>'));
+ t.state.search='';t.state.ownerFilter='one';t.state.pipelineStage='contacted';html=t.renderCrmPipeline();assert.ok(html.includes('Active pipeline'));assert.ok(html.includes('data-inline-stage="a"'));assert.ok(!html.includes('data-inline-stage="b"'));assert.ok(!html.includes('New Prospect</button>'));
 });
-test('CRM views render useful empty states without invented records or results',()=>{const t=fixture().T;t.state.profile={role:'sales'};for(const render of [t.renderCrmOverview,t.renderCrmPipeline,t.renderCrmContacts,t.renderCrmTeam])assert.ok(render().length>100);assert.match(t.renderCrmPipeline(),/No opportunities here yet/);assert.match(t.renderCrmTeam(),/No team members/);});
+test('CRM views render useful empty states without invented records or results',()=>{const t=fixture().T;t.state.profile={role:'sales'};for(const render of [t.renderCrmOverview,t.renderCrmPipeline,t.renderCrmContacts,t.renderCrmTeam])assert.ok(render().length>100);assert.match(t.renderCrmPipeline(),/No prospects match this view/);assert.match(t.renderCrmTeam(),/No team members/);});
 
 
 test('CRM collection loader reads beyond the first database page',async()=>{
@@ -91,7 +91,7 @@ test('Team loads lightweight lead ownership only, without contact history reques
 test('a stalled request exits loading with a retry action and a retry recovers',async()=>{
  const c=fixture(),t=c.T;
  await assert.rejects(t.withCrmTimeout(new Promise(()=>{}),5),/took too long/);
- vm.runInContext(`render=()=>{};loadRows=async()=>{throw new Error('Loading took too long. Please retry.')};loadReps=async()=>[];`,c);
+ vm.runInContext(`render=()=>{};loadRows=async()=>{throw new Error('Loading took too long. Please retry.')};loadReps=async()=>[];crmSalesRequest=async()=>({});`,c);
  await t.refreshData(true,true);assert.equal(t.state.loading,false);assert.equal(t.state.loadFailed,true);assert.match(t.renderLoadFailure(),/data-retry-workspace/);
  vm.runInContext(`loadRows=async()=>({leads:[],tasks:[],activities:[]})`,c);
  await t.refreshData(true,true);assert.equal(t.state.loading,false);assert.equal(t.state.loadFailed,false);

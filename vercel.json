@@ -49,6 +49,9 @@
     },
     "api/customer-portal.js": {
       "maxDuration": 60
+    },
+    "api/crm-sales.js": {
+      "maxDuration": 60
     }
   },
   "routes": [
