@@ -53,6 +53,16 @@
   },
   "routes": [
     {
+      "src": "^/(?:index\\.html)?$",
+      "has": [
+        {
+          "type": "host",
+          "value": "sales.turnlypros.com"
+        }
+      ],
+      "dest": "/sales-login.html"
+    },
+    {
       "src": "^/qa-analytics(?:\\.html)?/?$",
       "status": 308,
       "headers": {
