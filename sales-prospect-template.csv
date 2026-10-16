@@ -1,2 +1,2 @@
-name,address,phone_number,stage,next_steps
-The Maple at Austin,"2901 Maple Ave, Austin, TX",512-555-0187,new_leads,Call decision maker
+name,brokerage,email,phone_number,city,state,prospect_type,stage,next_steps
+Example Realtor,Example Realty,agent@example.com,919-555-0100,Raleigh,NC,realtor,new_leads,Discuss closing gifts

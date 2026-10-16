@@ -2,10 +2,11 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),fs=requir
 let source=fs.readFileSync('sales-portal.js','utf8').replace(/\r/g,'').replace(/import[\s\S]*?from\s+["'][^"']+["'];/g,'');
 const cut=source.indexOf('bindEvents();\n\nif (await requireSalesAccess())');
 source=source.slice(0,cut)+source.slice(source.indexOf('function renderCrmOverview()',cut));
+source=fs.readFileSync('crm-sales-content.mjs','utf8').replace(/export /g,'')+'\n'+source;
 function fixture(profile={role:'sales',status:'active'}){
  const db={auth:{getUser:async()=>({data:{user:{id:'staff',user_metadata:{role:'admin'}}}})},from:()=>({select(){return this},eq(){return this},maybeSingle:async()=>({data:profile})})};
  const context={console,URL,Date,Intl,Map,Set,Number,String,Math,JSON,window:{__ENV:{SUPABASE_URL:'test',SUPABASE_ANON_KEY:'test'},location:{},localStorage:{getItem:()=>null}},localStorage:{getItem:()=>null},document:{getElementById:()=>null,body:{dataset:{salesPage:'dashboard'}}},createClient:()=>db,verifyAdminPreviewSession:async()=>null};
- vm.createContext(context);vm.runInContext(source+'\nglobalThis.T={state,requireSalesAccess,isSalesAdmin,renderCrmOverview,renderCrmPipeline,renderCrmContacts,renderCrmTeam,baseFilteredRows,loadSalesCollection,updateStage,assignmentPlan,renderAssignmentModal,payloadFromUpload};',context);return context;
+ vm.createContext(context);vm.runInContext(source+'\nglobalThis.T={state,requireSalesAccess,isSalesAdmin,renderCrmOverview,renderCrmPipeline,renderCrmContacts,renderCrmTeam,baseFilteredRows,loadSalesCollection,updateStage,assignmentPlan,renderAssignmentModal,payloadFromUpload,renderSidebar,renderLeadsPage,renderLeadFocusMode,renderScriptsPage,renderPlaybookPage,pagedProspects,knowledgeMatches,handleOutreachForm,renderContactCard};',context);return context;
 }
 test('CRM access requires a permitted saved staff profile, never editable user metadata',async()=>{
  for(const profile of [null,{role:'contractor',status:'active'},{role:'sales',status:'disabled'},{role:'sales_team',status:'suspended'}]){const c=fixture(profile);assert.equal(await c.T.requireSalesAccess(),false);assert.equal(c.window.location.href,'sales-login.html');}
@@ -53,4 +54,24 @@ test('pipeline stage change persists to existing records and writes an activity'
  const c=fixture();c.T.state.rows=[{id:'lead',pipeline_stage:'new_leads'}];
  vm.runInContext(`globalThis.saved=[];saveRecord=async(id,payload,activity)=>saved.push({id,payload,activity});refreshData=async()=>{};setMessage=()=>{};`,c);
  await c.T.updateStage('lead','contacted');assert.equal(c.saved.length,1);assert.equal(c.saved[0].id,'lead');assert.equal(c.saved[0].payload.pipeline_stage,'contacted');assert.equal(c.saved[0].activity,'Moved to Contacted.');
+});
+
+test('gift sales navigation and workflow remove retired tabs and support large prospect lists',()=>{
+ const t=fixture().T;t.state.profile={role:'admin'};t.state.reps=[];
+ t.state.rows=Array.from({length:5676},(_,i)=>({id:String(i),property_name:'Realtor '+i,prospect_type:'realtor',business_segment:'residential',pipeline_stage:'new_leads'}));
+ let html=t.renderLeadsPage();assert.equal((html.match(/data-lead-select="/g)||[]).length,50);assert.match(html,/Select first 2000 matches/);
+ t.state.prospectPage=114;assert.equal(t.pagedProspects(t.state.rows).rows.length,26);
+ const nav=t.renderSidebar();for(const label of ['Contacts','Walkthroughs','Agent partners','Proposals','Closing'])assert.ok(!nav.includes('>'+label+'<'));
+ assert.match(nav,/Scripts/);const overview=t.renderCrmOverview();assert.ok(!overview.includes('sales-walkthroughs.html'));
+});
+test('library contains varied scripts and objections and filters without losing content',()=>{
+ const t=fixture().T;assert.match(t.renderScriptsPage(),/18 outreach scripts and 60 objection responses/);
+ t.state.libraryKind='objections';t.state.librarySearch='refund';let html=t.renderScriptsPage();assert.match(html,/refund/);assert.ok(!html.includes('Can I reload a card?'));
+ t.state.librarySearch='';t.state.libraryCategory='Boundaries';html=t.renderScriptsPage();assert.match(html,/Stop calling/);assert.ok(!html.includes('bulk discount'));
+ const guide=t.renderPlaybookPage();assert.match(guide,/Why realtors may choose/);assert.match(guide,/One gift card can be applied/);
+});
+test('realtor contact card includes alternate contacts, escapes source notes and suppresses calling for opt-outs',()=>{
+ const t=fixture().T,row={id:'r',property_name:'Realtor',referral_agent_id:'a',contact_phone:'9195550100',contact_email:'agent@example.test',source_contact:{phone_2:'9195550200',email_3:'alt@example.test',notes:'<script>bad()</script>'}};
+ let html=t.renderContactCard(row);assert.match(html,/9195550200/);assert.match(html,/alt@example.test/);assert.ok(!html.includes('<script>'));
+ html=t.renderContactCard({...row,do_not_contact:true});assert.ok(!html.includes('href="tel:'));assert.ok(!html.includes('href="mailto:'));
 });
