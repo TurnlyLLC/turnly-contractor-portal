@@ -1,4 +1,5 @@
 const S=require('../lib/residential-server.cjs'),G=require('../lib/gift-cards.cjs');
+const C=require('../lib/crm-sales.cjs');
 const {uuid,email,clean}=require('../lib/agent-referrals.cjs');
 module.exports=async(req,res)=>{
  if(req.method!=='POST')return S.json(res,405,{error:'Method not allowed.'});
@@ -67,8 +68,11 @@ module.exports=async(req,res)=>{
   if(!uuid(i.id)||!/^[-a-zA-Z0-9_]{40,100}$/.test(i.token||''))throw S.fail('Refresh and try again.');
   const quantity=Number(i.quantity),name=clean(i.name,160),em=email(i.email);
   if(!Number.isInteger(quantity)||quantity<1||quantity>25||!name||!em||i.website)throw S.fail('Enter your name, email and between 1 and 25 cards.');
-  const requestHash=S.hash(JSON.stringify({quantity,name,email:em,terms:G.TERMS}));
-  S.checked(await db.from('gift_orders').upsert({id:i.id,token_hash:S.hash(i.token),request_hash:requestHash,quantity,name,email:em,amount_cents:quantity*10000,terms_version:G.TERMS},{onConflict:'id',ignoreDuplicates:true}));
+  const attribution=await C.attribution(db,i.ref,i.contact);delete attribution.representative;
+  if(attribution.sales_user_id&&!attribution.sales_lead_id){const matches=S.checked(await db.from('sales_leads').select('id').eq('business_segment','residential').eq('sales_owner_id',attribution.sales_user_id).ilike('contact_email',em.replace(/[\\%_]/g,'\\$&')).limit(2));if(matches.length===1)attribution.sales_lead_id=matches[0].id;}
+  const buyer_kind=i.buyer_kind==='realtor'?'realtor':'other',brokerage=clean(i.brokerage,160);
+  const requestHash=S.hash(JSON.stringify({quantity,name,email:em,terms:G.TERMS,ref:i.ref||'',contact:i.contact||'',buyer_kind,brokerage}));
+  S.checked(await db.from('gift_orders').upsert({id:i.id,token_hash:S.hash(i.token),request_hash:requestHash,quantity,name,email:em,amount_cents:quantity*10000,terms_version:G.TERMS,buyer_kind,brokerage,...attribution},{onConflict:'id',ignoreDuplicates:true}));
   const o=S.checked(await db.from('gift_orders').select('*').eq('id',i.id).single());
   if(o.token_hash!==S.hash(i.token)||o.request_hash!==requestHash)throw S.fail('Your order changed. Refresh before purchasing.',409);
   if(o.status!=='pending')throw S.fail('This order is already complete.',409);
@@ -77,7 +81,7 @@ module.exports=async(req,res)=>{
   else{
    if(Date.now()-Date.parse(o.created_at)>23*3600000)throw S.fail('This checkout expired. Refresh to start again.',409);
    const receipt=`${S.ORIGIN}/gift-cards.html#order=${i.id}&token=${encodeURIComponent(i.token)}`;
-   session=await st.checkout.sessions.create({mode:'payment',customer_email:em,allowed_payment_method_types:['card'],client_reference_id:o.id,metadata:{purpose:'turnly_gift_cards',order_id:o.id,terms_version:G.TERMS},payment_intent_data:{metadata:{purpose:'turnly_gift_cards',order_id:o.id}},line_items:[{quantity,price_data:{currency:'usd',unit_amount:10000,product_data:{name:'Turnly $100 Gift Card',description:'NC service areas only. No expiration. One unique card per $100.'}}}],success_url:receipt,cancel_url:receipt+'&cancelled=1'},{idempotencyKey:`gift-checkout-${o.id}`});
+   session=await st.checkout.sessions.create({mode:'payment',customer_email:em,payment_method_types:['card'],client_reference_id:o.id,metadata:{purpose:'turnly_gift_cards',order_id:o.id,terms_version:G.TERMS},payment_intent_data:{metadata:{purpose:'turnly_gift_cards',order_id:o.id}},line_items:[{quantity,price_data:{currency:'usd',unit_amount:10000,product_data:{name:'Turnly $100 Gift Card',description:'NC service areas only. No expiration. One unique card per $100.'}}}],success_url:receipt,cancel_url:receipt+'&cancelled=1'},{idempotencyKey:`gift-checkout-${o.id}`});
    S.checked(await db.from('gift_orders').update({stripe_session:session.id}).eq('id',o.id));
   }
   return S.json(res,200,{url:session.url});

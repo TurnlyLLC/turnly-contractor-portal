@@ -46,7 +46,7 @@ const pageConfig = {
     subtitle: "Schedule walkthroughs for management to close qualified opportunities."
   },
   tasks: {
-    title: "Tasks & Follow-ups",
+    title: "Follow-ups",
     subtitle: "Track outreach, pricing confirmation, reminders, and next sales actions."
   }
 };
@@ -56,8 +56,9 @@ const navItems = [
  ['dashboard','Overview','sales.html','dashboard'],
  ['leads','Prospects','sales-leads.html','users'],
  ['pipeline','Deal pipeline','crm-pipeline.html','dashboard'],
- ['tasks','Tasks & Follow-ups','sales-tasks.html','clipboard-check'],
+ ['tasks','Follow-ups','sales-tasks.html','clipboard-check'],
  ['scripts','Scripts','crm-scripts.html','file-text'],
+ ['sales','Sales dashboard','crm-sales.html','dashboard'],
  ['team','Team','crm-team.html','users'],
  ['guide','Team playbook','crm-guide.html','file-check']
 ];
@@ -65,7 +66,7 @@ Object.assign(pageConfig,{
  leads:{title:'Prospects',subtitle:'Realtors and residential clients. One owner, one clear next step.'},
  scripts:{title:'Scripts',subtitle:'Outreach scripts, objection responses and respectful next steps.'},
  guide:{title:'Team playbook',subtitle:'Sell Turnly gift cards and residential cleaning with confidence.'},
- tasks:{title:'Tasks & Follow-ups',subtitle:'Calls, purchase-link follow-ups and next conversations.'}
+ tasks:{title:'Follow-ups',subtitle:'Calls, purchase-link follow-ups and next conversations.'}
 });
 const stageDefs = [
  {id:'new_leads',label:'New',tone:'green'},
@@ -828,7 +829,7 @@ function taskStatus(row) {
 }
 
 function taskDue(row) {
-  return row?.task_due_at || row?.next_step_due_at;
+  return row?.follow_up_due_at || row?.task_due_at || row?.next_step_due_at;
 }
 
 function walkthroughAt(row) {
@@ -1189,7 +1190,7 @@ async function loadSalesCollection(tableName,compact=false) {
   for(let offset=0;;offset+=500){
     const isLead = tableName === SALES_TABLES.leads;
     const result = await supabase.from(tableName)
-      .select(isLead ? (compact?'id,business_segment,sales_owner_id,pipeline_stage,do_not_contact':'*') : '*,sales_leads!inner(business_segment)')
+      .select(isLead ? (compact?'id,business_segment,sales_owner_id,pipeline_stage,do_not_contact,sales_region,sales_city,prospect_type':'*') : '*,sales_leads!inner(business_segment)')
       .eq(isLead ? 'business_segment' : 'sales_leads.business_segment', 'residential')
       .order('id',{ascending:true}).range(offset,offset+499);
     if(result.error)throw result.error;
@@ -1210,7 +1211,8 @@ async function refreshData(showLoading = true,accessChecked=false) {
   if(showLoading){state.loading=true;state.loadFailed=false;state.message='';render();}
   try {
     if(!accessChecked&&!await withCrmTimeout(requireSalesAccess())){state.rows=[];state.leads=[];return;}
-    const [collections,reps]=await withCrmTimeout(Promise.all([loadRows(),loadReps()]));
+    const [collections,reps,salesContext]=await withCrmTimeout(Promise.all([loadRows(),loadReps(),crmSalesRequest('context')]));
+    state.salesContext=salesContext;
     Object.assign(state,collections,{reps,walkthroughs:[],quotes:[],contracts:[],walkthroughAvailability:[]});
     composeSalesRows();
     const ids=new Set(state.rows.map(row=>row.id));state.selectedLeadIds=new Set([...state.selectedLeadIds].filter(id=>ids.has(id)));
@@ -1259,7 +1261,7 @@ function renderSidebar() {
       </a>
       <p class="sales-side-kicker">Workspace</p>
       <nav class="sales-nav" aria-label="Sales navigation">
-        ${navItems.map(([key, label, href, iconName]) => `
+        ${navItems.filter(([key])=>key!=='sales'||isSalesAdmin()).map(([key, label, href, iconName]) => `
           <a class="sales-nav-link ${state.page === key ? "active" : ""}" href="${href}">
             ${icon(iconName)}<span>${label}</span>
           </a>
@@ -1341,9 +1343,9 @@ function renderTopbar() {
           ${icon("calendar")}
           <span>${esc(formatDate(startOfWeek(), { year: "numeric" }))} - ${esc(formatDate(endOfWeek(), { year: "numeric" }))}</span>
         </button>
-        <a class="sales-icon-button" href="sales-tasks.html" aria-label="Open follow-up tasks">
+        <a class="sales-icon-button" href="sales.html#notifications" aria-label="Open notifications">
           ${icon("bell")}
-          <span class="sales-badge">${number(openTasks().length)}</span>
+          <span class="sales-badge">${number(state.salesContext?.notifications?.length||0)}</span>
         </a>
         ${isSalesAdmin() ? `
           <button class="sales-primary-button sales-upload-prospects-button" type="button" data-open-import>
@@ -1384,6 +1386,7 @@ function renderPage() {
  if(state.page==='scripts')return renderScriptsPage();
  if(state.page==='guide')return renderPlaybookPage();
  if(state.page==='pipeline')return renderCrmPipeline();
+ if(state.page==='sales')return isSalesAdmin()?renderSalesDashboard():emptyState('Administrator access required','Open Overview for your sales results.');
  if(state.page==='team')return renderCrmTeam();
  if(state.page==='leads')return renderLeadsPage();
  if(state.page==='tasks')return renderTasksPage();
@@ -1425,7 +1428,7 @@ function baseFilteredRows(rows = state.rows) {
 }
 
 function leadFocusRows() {
-  return baseFilteredRows().filter(row=>!row.do_not_contact && stageFor(row)!=="lost");
+  return baseFilteredRows().filter(row=>!row.do_not_contact && !['lost','follow_up','active'].includes(stageFor(row)));
 }
 
 function statusForCurrentPage(row) {
@@ -1834,7 +1837,7 @@ function renderFilters(options = {}) {
         <input id="salesPageSearch" aria-label="Search records" type="search" value="${esc(state.search)}" placeholder="${esc(options.placeholder || "Search records...")}" />
       </label>
       <select class="sales-filter" aria-label="Filter by owner" data-filter-owner>${ownerOptions}</select>
-      <select class="sales-filter" aria-label="Filter by stage" data-filter-stage>${stageOptions}</select>
+      ${state.page==='pipeline'?'':`<select class="sales-filter" aria-label="Filter by stage" data-filter-stage>${stageOptions}</select>`}
       ${options.statuses ? `<select class="sales-filter" data-filter-status>${statusOptions}</select>` : `<span></span>`}
       ${isSalesAdmin() ? `<button class="sales-primary-button" type="button" data-open-lead>${icon("plus")}New Prospect</button>` : ""}
     </div>
@@ -1867,7 +1870,7 @@ function renderStageTabs() {
 
 function renderLeadsPage() {
  const rows=baseFilteredRows(),focus=leadFocusRows();
- if(state.leadFocusMode){const selected=recordById(state.selectedId);return renderLeadFocusMode(selected&&(selected.do_not_contact||stageFor(selected)==='lost')?[selected]:focus);}
+ if(state.leadFocusMode){const selected=recordById(state.selectedId);return renderLeadFocusMode(selected&&(selected.do_not_contact||['lost','follow_up','active'].includes(stageFor(selected)))?[selected]:focus);}
  const page=pagedProspects(rows),admin=isSalesAdmin();
  return `<div class="crm-welcome"><div><p class="crm-eyebrow">REALTORS & RESIDENTIAL CLIENTS</p><h2>Your next conversation starts here.</h2><p>Call, understand the opportunity, and offer a useful next step.</p></div><button class="sales-primary-button" data-enter-lead-focus ${focus.length?'':'disabled'}>Start calling</button></div>
  <article class="sales-panel"><div class="sales-panel-header"><div><h2>Prospects</h2><p>${number(rows.length)} matches · realtor and residential contacts in one list</p></div>${admin?'<div class="sales-row-actions"><button class="sales-secondary-button" data-open-import>Import prospects</button><button class="sales-primary-button" data-open-lead>Add prospect</button></div>':''}</div>
@@ -1878,13 +1881,13 @@ function renderLeadsPage() {
 
 function renderLeadTable(rows) {
  if(!rows.length)return emptyState('No prospects match this view','Try another operator, city, prospect type or search.');
- return `<div class="sales-table-wrap"><table class="sales-table"><thead><tr>${isSalesAdmin()?'<th>Select</th>':''}<th>Prospect</th><th>Contact</th><th>Operator</th><th>Stage</th><th>Next action</th><th>Open</th></tr></thead><tbody>${rows.map(row=>`<tr>
+ return `<div class="sales-table-wrap"><table class="sales-table"><thead><tr>${isSalesAdmin()?'<th>Select</th>':''}<th>Prospect</th><th>Contact</th><th>Operator</th><th>Stage</th>${state.page==='tasks'?'<th>Reach out on</th>':''}<th>Open</th></tr></thead><tbody>${rows.map(row=>`<tr>
  ${isSalesAdmin()?`<td><input type="checkbox" data-lead-select="${esc(row.id)}" aria-label="Select ${esc(recordTitle(row))}" ${state.selectedLeadIds.has(row.id)?'checked':''}></td>`:''}
  <td><strong>${esc(recordTitle(row))}</strong><small>${esc(row.company_name||prospectTypeLabel(row.prospect_type))}</small><small>${esc([row.sales_city,row.sales_state].filter(Boolean).join(', '))}</small>${row.do_not_contact?'<span class="sales-status-pill lost">Do not contact</span>':''}</td>
  <td>${contactActions(row)}<small>${row.referral_agent_id?'Imported realtor · all contact details inside':''}</small></td>
  <td>${esc(ownerName(row))}${isSalesAdmin()?`<button class="sales-link-action" data-assign-lead="${esc(row.id)}">Assign</button>`:''}</td>
  <td><select class="sales-filter" data-inline-stage="${esc(row.id)}" aria-label="Stage for ${esc(recordTitle(row))}">${stageDefs.map(st=>`<option value="${st.id}" ${stageFor(row)===st.id?'selected':''}>${esc(st.label)}</option>`).join('')}</select></td>
- <td>${esc(row.next_step||'Set a next step')}<small>${esc(formatDateTime(taskDue(row),{empty:'No follow-up date'}))}</small></td>
+ ${state.page==='tasks'?`<td>${esc(formatDateTime(taskDue(row),{empty:'Not scheduled'}))}</td>`:''}
  <td><button class="sales-primary-button" data-work-prospect="${esc(row.id)}">Work prospect</button><button class="sales-link-action" data-open-lead="${esc(row.id)}">Edit details</button></td></tr>`).join('')}</tbody></table></div>`;
 }
 
@@ -2178,7 +2181,7 @@ function renderLeadFocusMode(rows) {
  const row=selectRecord(rows);
  if(!row)return `${emptyState('No callable prospects in this view','Do-not-contact and declined prospects are excluded from the calling queue.')}<button class="sales-secondary-button" data-exit-lead-focus>Back to prospects</button>`;
  return `<div class="crm-welcome"><div><p class="crm-eyebrow">${esc(prospectTypeLabel(row.prospect_type))} · ${rows.findIndex(r=>r.id===row.id)+1} OF ${rows.length}</p><h2>${esc(recordTitle(row))}</h2><p>${esc(row.company_name||'Residential prospect')} · ${esc(ownerName(row))}</p></div>${renderFocusNavigation(rows,'top')}</div>
- <div class="crm-call-layout"><div>${renderContactCard(row)}<article class="sales-panel crm-call-panel"><h2>Conversation notes</h2><p class="crm-note-text">${esc(row.lead_notes||'No notes yet.')}</p>${(row.sales_activity_log||[]).slice(0,15).map(a=>`<div class="crm-history"><small>${esc(formatDateTime(a.at))} · ${esc(a.user)}</small><p>${esc(a.text)}</p></div>`).join('')}</article></div>
+ <div class="crm-call-layout"><div>${renderContactCard(row)}${renderQuickSend(row)}<article class="sales-panel crm-call-panel"><h2>Conversation notes</h2><p class="crm-note-text">${esc(row.lead_notes||'No notes yet.')}</p>${(row.sales_activity_log||[]).slice(0,15).map(a=>`<div class="crm-history"><small>${esc(formatDateTime(a.at))} · ${esc(a.user)}</small><p>${esc(a.text)}</p></div>`).join('')}</article></div>
  <article class="sales-panel crm-call-panel"><p class="crm-eyebrow">LISTEN → EXPLAIN → AGREE ON A NEXT STEP</p><h2>Work this opportunity</h2><p>Ask about their closing gifts, upcoming clients, service-area fit and preferred next step.</p><a href="crm-scripts.html" target="_blank" rel="noopener" class="sales-secondary-button">Open scripts & objections ↗</a>
  <form data-outreach-form data-record-id="${esc(row.id)}"><div class="sales-form-grid">
  ${selectField('pipeline_stage','Outcome / stage',stageDefs.map(st=>[st.id,st.label]),stageFor(row))}
@@ -2971,8 +2974,8 @@ function renderTaskFocusLanes(groups) {
 }
 
 function renderTasksPage() {
- const rows=baseFilteredRows().filter(r=>!r.do_not_contact&&taskStatus(r)!=='completed'&&taskDue(r)).sort((a,b)=>(new Date(taskDue(a)||'9999-01-01'))-(new Date(taskDue(b)||'9999-01-01'))),page=pagedProspects(rows);
- return `<article class="sales-panel"><div class="sales-panel-header"><div><h2>Calls & follow-ups</h2><p>Work the next action agreed with each prospect.</p></div></div>${renderFilters({placeholder:'Search follow-ups...'})}${renderLeadTable(page.rows)}${renderProspectPager(page)}</article>`;
+ const rows=baseFilteredRows().filter(r=>!r.do_not_contact&&['lost','follow_up'].includes(stageFor(r))).sort((a,b)=>(new Date(taskDue(a)||'9999-01-01'))-(new Date(taskDue(b)||'9999-01-01'))),page=pagedProspects(rows);
+ return `<article class="sales-panel"><div class="sales-panel-header"><div><h2>Follow-up pipeline</h2><p>Follow-up and Not interested leads leave the active pipeline. A reminder appears one calendar month later. Do-not-contact leads are excluded.</p></div></div>${renderFilters({placeholder:'Search follow-ups...'})}${renderLeadTable(page.rows)}${renderProspectPager(page)}</article>`;
 }
 
 function renderTaskTable(rows) {
@@ -3058,6 +3061,8 @@ function renderTaskDetail(row) {
 
 function renderModal() {
   if (!state.modal) return "";
+  if(state.modal.type==='sendLink')return renderSendModal();
+  if(state.modal.type==='removeLeads')return renderRemoveModal();
   if (state.modal.type.startsWith("team")) return renderTeamModal();
   if (state.modal.type === "assignment") return renderAssignmentModal();
   if (state.modal.type === "import") return renderImportModal();
@@ -4092,12 +4097,13 @@ function changeCalendar(direction) {
 }
 
 function bindEvents() {
+  bindSalesOperations();
   document.addEventListener('click',event=>{if(event.target.closest?.('[data-retry-workspace]'))refreshData();});
   document.addEventListener('click',async event=>{
     const button=event.target.closest?.('[data-team-create],[data-team-edit],[data-team-reset],[data-team-deactivate],[data-team-reactivate],[data-team-assign],[data-team-copy]');if(!button)return;
     if(!isSalesAdmin())return;
     if(button.hasAttribute('data-team-copy')){try{await navigator.clipboard.writeText(`Turnly Residential CRM\nhttps://sales.turnlypros.com\nUsername: ${state.modal.username}\nTemporary password: ${state.modal.temporary_password}\nChoose a new password at first sign-in.`);document.querySelector('#crmCredentialMessage').textContent='Copied. Share privately with this member.';}catch{document.querySelector('#crmCredentialMessage').textContent='Select and copy the details above.';}return;}
-    if(button.dataset.teamAssign){state.modal={type:'assignment',fromTeam:true,operatorId:button.dataset.teamAssign,ids:state.rows.filter(r=>!r.sales_owner_id&&r.business_segment==='residential'&&!r.do_not_contact&&!['active','lost'].includes(stageFor(r))).sort((a,b)=>a.id.localeCompare(b.id)).slice(0,50).map(r=>r.id)};render();updateAssignmentPreview(document.querySelector('[data-assignment-form]'));return;}
+    if(button.dataset.teamAssign){state.modal={type:'assignment',fromTeam:true,operatorId:button.dataset.teamAssign,ids:state.rows.filter(r=>!r.sales_owner_id&&r.business_segment==='residential'&&!r.do_not_contact&&!['active','lost','follow_up'].includes(stageFor(r))).sort((a,b)=>a.id.localeCompare(b.id)).slice(0,50).map(r=>r.id)};render();updateAssignmentPreview(document.querySelector('[data-assignment-form]'));return;}
     const action=button.hasAttribute('data-team-create')?'create':button.dataset.teamEdit?'edit':button.dataset.teamReset?'reset':button.dataset.teamDeactivate?'deactivate':'reactivate';
     state.modal={type:'teamMember',action,userId:button.dataset.teamEdit||button.dataset.teamReset||button.dataset.teamDeactivate||button.dataset.teamReactivate};render();
   });
@@ -4601,28 +4607,29 @@ bindEvents();
 
 if (await requireSalesAccess()) {
   const hashId = window.location.hash.replace("#", "");
-  if (hashId) {
+  if (hashId&&hashId!=='notifications') {
     state.selectedId = hashId;
     if(state.page==="leads")state.leadFocusMode=true;
   } else {
     restoreSalesFocusPlace();
   }
   await refreshData(true,true);
-  setInterval(async()=>{if(!await requireSalesAccess()){state.rows=[];state.leads=[];state.reps=[];}},60000);
+  setInterval(async()=>{if(!await requireSalesAccess()){state.rows=[];state.leads=[];state.reps=[];}else if(!document.hidden){try{const result=await crmSalesRequest('notifications');if(state.salesContext){state.salesContext.notifications=result.notifications;const badge=document.querySelector('.sales-badge');if(badge)badge.textContent=result.notifications.length;}}catch{}}},60000);
 }
 
 function renderCrmOverview() {
- const rows=baseFilteredRows(),open=rows.filter(r=>!r.do_not_contact&&!['active','lost'].includes(stageFor(r))),due=open.filter(r=>taskDue(r)&&new Date(taskDue(r))<=new Date()&&taskStatus(r)!=='completed'),purchased=rows.filter(r=>stageFor(r)==='active');
+ const rows=baseFilteredRows(),open=rows.filter(r=>!r.do_not_contact&&!['active','lost','follow_up'].includes(stageFor(r))),due=rows.filter(r=>!r.do_not_contact&&['lost','follow_up'].includes(stageFor(r))&&taskDue(r)&&new Date(taskDue(r))<=new Date()&&taskStatus(r)!=='completed'),purchased=rows.filter(r=>stageFor(r)==='active');
  return `<div class="crm-welcome"><div><p class="crm-eyebrow">TURNLY RESIDENTIAL SALES</p><h2>A useful gift. A real conversation.</h2><p>Help realtors give clients $100 toward a cleaner home.</p></div><a class="sales-primary-button" href="sales-leads.html">Work prospects →</a></div>
- <section class="sales-metric-grid crm-four">${metricCard('Open prospects',number(open.length),'People to move forward','users')}${metricCard('Realtor prospects',number(rows.filter(r=>r.prospect_type==='realtor').length),'In your current operator view','users','blue')}${metricCard('Follow-ups due',number(due.length),'Open follow-ups due now','clipboard-check','yellow')}${metricCard('Purchased / booked',number(purchased.length),'Manually verified sales stages','check')}</section>
- <div class="crm-overview-grid"><article class="sales-panel"><div class="sales-panel-header"><h2>Pipeline at a glance</h2><a class="sales-link-action" href="crm-pipeline.html">Open pipeline →</a></div><div class="crm-stage-summary">${stageDefs.map(st=>{const count=rows.filter(r=>stageFor(r)===st.id).length;return `<div class="crm-stage-row"><span>${esc(st.label)}</span><div class="crm-bar"><i style="width:${rows.length?Math.round(count/rows.length*100):0}%"></i></div><strong>${number(count)}</strong></div>`}).join('')}</div></article>
+ <section class="sales-metric-grid crm-four">${metricCard('Open prospects',number(open.length),'People to move forward','users')}${metricCard('Realtor prospects',number(rows.filter(r=>r.prospect_type==='realtor').length),'In your current operator view','users','blue')}${metricCard('Follow-ups due',number(due.length),'Open follow-ups due now','clipboard-check','yellow')}${metricCard('Completed purchases',number(state.salesContext?.stats?.purchases||0),'Stripe-confirmed gift-card orders','check')}</section>
+ ${renderReferralPanel()}${renderCrmNotifications()}<div class="crm-overview-grid"><article class="sales-panel"><div class="sales-panel-header"><h2>Pipeline at a glance</h2><a class="sales-link-action" href="crm-pipeline.html">Open pipeline →</a></div><div class="crm-stage-summary">${stageDefs.map(st=>{const count=rows.filter(r=>stageFor(r)===st.id).length;return `<div class="crm-stage-row"><span>${esc(st.label)}</span><div class="crm-bar"><i style="width:${rows.length?Math.round(count/rows.length*100):0}%"></i></div><strong>${number(count)}</strong></div>`}).join('')}</div></article>
  <article class="sales-panel crm-call-panel"><p class="crm-eyebrow">THE OFFER</p><h2>$100 Turnly gift cards</h2><p>Separate cards. Printable PDF after payment. No expiration. Eligible North Carolina service addresses only.</p><p>Each card is cleaning credit. The recipient pays any difference; one gift card can be used per online booking.</p><a class="sales-primary-button" target="_blank" rel="noopener" href="${GIFT_CARD_URL}">View purchase page ↗</a><a class="sales-secondary-button" href="crm-guide.html">Read the sales playbook</a></article></div>
  <div class="sales-two-column"><article class="sales-panel crm-call-panel"><h2>Next conversations</h2>${due.slice(0,8).map(r=>`<a class="crm-queue-item" href="sales-leads.html#${esc(r.id)}"><strong>${esc(recordTitle(r))}</strong><span>${esc(r.next_step||'Follow up')}</span></a>`).join('')||'<p>No overdue follow-ups in this view. Open Prospects to work your list.</p>'}</article><article class="sales-panel"><div class="sales-panel-header"><h2>Activity feed</h2></div>${renderRecentActivity()}</article></div>`;
 }
 
 function renderCrmPipeline() {
- const rows=baseFilteredRows(),selected=rows.find(r=>r.id===state.selectedId);
- return `<article class="sales-panel crm-board-panel">${renderFilters({placeholder:'Search prospects, brokerages or contacts...'})}${renderProspectFilters()}<div class="crm-board-meta"><span>${number(rows.length)} opportunities</span><span>Stages record actions; they do not send messages or charge a payment.</span></div><div class="crm-pipeline">${stageDefs.map(st=>{const cards=rows.filter(r=>stageFor(r)===st.id);return `<section class="crm-pipeline-column"><header><span class="crm-stage-dot ${st.tone}"></span><h2>${esc(st.label)}</h2><b>${number(cards.length)}</b></header><div class="crm-pipeline-cards">${cards.slice(0,60).map(r=>`<article class="crm-deal-card"><button data-select-record="${esc(r.id)}">${esc(recordTitle(r))}</button><small>${esc(r.company_name||prospectTypeLabel(r.prospect_type))}</small><p>${esc(ownerName(r))}</p><span>${r.gift_card_quantity?`${number(r.gift_card_quantity)} cards considered`:'Quantity not set'}</span><select class="sales-filter" data-crm-stage="${esc(r.id)}" aria-label="Stage for ${esc(recordTitle(r))}">${stageDefs.map(stage=>`<option value="${stage.id}" ${stage.id===st.id?'selected':''}>${esc(stage.label)}</option>`).join('')}</select></article>`).join('')||'<p class="crm-empty-lane">No opportunities here yet.</p>'}${cards.length>60?`<a href="sales-leads.html" class="sales-link-action">${number(cards.length-60)} more — use Prospects to work the full list</a>`:''}</div></section>`}).join('')}</div></article>${selected?`<div class="crm-detail-drawer"><button class="sales-secondary-button" type="button" data-crm-close-detail>Close details</button>${renderLeadDetail(selected)}</div>`:''}`;
+ const rows=baseFilteredRows().filter(r=>!r.do_not_contact&&!['lost','follow_up'].includes(stageFor(r))),stages=stageDefs.filter(st=>!['lost','follow_up'].includes(st.id));
+ const selected=state.pipelineStage||'new_leads',page=pagedProspects(rows.filter(r=>stageFor(r)===selected));
+ return `<article class="sales-panel">${renderFilters({placeholder:'Search prospects...'})}${renderProspectFilters()}<h2>Active pipeline</h2><p>Choose a stage count to work its leads. Follow-up and Not interested leads live in <a href="sales-tasks.html">Follow-ups</a>.</p><div class="crm-linear-pipeline">${stages.map((st,n)=>`<button class="crm-stage-step ${selected===st.id?'selected':''}" data-pipeline-stage="${st.id}"><small>${n+1}. ${esc(st.label)}</small><strong>${number(rows.filter(r=>stageFor(r)===st.id).length)}</strong><span>View leads →</span></button>`).join('')}</div><h3>${esc(stageLabel(selected))}</h3>${renderLeadTable(page.rows)}${renderProspectPager(page)}</article>`;
 }
 
 function renderCrmContacts(){
@@ -4638,7 +4645,7 @@ function renderCrmTeam(){
  const admin=isSalesAdmin(),search=normalize(state.teamSearch),members=state.reps.filter(p=>!search||normalize(`${p.full_name} ${p.username||''} ${p.status}`).includes(search));
  return `<div class="crm-welcome"><div><p class="crm-eyebrow">YOUR PEOPLE. THEIR PIPELINE.</p><h2>Build your sales team.</h2><p>${admin?'Create usernames, manage access and put leads in the right hands. No email addresses needed.':'Your team account and assigned opportunities.'}</p></div>${admin?'<button class="sales-primary-button" data-team-create>Add team member</button>':''}</div>
  <section class="sales-panel"><div class="sales-panel-header"><div><h2>Team members</h2><p>${state.reps.filter(p=>p.status==='active'&&p.enabled!==false).length} active · ${state.rows.filter(r=>!r.sales_owner_id).length} unassigned prospects</p></div><input id="crmTeamSearch" type="search" aria-label="Search team members" placeholder="Search name or username" value="${esc(state.teamSearch||'')}"></div>
- <div class="crm-team-grid">${members.map(p=>{const own=state.rows.filter(r=>r.sales_owner_id===p.id),open=own.filter(r=>!['active','lost'].includes(stageFor(r))),active=p.status==='active'&&p.enabled!==false;return `<article class="crm-member-card"><div class="crm-member-head"><span class="sales-avatar">${esc(initials(p.full_name||'Team member'))}</span><div><h3>${esc(p.full_name||'Team member')}</h3><p>${p.username?'@'+esc(p.username):'Username not set'} · ${p.role==='admin'?'Administrator':'Sales member'}</p></div></div><span class="crm-member-status ${active?'':'inactive'}">${!active?'Inactive':p.must_change_password?'Password setup required':'Active'}</span><div class="crm-member-stats"><span><strong>${open.length}</strong>Open leads</span><span><strong>${own.filter(r=>stageFor(r)==='active').length}</strong>Purchased / booked</span></div><div class="crm-member-actions"><a class="sales-secondary-button" href="sales-leads.html?owner=${encodeURIComponent(p.id)}">View leads</a>${admin&&active?`<button class="sales-primary-button" data-team-assign="${esc(p.id)}">Assign leads</button>`:''}${admin&&(p.role!=='admin'||p.id===state.user?.id)?`<button class="sales-secondary-button" data-team-edit="${esc(p.id)}">${p.username?'Edit member':'Set username'}</button>`:''}${admin&&p.role!=='admin'&&p.username?`${active?`<button class="sales-secondary-button" data-team-reset="${esc(p.id)}">Reset password</button><button class="crm-danger-button" data-team-deactivate="${esc(p.id)}">Deactivate</button>`:`<button class="sales-primary-button" data-team-reactivate="${esc(p.id)}">Reactivate</button><a class="sales-secondary-button" href="sales-leads.html?owner=${encodeURIComponent(p.id)}">Reassign their leads</a>`}`:''}</div></article>`;}).join('')||'<p>No team members match this search.</p>'}</div></section>
+ <div class="crm-team-grid">${members.map(p=>{const own=state.rows.filter(r=>r.sales_owner_id===p.id),open=own.filter(r=>!['active','lost','follow_up'].includes(stageFor(r))),active=p.status==='active'&&p.enabled!==false;return `<article class="crm-member-card"><div class="crm-member-head"><span class="sales-avatar">${esc(initials(p.full_name||'Team member'))}</span><div><h3>${esc(p.full_name||'Team member')}</h3><p>${p.username?'@'+esc(p.username):'Username not set'} · ${p.role==='admin'?'Administrator':'Sales member'}</p></div></div><span class="crm-member-status ${active?'':'inactive'}">${!active?'Inactive':p.must_change_password?'Password setup required':'Active'}</span><div class="crm-member-stats"><span><strong>${open.length}</strong>Open leads</span><span><strong>${own.filter(r=>stageFor(r)==='active').length}</strong>Purchased / booked</span></div><div class="crm-member-actions"><a class="sales-secondary-button" href="sales-leads.html?owner=${encodeURIComponent(p.id)}">View leads</a>${admin?`<button class="sales-secondary-button" data-remove-leads="${esc(p.id)}">Remove leads</button>`:''}${admin&&active?`<button class="sales-primary-button" data-team-assign="${esc(p.id)}">Assign leads</button>`:''}${admin&&(p.role!=='admin'||p.id===state.user?.id)?`<button class="sales-secondary-button" data-team-edit="${esc(p.id)}">${p.username?'Edit member':'Set username'}</button>`:''}${admin&&p.role!=='admin'&&p.username?`${active?`<button class="sales-secondary-button" data-team-reset="${esc(p.id)}">Reset password</button><button class="crm-danger-button" data-team-deactivate="${esc(p.id)}">Deactivate</button>`:`<button class="sales-primary-button" data-team-reactivate="${esc(p.id)}">Reactivate</button><a class="sales-secondary-button" href="sales-leads.html?owner=${encodeURIComponent(p.id)}">Reassign their leads</a>`}`:''}</div></article>`;}).join('')||'<p>No team members match this search.</p>'}</div></section>
  ${admin?'<div class="crm-onboarding"><h2>A simple start for every member</h2><p>1. Add a name and username. 2. Share their temporary password privately. 3. Assign leads. They will choose their own password at first sign-in. Password resets require a new password again; deactivation preserves their notes and lead ownership until you reassign them.</p></div>':''}`;
 }
 function renderTeamModal(){
@@ -4657,7 +4664,7 @@ async function handleTeamForm(form){
 function updateAssignmentPreview(form){
  const output=form.querySelector('[data-assignment-preview]');if(!output)return;
  const ids=[...form.querySelectorAll('[name="operator"]:checked')].map(i=>i.value),only=form.querySelector('[name="only_unassigned"]').checked;
- if(state.modal.fromTeam){const count=Math.max(1,Math.min(2000,Number(form.querySelector('[name="batch_count"]').value)||1));state.modal.ids=state.rows.filter(r=>r.business_segment==='residential'&&!r.sales_owner_id&&!r.do_not_contact&&!['active','lost'].includes(stageFor(r))).sort((a,b)=>a.id.localeCompare(b.id)).slice(0,count).map(r=>r.id);}
+ if(state.modal.fromTeam){const region=form.querySelector('[name=region]').value,city=form.querySelector('[name=city]').value;const count=Math.max(1,Math.min(2000,Number(form.querySelector('[name="batch_count"]').value)||1));state.modal.ids=state.rows.filter(r=>r.business_segment==='residential'&&!r.sales_owner_id&&!r.do_not_contact&&stageFor(r)==='new_leads'&&(!region||r.sales_region===region)&&(!city||r.sales_city===city)).sort((a,b)=>a.id.localeCompare(b.id)).slice(0,count).map(r=>r.id);}
  try{const plan=assignmentPlan(state.modal.ids,ids,only);output.innerHTML=`<strong>Assignment preview · ${plan.length} leads</strong>${ids.map(id=>`<p>${esc(state.reps.find(p=>p.id===id)?.full_name||'Member')}: <strong>${plan.filter(r=>r.operatorId===id).length}</strong> leads</p>`).join('')}`;}catch(e){output.textContent=ids.length?e.message:'Choose a sales member to preview the assignment.';}
 }
 
@@ -4676,7 +4683,7 @@ function renderAssignmentModal() {
   const rows=(state.modal.ids||[]).map(recordById).filter(Boolean),assigned=rows.filter(row=>row.sales_owner_id).length;
   return renderModalShell('Assign residential leads','Operator allocation',`
     <form data-assignment-form><div class="sales-modal-body">
-      ${state.modal.fromTeam?`<label>How many unassigned leads?<input type="number" name="batch_count" min="1" max="2000" value="${rows.length||1}"></label><p>From open, contactable, unassigned residential prospects. Up to 2,000 at a time.</p>`:`<p><strong>${rows.length} selected leads</strong> · ${assigned} already assigned.</p>`}
+      ${state.modal.fromTeam?`<label>Region<select name="region"><option value="">All regions</option>${[...new Set(state.rows.map(r=>r.sales_region).filter(Boolean))].sort().map(v=>`<option>${esc(v)}</option>`).join('')}</select></label><label>City<select name="city"><option value="">All cities</option>${[...new Set(state.rows.map(r=>r.sales_city).filter(Boolean))].sort().map(v=>`<option>${esc(v)}</option>`).join('')}</select></label><p>Regions organize contacts; they do not change Turnly’s eligible service areas.</p><label>How many unassigned leads?<input type="number" name="batch_count" min="1" max="2000" value="${rows.length||1}"></label><p>From new, contactable, unassigned residential prospects. Up to 2,000 at a time.</p>`:`<p><strong>${rows.length} selected leads</strong> · ${assigned} already assigned.</p>`}
       <p>Choose one member, or select several to split the leads evenly.</p>
       <fieldset class="crm-operator-options"><legend>Assign to operators</legend>
         ${activeCrmOperators().map(rep=>`<label><input type="checkbox" name="operator" value="${esc(rep.id)}" ${state.modal.operatorId===rep.id?'checked':''}><span><strong>${esc(rep.full_name||rep.email)}</strong><small>${rep.username?'@'+esc(rep.username):'Sales member'} · ${state.rows.filter(row=>row.sales_owner_id===rep.id && !['active','lost'].includes(stageFor(row))).length} open leads</small></span></label>`).join('') || '<p>No active operators. Add a member in the Team tab first.</p>'}
@@ -4697,7 +4704,7 @@ async function handleAssignmentForm(form) {
     const onlyUnassigned=form.querySelector('[name="only_unassigned"]').checked;
     const plan=assignmentPlan(ids,operators,onlyUnassigned);
     if (!plan.length) throw new Error('No eligible leads. Uncheck “Only assign unassigned leads” to reassign existing owners.');
-    const {data,error}=await supabase.rpc('assign_residential_leads',{p_lead_ids:ids,p_operator_ids:operators,p_only_unassigned:onlyUnassigned});
+    const {data,error}=state.modal.fromTeam?await supabase.rpc('crm_allocate_region',{p_operator_ids:operators,p_count:Number(form.querySelector('[name=batch_count]').value),p_region:form.querySelector('[name=region]').value,p_city:form.querySelector('[name=city]').value}):await supabase.rpc('assign_residential_leads',{p_lead_ids:ids,p_operator_ids:operators,p_only_unassigned:onlyUnassigned});
     if (error) throw error;
     state.modal=null; state.selectedLeadIds.clear();
     await refreshData(false);
@@ -4772,4 +4779,55 @@ function renderPlaybookPage() {
  return `<div class="crm-welcome"><div><p class="crm-eyebrow">THE RESIDENTIAL SALES PLAYBOOK</p><h2>Sell useful help for the home.</h2><p>A practical process for realtor gift cards and residential services.</p></div><a class="sales-primary-button" href="crm-scripts.html">Open scripts & objections →</a></div>
  <div class="crm-playbook-layout"><nav class="sales-panel crm-playbook-index" aria-label="Playbook sections">${PLAYBOOK.map((s,i)=>`<a href="#playbook-${i}">${esc(s.title)}</a>`).join('')}<a href="#gift-card-facts">Current product facts</a></nav><div>${PLAYBOOK.map((section,i)=>`<section class="sales-panel crm-playbook-section" id="playbook-${i}"><p class="crm-eyebrow">${String(i+1).padStart(2,'0')}</p><h2>${esc(section.title)}</h2>${(section.paragraphs||[]).map(p=>`<p>${esc(p)}</p>`).join('')}${section.steps?`<ol>${section.steps.map(step=>`<li>${esc(step)}</li>`).join('')}</ol>`:''}</section>`).join('')}
  <section class="sales-panel crm-playbook-section" id="gift-card-facts"><h2>Current product facts</h2><p>Check the live purchase page and terms before quoting a policy. These points describe the current offer.</p><ul>${PRODUCT_FACTS.map(p=>`<li>${esc(p)}</li>`).join('')}</ul><div class="sales-row-actions"><a href="${GIFT_CARD_URL}" target="_blank" rel="noopener" class="sales-primary-button">Gift-card purchase page ↗</a><a href="gift-card-terms.html" target="_blank" rel="noopener" class="sales-secondary-button">Current gift-card terms ↗</a><a href="${RESIDENTIAL_URL}" target="_blank" rel="noopener" class="sales-secondary-button">Residential website ↗</a></div></section></div></div>`;
+}
+function crmSalesRequest(action,values={}){
+ return supabase.auth.getSession().then(async({data})=>{if(!data?.session)throw new Error('Please sign in again.');const response=await crmFetch('/api/crm-sales',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+data.session.access_token},body:JSON.stringify({action,...values})});const result=await response.json();if(!response.ok)throw new Error(result.error||'Unable to load sales data.');return result;});
+}
+function salesMoney(c){return money((c||0)/100);}
+function renderReferralPanel(){
+ const c=state.salesContext||{},own=c.own||{};
+ return `<article class="sales-panel crm-referral-panel"><div><p class="crm-eyebrow">YOUR PERSONAL CHECKOUT</p><h2>Your link. Your credited sales.</h2><p>Share this checkout with prospects. Earn 10% of each buyer’s first completed purchase. Repeat purchases earn no commission; buyers are matched by checkout email.</p></div><label>Your gift-card checkout link<input id="crmReferralLink" readonly value="${esc(c.link?.url||'')}" aria-label="Your referral link"></label><div class="sales-row-actions"><button class="sales-primary-button" data-copy-referral>Copy link</button><button class="sales-secondary-button" data-send-link="" data-channel="email">Email a contact</button><button class="sales-secondary-button" data-send-link="" data-channel="sms">Text a contact</button></div><p>${number(own.purchases||0)} credited purchases · ${salesMoney(own.gross_cents)} gross sales · ${salesMoney(own.commission_cents)} earned commissions (unpaid)${!c.settings?.commission_mode?' · Commission rate not set':own.unrated?' · '+number(own.unrated)+' earlier orders need a rate':''}</p><p class="crm-muted">Email: ${c.sending?.email?'connected':'setup required'} · Text: ${c.sending?.sms?'connected':'setup required'}</p></article>`;
+}
+function renderCrmNotifications(){
+ const notices=state.salesContext?.notifications||[];
+ return `<article id="notifications" class="sales-panel"><h2>Notifications <span class="sales-status-pill">${notices.length}</span></h2>${notices.map(n=>`<div class="crm-notification"><a href="${n.lead_id?'sales-leads.html#'+esc(n.lead_id):'crm-team.html'}"><strong>${esc(n.title)}</strong><small>${esc(formatDateTime(n.due_at))}</small></a><button class="sales-secondary-button" data-ack-notice="${esc(n.id)}">Dismiss</button></div>`).join('')||'<p>You’re caught up. Monthly reminders and lead-supply alerts appear here when due.</p>'}</article>`;
+}
+function renderSalesDashboard(){
+ const stats=state.salesContext?.stats||{},clients=stats.clients||[],search=normalize(state.buyerSearch||''),matches=clients.filter(c=>!search||normalize(c.name+' '+c.email).includes(search));
+ const page=Math.max(1,Math.min(state.buyerPage||1,Math.ceil(matches.length/50)||1)),shown=matches.slice((page-1)*50,page*50);
+ return `<div class="crm-welcome"><div><p class="crm-eyebrow">ACTUAL GIFT-CARD SALES</p><h2>Revenue you can reconcile.</h2><p>All-time Stripe-confirmed orders, recorded in Supabase. Pending checkouts and manually edited stages never count.</p></div><button class="sales-secondary-button" data-retry-workspace>Refresh totals</button></div><section class="sales-metric-grid crm-four">${metricCard('Gross sales',salesMoney(stats.gross_cents),'Before refunds','check')}${metricCard('Cards purchased',number(stats.cards||0),'$100 cards issued','file-text')}${metricCard('Completed purchases',number(stats.purchases||0),'One per paid order','check')}${metricCard('Realtor buyers',number(stats.realtor_buyers||0),'Distinct normalized buyer emails','users')}</section><article class="sales-panel"><h2>Sales reconciliation</h2><p>Refunds: <strong>${salesMoney(stats.refund_cents)}</strong> · After refunds: <strong>${salesMoney((stats.gross_cents||0)-(stats.refund_cents||0))}</strong> · Under review / disputed: <strong>${salesMoney(stats.held_cents)}</strong></p><p>${number(stats.buyers||0)} unique buying clients. Realtor buyers identify themselves at checkout. Repeat purchases by the same email count as one buyer and separate purchases. Commissions: 10% of the buyer’s first completed purchase only, matched by checkout email. Refunds reduce earned commissions; disputed orders are held. Historical purchases remain counted after refunds; refunded dollars are shown separately.</p><p>Conversion rate is measured for attributed realtor leads below; buyers without a matched lead are included in buyer totals.</p>${state.salesContext?.conversion?`<p><strong>${state.salesContext.conversion.buyers}</strong> matched realtor leads purchased / <strong>${state.salesContext.conversion.prospects}</strong> realtor prospects · <strong>${state.salesContext.conversion.prospects?(100*state.salesContext.conversion.buyers/state.salesContext.conversion.prospects).toFixed(1):'0.0'}%</strong> conversion</p>`:''}</article><article class="sales-panel"><h2>Sales by team member</h2><div class="sales-table-wrap"><table class="sales-table"><thead><tr><th>Sales member</th><th>Purchases</th><th>Cards</th><th>Gross sales</th><th>Earned commissions · unpaid</th></tr></thead><tbody>${(state.salesContext?.memberStats||[]).map(m=>`<tr><td>${esc(state.reps.find(r=>r.id===m.user_id)?.full_name||'Sales member')}</td><td>${m.purchases}</td><td>${m.cards}</td><td>${salesMoney(m.gross_cents)}</td><td>${salesMoney(m.commission_cents)}</td></tr>`).join('')||'<tr><td colspan="5">No attributed completed purchases yet.</td></tr>'}</tbody></table></div></article><article class="sales-panel"><div class="sales-panel-header"><h2>Sales by client</h2><input id="crmBuyerSearch" type="search" value="${esc(state.buyerSearch||'')}" placeholder="Search buyer name or email" aria-label="Search buyers"></div><div class="sales-table-wrap"><table class="sales-table"><thead><tr><th>Buyer</th><th>Type</th><th>Purchases</th><th>Cards</th><th>Gross sales</th><th>Refunds</th></tr></thead><tbody>${shown.map(c=>`<tr><td><strong>${esc(c.name)}</strong><small>${esc(c.email)}</small></td><td>${c.realtor?'Realtor':'Other buyer'}</td><td>${c.purchases}</td><td>${c.cards}</td><td>${salesMoney(c.gross_cents)}</td><td>${salesMoney(c.refund_cents)}</td></tr>`).join('')||'<tr><td colspan="6">No completed purchases match this view.</td></tr>'}</tbody></table></div><div class="crm-pager"><button class="sales-secondary-button" data-buyer-page="${page-1}" ${page===1?'disabled':''}>Previous</button><span>${matches.length} clients · Page ${page}</span><button class="sales-secondary-button" data-buyer-page="${page+1}" ${page*50>=matches.length?'disabled':''}>Next</button></div></article>`;
+}
+function renderQuickSend(row){
+ return `<article class="sales-panel crm-call-panel"><h2>Send your purchase link</h2><p>Recipient details come from this lead. Confirm permission before sending.</p><div class="sales-row-actions"><button class="sales-primary-button" data-send-link="${esc(row.id)}" data-channel="email" ${row.do_not_contact||!row.contact_email?'disabled':''}>Email link</button><button class="sales-secondary-button" data-send-link="${esc(row.id)}" data-channel="sms" ${row.do_not_contact||!row.contact_phone?'disabled':''}>Text link</button></div></article>`;
+}
+function renderSendModal(){
+ const m=state.modal,row=recordById(m.leadId),channel=m.channel||'email';
+ return renderModalShell('Send gift-card checkout','Your credited sales link',`<form data-send-checkout><div class="sales-modal-body"><label>Contact<select name="lead_id" data-send-recipient required><option value="">Choose a saved lead</option>${state.rows.filter(r=>!r.do_not_contact).map(r=>`<option value="${esc(r.id)}" ${r.id===m.leadId?'selected':''}>${esc(recordTitle(r))} · ${esc(channel==='email'?r.contact_email||'No email':r.contact_phone||'No phone')}</option>`).join('')}</select></label><p>Sending by <strong>${channel==='email'?'email':'text'}</strong> to <strong>${esc(row?(channel==='email'?row.contact_email:row.contact_phone)||'Missing contact information':'Select a contact above')}</strong>.</p><p>Your message includes the contact’s name, your name, your tracked checkout link, the $100 card amount, service-area restrictions, and opt-out instructions.</p><label class="crm-consent"><input type="checkbox" name="consent" required> I verified that this contact agreed to receive ${channel==='email'?'emails':'text messages'} from Turnly at this address or number.</label><p>${state.salesContext?.sending?.[channel]?'Sending records the consent confirmation and provider receipt in lead activity.':'This channel needs its sending service connected before messages can be sent.'}</p><p>Only an accepted provider response is reported as accepted; it does not guarantee delivery.</p></div>${modalFooter('Send '+(channel==='email'?'email':'text'))}</form>`,'',true);
+}
+function renderRemoveModal(){
+ const p=state.reps.find(p=>p.id===state.modal.userId),rows=state.rows.filter(r=>r.sales_owner_id===p?.id);
+ return renderModalShell('Remove assigned leads','Return leads to the shared pool',`<form data-remove-leads-form><div class="sales-modal-body"><h3>${esc(p?.full_name||'Team member')}</h3><p>Notes and pipeline stages stay with each lead. Their owner is cleared, so they can be assigned again.</p><label>Leads to remove<select name="scope"><option value="new">Only New leads (${rows.filter(r=>stageFor(r)==='new_leads').length})</option><option value="all">All assigned leads (${rows.length})</option></select></label></div>${modalFooter('Remove assignments')}</form>`,'',true);
+}
+function bindSalesOperations(){
+ Object.assign(pageConfig,{sales:{title:'Sales dashboard',subtitle:'Confirmed gift-card purchases, clients, and sales totals.'}});
+ document.addEventListener('click',async event=>{
+  const b=event.target.closest?.('[data-copy-referral],[data-send-link],[data-pipeline-stage],[data-ack-notice],[data-remove-leads],[data-buyer-page]');if(!b)return;
+  try{
+   if(b.hasAttribute('data-copy-referral')){await navigator.clipboard.writeText(state.salesContext.link.url);setMessage('Your checkout link was copied.','success');}
+   if(b.hasAttribute('data-send-link')){state.modal={type:'sendLink',leadId:b.dataset.sendLink,channel:b.dataset.channel,requestId:crypto.randomUUID()};render();}
+   if(b.dataset.pipelineStage){state.pipelineStage=b.dataset.pipelineStage;state.prospectPage=1;render();}
+   if(b.dataset.ackNotice){await crmSalesRequest('ack',{id:b.dataset.ackNotice});state.salesContext.notifications=state.salesContext.notifications.filter(n=>n.id!==b.dataset.ackNotice);render();}
+   if(b.dataset.removeLeads&&isSalesAdmin()){state.modal={type:'removeLeads',userId:b.dataset.removeLeads};render();}
+   if(b.dataset.buyerPage){state.buyerPage=Number(b.dataset.buyerPage);render();}
+  }catch(e){setMessage(e.message,'error');}
+ });
+ document.addEventListener('change',event=>{if(event.target.matches('[data-send-recipient]')){state.modal.leadId=event.target.value;state.modal.requestId=crypto.randomUUID();render();}});
+ document.addEventListener('input',event=>{if(event.target.id==='crmBuyerSearch'){state.buyerSearch=event.target.value;state.buyerPage=1;render();const field=document.querySelector('#crmBuyerSearch');field?.focus();field?.setSelectionRange(field.value.length,field.value.length);}});
+ document.addEventListener('submit',async event=>{
+  const f=event.target;if(!f.matches('[data-send-checkout],[data-remove-leads-form]'))return;event.preventDefault();const b=f.querySelector('[type=submit]');if(b.disabled)return;b.disabled=true;
+  try{
+   if(f.matches('[data-send-checkout]')){const r=await crmSalesRequest('send',{lead_id:f.elements.lead_id.value,consent:f.elements.consent.checked,channel:state.modal.channel,request_id:state.modal.requestId});if(r.message.status!=='accepted')throw new Error(r.message.error||'This message is still processing. Do not send it again until its status is confirmed.');state.modal=null;await refreshData(false);setMessage('Message accepted by the sending service.','success');}
+   else{const r=await supabase.rpc('crm_remove_operator_leads',{p_operator:state.modal.userId,p_only_new:f.elements.scope.value==='new'});if(r.error)throw r.error;state.modal=null;await refreshData(false);setMessage(`${r.data} lead assignments removed. Notes were preserved.`,'success');}
+  }catch(e){setInlineFormMessage(f,e.message,'error');}finally{b.disabled=false;}
+ });
 }

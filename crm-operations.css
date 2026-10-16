@@ -1,0 +1,15 @@
+/* Explicit foregrounds keep the light CRM readable over inherited portal themes. */
+.sales-portal-body .sales-panel,.sales-portal-body .sales-modal,.sales-portal-body .sales-modal-body,.sales-portal-body .crm-member-card{background:#fff;color:#183347;box-shadow:none}
+.sales-portal-body input,.sales-portal-body textarea,.sales-portal-body select{background:#fff;color:#183347;border:1px solid #ccdbe2;color-scheme:light;box-shadow:none}
+.sales-portal-body input::placeholder,.sales-portal-body textarea::placeholder{color:#5e7180}
+.sales-portal-body h1,.sales-portal-body h2,.sales-portal-body h3,.sales-portal-body label,.sales-portal-body th{color:#183347;text-shadow:none}
+.sales-portal-body .sales-secondary-button{background:#fff;color:#125c58;border:1px solid #b7cecd;box-shadow:none}
+.sales-portal-body .sales-primary-button{background:#007f76;color:#fff;box-shadow:none;text-shadow:none}
+.sales-portal-body .sales-table td,.sales-portal-body .sales-table th{color:#183347;background:#fff}
+.sales-portal-body .sales-table small,.crm-muted{color:#536b7a}
+.crm-referral-panel{display:grid;gap:16px;margin-bottom:24px;padding:24px}.crm-referral-panel input{width:100%;padding:12px;margin-top:8px}.crm-referral-panel label{display:block}
+.crm-linear-pipeline{display:flex;gap:12px;overflow:auto;padding:18px 0;margin-bottom:18px}.crm-stage-step{flex:1;min-width:155px;text-align:left;padding:18px;background:#f4f8fa;color:#183347;border:1px solid #ccdbe2;border-radius:12px;cursor:pointer}.crm-stage-step strong{display:block;font-size:32px;margin:10px 0}.crm-stage-step span{font-size:12px}.crm-stage-step.selected{background:#e5f5f0;border:2px solid #008176}.crm-stage-step small{font-weight:700}.crm-notification{display:flex;justify-content:space-between;gap:12px;padding:16px 0;border-bottom:1px solid #e5ecef}.crm-notification a{color:#125c58}.crm-notification small{display:block;color:#536b7a;margin-top:6px}#notifications{margin-bottom:24px;padding:24px}.crm-consent{display:flex;align-items:flex-start;gap:10px;background:#edf7f4;padding:16px;border-radius:10px}.crm-consent input{width:auto;flex:none;margin-top:4px}.sales-modal-body select{width:100%;padding:12px}.sales-modal-body label{display:block;margin:12px 0}.sales-panel>h2,.sales-panel>h3,.sales-panel>p{margin:16px 24px}.sales-modal-body p{line-height:1.6}.crm-stage-step:focus-visible,button:focus-visible{outline:3px solid #48ada3;outline-offset:3px}
+@media(max-width:700px){.crm-notification{flex-wrap:wrap}.crm-referral-panel .sales-row-actions{flex-wrap:wrap}.sales-metric-grid.crm-four{grid-template-columns:repeat(2,minmax(0,1fr))}.crm-referral-panel{padding:18px}}
+
+.sales-portal-body .sales-table td strong,.sales-portal-body .sales-panel strong,.sales-portal-body .sales-panel h4,.sales-portal-body .sales-modal strong,.sales-portal-body .crm-operator-options strong{color:#183347!important;text-shadow:none}
+.sales-portal-body .sales-metric-card,.sales-portal-body .sales-panel,.sales-portal-body .crm-member-card{box-shadow:none!important}
