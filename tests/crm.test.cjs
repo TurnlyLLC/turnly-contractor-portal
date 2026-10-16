@@ -5,8 +5,8 @@ source=source.slice(0,cut)+source.slice(source.indexOf('function renderCrmOvervi
 source=fs.readFileSync('crm-sales-content.mjs','utf8').replace(/export /g,'')+'\n'+source;
 function fixture(profile={role:'sales',status:'active'}){
  const db={rpc:async()=>({data:{active:true,session_valid:true,must_change_password:false}}),auth:{getUser:async()=>({data:{user:{id:'staff',user_metadata:{role:'admin'}}}})},from:()=>({select(){return this},eq(){return this},maybeSingle:async()=>({data:profile})})};
- const context={console,URL,URLSearchParams,Date,Intl,Map,Set,Number,String,Math,JSON,window:{__ENV:{SUPABASE_URL:'test',SUPABASE_ANON_KEY:'test'},location:{},localStorage:{getItem:()=>null}},localStorage:{getItem:()=>null},document:{getElementById:()=>null,body:{dataset:{salesPage:'dashboard'}}},createClient:()=>db,verifyAdminPreviewSession:async()=>null};
- vm.createContext(context);vm.runInContext(source+'\nglobalThis.T={state,requireSalesAccess,isSalesAdmin,renderCrmOverview,renderCrmPipeline,renderCrmContacts,renderCrmTeam,baseFilteredRows,loadSalesCollection,updateStage,assignmentPlan,renderAssignmentModal,payloadFromUpload,renderSidebar,renderLeadsPage,renderLeadFocusMode,renderScriptsPage,renderPlaybookPage,pagedProspects,knowledgeMatches,handleOutreachForm,renderContactCard};',context);return context;
+ const context={console,setTimeout,clearTimeout,URL,URLSearchParams,Date,Intl,Map,Set,Number,String,Math,JSON,window:{__ENV:{SUPABASE_URL:'test',SUPABASE_ANON_KEY:'test'},location:{},localStorage:{getItem:()=>null}},localStorage:{getItem:()=>null},document:{getElementById:()=>null,body:{dataset:{salesPage:'dashboard'}}},createClient:()=>db,verifyAdminPreviewSession:async()=>null};
+ vm.createContext(context);vm.runInContext(source+'\nglobalThis.T={state,requireSalesAccess,isSalesAdmin,renderCrmOverview,renderCrmPipeline,renderCrmContacts,renderCrmTeam,baseFilteredRows,loadSalesCollection,updateStage,assignmentPlan,renderAssignmentModal,payloadFromUpload,renderSidebar,renderLeadsPage,renderLeadFocusMode,renderScriptsPage,renderPlaybookPage,pagedProspects,knowledgeMatches,handleOutreachForm,renderContactCard,loadRows,refreshData,withCrmTimeout,renderLoadFailure};',context);return context;
 }
 test('CRM access requires a permitted saved staff profile, never editable user metadata',async()=>{
  for(const profile of [null,{role:'contractor',status:'active'},{role:'sales',status:'disabled'},{role:'sales_team',status:'suspended'}]){const c=fixture(profile);assert.equal(await c.T.requireSalesAccess(),false);assert.equal(c.window.location.href,'sales-login.html');}
@@ -81,4 +81,18 @@ test('temporary-password and stale-session accounts cannot enter CRM screens',as
   const c=fixture({role:'sales_team',status:'active'});c.gate=access;vm.runInContext('supabase.rpc=async()=>({data:gate})',c);
   assert.equal(await c.T.requireSalesAccess(),false);assert.equal(c.window.location.href,access.must_change_password?'crm-password.html':'sales-login.html');
  }
+});
+
+
+test('Team loads lightweight lead ownership only, without contact history requests',async()=>{
+ const c=fixture();c.T.state.page='team';vm.runInContext(`globalThis.calls=[];supabase.from=(table)=>({select(value){calls.push([table,value]);return this},eq(){return this},order(){return this},async range(){return {data:[]}}})`,c);
+ await c.T.loadRows();assert.equal(c.calls.length,1);assert.equal(c.calls[0][0],'sales_leads');assert.ok(c.calls[0][1].includes('sales_owner_id'));assert.ok(!c.calls[0][1].includes('*'));
+});
+test('a stalled request exits loading with a retry action and a retry recovers',async()=>{
+ const c=fixture(),t=c.T;
+ await assert.rejects(t.withCrmTimeout(new Promise(()=>{}),5),/took too long/);
+ vm.runInContext(`render=()=>{};loadRows=async()=>{throw new Error('Loading took too long. Please retry.')};loadReps=async()=>[];`,c);
+ await t.refreshData(true,true);assert.equal(t.state.loading,false);assert.equal(t.state.loadFailed,true);assert.match(t.renderLoadFailure(),/data-retry-workspace/);
+ vm.runInContext(`loadRows=async()=>({leads:[],tasks:[],activities:[]})`,c);
+ await t.refreshData(true,true);assert.equal(t.state.loading,false);assert.equal(t.state.loadFailed,false);
 });

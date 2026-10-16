@@ -1,5 +1,5 @@
 import {GIFT_CARD_URL,RESIDENTIAL_URL,PRODUCT_FACTS,PLAYBOOK,SALES_SCRIPTS,SALES_OBJECTIONS} from './crm-sales-content.mjs?v=20261016-gift-sales';
-import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/+esm";
 import {
   adminPreviewPortalOptions,
   adminPreviewPropertyOptions,
@@ -335,7 +335,7 @@ const iconPaths = {
 
 const env = window.__ENV || {};
 const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
-  ? createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY)
+  ? createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {global:{fetch:crmFetch}})
   : null;
 
 const app = document.getElementById("salesApp");
@@ -1175,12 +1175,21 @@ async function loadWalkthroughAvailability() {
   }
 }
 
-async function loadSalesCollection(tableName) {
+function crmFetch(url,options={}) {
+ const timeout=AbortSignal.timeout(20000);
+ return fetch(url,{...options,signal:options.signal?AbortSignal.any([options.signal,timeout]):timeout});
+}
+async function withCrmTimeout(promise,milliseconds=30000) {
+ let timer;
+ try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('Loading took too long. Please retry.')),milliseconds);})]);}
+ finally{clearTimeout(timer);}
+}
+async function loadSalesCollection(tableName,compact=false) {
   const rows=[];
   for(let offset=0;;offset+=500){
     const isLead = tableName === SALES_TABLES.leads;
     const result = await supabase.from(tableName)
-      .select(isLead ? '*' : '*,sales_leads!inner(business_segment)')
+      .select(isLead ? (compact?'id,business_segment,sales_owner_id,pipeline_stage,do_not_contact':'*') : '*,sales_leads!inner(business_segment)')
       .eq(isLead ? 'business_segment' : 'sales_leads.business_segment', 'residential')
       .order('id',{ascending:true}).range(offset,offset+499);
     if(result.error)throw result.error;
@@ -1189,38 +1198,30 @@ async function loadSalesCollection(tableName) {
   }
 }
 async function loadRows() {
- const [leads,tasks,activities]=await Promise.all([loadSalesCollection(SALES_TABLES.leads),loadSalesCollection(SALES_TABLES.tasks),loadSalesCollection(SALES_TABLES.activities)]);
- state.leads=(leads.data||[]).sort((a,b)=>new Date(b.last_activity_at)-new Date(a.last_activity_at));
- state.tasks=tasks.data||[];state.activities=activities.data||[];
- state.walkthroughs=[];state.quotes=[];state.contracts=[];state.walkthroughAvailability=[];
- composeSalesRows();
- const ids=new Set(state.rows.map(row=>row.id));state.selectedLeadIds=new Set([...state.selectedLeadIds].filter(id=>ids.has(id)));
+ const team=state.page==='team';
+ const [leads,tasks,activities]=await Promise.all([loadSalesCollection(SALES_TABLES.leads,team),team?{data:[]}:loadSalesCollection(SALES_TABLES.tasks),team?{data:[]}:loadSalesCollection(SALES_TABLES.activities)]);
+ return {leads:leads.data||[],tasks:tasks.data||[],activities:activities.data||[]};
 }
-
 async function loadReps() {
- const result=await crmTeamRequest('list');state.reps=result.members||[];
+ const result=await crmTeamRequest('list');return result.members||[];
 }
-
-async function refreshData(showLoading = true) {
+async function refreshData(showLoading = true,accessChecked=false) {
   if(["scripts","guide"].includes(state.page)){state.loading=false;render();return;}
-  if (showLoading) {
-    state.loading = true;
-    render();
-  }
-
+  if(showLoading){state.loading=true;state.loadFailed=false;state.message='';render();}
   try {
-    if(!await requireSalesAccess()){state.rows=[];state.leads=[];return;}
-    await Promise.all([loadRows(), loadReps()]);
-    state.loading = false;
-    state.message = "";
-    render();
-  } catch (error) {
-    state.loading = false;
-    state.message = `Unable to load sales data: ${error.message}`;
-    state.messageTone = "error";
+    if(!accessChecked&&!await withCrmTimeout(requireSalesAccess())){state.rows=[];state.leads=[];return;}
+    const [collections,reps]=await withCrmTimeout(Promise.all([loadRows(),loadReps()]));
+    Object.assign(state,collections,{reps,walkthroughs:[],quotes:[],contracts:[],walkthroughAvailability:[]});
+    composeSalesRows();
+    const ids=new Set(state.rows.map(row=>row.id));state.selectedLeadIds=new Set([...state.selectedLeadIds].filter(id=>ids.has(id)));
+    state.loading=false;state.loadFailed=false;state.message='';render();
+  } catch(error) {
+    state.loading=false;state.loadFailed=true;state.message='';
+    state.loadError=/timeout|abort|took too long/i.test(error.message)?'The connection took too long. Your data is safe. Try loading again.':`We could not load your workspace. ${error.message}`;
     render();
   }
 }
+function renderLoadFailure(){return `<article class="sales-panel crm-call-panel"><h2>Your workspace could not load</h2><p role="alert">${esc(state.loadError)}</p><button class="sales-primary-button" data-retry-workspace>Retry loading</button></article>`;}
 
 function pageTitle() {
   return pageConfig[state.page] || pageConfig.dashboard;
@@ -1236,13 +1237,13 @@ function render() {
         ${renderTopbar()}
         <section class="sales-page-body">
           ${state.message ? `<p class="sales-message ${esc(state.messageTone)}">${esc(state.message)}</p>` : ""}
-          ${state.loading ? renderLoading() : renderPage()}
+          ${state.loading ? renderLoading() : state.loadFailed ? renderLoadFailure() : renderPage()}
         </section>
       </section>
       ${renderModal()}
     </main>
   `;
-  if(['salesGlobalSearch','salesPageSearch','crmLibrarySearch'].includes(focusId)){const input=document.getElementById(focusId);input?.focus();if(caret!=null)input?.setSelectionRange(caret,caret);}
+  if(['salesGlobalSearch','salesPageSearch','crmLibrarySearch','crmTeamSearch'].includes(focusId)){const input=document.getElementById(focusId);input?.focus();if(caret!=null)input?.setSelectionRange(caret,caret);}
 
 }
 
@@ -4091,6 +4092,7 @@ function changeCalendar(direction) {
 }
 
 function bindEvents() {
+  document.addEventListener('click',event=>{if(event.target.closest?.('[data-retry-workspace]'))refreshData();});
   document.addEventListener('click',async event=>{
     const button=event.target.closest?.('[data-team-create],[data-team-edit],[data-team-reset],[data-team-deactivate],[data-team-reactivate],[data-team-assign],[data-team-copy]');if(!button)return;
     if(!isSalesAdmin())return;
@@ -4605,7 +4607,7 @@ if (await requireSalesAccess()) {
   } else {
     restoreSalesFocusPlace();
   }
-  await refreshData();
+  await refreshData(true,true);
   setInterval(async()=>{if(!await requireSalesAccess()){state.rows=[];state.leads=[];state.reps=[];}},60000);
 }
 
@@ -4629,7 +4631,7 @@ function renderCrmContacts(){
 }
 async function crmTeamRequest(action,values={}) {
  const {data}=await supabase.auth.getSession();if(!data?.session)throw new Error('Please sign in again.');
- const response=await fetch('/api/crm-team',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+data.session.access_token},body:JSON.stringify({action,...values})});
+ const response=await crmFetch('/api/crm-team',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+data.session.access_token},body:JSON.stringify({action,...values})});
  const result=await response.json();if(!response.ok)throw new Error(result.error||'Unable to update team access.');return result;
 }
 function renderCrmTeam(){
