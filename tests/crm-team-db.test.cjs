@@ -18,6 +18,7 @@ test('CRM access gates enforce temporary passwords, revoked sessions and inactiv
  select set_config('test.uid','00000000-0000-4000-8000-000000000001',false),set_config('test.session','00000000-0000-4000-8000-000000000010',false);`);
  const path=fs.readdirSync('supabase/migrations').find(n=>n.endsWith('_crm_team_access.sql'));
  await db.exec(fs.readFileSync(path?'supabase/migrations/'+path:'../crm-team-access.sql','utf8').replace(/^\uFEFF/,''));
+ await db.exec(fs.readFileSync('supabase/migrations/20261016184213_crm_access_performance.sql','utf8').replace(/^\uFEFF/,''));
  await db.exec(`insert into crm_user_access(user_id,username)values('00000000-0000-4000-8000-000000000001','sam');set role authenticated;`);
  assert.equal((await db.query('select * from sales_leads')).rows.length,0);
  await assert.rejects(db.query("update profiles set role='admin' where id=auth.uid()"),/administrator/);
