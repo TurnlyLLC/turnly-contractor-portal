@@ -33,11 +33,11 @@ const allowedRoles = new Set(["admin", "sales", "sales_team"]);
 
 const pageConfig = {
   dashboard: {
-    title: "Sales Dashboard",
-    subtitle: "Identify ideal properties, confirm the $0.25/sq ft fit, and schedule walkthroughs for management."
+    title: "Overview",
+    subtitle: "Your team, your opportunities, and the next conversation that matters."
   },
   leads: {
-    title: "Lead Qualification",
+    title: "Prospects",
     subtitle: "Qualify prospects, confirm pricing fit, and prepare walkthrough-ready candidates."
   },
   walkthroughs: {
@@ -50,12 +50,18 @@ const pageConfig = {
   }
 };
 
+Object.assign(pageConfig,{pipeline:{title:"Deal pipeline",subtitle:"Move opportunities forward, one meaningful conversation at a time."},contacts:{title:"Contacts",subtitle:"The people and properties behind every relationship."},quotes:{title:"Proposals",subtitle:"Prepare, review, and follow up on your quotes."},contracts:{title:"Closing",subtitle:"Track management review, contracts, and won business."},team:{title:"Team",subtitle:"Ownership, workload, and results across your sales team."}});
 const navItems = [
-  ["dashboard", "Dashboard", "sales.html", "dashboard"],
-  ["leads", "Leads", "sales-leads.html", "users"],
-  ["agents", "Agents", "sales-agents.html", "users"],
+  ["dashboard", "Overview", "sales.html", "dashboard"],
+  ["pipeline", "Deal pipeline", "crm-pipeline.html", "dashboard"],
+  ["contacts", "Contacts", "crm-contacts.html", "users"],
+  ["leads", "Prospects", "sales-leads.html", "users"],
+  ["agents", "Agent partners", "sales-agents.html", "users"],
   ["walkthroughs", "Walkthroughs", "sales-walkthroughs.html", "calendar"],
-  ["tasks", "Tasks & Follow-ups", "sales-tasks.html", "clipboard-check"]
+  ["tasks", "Tasks & Follow-ups", "sales-tasks.html", "clipboard-check"],
+  ["quotes", "Proposals", "crm-proposals.html", "file-text"],
+  ["contracts", "Closing", "crm-closing.html", "file-check"],
+  ["team", "Team", "crm-team.html", "users"]
 ];
 
 const stageDefs = [
@@ -335,7 +341,7 @@ const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
   : null;
 
 const app = document.getElementById("salesApp");
-const retiredPages = new Set(["quotes", "contracts"]);
+const retiredPages = new Set();
 const requestedSalesPage = document.body.dataset.salesPage || "dashboard";
 if (retiredPages.has(requestedSalesPage)) {
   window.history.replaceState(null, "", "sales.html");
@@ -383,69 +389,6 @@ let quotePreviewFileName = "";
 let leadColumnResize = null;
 const LEAD_NOTES_FULL_WIDTH = 420;
 
-function ensureSidebarLayoutLock() {
-  if (!document.head) return;
-  let style = document.getElementById("sales-sidebar-layout-lock");
-  if (!style) {
-    style = document.createElement("style");
-    style.id = "sales-sidebar-layout-lock";
-    style.textContent = `
-body.sales-portal-body .sales-app {
-  grid-template-columns: clamp(190px, 16vw, 236px) minmax(0, 1fr) !important;
-  position: relative !important;
-  z-index: 1 !important;
-}
-body.sales-portal-body .sales-sidebar {
-  align-content: start !important;
-  align-self: stretch !important;
-  display: grid !important;
-  gap: 20px !important;
-  grid-template-rows: max-content max-content max-content max-content !important;
-  height: auto !important;
-  min-height: 100vh !important;
-  overflow: visible !important;
-  padding: 22px 14px 18px !important;
-  position: relative !important;
-  top: auto !important;
-}
-body.sales-portal-body .sales-side-kicker {
-  align-self: start !important;
-  margin: 2px 12px 0 !important;
-}
-body.sales-portal-body .sales-nav {
-  align-content: start !important;
-  display: grid !important;
-  gap: 8px !important;
-  grid-template-columns: 1fr !important;
-  margin: 0 !important;
-  max-height: none !important;
-  opacity: 1 !important;
-  overflow: visible !important;
-  padding-right: 2px !important;
-  visibility: visible !important;
-}
-body.sales-portal-body .sales-nav-link {
-  display: flex !important;
-  min-height: 46px !important;
-  visibility: visible !important;
-}
-@media (max-width: 980px) {
-  body.sales-portal-body .sales-app {
-    grid-template-columns: 1fr !important;
-  }
-  body.sales-portal-body .sales-sidebar {
-    height: auto !important;
-    min-height: 0 !important;
-    grid-template-rows: auto auto auto !important;
-    padding-bottom: 14px !important;
-  }
-  body.sales-portal-body .sales-nav {
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)) !important;
-  }
-}`;
-  }
-  document.head.appendChild(style);
-}
 
 function icon(name) {
   return `<svg class="sales-icon" viewBox="0 0 24 24" aria-hidden="true">${iconPaths[name] || iconPaths.dashboard}</svg>`;
@@ -911,7 +854,7 @@ function roleLabel() {
 }
 
 function isSalesAdmin() {
-  return normalize(state.profile?.role || state.user?.user_metadata?.role) === "admin";
+  return normalize(state.profile?.role) === "admin";
 }
 
 function salesFocusPlaceStorageKey() {
@@ -1185,7 +1128,7 @@ async function requireSalesAccess() {
 
   const { data, error } = await supabase.auth.getUser();
   if (error || !data?.user) {
-    window.location.href = "index.html";
+    window.location.href = "sales-login.html";
     return false;
   }
 
@@ -1210,9 +1153,9 @@ async function requireSalesAccess() {
     }
   }
 
-  const role = normalize(effectiveProfile?.role || state.user.user_metadata?.role);
-  if (!allowedRoles.has(role)) {
-    window.location.href = "index.html";
+  const role = normalize(effectiveProfile?.role);
+  if (!allowedRoles.has(role) || ["inactive", "disabled", "suspended", "rejected"].includes(normalize(effectiveProfile?.status))) {
+    window.location.href = "sales-login.html";
     return false;
   }
 
@@ -1236,19 +1179,28 @@ async function loadWalkthroughAvailability() {
   }
 }
 
+async function loadSalesCollection(tableName) {
+  const rows=[];
+  for(let offset=0;;offset+=500){
+    const result=await supabase.from(tableName).select('*').order('id',{ascending:true}).range(offset,offset+499);
+    if(result.error)throw result.error;
+    rows.push(...(result.data||[]));
+    if((result.data||[]).length<500)return {data:rows};
+  }
+}
 async function loadRows() {
   const queries = await Promise.all([
-    supabase.from(SALES_TABLES.leads).select("*").order("last_activity_at", { ascending: false }).limit(2000),
-    supabase.from(SALES_TABLES.walkthroughs).select("*").order("created_at", { ascending: false }).limit(2000),
-    supabase.from(SALES_TABLES.quotes).select("*").order("created_at", { ascending: false }).limit(2000),
-    supabase.from(SALES_TABLES.contracts).select("*").order("created_at", { ascending: false }).limit(2000),
-    supabase.from(SALES_TABLES.tasks).select("*").order("created_at", { ascending: false }).limit(2000),
-    supabase.from(SALES_TABLES.activities).select("*").order("created_at", { ascending: false }).limit(4000)
+    loadSalesCollection(SALES_TABLES.leads),
+    loadSalesCollection(SALES_TABLES.walkthroughs),
+    loadSalesCollection(SALES_TABLES.quotes),
+    loadSalesCollection(SALES_TABLES.contracts),
+    loadSalesCollection(SALES_TABLES.tasks),
+    loadSalesCollection(SALES_TABLES.activities)
   ]);
   const error = queries.find((result) => result.error)?.error;
   if (error) throw error;
 
-  state.leads = queries[0].data || [];
+  state.leads = (queries[0].data || []).sort((a,b)=>new Date(b.last_activity_at)-new Date(a.last_activity_at));
   state.walkthroughs = queries[1].data || [];
   state.quotes = queries[2].data || [];
   state.contracts = queries[3].data || [];
@@ -1300,7 +1252,6 @@ function pageTitle() {
 
 function render() {
   if (!app) return;
-  ensureSidebarLayoutLock();
   app.innerHTML = `
     <main class="sales-app">
       ${renderSidebar()}
@@ -1314,7 +1265,6 @@ function render() {
       ${renderModal()}
     </main>
   `;
-  requestAnimationFrame(ensureSidebarLayoutLock);
 }
 
 function renderSidebar() {
@@ -1323,11 +1273,11 @@ function renderSidebar() {
       <a class="sales-brand" href="sales.html" aria-label="Turnly sales dashboard">
         <span class="sales-brand-mark">T</span>
         <span>
-          <strong>Turnly</strong>
-          <small>Sales Platform</small>
+          <strong>Turnly CRM</strong>
+          <small>SALES WORKSPACE</small>
         </span>
       </a>
-      <p class="sales-side-kicker">Sales</p>
+      <p class="sales-side-kicker">Workspace</p>
       <nav class="sales-nav" aria-label="Sales navigation">
         ${navItems.map(([key, label, href, iconName]) => `
           <a class="sales-nav-link ${state.page === key ? "active" : ""}" href="${href}">
@@ -1336,7 +1286,7 @@ function renderSidebar() {
         `).join("")}
       </nav>
       <div class="sales-sidebar-footer">
-        <div class="sales-collapse-note">${icon("left")}<span>Collapse</span></div>
+        <div class="crm-workspace-note"><span class="crm-live-dot"></span> Team workspace</div><a href="crm-guide.html" class="sales-nav-link">${icon("file-text")}<span>Team playbook</span></a>
       </div>
     </aside>
   `;
@@ -1411,10 +1361,10 @@ function renderTopbar() {
           ${icon("calendar")}
           <span>${esc(formatDate(startOfWeek(), { year: "numeric" }))} - ${esc(formatDate(endOfWeek(), { year: "numeric" }))}</span>
         </button>
-        <button class="sales-icon-button" type="button" aria-label="Notifications">
+        <a class="sales-icon-button" href="sales-tasks.html" aria-label="Open follow-up tasks">
           ${icon("bell")}
           <span class="sales-badge">${number(openTasks().length)}</span>
-        </button>
+        </a>
         ${isSalesAdmin() ? `
           <button class="sales-primary-button sales-upload-prospects-button" type="button" data-open-import>
             ${icon("upload")}<span>Upload Prospects</span>
@@ -1430,7 +1380,7 @@ function renderTopbar() {
             ${icon("chevron")}
           </button>
           <div class="sales-profile-menu" ${state.profileOpen ? "" : "hidden"}>
-            <a href="index.html">${icon("dashboard")}Portal Home</a>
+            <a href="crm-guide.html">${icon("file-text")}CRM playbook</a>
             <button type="button" data-sales-logout>${icon("left")}Sign Out</button>
           </div>
         </div>
@@ -1443,18 +1393,23 @@ function renderLoading() {
   return `
     <section class="sales-panel sales-empty">
       <div>
-        <strong>Loading sales portal</strong>
-        <p>Pulling the latest prospects and workflow details from Supabase.</p>
+        <strong>Loading your workspace</strong>
+        <p>Getting your latest contacts, opportunities, and follow-ups.</p>
       </div>
     </section>
   `;
 }
 
 function renderPage() {
+  if(state.page==="pipeline")return renderCrmPipeline();
+  if(state.page==="contacts")return renderCrmContacts();
+  if(state.page==="quotes")return renderQuotesPage();
+  if(state.page==="contracts")return renderContractsPage();
+  if(state.page==="team")return renderCrmTeam();
   if (state.page === "leads") return renderLeadsPage();
   if (state.page === "walkthroughs") return renderWalkthroughsPage();
   if (state.page === "tasks") return renderTasksPage();
-  return renderDashboardPage();
+  return renderCrmOverview();
 }
 
 function baseFilteredRows(rows = state.rows) {
@@ -1475,6 +1430,8 @@ function baseFilteredRows(rows = state.rows) {
       recordCompany(row),
       recordContact(row),
       recordAddress(row),
+      row.contact_email,
+      row.contact_phone,
       row.lead_source,
       row.next_step,
       row.default_scope,
@@ -1486,7 +1443,7 @@ function baseFilteredRows(rows = state.rows) {
 }
 
 function leadFocusRows() {
-  return state.rows.slice();
+  return baseFilteredRows();
 }
 
 function statusForCurrentPage(row) {
@@ -1891,10 +1848,10 @@ function renderFilters(options = {}) {
     <div class="sales-filter-bar">
       <label class="sales-search">
         ${icon("search")}
-        <input id="salesPageSearch" type="search" value="${esc(state.search)}" placeholder="${esc(options.placeholder || "Search records...")}" />
+        <input id="salesPageSearch" aria-label="Search records" type="search" value="${esc(state.search)}" placeholder="${esc(options.placeholder || "Search records...")}" />
       </label>
-      <select class="sales-filter" data-filter-owner>${ownerOptions}</select>
-      <select class="sales-filter" data-filter-stage>${stageOptions}</select>
+      <select class="sales-filter" aria-label="Filter by owner" data-filter-owner>${ownerOptions}</select>
+      <select class="sales-filter" aria-label="Filter by stage" data-filter-stage>${stageOptions}</select>
       ${options.statuses ? `<select class="sales-filter" data-filter-status>${statusOptions}</select>` : `<span></span>`}
       ${isSalesAdmin() ? `<button class="sales-primary-button" type="button" data-open-lead>${icon("plus")}New Prospect</button>` : ""}
     </div>
@@ -1906,7 +1863,7 @@ function renderLeadFilters() {
     <div class="sales-lead-filter-row">
       <label class="sales-search">
         ${icon("search")}
-        <input id="salesPageSearch" type="search" value="${esc(state.search)}" placeholder="Search prospects..." />
+        <input id="salesPageSearch" aria-label="Search records" type="search" value="${esc(state.search)}" placeholder="Search prospects..." />
       </label>
     </div>
   `;
@@ -1954,7 +1911,7 @@ function renderLeadsPage() {
             <button class="sales-danger-button" type="button" data-delete-selected-leads ${selectedCount ? "" : "disabled"}>${icon("x")}Delete Selected</button>
           </div>` : ""}
         </div>
-        ${renderLeadFilters()}
+        ${renderFilters({placeholder:"Search prospects, contacts, or properties..."})}
         ${renderStageTabs()}
         ${canManageLeads ? `<div class="sales-bulk-toolbar">
           <label>
@@ -3131,10 +3088,10 @@ function renderTaskFilters() {
     <div class="sales-task-toolbar">
       <label class="sales-search">
         ${icon("search")}
-        <input id="salesPageSearch" type="search" value="${esc(state.search)}" placeholder="Search follow-ups, contacts, or properties..." />
+        <input id="salesPageSearch" aria-label="Search records" type="search" value="${esc(state.search)}" placeholder="Search follow-ups, contacts, or properties..." />
       </label>
-      <select class="sales-filter" data-filter-owner>${ownerOptions}</select>
-      <select class="sales-filter" data-filter-stage>${stageOptions}</select>
+      <select class="sales-filter" aria-label="Filter by owner" data-filter-owner>${ownerOptions}</select>
+      <select class="sales-filter" aria-label="Filter by stage" data-filter-stage>${stageOptions}</select>
       <select class="sales-filter" data-filter-status>${statusOptions}</select>
       <button class="sales-primary-button" type="button" data-open-task="${esc(state.selectedId || "")}">${icon("plus")}New Follow-up</button>
     </div>
@@ -4468,7 +4425,7 @@ function bindEvents() {
     if (target.closest("[data-sales-logout]")) {
       await autosaveFocusLead({ includeNote: true });
       await supabase?.auth.signOut();
-      window.location.href = "index.html";
+      window.location.href = "sales-login.html";
       return;
     }
 
@@ -4587,6 +4544,7 @@ function bindEvents() {
       return;
     }
 
+    if(target.closest("[data-crm-close]")){state.selectedId=null;render();return;}
     const select = target.closest("[data-select-record]");
     if (select) {
       await autosaveFocusLead({ includeNote: true });
@@ -4740,6 +4698,7 @@ function bindEvents() {
   });
 
   document.addEventListener("change", async (event) => {
+    if(event.target.matches("[data-crm-stage]")){await updateStage(event.target.dataset.crmStage,event.target.value);return;}
     if (event.target?.matches('[data-focus-lead-form] input[name="walkthrough_window"]')) {
       syncFocusConditionalUi(event.target.closest("[data-focus-lead-form]"), event.target);
       await autosaveFocusLead();
@@ -4851,4 +4810,24 @@ if (await requireSalesAccess()) {
     restoreSalesFocusPlace();
   }
   await refreshData();
+}
+
+function renderCrmOverview(){
+ const rows=baseFilteredRows(),open=rows.filter(r=>!['active','lost'].includes(stageFor(r))),won=rows.filter(r=>stageFor(r)==='active');
+ const due=rows.filter(r=>taskDue(r)&&new Date(taskDue(r))<new Date()&&taskStatus(r)!=='completed');
+ return `<div class="crm-welcome"><div><p class="crm-eyebrow">YOUR SALES WORKSPACE</p><h2>Make the next move.</h2><p>Every relationship has a next step. Here’s where to focus today.</p></div><a href="crm-pipeline.html" class="sales-primary-button">View pipeline ${icon('right')}</a></div>
+ <section class="sales-metric-grid crm-four">${metricCard('Open pipeline',money(open.reduce((s,r)=>s+recordValue(r),0),true),`${open.length} open opportunities`,'dollar')}${metricCard('Active relationships',number(rows.length),'Prospects across your workspace','users','blue')}${metricCard('Follow-ups overdue',number(due.length),'Needs your attention','clipboard-check','yellow')}${metricCard('Won business',money(won.reduce((s,r)=>s+recordValue(r),0),true),`${won.length} won opportunities`,'trophy')}</section>
+ <section class="crm-overview-grid"><article class="sales-panel"><div class="sales-panel-header"><div><h2>Pipeline at a glance</h2><p>Opportunity volume by stage</p></div><a class="sales-link-action" href="crm-pipeline.html">Open board →</a></div><div class="crm-stage-summary">${stageDefs.map(st=>{const items=rows.filter(r=>stageFor(r)===st.id);return `<a href="crm-pipeline.html" class="crm-stage-row"><span>${esc(st.label)}</span><div class="crm-bar"><i style="width:${rows.length?Math.round(items.length/rows.length*100):0}%"></i></div><strong>${items.length}</strong></a>`;}).join('')}</div></article><article class="sales-panel"><div class="sales-panel-header"><div><h2>Your next conversations</h2><p>Upcoming property walkthroughs</p></div><a class="sales-link-action" href="sales-walkthroughs.html">Calendar →</a></div>${renderUpcomingWalkthroughs(4)}</article></section>
+ <section class="sales-two-column"><article class="sales-panel"><div class="sales-panel-header"><div><h2>Follow-up queue</h2><p>Keep every opportunity moving</p></div><a href="sales-tasks.html" class="sales-link-action">All tasks →</a></div>${renderProspectWorkQueue()}</article><article class="sales-panel"><div class="sales-panel-header"><div><h2>Activity feed</h2><p>The latest updates from your team</p></div></div>${renderRecentActivity()}</article></section>`;
+}
+function renderCrmPipeline(){
+ const rows=baseFilteredRows(),selected=rows.find(r=>r.id===state.selectedId);
+ return `<article class="sales-panel crm-board-panel">${renderFilters({placeholder:'Search opportunities...'})}<div class="crm-board-meta"><span>${rows.length} opportunities · ${money(rows.reduce((s,r)=>s+recordValue(r),0),true)} total value</span><span>Change a card’s stage to update the pipeline</span></div><div class="crm-board">${stageDefs.map(st=>{const items=rows.filter(r=>stageFor(r)===st.id);return `<section class="crm-column"><header><span class="crm-stage-dot ${st.tone}"></span><h2>${esc(st.label)}</h2><span>${items.length}</span></header><p class="crm-column-total">${money(items.reduce((s,r)=>s+recordValue(r),0),true)}</p>${items.map(r=>`<article class="crm-deal"><button class="crm-deal-title" data-select-record="${esc(r.id)}">${esc(recordTitle(r))}</button><p>${esc(recordCompany(r)||recordContact(r))}</p><strong>${money(recordValue(r),true)}</strong><div class="crm-deal-next">${icon('calendar')} ${esc(r.next_step||'Set a next step')}</div><div class="crm-deal-owner"><span class="sales-avatar">${esc(initials(ownerName(r)))}</span><span>${esc(ownerName(r))}</span></div><label class="crm-sr-only" for="stage-${esc(r.id)}">Stage for ${esc(recordTitle(r))}</label><select id="stage-${esc(r.id)}" data-crm-stage="${esc(r.id)}">${stageDefs.map(v=>`<option value="${v.id}" ${v.id===stageFor(r)?'selected':''}>${esc(v.label)}</option>`).join('')}</select></article>`).join('')||'<div class="crm-column-empty">No opportunities here yet</div>'}</section>`;}).join('')}</div></article>${selected?`<div class="crm-record-detail"><button type="button" class="sales-secondary-button crm-detail-close" data-crm-close>Close details ×</button>${renderLeadDetail(selected)}</div>`:''}`;
+}
+function renderCrmContacts(){
+ const rows=baseFilteredRows(),selected=rows.find(r=>r.id===state.selectedId);
+ return `<section class="crm-contact-layout"><article class="sales-panel">${renderFilters({placeholder:'Search name, email, phone, or property...'})}<div class="sales-table-wrap"><table class="sales-table"><thead><tr><th>Contact</th><th>Company / property</th><th>Email & phone</th><th>Owner</th><th>Stage</th></tr></thead><tbody>${rows.map(r=>`<tr><td><button class="crm-text-button" data-select-record="${esc(r.id)}">${esc(recordContact(r)||recordTitle(r))}</button></td><td><strong>${esc(recordTitle(r))}</strong><small>${esc(recordCompany(r))}</small></td><td><span>${esc(r.contact_email||'No email saved')}</span><small>${esc(r.contact_phone||'No phone saved')}</small></td><td>${esc(ownerName(r))}</td><td><span class="sales-status-pill ${esc(stageFor(r))}">${esc(stageLabel(stageFor(r)))}</span></td></tr>`).join('')||'<tr><td colspan="5">No contacts match this view.</td></tr>'}</tbody></table></div></article>${selected?renderLeadDetail(selected):''}</section>`;
+}
+function renderCrmTeam(){
+ return `<article class="sales-panel"><div class="sales-panel-header"><div><h2>Team performance</h2><p>Based on assigned opportunities. Team access is managed by your administrator.</p></div></div><div class="sales-table-wrap"><table class="sales-table"><thead><tr><th>Team member</th><th>Role</th><th>Open opportunities</th><th>Open value</th><th>Won</th><th>Status</th></tr></thead><tbody>${state.reps.map(rep=>{const rows=state.rows.filter(r=>r.sales_owner_id===rep.id),open=rows.filter(r=>!['active','lost'].includes(stageFor(r)));return `<tr><td><strong>${esc(rep.full_name||'Team member')}</strong><small>${esc(rep.email)}</small></td><td>${esc(titleCase(rep.role))}</td><td>${open.length}</td><td>${money(open.reduce((s,r)=>s+recordValue(r),0),true)}</td><td>${rows.filter(r=>stageFor(r)==='active').length}</td><td>${esc(rep.status||'Not set')}</td></tr>`;}).join('')||'<tr><td colspan="6">No team members are visible to this account.</td></tr>'}</tbody></table></div></article><div class="crm-onboarding"><h2>Ready for your sales team</h2><p>Use the playbook to learn the workflow, then assign each opportunity an owner and a next step.</p><a class="sales-primary-button" href="crm-guide.html">Open team playbook →</a></div>`;
 }
