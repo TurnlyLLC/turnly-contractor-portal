@@ -2,6 +2,7 @@ import {earliestDay,hasNotice} from './residential-notice.mjs?v=20261015-36hours
 import {setupAddress} from './residential-address.mjs?v=20261009-visit';
 const $=s=>document.querySelector(s),form=$('#bookingForm'),f=form.elements;
 const code=new URL(location.href).searchParams.get('ref')||'';
+const ba=new URL(location.href).searchParams.get('ba')||'';
 const gift=new URLSearchParams(location.hash.slice(1)).get('gift')||'';
 const labels=['YOUR HOME','YOUR DETAILS','YOUR CLEAN','YOUR QUOTE','YOUR TIME','YOUR VISIT','YOUR BOOKING'];
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -14,7 +15,7 @@ const tomorrow=new Date(earliestDay()+'T12:00:00Z');f.service_date.min=earliestD
 let month=new Date(tomorrow.getUTCFullYear(),tomorrow.getUTCMonth(),1);
 form.noValidate=true;
 function notice(text,error=false){const el=$('#notice');el.textContent=text;el.hidden=!text;el.className='notice'+(error?' error':'');}
-async function api(action,values={}){const r=await fetch('/api/residential-booking',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,code,gift,...values}),signal:AbortSignal.timeout(30000)});let data;try{data=await r.json();}catch{throw new Error('We couldn’t reach the booking service. Please try again.');}if(!r.ok)throw new Error(data.error||'Please try again.');return data;}
+async function api(action,values={}){const r=await fetch('/api/residential-booking',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,code,ba,gift,...values}),signal:AbortSignal.timeout(30000)});let data;try{data=await r.json();}catch{throw new Error('We couldn’t reach the booking service. Please try again.');}if(!r.ok)throw new Error(data.error||'Please try again.');return data;}
 function values(){const data=Object.fromEntries(new FormData(form));data.property_confirmed=f.property_confirmed.checked;data.consent=f.consent.checked;if(gift&&quote)data.gift_expected_cents=quote.gift_cents;if(!['standard','deep'].includes(data.service))data.frequency='once';return data;}
 function humanDate(d){return new Date(d+'T12:00:00Z').toLocaleDateString('en-US',{weekday:'short',month:'long',day:'numeric',year:'numeric',timeZone:'UTC'});}
 function humanTime(t){const [h,m]=t.split(':');return `${(+h%12)||12}:${m} ${+h>=12?'PM':'AM'}`;}

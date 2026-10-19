@@ -1,0 +1,5 @@
+const form=document.querySelector('#referralForm'),notice=document.querySelector('#notice'),button=document.querySelector('#continue');
+const code=new URL(location.href).searchParams.get('code')||location.pathname.split('/').pop();
+async function api(action,values={}){const r=await fetch('/api/ambassadors',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,code,...values}),signal:AbortSignal.timeout(30000)});const data=await r.json();if(!r.ok)throw new Error(data.error||'Please try again.');return data;}
+try{const data=await api('context');document.querySelector('#referrer').textContent='Introduced by '+data.name;button.disabled=false;}catch(e){notice.textContent=e.message;}
+form.addEventListener('submit',async e=>{e.preventDefault();button.disabled=true;notice.textContent='';try{const data=await api('register',{name:form.elements.name.value,email:form.email.value,phone:form.phone.value,consent:form.consent.checked});location.assign(data.booking_url);}catch(e){notice.textContent=e.message;button.disabled=false;}});
