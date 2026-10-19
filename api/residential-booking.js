@@ -79,7 +79,7 @@ module.exports=async(req,res)=>{
   if(checkout&&input.consent!==true)throw S.fail('Authorize the service-date charge to continue.');
   if(gift){if(!Number.isInteger(input.gift_expected_cents)||input.gift_expected_cents<=0||input.gift_expected_cents>10000)throw S.fail('Refresh your quote to apply available gift credit.');data.gift_expected_cents=input.gift_expected_cents;}
   const status=data.quote.review_required?'review_required':checkout?'awaiting_card':'requested';
-  S.checked(await db.rpc(gift?'create_gift_booking':direct?'create_direct_booking':'create_residential_booking',{p_id:input.id,p_token:S.hash(input.token),p_hash:S.hash(JSON.stringify(gift?{data,status,gift:gift.id}:{data,status})),...(gift?{p_gift:gift.code}:direct?{}:{p_code:input.code}),p_data:data,p_status:status,p_consent:checkout?(gift?CONSENT+' Gift card applied; only the remaining balance is charged.':CONSENT):null}));
+  S.checked(await db.rpc(gift?'create_gift_booking':direct?(input.ba?'create_ba_booking':'create_direct_booking'):'create_residential_booking',{p_id:input.id,p_token:S.hash(input.token),p_hash:S.hash(JSON.stringify(gift?{data,status,gift:gift.id}:{data,status})),...(gift?{p_gift:gift.code}:direct?(input.ba?{p_code:String(input.ba)}:{}):{p_code:input.code}),p_data:data,p_status:status,p_consent:checkout?(gift?CONSENT+' Gift card applied; only the remaining balance is charged.':CONSENT):null}));
   let b=await S.owned(db,input);
   if(!checkout)return S.json(res,200,{booking:S.summary(b)});
   if(b.status!=='awaiting_card')return S.json(res,200,{booking:S.summary(b)});

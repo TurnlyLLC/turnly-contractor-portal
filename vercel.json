@@ -60,6 +60,26 @@
       "has": [
         {
           "type": "host",
+          "value": "ba.turnlypros.com"
+        }
+      ],
+      "dest": "/ba-login.html"
+    },
+    {
+      "src": "^/r/(BA-[A-Z0-9]{16})$",
+      "has": [
+        {
+          "type": "host",
+          "value": "ba.turnlypros.com"
+        }
+      ],
+      "dest": "/ba-referral.html?code=$1"
+    },
+    {
+      "src": "^/(?:index\\.html)?$",
+      "has": [
+        {
+          "type": "host",
           "value": "sales.turnlypros.com"
         }
       ],
