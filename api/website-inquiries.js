@@ -224,8 +224,8 @@ async function createInquiry(req, res, client) {
   }
 
   if (residential) {
-    // Older cached forms remain compatible; the new form requires a full address.
-    if (body.street_address !== undefined && (!text(body.street_address,240) || !/^[A-Za-z]{2}$/.test(String(body.state || '')) || !/^\d{5}(-\d{4})?$/.test(String(body.postal_code || '')))) {
+    // A cleaning inquiry needs a complete address for mandatory service-area validation.
+    if ((!text(body.street_address,240) || !/^[A-Za-z]{2}$/.test(String(body.state || '')) || !/^\d{5}(-\d{4})?$/.test(String(body.postal_code || '')))) {
       sendJson(res, 400, { error: 'Enter your street address, two-letter state, and ZIP code.' }); return;
     }
     for (const [field, min, max, step] of [["bedrooms", 0, 30, 1], ["bathrooms", 1, 30, 0.5], ["square_feet", 100, 100000, 1]]) {
@@ -253,6 +253,7 @@ async function createInquiry(req, res, client) {
     : [propertyName || facilityType || "Apartment Turnover Inquiry", city].filter(Boolean).join(" - ");
   const leadNotes = buildLeadNotes(body, req, residential);
   const payload = {
+    address: text(body.street_address || body.property_address || body.address,300) ? [text(body.street_address || body.property_address || body.address,300),city,text(body.state,2),text(body.postal_code || body.zip,10)].filter(Boolean).join(", ") : null,
     property_name: leadPropertyName,
     name: leadPropertyName,
     company_name: managementCompany || facilityType,
@@ -280,7 +281,7 @@ async function createInquiry(req, res, client) {
 
   if (error) {
     console.error("[website-inquiries] sales lead insert failed", error);
-    sendJson(res, 500, { error: "Unable to save inquiry." });
+    sendJson(res, 400, { error: /address|service area|verification/i.test(error.message || "") ? error.message : "Unable to save inquiry." });
     return;
   }
 

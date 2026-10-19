@@ -1,0 +1,64 @@
+const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs');
+const {PGlite}=require('@electric-sql/pglite');
+test('address validation and contractor city boundaries cannot be bypassed by direct writes',async()=>{
+ const db=new PGlite();
+ try{
+ await db.exec(`create schema auth; create schema extensions; create role anon; create role authenticated; create role service_role;
+ create function auth.uid() returns uuid language sql as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
+ create function auth.role() returns text language sql as $$select current_setting('request.jwt.claim.role',true)$$;
+ create table profiles(id uuid primary key,role text,contractor_approved boolean,market text,region text,location text);
+ create table contractors(id uuid primary key,market text,region text,location text);
+ create table contractor_invites(id uuid primary key);
+ create table assignment_blocks(id int primary key,address text,status text);
+ create table referral_bookings(id int primary key,property_address text,city text,state text,zip text);
+ create table residential_inquiries(id int primary key,payload jsonb);
+ create table properties(id int primary key,address text,city text,state text,zip text);
+ create table portal_properties(like properties);
+ create table sales_leads(like properties); create table commercial_leads(like properties);
+ create table extensions.fixture(body jsonb);
+ insert into extensions.fixture values ('{"candidates":[{"score":100,"address":"1 E Edenton St, Raleigh, NC 27601","location":{"x":-78.6382,"y":35.7796},"attributes":{"Addr_type":"PointAddress","Region":"NC"}}]}');
+ create function extensions.http_get(text,jsonb) returns table(status int,content text) language sql as $$select 200,body::text from extensions.fixture$$;
+ insert into profiles values('00000000-0000-0000-0000-000000000001','admin',false,'','',''),('00000000-0000-0000-0000-000000000002','contractor',true,'Durham','',''),('00000000-0000-0000-0000-000000000003','contractor',true,'Asheville','',''),('00000000-0000-0000-0000-000000000004','contractor',true,'','','');
+ alter table assignment_blocks enable row level security;
+ grant usage on schema public,auth to authenticated; grant select on profiles to authenticated; grant all on assignment_blocks to authenticated;
+ create policy legacy_everything on assignment_blocks for all to authenticated using(true) with check(true);`);
+ const sql=fs.readFileSync('supabase/migrations/20261019155534_service_city_coverage.sql','utf8').replace('create extension if not exists http with schema extensions;','');
+ await db.exec(sql);
+ await db.exec("insert into assignment_blocks values(1,'1 E Edenton St, Raleigh, NC 27601','open')");
+ assert.equal((await db.query('select count(*)::int n from service_private.address_checks')).rows[0].n,1);
+ await assert.rejects(db.exec("insert into assignment_blocks values(2,'','open')"),/complete street/);
+ await db.exec(`update extensions.fixture set body=jsonb_set(body,'{candidates,0,location}','{"x":-80.8431,"y":35.2271}');`);
+ await assert.rejects(db.exec("insert into referral_bookings values(2,'600 E Trade St','Charlotte','NC','28202')"),/outside our service area/);
+ assert.equal((await db.query('select count(*)::int n from referral_bookings')).rows[0].n,0);
+ await db.exec(`update extensions.fixture set body=jsonb_set(body,'{candidates,0,score}','80');`);
+ await assert.rejects(db.exec("insert into properties values(3,'999 Fake Street','Raleigh','NC','27601')"),/could not verify/);
+ await db.exec(`update extensions.fixture set body=jsonb_set(jsonb_set(body,'{candidates,0,score}','100'),'{candidates,0,location}','{"x":-82.5515,"y":35.5951}');`);
+ await db.exec("insert into assignment_blocks values(3,'70 Court Plaza, Asheville, NC 28801','open')");
+ const asUser=async id=>{await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub',$1,false)",['00000000-0000-0000-0000-'+String(id).padStart(12,'0')]);await db.exec("set role authenticated");};
+ await asUser(2);
+ assert.deepEqual((await db.query('select id from assignment_blocks order by id')).rows,[{id:1}],'Durham includes Raleigh address within its 25-mile radius');
+ assert.equal((await db.query("update assignment_blocks set status='claimed' where id=3 returning id")).rows.length,0);
+ await assert.rejects(db.exec("update assignment_blocks set address='70 Court Plaza, Asheville, NC 28801' where id=1"),/outside your assigned|Only administrators/);
+ await assert.rejects(db.exec('delete from assignment_blocks where id=1'),/cannot delete/);
+ await asUser(3);assert.deepEqual((await db.query('select id from assignment_blocks')).rows,[{id:3}]);
+ await asUser(4);assert.equal((await db.query('select id from assignment_blocks')).rows.length,0);
+ await db.exec('reset role');
+ await assert.rejects(db.exec("update profiles set service_city='Raleigh',service_state='NC' where id='00000000-0000-0000-0000-000000000004'"),/Only administrators/);
+ await asUser(1);assert.equal((await db.query('select id from assignment_blocks')).rows.length,2);
+ await db.exec('delete from assignment_blocks where id=3');
+ assert.equal((await db.query('select id from assignment_blocks')).rows.length,1,'admin deletion still works');
+ await db.exec('reset role');
+ const miles=(await db.query('select service_private.miles(35.7796,-78.6382,35.7796,-78.6382) n')).rows[0].n;assert.equal(miles,0);
+ // Boundary tests use a point north of Asheville, far from other service cities.
+ await db.exec(`update extensions.fixture set body=jsonb_set(body,'{candidates,0,location}',jsonb_build_object('x',-82.5515,'y',35.5951+degrees(24.999/3958.7613)));`);
+ await db.exec("insert into assignment_blocks values(4,'100 Boundary Rd, Asheville, NC 28801','open')");
+ await db.exec(`update extensions.fixture set body=jsonb_set(body,'{candidates,0,location}',jsonb_build_object('x',-82.5515,'y',35.5951+degrees(25.001/3958.7613)));`);
+ await assert.rejects(db.exec("insert into assignment_blocks values(5,'101 Boundary Rd, Asheville, NC 28801','open')"),/outside our service area/);
+ await assert.rejects(db.exec("insert into residential_inquiries values(6,'{\"address\":\"102 Boundary Rd, Asheville, NC 28801\"}')"),/outside our service area/);
+ await db.exec(`update extensions.fixture set body='{"candidates":[]}';`);
+ await assert.rejects(db.exec("insert into commercial_leads values(7,'103 Unknown Rd','Raleigh','NC','27601')"),/could not verify/);
+ await db.exec("select set_config('request.jwt.claim.sub','',false); select set_config('request.jwt.claim.role','anon',false)");
+ await assert.rejects(db.exec("insert into profiles(id,role,service_city,service_state) values('00000000-0000-0000-0000-000000000005','contractor','Raleigh','NC')"),/Only administrators/);
+ }finally{await db.close();}
+});
+

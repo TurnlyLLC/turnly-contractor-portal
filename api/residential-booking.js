@@ -68,6 +68,10 @@ module.exports=async(req,res)=>{
   const direct=!gift&&!input.code;
   const a=gift?{name:'Turnly gift card',referral_code:''}:direct?{name:'Turnly Residential',referral_code:''}:await S.agent(db,input.code);
   if(input.action==='context')return S.json(res,200,{agent:{name:a.name,code:a.referral_code},direct,payments_ready:S.ready(),property_lookup:!!process.env.RENTCAST_API_KEY,gift:gift?{balance_cents:gift.balance_cents,available_cents:gift.balance_cents-gift.reserved_cents}:null,consent:gift?CONSENT+' I authorize application of my gift card to this visit; only the remaining amount will be charged to my saved card.':CONSENT});
+  if(['property','quote'].includes(input.action)){
+   await S.rate(db,req,'coverage');
+   S.checked(await db.rpc('check_service_address',{address:[clean(input.property_address,300),clean(input.city,100),clean(input.state,2),clean(input.zip,10)].filter(Boolean).join(', ')}));
+  }
   if(input.action==='property'){await S.rate(db,req,'property');return S.json(res,200,await require('../lib/residential-property.cjs').lookup(input));}
   if(input.action==='quote'){await S.rate(db,req,'quote');const q=quote(input);if(gift){if(String(input.state).toUpperCase()!=='NC')throw S.fail('Gift cards can only be used in North Carolina.');q.gift_cents=Math.min(q.amount_cents,gift.balance_cents-gift.reserved_cents);q.card_charge_cents=q.amount_cents-q.gift_cents;}return S.json(res,200,{quote:q});}
   if(!['checkout','request'].includes(input.action))throw S.fail('Unknown booking action.');
