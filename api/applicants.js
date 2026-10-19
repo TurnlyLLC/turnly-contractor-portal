@@ -25,15 +25,17 @@ module.exports=async(req,res)=>{
   }
   const actor=await admin(db,req);
   if(input.action==='list'){
+   const role=input.role||'cleaner';if(!ROLES.includes(role))throw fail('Choose cleaner or brand ambassador applications.');
    const page=Math.max(1,Math.min(10000,parseInt(input.page)||1));
    let q=db.from('recruiting_applications').select('id,role,name,email,phone,city,state,service_city,status,created_at,version',{count:'exact'}).order('created_at',{ascending:false});
-   if(ROLES.includes(input.role))q=q.eq('role',input.role);
+   q=q.eq('role',role);
    if(STATUSES.includes(input.status))q=q.eq('status',input.status);
    if(input.city)q=q.eq('service_city',String(input.city).slice(0,30));
    const search=String(input.search||'').replace(/[^a-zA-Z0-9@. +_-]/g,'').slice(0,100);
    if(search)q=q.or(`name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`);
    const result=await q.range((page-1)*30,page*30-1);checked(result);
-   return json(res,200,{rows:result.data,count:result.count,page});
+   const totals=await Promise.all(ROLES.map(async r=>{const result=await db.from('recruiting_applications').select('id',{count:'exact',head:true}).eq('role',r);checked(result);return [r,result.count];}));
+   return json(res,200,{rows:result.data,count:result.count,page,counts:Object.fromEntries(totals)});
   }
   if(!/^[0-9a-f-]{36}$/i.test(input.id||''))throw fail('Choose an application.');
   if(input.action==='detail')return json(res,200,{application:checked(await db.from('recruiting_applications').select('*').eq('id',input.id).single()),events:checked(await db.from('recruiting_application_events').select('status,note,created_at').eq('application_id',input.id).order('created_at',{ascending:false}))});

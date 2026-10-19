@@ -54,7 +54,8 @@ export const navSections = [
   {
     title: "Contractors",
     links: [
-      { key: "applicants", label: "Applicants", href: "applicants.html", icon: "users" },
+      { key: "applicants", label: "Cleaner applicants", href: "applicants.html?role=cleaner", icon: "users" },
+      { key: "ambassador-applicants", label: "Ambassador applicants", href: "applicants.html?role=brand_ambassador", icon: "users" },
       { key: "ambassadors", label: "Brand ambassadors", href: "https://ba.turnlypros.com", icon: "users" },
       { key: "directory", label: "Directory", href: "directory.html", icon: "users" }
     ]
