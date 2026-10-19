@@ -26,14 +26,19 @@ test('database enforces owner isolation, month reminders, single attribution, re
  select set_config('test.uid','${id(1)}',false);`);
  const migration=fs.readdirSync('supabase/migrations').find(n=>n.endsWith('_crm_sales_operations.sql'));
  await db.exec(fs.readFileSync(migration?'supabase/migrations/'+migration:'../crm-sales-operations.sql','utf8'));
+ await db.exec(fs.readFileSync('supabase/migrations/20261019192413_crm_followup_banks.sql','utf8'));
  await db.exec(`insert into sales_leads(id,sales_owner_id,contact_name,sales_city)values('${id(10)}','${id(2)}','First','Raleigh'),('${id(11)}','${id(3)}','Second','Durham');
  update sales_leads set pipeline_stage='follow_up' where id='${id(10)}';`);
+ const entered=(await db.query("select follow_up_started_at from sales_leads where id='"+id(10)+"'")).rows[0].follow_up_started_at;
+ await db.exec("update sales_leads set pipeline_stage='lost' where id='"+id(10)+"'");
+ assert.equal((await db.query("select follow_up_started_at from sales_leads where id='"+id(10)+"'")).rows[0].follow_up_started_at.toISOString(),entered.toISOString());
  let r=(await db.query(`select follow_up_due_at>now()+interval '27 days' and follow_up_due_at<now()+interval '32 days' as scheduled from sales_leads where id='${id(10)}'`)).rows[0];assert.equal(r.scheduled,true);
  assert.equal((await db.query("select count(*)::int n from crm_notifications where kind='leads_exhausted' and not resolved")).rows[0].n,1);
  await db.exec(`insert into sales_leads(id,sales_owner_id,contact_name)values('${id(12)}','${id(2)}','Third');`);
  assert.equal((await db.query("select count(*)::int n from crm_notifications where kind='leads_exhausted' and not resolved")).rows[0].n,0);
  await db.exec(`update sales_leads set do_not_contact=true where id='${id(10)}'`);
  assert.equal((await db.query(`select follow_up_due_at from sales_leads where id='${id(10)}'`)).rows[0].follow_up_due_at,null);
+ await db.exec("update sales_leads set do_not_contact=false where id='"+id(10)+"'");assert.equal((await db.query("select do_not_contact from sales_leads where id='"+id(10)+"'")).rows[0].do_not_contact,true);
  assert.equal((await db.query("select count(*)::int n from crm_notifications where kind='follow_up' and not resolved")).rows[0].n,0);
  await db.exec(`insert into gift_orders(id,email,name,quantity,amount_cents,sales_user_id,sales_lead_id,buyer_kind,commission_mode,commission_rate) values('${id(20)}','a@example.test','Agent',2,20000,'${id(2)}','${id(12)}','realtor','percent',1000)`);
  assert.equal((await db.query('select count(*)::int n from crm_sales_commissions')).rows[0].n,0);
@@ -48,6 +53,7 @@ test('database enforces owner isolation, month reminders, single attribution, re
  assert.equal((await db.query('select count(*)::int n from sales_leads')).rows[0].n,2);
  assert.equal((await db.query(`update sales_leads set pipeline_stage='lost' where id='${id(11)}' returning id`)).rows.length,0);
  await assert.rejects(db.query(`update sales_leads set sales_owner_id='${id(3)}' where id='${id(12)}'`),/reassign/);
+ await assert.rejects(db.query("select crm_remove_operator_leads_by_status('"+id(2)+"','all')"),/Administrator/);
  await assert.rejects(db.query('select * from crm_sales_commissions'),/permission denied/);
  await assert.rejects(db.query(`select crm_allocate_region(array['${id(2)}'::uuid],1)`),/Administrator/);
  await db.exec(`reset role;select set_config('test.uid','${id(1)}',false);insert into sales_leads(id,sales_city,sales_region) values('${id(30)}','Raleigh','Triangle'),('${id(31)}','Durham','Triangle');set role authenticated;`);
@@ -55,6 +61,8 @@ test('database enforces owner isolation, month reminders, single attribution, re
  assert.equal((await db.query(`select crm_allocate_region(array['${id(3)}'::uuid],10,'Triangle','Raleigh') n`)).rows[0].n,0);
  assert.equal((await db.query(`select crm_remove_operator_leads('${id(2)}',true) n`)).rows[0].n,1);
  assert.equal((await db.query(`select sales_owner_id from sales_leads where id='${id(30)}'`)).rows[0].sales_owner_id,null);
+ assert.equal((await db.query(`select crm_remove_operator_leads_by_status('${id(2)}','followups') n`)).rows[0].n,1);
+ assert.equal((await db.query(`select sales_owner_id from sales_leads where id='${id(12)}'`)).rows[0].sales_owner_id,id(2));
  }finally{await db.close();}
 });
 const {send}=require('../lib/crm-sales.cjs');
@@ -70,4 +78,17 @@ test('message sends require owned lead and explicit consent; provider receipts a
   assert.equal((await send(db,user,{...input,recipient:'tampered@example.test'})).status,'accepted');assert.equal(calls,1);
   assert.equal((await send(db,user,input)).status,'accepted');assert.equal(calls,1);assert.equal(db.tables.crm_sales_messages.length,1);assert.equal(db.tables.sales_activities.length,1);assert.equal(lead.pipeline_stage,'link_sent');
  }finally{global.fetch=oldFetch;if(oldKey===undefined)delete process.env.RESEND_API_KEY;else process.env.RESEND_API_KEY=oldKey;if(oldFrom===undefined)delete process.env.REFERRAL_FROM_EMAIL;else process.env.REFERRAL_FROM_EMAIL=oldFrom;}
+});
+
+test('alternate recipient is validated, recorded, and cannot reuse a send request with a changed destination',async()=>{
+ const lead={id:id(40),sales_owner_id:id(2),business_segment:'residential',contact_email:'original@example.test',contact_name:'Agent',pipeline_stage:'follow_up'},db=fakeDb(lead),user={id:id(2),full_name:'Member'};
+ const input={lead_id:lead.id,channel:'email',request_id:id(70),consent:true,recipient_override:'alternate@example.test'},oldFetch=global.fetch,key=process.env.RESEND_API_KEY,from=process.env.REFERRAL_FROM_EMAIL;let calls=0;
+ process.env.RESEND_API_KEY='fixture';process.env.REFERRAL_FROM_EMAIL='fixture@example.test';
+ global.fetch=async(url,o)=>{calls++;assert.deepEqual(JSON.parse(o.body).to,['alternate@example.test']);return{ok:true,json:async()=>({id:'receipt'})}};
+ try{await assert.rejects(send(db,user,{...input,recipient_override:'invalid'}),/valid|email/);await assert.rejects(send(db,user,{...input,consent:false}),/permission/);await send(db,user,input);await send(db,user,input);assert.equal(calls,1);assert.equal(db.tables.crm_sales_messages[0].recipient,input.recipient_override);assert.equal(lead.contact_email,'original@example.test');assert.equal(lead.pipeline_stage,'follow_up');await assert.rejects(send(db,user,{...input,recipient_override:'another@example.test'}),/conflict/);}finally{global.fetch=oldFetch;if(key===undefined)delete process.env.RESEND_API_KEY;else process.env.RESEND_API_KEY=key;if(from===undefined)delete process.env.REFERRAL_FROM_EMAIL;else process.env.REFERRAL_FROM_EMAIL=from;}
+});
+test('follow-up age boundaries use entry date and preserve unknown dates',()=>{
+ const vm=require('vm'),source=fs.readFileSync('sales-portal.js','utf8'),context={Date};vm.createContext(context);vm.runInContext(source.slice(source.indexOf('function followUpAge('),source.indexOf('function renderTasksPage(')),context);
+ for(const [days,bank] of [[0,'30'],[30,'30'],[31,'60'],[60,'60'],[61,'90'],[90,'90'],[91,'long'],[300,'long']])assert.equal(context.followUpBank({follow_up_started_at:new Date(Date.now()-days*86400000).toISOString()}),bank);
+ assert.equal(context.followUpBank({created_at:new Date().toISOString()}),'unknown');
 });

@@ -16,6 +16,7 @@ module.exports=async(req,res)=>{
   if(input.action==='submit'){
    if(input.website)return json(res,200,{ok:true});
    const row=validate(input);await rate(db,req,'applicants');
+   if(row.role==='cleaner'&&!input.resume)throw fail('Upload your resume PDF before submitting your application.');
    if(input.resume&&row.role!=='cleaner')throw fail('Resumes are only accepted for cleaner applications.');
    if(input.resume)R.pdf(input.resume);
    const fingerprint=hash(JSON.stringify(row)+(input.resume?hash(input.resume.data):''));
