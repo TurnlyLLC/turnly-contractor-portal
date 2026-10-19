@@ -2,6 +2,7 @@ const S=require('../lib/residential-server.cjs'),A=require('../lib/ambassadors.c
 const {email,clean,uuid}=require('../lib/agent-referrals.cjs');
 const {randomBytes}=require('node:crypto');
 module.exports=async(req,res)=>{
+ res.setHeader('Cache-Control','no-store');
  if(req.method!=='POST')return S.json(res,405,{error:'Method not allowed.'});
  try{
   const x=await S.body(req),db=S.database();
@@ -37,8 +38,7 @@ module.exports=async(req,res)=>{
    return S.json(res,200,{ok:true});
   }
   if(x.action==='dashboard'){
-   if(!actor.admin&&!actor.member.onboarding_completed_at)return S.json(res,200,{onboarding_required:true});
-   const members=actor.admin?S.checked(await db.from('ba_members').select('user_id,name,email,code,enabled,created_at').order('name')):[actor.member];
+   const members=actor.admin?S.checked(await db.from('ba_members').select('user_id,name,email,code,enabled,onboarding_completed_at,created_at').order('name')):[actor.member];
    const id=actor.admin?(x.member_id||members[0]?.user_id):actor.id;
    const member=members.find(m=>m.user_id===id)||null;
    let leads=[],earnings=[];
@@ -49,8 +49,8 @@ module.exports=async(req,res)=>{
    }
    // No customer email, phone, address, billing details or later bookings leave this endpoint.
    if(!actor.admin)leads=leads.map(l=>({...l,name:l.name.split(/\s+/).map((part,i)=>i===0?part:part[0]+'.').join(' ')}));
-   const safeMember=m=>m?(({user_id,name,email,code,enabled})=>({user_id,name,email,code,enabled}))(m):null;
-   return S.json(res,200,{admin:actor.admin,members:members.map(safeMember),member:safeMember(member),leads,earnings});
+   const safeMember=m=>m?(({user_id,name,email,code,enabled,onboarding_completed_at})=>({user_id,name,email,code,enabled,onboarding_completed_at}))(m):null;
+   return S.json(res,200,{admin:actor.admin,onboarding_required:!actor.admin&&!actor.member.onboarding_completed_at,members:members.map(safeMember),member:safeMember(member),leads,earnings});
   }
   if(!actor.admin)throw S.fail('Admin access required.',403);
   if(x.action==='create'){
