@@ -4,11 +4,11 @@ Public entry: `/apply.html`. Admin queue: `/applicants.html`, linked under Contr
 
 Cleaners provide contact information, preferred North Carolina service area, experience, service interests, availability, equipment/transport/insurance readiness, and acknowledgments of required onboarding, training, safe work, privacy, and quality procedures. Based on Turnly Academy module 1 (independent contractor responsibilities), safety, QA, and certification modules plus existing contractor document review. No invented minimum experience, insurance coverage amount, pay promise, or automatic eligibility decision.
 
-Brand ambassadors use a separate interest registration. Duties, compensation, eligibility, and later onboarding are deliberately pending the owner’s details.
+Brand ambassadors complete the full four-step application described below. Previous interest registrations remain available for review.
 
 Applications are private service-role storage behind a rate-limited API; admin requests validate the authenticated user against the stored profile. Consent is versioned. A stable UUID makes retries idempotent without exposing an email lookup. Database triggers record each submission/review transaction. Version checks prevent one administrator overwriting another’s review. No access to applications is granted to anonymous or normal authenticated database clients.
 
-Review stages: New, Reviewing, Contacted, Interview, Selected / onboarding, Waitlist, Not selected, Withdrawn. Internal notes and history are retained. Selecting onboarding does not create an account or approve job access. Admin opens Directory to create/locate the contractor account, then reviews its onboarding and training through existing workflows. Email/call buttons launch the administrator’s own applications; no automatic messages are sent.
+Review stages: New, Reviewing, Contacted, Interview, Approved for onboarding, Waitlist, Not selected, Withdrawn. Internal notes and history are retained. Selecting onboarding does not create an account or approve job access. Admin opens Directory to create/locate the contractor account, then reviews its onboarding and training through existing workflows. Email/call buttons launch the administrator’s own applications; no automatic messages are sent.
 
 Deploy database migration 20261019162553 before publishing the portal and public website links. Uses existing SUPABASE_SERVICE_ROLE_KEY and allow_referral_request rate limiter; no new secrets. Public form stores no applicant draft in browser storage. Existing Academy, job approval, and service coverage systems are unchanged.
 
