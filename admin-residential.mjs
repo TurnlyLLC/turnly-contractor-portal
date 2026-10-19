@@ -1,4 +1,4 @@
-import {renderStandaloneAdminSidebar,bindStandaloneAdminNavigation} from "./admin-navigation.mjs?v=20261012-light";
+import {renderStandaloneAdminSidebar,bindStandaloneAdminNavigation} from "./admin-navigation.mjs?v=20261019-sales-link";
 document.getElementById("adminNavigation").outerHTML=renderStandaloneAdminSidebar("residential-bookings");
 bindStandaloneAdminNavigation();
 import {createClient} from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/+esm';
