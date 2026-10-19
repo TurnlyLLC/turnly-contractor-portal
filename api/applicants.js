@@ -19,8 +19,10 @@ module.exports=async(req,res)=>{
    if(row.role==='cleaner'&&!input.resume)throw fail('Upload your resume PDF before submitting your application.');
    if(input.resume&&row.role!=='cleaner')throw fail('Resumes are only accepted for cleaner applications.');
    if(input.resume)R.pdf(input.resume);
-   const fingerprint=hash(JSON.stringify(row)+(input.resume?hash(input.resume.data):''));
-   const saved=await db.from('recruiting_applications').insert({...row,status:row.role==='brand_ambassador'?'onboarding':'new',payload_hash:fingerprint}).select('id').single();
+   if(row.role==='brand_ambassador'&&!/^[a-f0-9]{64}$/.test(input.enrollment_token||''))throw fail('Reload the application before continuing.');
+   const enrollment_hash=row.role==='brand_ambassador'?hash(input.enrollment_token):null;
+   const fingerprint=hash(JSON.stringify(row)+String(enrollment_hash||'')+(input.resume?hash(input.resume.data):''));
+   const saved=await db.from('recruiting_applications').insert({...row,status:row.role==='brand_ambassador'?'onboarding':'new',payload_hash:fingerprint,enrollment_hash}).select('id').single();
    if(saved.error?.code==='23505'){
     const existing=checked(await db.from('recruiting_applications').select('payload_hash').eq('id',row.id).maybeSingle());
     if(existing?.payload_hash!==fingerprint)throw fail('This application has changed. Reload the page before submitting again.',409);
@@ -30,7 +32,7 @@ module.exports=async(req,res)=>{
     if(!stored.resume_path){const path=await R.upload(db,'resumes/'+row.id+'/'+require('node:crypto').randomUUID()+'.pdf',input.resume);checked(await db.from('recruiting_applications').update({resume_path:path,resume_name:'Resume.pdf'}).eq('id',row.id).is('resume_path',null));}
    }
    await R.queue(db,row);let emailed=false;try{emailed=await R.deliver(db,row.id);}catch{console.warn('Application email queued for retry');}
-   return json(res,200,{ok:true,reference:row.id,email_sent:emailed,next:row.role==='brand_ambassador'?'https://ba.turnlypros.com/ba-onboarding.html':null});
+   return json(res,200,{ok:true,reference:row.id,email_sent:emailed,next:row.role==='brand_ambassador'?'https://ba.turnlypros.com/ba-signup.html#application='+row.id+'&token='+input.enrollment_token:null});
   }
   const actor=await admin(db,req);
   if(input.action==='list'){

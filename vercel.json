@@ -62,6 +62,10 @@
     },
     "api/applicants.js": {
       "maxDuration": 60
+    },
+    "api/ba-onboarding.js": {
+      "maxDuration": 60,
+      "includeFiles": "assets/irs-w9.pdf"
     }
   },
   "routes": [
