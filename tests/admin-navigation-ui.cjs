@@ -10,7 +10,7 @@ const server=http.createServer((req,res)=>{const file=path.resolve(root,'.'+new 
 (async()=>{
  const {navSections}=await import(pathToFileURL(path.join(root,'admin-navigation.mjs')));
  const expected=navSections.flatMap(s=>s.links.map(l=>l.href));assert.equal(new Set(expected).size,expected.length);
- for(const href of expected)assert.ok(fs.existsSync(path.join(root,href)),`Missing destination ${href}`);
+ for(const href of expected.filter(h=>!h.startsWith('https://')))assert.ok(fs.existsSync(path.join(root,href)),`Missing destination ${href}`);
  await new Promise(r=>server.listen(0,'127.0.0.1',r));const browser=await chromium.launch({headless:true,executablePath:process.env.QA_CHROMIUM});
  const page=await browser.newPage({viewport:{width:1440,height:1000}});
  await page.route('**/env.js',r=>r.fulfill({contentType:'text/javascript',body:'window.__ENV={SUPABASE_URL:"https://example.supabase.co",SUPABASE_ANON_KEY:"test"};'}));

@@ -1,6 +1,6 @@
 import { loadActiveCleaningContractors } from "./contractor-directory-model.mjs?v=20261012-active";
 import { isResidentialAssignment, configureResidentialForm, residentialRecurrence } from "./residential-assignment.mjs?v=20261012-editor";
-import {navSections, renderAdminNavigation} from "./admin-navigation.mjs?v=20261012-light";
+import {navSections, renderAdminNavigation} from "./admin-navigation.mjs?v=20261019-sales-link";
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 import {
   adminPreviewPortalOptions,
@@ -538,21 +538,18 @@ const internalMessageState = {
 };
 
 function renderAdminSalesMount() {
-  return `
-    <section class="panel">
-      <div class="empty-state">
-        ${icon("refresh")}
-        <h3>Loading sales workspace</h3>
-        <p>Pulling sales pipeline records from Supabase.</p>
-      </div>
-    </section>
-  `;
+  return `<section class="panel"><div class="empty-state">
+    ${icon("trending-up")}
+    <h3>Sales has moved to Turnly Sales CRM</h3>
+    <p>Manage all leads, follow-ups, team assignments, and sales activity in the dedicated sales portal.</p>
+    <a class="primary-action" href="https://sales.turnlypros.com">Open Sales CRM →</a>
+  </div></section>`;
 }
 
 const pages = {
   "sales-overview": {
-    title: "Sales Dashboard",
-    subtitle: "Monitor prospect intake, team follow-ups, walkthroughs, and conversion progress.",
+    title: "Sales CRM",
+    subtitle: "All sales activity is managed at sales.turnlypros.com.",
     render: renderAdminSalesMount
   },
   "dashboard": {
@@ -572,28 +569,28 @@ const pages = {
     render: renderMessages
   },
   "leads": {
-    title: "Leads",
-    subtitle: "Track and manage new business opportunities",
+    title: "Sales CRM",
+    subtitle: "All sales activity is managed at sales.turnlypros.com.",
     render: renderAdminSalesMount
   },
   "walkthroughs": {
-    title: "Walkthroughs",
-    subtitle: "Schedule and manage property walkthroughs",
+    title: "Sales CRM",
+    subtitle: "All sales activity is managed at sales.turnlypros.com.",
     render: renderAdminSalesMount
   },
   "quotes": {
-    title: "Quotes",
-    subtitle: "Create, send, and manage quotes for potential clients",
+    title: "Sales CRM",
+    subtitle: "All sales activity is managed at sales.turnlypros.com.",
     render: renderAdminSalesMount
   },
   "contracts-pending": {
-    title: "Contracts",
-    subtitle: "Track pending and signed sales contracts",
+    title: "Sales CRM",
+    subtitle: "All sales activity is managed at sales.turnlypros.com.",
     render: renderAdminSalesMount
   },
   "sales-tasks": {
-    title: "Tasks & Follow-ups",
-    subtitle: "Manage outreach, pricing confirmation, walkthrough handoffs, and sales follow-up work.",
+    title: "Sales CRM",
+    subtitle: "All sales activity is managed at sales.turnlypros.com.",
     render: renderAdminSalesMount
   },
   "contracts": {
@@ -16832,12 +16829,6 @@ function renderApp() {
   }
   if (activeKey === "qa-queue") {
     initQaQueue();
-  }
-  if (activeKey === "leads") {
-    initLeads();
-  }
-  if (activeKey === "walkthroughs") {
-    initWalkthroughs();
   }
   if (activeKey === "reports-sales") {
     initSalesReport();
