@@ -22,3 +22,13 @@ The ambassador application now collects legal and preferred name, contact/locati
 Admin queues are separate: `/applicants.html?role=cleaner` and `/applicants.html?role=brand_ambassador`. The API defaults to cleaners and rejects unknown roles; it never returns a mixed applicant list. Separate global counts are admin-only. Existing interest applications remain readable and are marked as legacy registrations requiring the full application. Existing cleaner validation and application audit history are preserved.
 
 The initial application does not sign the supplied draft agreement, collect tax IDs or payment details, activate accounts, or adopt the draft’s proposed 14/30/90-day terms. Approved applicants proceed to separately arranged secure onboarding.
+
+## Enrollment and receipts — October 19, 2026
+
+Ambassador intake immediately uses onboarding status and redirects to ba.turnlypros.com/ba-onboarding.html. Cleaners remain in review. Every new submission atomically queues a Resend thank-you email; /api/recruiting-mail retries every 10 minutes using CRON_SECRET, RESEND_API_KEY and REFERRAL_FROM_EMAIL. Receipt delivery uses a stable payload/idempotency key, a five-minute lease, and stops ambiguous retries before the provider's 24-hour window. Existing applications are not emailed retroactively.
+
+Resume uploads are optional PDFs up to 1 MB. W-9s are signed PDFs up to 1 MB. The recruiting-private bucket has no public/authenticated storage policy. Only authenticated owner/admin endpoints issue 60-second download links; tax IDs never appear in application answers, notes, emails or referral responses. PDF header/size validation is not malware scanning. Admin applicant detail includes resume download or ambassador agreement/W-9/onboarding status.
+
+Apply 20261019173854_enrollment_admin_workflows.sql before publishing. Local tests cover authorization, bounded file handling, private tables, onboarding gates, email retries and Eastern-time financial year boundaries. No synthetic production applicants or tax documents are created.
+
+Payout transfers still use Turnly's existing manual process; onboarding does not collect bank details or automate transfers. Ambassadors receive payout coordination instructions. Insurance is recommended, not a gate. Legal responsibility language preserves nonwaivable obligations and excludes Turnly's own negligence/misconduct.

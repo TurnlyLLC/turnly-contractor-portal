@@ -53,7 +53,7 @@ test('contact consent and stored access are required; metadata cannot grant acce
 });
 test('HTTP dashboard forces ambassador ownership and strips private profile fields',async()=>{
  const vm=require('node:vm'),S=require('../lib/residential-server.cjs');let selected;
- const member={user_id:'mine',name:'Ambassador',email:'agent@example.com',code:'BA-1111111111111111',enabled:true,session_id:'private-session',must_change_password:false};
+ const member={user_id:'mine',name:'Ambassador',email:'agent@example.com',code:'BA-1111111111111111',enabled:true,session_id:'private-session',must_change_password:false,onboarding_completed_at:'2026-10-19'};
  const db={from(table){return {select(){return this},eq(key,value){selected=value;return this},order(){return this},range:async()=>({data:[{id:'lead',name:'Example Person',stage:'lead'}]}),in:async()=>({data:[]})};}};
  const context={module:{exports:{}},require:p=>p==='../lib/residential-server.cjs'?{...S,database:()=>db}:p==='../lib/ambassadors.cjs'?{...A,access:async()=>({id:'mine',admin:false,member})}:p==='../lib/agent-referrals.cjs'?require('../lib/agent-referrals.cjs'):require(p),console,Buffer,process};
  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../api/ambassadors.js'),'utf8'),context);

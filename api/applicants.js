@@ -1,4 +1,5 @@
 const {database,body,json,admin,rate,fail,hash}=require('../lib/residential-server.cjs');
+const R=require('../lib/recruiting-workflows.cjs');
 const {validate,review,ROLES,STATUSES}=require('../lib/applicants.cjs');
 const checked=r=>{if(r.error)throw fail('Applications are temporarily unavailable. Please try again.',503);return r.data;};
 const origins=new Set(['https://portal.turnlypros.com','https://turnlypros.com','https://www.turnlypros.com','https://res.turnlypros.com']);
@@ -11,17 +12,24 @@ module.exports=async(req,res)=>{
  if(req.method==='OPTIONS'){res.statusCode=204;return res.end();}
  if(req.method!=='POST')return json(res,405,{error:'Method not allowed.'});
  try{
-  const input=await body(req),db=database();
+  const input=await R.requestBody(req),db=database();
   if(input.action==='submit'){
    if(input.website)return json(res,200,{ok:true});
    const row=validate(input);await rate(db,req,'applicants');
-   const fingerprint=hash(JSON.stringify(row));
-   const saved=await db.from('recruiting_applications').insert({...row,payload_hash:fingerprint}).select('id').single();
+   if(input.resume&&row.role!=='cleaner')throw fail('Resumes are only accepted for cleaner applications.');
+   if(input.resume)R.pdf(input.resume);
+   const fingerprint=hash(JSON.stringify(row)+(input.resume?hash(input.resume.data):''));
+   const saved=await db.from('recruiting_applications').insert({...row,status:row.role==='brand_ambassador'?'onboarding':'new',payload_hash:fingerprint}).select('id').single();
    if(saved.error?.code==='23505'){
     const existing=checked(await db.from('recruiting_applications').select('payload_hash').eq('id',row.id).maybeSingle());
     if(existing?.payload_hash!==fingerprint)throw fail('This application has changed. Reload the page before submitting again.',409);
    }else checked(saved);
-   return json(res,200,{ok:true,reference:row.id});
+   if(input.resume){
+    const stored=checked(await db.from('recruiting_applications').select('resume_path').eq('id',row.id).single());
+    if(!stored.resume_path){const path=await R.upload(db,'resumes/'+row.id+'/'+require('node:crypto').randomUUID()+'.pdf',input.resume);checked(await db.from('recruiting_applications').update({resume_path:path,resume_name:'Resume.pdf'}).eq('id',row.id).is('resume_path',null));}
+   }
+   await R.queue(db,row);let emailed=false;try{emailed=await R.deliver(db,row.id);}catch{console.warn('Application email queued for retry');}
+   return json(res,200,{ok:true,reference:row.id,email_sent:emailed,next:row.role==='brand_ambassador'?'https://ba.turnlypros.com/ba-onboarding.html':null});
   }
   const actor=await admin(db,req);
   if(input.action==='list'){
@@ -38,6 +46,14 @@ module.exports=async(req,res)=>{
    return json(res,200,{rows:result.data,count:result.count,page,counts:Object.fromEntries(totals)});
   }
   if(!/^[0-9a-f-]{36}$/i.test(input.id||''))throw fail('Choose an application.');
+  if(input.action==='onboarding'){
+   const a=checked(await db.from('recruiting_applications').select('email,role').eq('id',input.id).single());if(a.role!=='brand_ambassador')throw fail('Choose an ambassador application.');
+   const m=checked(await db.from('ba_members').select('user_id,onboarding_completed_at').eq('email',a.email).maybeSingle());
+   const record=m?checked(await db.from('ba_onboarding').select('agreement_version,agreement_text,signature_name,signed_at,w9_received_at,completed_at').eq('user_id',m.user_id).maybeSingle()):null;
+   const delivery=checked(await db.from('recruiting_delivery').select('sent_at,last_error').eq('application_id',input.id).maybeSingle());
+   return json(res,200,{member_id:m?.user_id,record,delivery});
+  }
+  if(input.action==='resume'){const a=checked(await db.from('recruiting_applications').select('resume_path').eq('id',input.id).single());if(!a.resume_path)throw fail('No resume is attached.',404);return json(res,200,{url:await R.signedDownload(db,a.resume_path)});}
   if(input.action==='detail')return json(res,200,{application:checked(await db.from('recruiting_applications').select('*').eq('id',input.id).single()),events:checked(await db.from('recruiting_application_events').select('status,note,created_at').eq('application_id',input.id).order('created_at',{ascending:false}))});
   if(input.action==='review'){
    const change=review(input);

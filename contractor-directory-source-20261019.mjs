@@ -1,0 +1,925 @@
+import { token, title, normalizeLookup, metadataFor, uniqueList, listFrom, firstValue, accessFromRow, roleText, isSales, isPropertyManager, isContractor, isInactive, isApproved, activeStatus, teamFor, visibleStatus, normalizePerson, mergeDirectoryPeople } from "./contractor-directory-model.mjs?v=20261012-active";
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+
+import { createContractorReview } from "./contractor-review-center.js?v=20261012c";
+
+const env = window.__ENV || {};
+const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
+  ? createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY)
+  : null;
+
+const managerMode = new URL(location.href).searchParams.get('tab') === 'property-managers';
+const state = {
+  people: [],
+  accessProperties: [],
+  accessRegions: [],
+  search: "",
+  managerSearch: "",
+  team: "contractor",
+  status: "all",
+  managerStatus: "active",
+  loading: false,
+  saving: false
+};
+
+const reviews = createContractorReview({ supabase, getPeople: () => state.people, onSaved: () => loadPeople(false) });
+
+const sources = [
+  { table: "profiles", select: "*" },
+  { table: "contractors", select: "*" }
+];
+
+function esc(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function isInactiveProperty(row = {}) {
+  return ["inactive", "disabled", "archived", "suspended", "rejected", "declined", "deleted", "lost", "cancelled", "canceled"]
+    .includes(token(row?.status || row?.contract_status || row?.stage || row?.pipeline_stage));
+}
+
+function accessPropertyTitle(row = {}) {
+  const meta = metadataFor(row);
+  return firstValue(row.property_name, row.name, row.company_name, row.client_name, row.title, meta.property_name, meta.name, meta.company_name);
+}
+
+function accessPropertyRegion(row = {}) {
+  const meta = metadataFor(row);
+  return firstValue(row.region, row.market, row.location, row.city, meta.region, meta.market, meta.location, meta.city);
+}
+
+function normalizeAccessProperty(row = {}, source = {}) {
+  if (isInactiveProperty(row)) return null;
+  const meta = metadataFor(row);
+  const name = accessPropertyTitle(row);
+  if (!name) return null;
+  const address = firstValue(row.address, row.billing_address, row.property_address, row.service_address, meta.address, meta.billing_address, meta.property_address);
+  const region = accessPropertyRegion(row);
+  const id = firstValue(row.id, row.property_id, row.portal_property_id, row.client_id, meta.id, meta.property_id, meta.portal_property_id, meta.client_id);
+  return {
+    id: String(id || ""),
+    name: String(name || ""),
+    address: String(address || ""),
+    region: String(region || ""),
+    source: source.table || "",
+    sourceLabel: source.label || title(source.table || "Property")
+  };
+}
+
+function propertyMatchesSaved(option = {}, allowedIds = [], allowedNames = []) {
+  const optionId = String(option.id || "").toLowerCase();
+  const optionNames = [option.name, option.address].map(normalizeLookup).filter(Boolean);
+  return allowedIds.some((id) => String(id || "").toLowerCase() === optionId)
+    || allowedNames.some((name) => {
+      const saved = normalizeLookup(name);
+      return optionNames.some((candidate) => candidate === saved || candidate.includes(saved) || saved.includes(candidate));
+    });
+}
+
+function accessSummary(person = {}) {
+  if (person.team === "contractor" && (!person.approved || person.status !== "active")) return "Approval required";
+  if (person.team !== "contractor") return "-";
+  const propertyCount = uniqueList([...person.allowedPropertyIds, ...person.allowedPropertyNames]).length;
+  const regionCount = uniqueList(person.allowedRegions).length;
+  if (!propertyCount && !regionCount) return "All job-board jobs";
+  return [
+    propertyCount ? `${propertyCount} ${propertyCount === 1 ? "property" : "properties"}` : "",
+    regionCount ? `${regionCount} ${regionCount === 1 ? "region" : "regions"}` : ""
+  ].filter(Boolean).join(", ");
+}
+
+function accessDetails(person = {}) {
+  const details = [
+    ...person.allowedPropertyNames,
+    ...person.allowedRegions.map((region) => `Region: ${region}`)
+  ];
+  return uniqueList(details).slice(0, 3).join(" | ");
+}
+
+function propertyOptionById(id = "") {
+  const normalized = String(id || "").toLowerCase();
+  if (!normalized) return null;
+  return state.accessProperties.find((option) => String(option.id || "").toLowerCase() === normalized) || null;
+}
+
+function propertyManagerAccessSummary(person = {}) {
+  const linked = propertyOptionById(person.propertyManagerPropertyId);
+  if (linked?.name) return linked.name;
+  if (person.requestedPropertyName) return person.requestedPropertyName;
+  if (person.allowedPropertyNames?.length) return person.allowedPropertyNames.join(", ");
+  if (person.allowedPropertyIds?.length) return `${person.allowedPropertyIds.length} linked ${person.allowedPropertyIds.length === 1 ? "property" : "properties"}`;
+  return "No property linked";
+}
+
+function propertyManagerAccessDetails(person = {}) {
+  const linked = propertyOptionById(person.propertyManagerPropertyId);
+  return [linked?.address, linked?.region, person.propertyManagerPropertyId ? `ID: ${person.propertyManagerPropertyId}` : ""]
+    .filter(Boolean)
+    .join(" | ");
+}
+
+function workspaceMarkup() {
+  return `
+    <section class="contractor-directory-workspace" data-contractor-directory-page>
+      <section class="metric-strip seven">
+        ${metric("Directory Total", "directoryTotal", "portal accounts", "blue", "DT")}
+        ${metric("Contractors", "contractorTotal", "service network", "green", "CN")}
+        ${metric("Sales Team", "salesTotal", "sales portal", "blue", "ST")}
+        ${metric("Property Managers", "propertyManagerTotal", "client access", "purple", "PM")}
+        ${metric("Active contractors", "activeTotal", "ready for work", "green", "A")}
+        ${metric("Pending", "pendingTotal", "needs approval", "yellow", "PA")}
+        ${metric("Inactive", "inactiveTotal", "not active", "red", "IA")}
+      </section>
+      ${reviews.markup()}
+      <section class="directory-layout">
+        <div class="suite-stack span-main">
+          <section class="table-card contractor-directory-card">
+            <div class="suite-toolbar">
+              <div class="toolbar-left">
+                <input id="contractorSearch" class="inline-search" type="search" placeholder="Search contractors..." autocomplete="off" />
+                <label class="suite-field compact-field"><span>Team</span><select id="contractorTeamFilter"><option value="contractor" selected>Contractors</option><option value="sales">Sales Team</option><option value="all">All Contractor/Sales</option></select></label>
+                <label class="suite-field compact-field"><span>Status</span><select id="contractorStatusFilter"><option value="all">All Statuses</option><option value="pending_approval">Pending Approval</option><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
+              </div>
+              <div class="toolbar-right">
+                <button id="contractorRefresh" class="secondary-action" type="button"><span>Refresh</span></button>
+                <button id="contractorAdd" class="primary-action" type="button"><span>Add Contractor / Sales</span></button>
+              </div>
+            </div>
+            <p id="contractorMessage" class="request-message" aria-live="polite"></p>
+            <div class="table-scroll">
+              <table class="suite-table">
+                <thead><tr><th>Name</th><th>Team</th><th>Company</th><th>Status</th><th>Service / Role</th><th>Location</th><th>Job Access</th><th>Phone</th><th>Source</th><th>Actions</th></tr></thead>
+                <tbody id="contractorRows"></tbody>
+              </table>
+            </div>
+            <div id="contractorEmpty" class="empty-state" hidden><strong>No contractors found</strong><p>Only contractor accounts and sales team entries appear in this section.</p></div>
+            <div class="table-foot"><span id="contractorCount">Showing 0 contractors</span></div>
+          </section>
+          <section class="table-card contractor-directory-card property-manager-directory-card">
+            <div class="suite-toolbar">
+              <div class="toolbar-left">
+                <input id="propertyManagerSearch" class="inline-search" type="search" placeholder="Search property managers..." autocomplete="off" />
+                <label class="suite-field compact-field"><span>Status</span><select id="propertyManagerStatusFilter"><option value="active">Active</option><option value="inactive">Inactive</option><option value="all">All Statuses</option></select></label>
+              </div>
+              <div class="toolbar-right">
+                <a class="secondary-action" href="coverage-center.html"><span>Regions & Access</span></a>
+              </div>
+            </div>
+            <div class="directory-section-heading">
+              <div>
+                <h2>Property Manager Accounts</h2>
+                <p>Manage property manager portal accounts separately from contractor accounts.</p>
+              </div>
+            </div>
+            <div class="table-scroll">
+              <table class="suite-table">
+                <thead><tr><th>Name</th><th>Status</th><th>Property Access</th><th>Phone</th><th>Source</th><th>Actions</th></tr></thead>
+                <tbody id="propertyManagerRows"></tbody>
+              </table>
+            </div>
+            <div id="propertyManagerEmpty" class="empty-state" hidden><strong>No property managers found</strong><p>Property manager accounts created from Regions & Access will appear here.</p></div>
+            <div class="table-foot"><span id="propertyManagerCount">Showing 0 property managers</span></div>
+          </section>
+        </div>
+      </section>
+      <div id="contractorModal" class="property-modal" hidden>
+        <div class="property-modal-backdrop" data-modal-close></div>
+        <section class="property-modal-panel">
+          <div class="property-modal-header"><div><h2 id="contractorModalTitle">Add Contractor / Sales</h2><p>Changes save back to Supabase.</p></div><button class="property-modal-close" type="button" data-modal-close>Close</button></div>
+          <div id="contractorModalBody"></div>
+        </section>
+      </div>
+    </section>`;
+}
+
+function metric(label, id, meta, tone, initials) {
+  return `<article class="metric-card ${tone}"><div class="metric-icon-wrap">${esc(initials)}</div><div class="metric-body"><span>${esc(label)}</span><strong id="${esc(id)}">0</strong><small>${esc(meta)}</small></div></article>`;
+}
+
+function injectStyles() {
+  if (document.getElementById("contractorDirectorySourceStyles")) return;
+  const style = document.createElement("style");
+  style.id = "contractorDirectorySourceStyles";
+  style.textContent = `
+    .contractor-directory-workspace{display:grid;gap:14px}.contractor-directory-workspace .metric-strip.seven{grid-template-columns:repeat(7,minmax(0,1fr))}.contractor-directory-card .suite-toolbar{padding:14px 16px 0}.contractor-directory-card .request-message{padding:0 16px 8px}.contractor-directory-card td strong,.contractor-directory-card td small{display:block}.contractor-directory-card td small{color:var(--suite-soft);font-size:11px;margin-top:3px}.directory-section-heading{border-top:1px solid var(--suite-border);padding:14px 16px 0}.directory-section-heading h2{font-size:16px;margin:0}.directory-section-heading p{color:var(--suite-soft);font-size:12px;margin:4px 0 0}.property-manager-directory-card{margin-top:12px}.contractor-file-name-link{color:var(--suite-text);text-decoration:none}.contractor-file-name-link:hover strong{color:var(--suite-green)}.compact-field{min-width:150px}.compact-field select{min-height:36px}.contractor-actions{align-items:center;display:flex;flex-wrap:wrap;gap:6px}.contractor-actions .secondary-action,.contractor-actions .primary-action{min-height:32px;padding:0 10px;white-space:nowrap}.contractor-form .checkbox-field{align-self:center}.contractor-password-note,.contractor-access-note{background:rgba(6,214,160,.1);border:1px solid rgba(6,214,160,.28);border-radius:8px;color:var(--suite-text);font-size:12px;line-height:1.5;margin:0;padding:12px}.contractor-password-message{font-size:12px;margin:0}.contractor-password-message.error{color:#ff5c7a}.contractor-password-message.success{color:var(--suite-green)}.contractor-access-scope{border:1px solid var(--suite-border);border-radius:12px;display:grid;gap:12px;padding:14px}.contractor-access-scope h3{font-size:14px;margin:0}.contractor-access-scope p{color:var(--suite-soft);font-size:12px;margin:0}.contractor-access-grid{display:grid;gap:12px;grid-template-columns:repeat(2,minmax(0,1fr))}.contractor-access-list{border:1px solid var(--suite-border);border-radius:10px;display:grid;gap:6px;max-height:190px;overflow:auto;padding:10px}.contractor-access-list strong{font-size:12px;margin-bottom:2px}.contractor-access-check{align-items:flex-start;display:flex;gap:8px;font-size:12px;line-height:1.35}.contractor-access-check input{margin-top:2px}.contractor-access-check span{display:grid}.contractor-access-check small{color:var(--suite-soft);font-size:11px}.contractor-access-empty{color:var(--suite-soft);font-size:12px}.contractor-access-summary{min-width:130px}.contractor-access-summary strong,.contractor-access-summary small{display:block}@media(max-width:1280px){.contractor-directory-workspace .metric-strip.seven{grid-template-columns:repeat(4,minmax(0,1fr))}}@media(max-width:980px){.contractor-directory-workspace .metric-strip.seven,.contractor-directory-card .suite-toolbar,.contractor-directory-card .toolbar-left,.contractor-directory-card .toolbar-right,.contractor-access-grid{align-items:stretch;display:grid;grid-template-columns:1fr}}
+  `;
+  document.head.appendChild(style);
+}
+
+function install() {
+  injectStyles();
+  const title = document.querySelector(".page-heading h1");
+  const subtitle = document.querySelector(".page-heading p");
+  if (title) title.textContent = managerMode ? "Client Directory · Property Managers" : "Contractor Directory";
+  if (subtitle) subtitle.textContent = "Manage contractor accounts separately from property manager portal accounts.";
+  const content = document.querySelector(".suite-content");
+  if (!content) return null;
+  content.innerHTML = workspaceMarkup();
+  const workspace = content.querySelector('[data-contractor-directory-page]');
+  workspace.classList.toggle('manager-mode', managerMode);
+  if (managerMode) content.insertAdjacentHTML('afterbegin', '<nav class="suite-tabs"><a href="client-directory.html">Client Directory</a><a class="active" href="client-directory.html?tab=property-managers">Property Managers</a><a href="contracts.html">Contracts</a></nav>');
+  else content.insertAdjacentHTML('afterbegin', '<p>Property managers are managed in <a href="client-directory.html?tab=property-managers">Client Directory → Property Managers</a>.</p>');
+  const scopeStyle=document.createElement('style');scopeStyle.textContent='.contractor-directory-workspace:not(.manager-mode) .property-manager-directory-card{display:none}.manager-mode .metric-strip,.manager-mode .contractor-directory-card:not(.property-manager-directory-card),.manager-mode .cr-center{display:none}';content.append(scopeStyle);
+  return content.querySelector("[data-contractor-directory-page]");
+}
+
+function setText(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value;
+}
+
+function setMessage(text, error = false) {
+  const el = document.getElementById("contractorMessage");
+  if (!el) return;
+  el.textContent = text || "";
+  el.classList.toggle("is-error", error);
+  el.classList.toggle("error", error);
+}
+
+async function loadSource(source) {
+  const result = await supabase.from(source.table).select(source.select).limit(1000);
+  if (result.error) {
+    console.warn(`[contractor-directory] ${source.table} load failed`, result.error);
+    return [];
+  }
+  return (result.data || []).map((row) => normalizePerson(row, source.table)).filter(Boolean);
+}
+
+async function loadAccessOptions() {
+  const accessSources = [
+    { table: "portal_properties", select: "*", label: "Property" },
+    { table: "client_contracts", select: "*", label: "Contract" }
+  ];
+  const results = await Promise.all(accessSources.map(async (source) => {
+    const result = await supabase.from(source.table).select(source.select).limit(1000);
+    if (result.error) {
+      console.warn(`[contractor-directory] ${source.table} access load failed`, result.error);
+      return [];
+    }
+    return (result.data || []).map((row) => normalizeAccessProperty(row, source)).filter(Boolean);
+  }));
+  const unique = new Map();
+  results.flat().forEach((option) => {
+    const key = normalizeLookup([option.name, option.address].filter(Boolean).join(" ")) || option.id;
+    const existing = unique.get(key);
+    if (!existing || option.source === "portal_properties") unique.set(key, option);
+  });
+  state.accessProperties = Array.from(unique.values())
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+  state.accessRegions = uniqueList(state.accessProperties.map((option) => option.region))
+    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+}
+
+async function loadPeople(refreshReviews = true) {
+  if (!supabase || state.loading) return;
+  state.loading = true;
+  setMessage("Loading contractor directory...");
+  try {
+    const [rows] = await Promise.all([
+      Promise.all(sources.map(loadSource)).then((parts) => parts.flat()),
+      loadAccessOptions()
+    ]);
+    state.people = mergeDirectoryPeople(rows).sort((a, b) => Number(b.status === "pending_approval") - Number(a.status === "pending_approval") || a.name.localeCompare(b.name));
+    render();
+    if (refreshReviews) await reviews.load();
+    setMessage(`${state.people.length} directory ${state.people.length === 1 ? "entry" : "entries"} synced from Supabase.`);
+  } catch (error) {
+    console.warn("[contractor-directory] load failed", error);
+    setMessage("Unable to load contractor directory: " + (error?.message || "Unknown error"), true);
+  } finally {
+    state.loading = false;
+  }
+}
+
+function filteredPeople() {
+  const term = state.search.trim().toLowerCase();
+  return state.people.filter((person) => {
+    if (person.team === "property_manager") return false;
+    if (state.team !== "all" && person.team !== state.team) return false;
+    if (state.status !== "all" && person.status !== state.status) return false;
+    if (!term) return true;
+    return [person.name, person.email, person.phone, person.company, person.service, person.location, person.teamLabel, accessSummary(person), accessDetails(person)]
+      .some((value) => String(value || "").toLowerCase().includes(term));
+  });
+}
+
+function filteredPropertyManagers() {
+  const term = state.managerSearch.trim().toLowerCase();
+  return state.people.filter((person) => {
+    if (person.team !== "property_manager") return false;
+    if (state.managerStatus !== "all" && person.status !== state.managerStatus) return false;
+    if (!term) return true;
+    return [person.name, person.email, person.phone, person.company, person.status, propertyManagerAccessSummary(person), propertyManagerAccessDetails(person)]
+      .some((value) => String(value || "").toLowerCase().includes(term));
+  });
+}
+
+function badge(value) {
+  return `<span class="status-badge status-${esc(token(value).replace(/_/g, "-"))}">${esc(title(value || "active"))}</span>`;
+}
+
+function renderMetrics() {
+  setText("directoryTotal", state.people.length.toLocaleString());
+  setText("contractorTotal", state.people.filter((p) => p.team === "contractor").length.toLocaleString());
+  setText("salesTotal", state.people.filter((p) => p.team === "sales").length.toLocaleString());
+  setText("propertyManagerTotal", state.people.filter((p) => p.team === "property_manager").length.toLocaleString());
+  setText("activeTotal", state.people.filter((p) => p.team === "contractor" && p.approved && p.status === "active").length.toLocaleString());
+  setText("pendingTotal", state.people.filter((p) => p.status === "pending_approval").length.toLocaleString());
+  setText("inactiveTotal", state.people.filter((p) => ["inactive", "disabled", "suspended"].includes(p.status)).length.toLocaleString());
+}
+
+function renderRows() {
+  const rows = filteredPeople();
+  const body = document.getElementById("contractorRows");
+  const empty = document.getElementById("contractorEmpty");
+  if (!body) return;
+  body.innerHTML = rows.map((person) => {
+    const approve = person.team === "contractor"
+      ? `<button class="secondary-action cr-review-link" type="button" data-review-account="${esc(person.key)}"><span>Review account</span></button>`
+      : "";
+    const fileLink = person.team === "contractor"
+      ? `<a class="secondary-action" href="${esc(contractorFileUrl(person))}"><span>File</span></a>`
+      : "";
+    const salesLoginLink = person.team === "sales"
+      ? `<a class="secondary-action" href="sales-login.html"><span>Sales Login</span></a>`
+      : "";
+    const resetPassword = (person.team === "contractor" || person.team === "sales") && (person.profileId || person.email)
+      ? `<button class="secondary-action" type="button" data-reset-password="${esc(person.key)}"><span>Reset Password</span></button>`
+      : "";
+    const nameCell = person.team === "contractor"
+      ? `<a class="contractor-file-name-link" href="${esc(contractorFileUrl(person))}"><strong>${esc(person.name)}</strong><small>${esc(person.email || "No email")}</small></a>`
+      : `<strong>${esc(person.name)}</strong><small>${esc(person.email || "No email")}</small>`;
+    return `<tr>
+      <td>${nameCell}</td>
+      <td>${badge(person.teamLabel)}</td><td>${esc(person.company || "-")}</td><td>${badge(person.status)}</td>
+      <td>${esc(person.service || "-")}</td><td>${esc(person.location || "-")}</td><td class="contractor-access-summary"><strong>${esc(accessSummary(person))}</strong><small>${esc(accessDetails(person) || "")}</small></td><td>${esc(person.phone || "-")}</td><td>${esc(person.sourceLabel)}</td>
+      <td><div class="contractor-actions">${fileLink}${salesLoginLink}${approve}${resetPassword}<button class="secondary-action" type="button" data-edit="${esc(person.key)}"><span>Edit</span></button></div></td>
+    </tr>`;
+  }).join("");
+  if (empty) empty.hidden = Boolean(rows.length);
+  const contractorTotal = state.people.filter((person) => person.team !== "property_manager").length;
+  setText("contractorCount", `Showing ${rows.length.toLocaleString()} of ${contractorTotal.toLocaleString()} contractor/sales accounts`);
+}
+
+function renderPropertyManagerRows() {
+  const rows = filteredPropertyManagers();
+  const body = document.getElementById("propertyManagerRows");
+  const empty = document.getElementById("propertyManagerEmpty");
+  if (!body) return;
+  body.innerHTML = rows.map((person) => `
+    <tr>
+      <td><strong>${esc(person.name)}</strong><small>${esc(person.email || "No email")}</small></td>
+      <td>${badge(person.status)}</td>
+      <td class="contractor-access-summary"><strong>${esc(propertyManagerAccessSummary(person))}</strong><small>${esc(propertyManagerAccessDetails(person) || "")}</small></td>
+      <td>${esc(person.phone || "-")}</td>
+      <td>${esc(person.sourceLabel)}</td>
+      <td><div class="contractor-actions"><button class="secondary-action" type="button" data-edit="${esc(person.key)}"><span>Edit</span></button><a class="secondary-action" href="coverage-center.html"><span>Access</span></a></div></td>
+    </tr>
+  `).join("");
+  if (empty) empty.hidden = Boolean(rows.length);
+  const managerTotal = state.people.filter((person) => person.team === "property_manager").length;
+  setText("propertyManagerCount", `Showing ${rows.length.toLocaleString()} of ${managerTotal.toLocaleString()} property managers`);
+}
+
+function contractorFileUrl(person) {
+  const params = new URLSearchParams();
+  if (person.profileId) params.set("profileId", person.profileId);
+  if (person.id) params.set("id", person.id);
+  if (person.source) params.set("source", person.source);
+  if (person.email) params.set("email", person.email);
+  return `contractor-file.html?${params.toString()}`;
+}
+
+function render() {
+  renderMetrics();
+  renderRows();
+  renderPropertyManagerRows();
+  reviews.render();
+}
+
+function field(id, label, type, value = "", extra = "") {
+  return `<label class="suite-field"><span>${esc(label)}</span><input id="${esc(id)}" type="${esc(type)}" value="${esc(value)}" ${extra} /></label>`;
+}
+
+function selectField(id, label, options, value) {
+  return `<label class="suite-field"><span>${esc(label)}</span><select id="${esc(id)}">${options.map(([key, text]) => `<option value="${esc(key)}" ${key === value ? "selected" : ""}>${esc(text)}</option>`).join("")}</select></label>`;
+}
+
+function propertyManagerPropertyField(person = null, team = "contractor") {
+  const selected = person?.propertyManagerPropertyId || person?.requestedPropertyName || "";
+  const options = state.accessProperties.map((option) => {
+    const value = option.id || option.name;
+    const label = [option.name, option.address].filter(Boolean).join(" - ");
+    const isSelected = String(value) === String(selected) || normalizeLookup(option.name) === normalizeLookup(selected);
+    return `<option value="${esc(value)}" ${isSelected ? "selected" : ""} data-property-name="${esc(option.name)}">${esc(label || option.name)}</option>`;
+  }).join("");
+  return `
+    <label id="propertyManagerPropertyWrap" class="suite-field wide" ${team === "property_manager" ? "" : "hidden"}>
+      <span>Linked Property</span>
+      <select id="propertyManagerProperty">
+        <option value="">No property linked</option>
+        ${options}
+      </select>
+    </label>
+  `;
+}
+
+function accessScopeMarkup(person = null, team = "contractor") {
+  const allowedRegions = uniqueList(person?.allowedRegions || []);
+  const allowedPropertyIds = uniqueList(person?.allowedPropertyIds || []);
+  const allowedPropertyNames = uniqueList(person?.allowedPropertyNames || []);
+  const properties = [...state.accessProperties];
+  allowedPropertyIds.forEach((id) => {
+    if (!properties.some((option) => String(option.id || "").toLowerCase() === String(id).toLowerCase())) {
+      properties.push({ id, name: `Saved property ${id}`, address: "", region: "", sourceLabel: "Saved" });
+    }
+  });
+  allowedPropertyNames.forEach((name) => {
+    if (!properties.some((option) => propertyMatchesSaved(option, [], [name]))) {
+      properties.push({ id: "", name, address: "", region: "", sourceLabel: "Saved" });
+    }
+  });
+  const regions = uniqueList([...state.accessRegions, ...allowedRegions]);
+  const regionChecks = regions.length
+    ? regions.map((region) => {
+      const checked = allowedRegions.some((saved) => normalizeLookup(saved) === normalizeLookup(region));
+      return `<label class="contractor-access-check"><input type="checkbox" data-access-region-option value="${esc(region)}" ${checked ? "checked" : ""} /><span>${esc(region)}</span></label>`;
+    }).join("")
+    : `<span class="contractor-access-empty">No active contract regions found yet.</span>`;
+  const propertyChecks = properties.length
+    ? properties.map((option) => {
+      const checked = propertyMatchesSaved(option, allowedPropertyIds, allowedPropertyNames);
+      return `<label class="contractor-access-check"><input type="checkbox" data-access-property-option data-property-id="${esc(option.id)}" data-property-name="${esc(option.name)}" value="${esc(option.id || option.name)}" ${checked ? "checked" : ""} /><span><strong>${esc(option.name)}</strong><small>${esc([option.region, option.address, option.sourceLabel].filter(Boolean).join(" - "))}</small></span></label>`;
+    }).join("")
+    : `<span class="contractor-access-empty">No active properties or contracts found yet.</span>`;
+  return `
+    <div id="contractorAccessControls" class="contractor-access-scope wide" ${team === "contractor" ? "" : "hidden"}>
+      <div>
+        <h3>Contractor Job Access</h3>
+        <p>Choose the regions and properties this contractor can see on the job board. Leave both lists blank to allow every open job.</p>
+      </div>
+      <div class="contractor-access-grid">
+        <div class="contractor-access-list"><strong>Allowed Regions</strong>${regionChecks}</div>
+        <div class="contractor-access-list"><strong>Allowed Properties / Contracts</strong>${propertyChecks}</div>
+      </div>
+    </div>
+  `;
+}
+
+function formMarkup(person = null) {
+  const team = person?.team || "contractor";
+  const status = person?.status || "active";
+  const approved = person ? person.approved : team === "contractor";
+  const isNew = !person;
+  const roleOptions = team === "property_manager"
+    ? [["property_manager", "Property Manager"]]
+    : [["contractor", "Contractor"], ["sales", "Sales Team"]];
+  return `<form id="contractorForm" class="lead-form contractor-form" data-source="${esc(person?.source || "")}" data-id="${esc(person?.id || "")}" data-profile-id="${esc(person?.profileId || "")}">
+    <div class="form-grid">
+      ${field("contractorName", "Name", "text", person?.name || "", "required")}
+      ${field("contractorEmail", "Email", "email", person?.email || "", isNew ? "required" : "")}
+      ${field("contractorPhone", "Phone", "tel", person?.phone || "")}
+      ${selectField("contractorTeam", "Portal Role", roleOptions, team)}
+      ${selectField("contractorStatus", "Status", [["active", "Active"], ["pending_approval", "Pending Approval"], ["inactive", "Inactive"], ["suspended", "Suspended"]], status)}
+      ${field("contractorCompany", "Company", "text", person?.company || "")}
+      ${field("contractorService", team === "property_manager" ? "Role Notes" : team === "sales" ? "Sales Role" : "Service Types", "text", team === "property_manager" ? "" : person?.service || "")}
+      ${field("contractorLocation", "Location / Market", "text", person?.location || "")}
+      <label class="suite-field wide"><span>Notes</span><textarea id="contractorNotes" rows="3">${esc(person?.notes || "")}</textarea></label>
+      <label id="contractorApprovedWrap" class="checkbox-field wide" ${team === "contractor" ? "" : "hidden"}><input id="contractorApproved" type="checkbox" ${approved ? "checked" : ""} /> <span>Approved / auto approve on signup</span></label>
+      ${propertyManagerPropertyField(person, team)}
+      ${accessScopeMarkup(person, team)}
+      ${isNew ? `
+        <div id="contractorLiveAccountFields" class="contractor-live-account-fields wide">
+          <div class="form-grid">
+            ${field("contractorTempPassword", "Temporary Password", "password", "", "autocomplete=\"new-password\" minlength=\"8\" required")}
+            ${field("contractorTempPasswordConfirm", "Confirm Temporary Password", "password", "", "autocomplete=\"new-password\" minlength=\"8\" required")}
+          </div>
+          <p id="contractorLiveAccountNote" class="contractor-password-note">New portal users are created with this temporary password. On first login, Turnly will require them to choose a new password before their portal opens.</p>
+        </div>
+      ` : ""}
+    </div>
+    <div class="lead-form-actions"><button class="secondary-action" type="button" data-modal-close><span>Cancel</span></button><button id="contractorSave" class="primary-action" type="submit"><span>Save to Supabase</span></button></div>
+  </form>`;
+}
+
+function passwordFormMarkup(person) {
+  const profileId = person?.profileId || (person?.source === "profiles" ? person?.id || "" : "");
+  return `<form id="contractorPasswordForm" class="lead-form contractor-form" data-profile-id="${esc(profileId)}" data-email="${esc(person?.email || "")}" data-name="${esc(person?.name || "this contractor")}">
+    <div class="form-grid">
+      <label class="suite-field wide"><span>Portal User</span><input type="text" value="${esc([person?.name, person?.email].filter(Boolean).join(" - ") || "Portal User")}" disabled /></label>
+      ${field("contractorTempPassword", "Temporary Password", "password", "", "autocomplete=\"new-password\" minlength=\"8\" required")}
+      ${field("contractorTempPasswordConfirm", "Confirm Temporary Password", "password", "", "autocomplete=\"new-password\" minlength=\"8\" required")}
+      <p class="contractor-password-note wide">This portal user can sign in with this temporary password one time. On their next login, Turnly will require them to choose a new password before the portal opens.</p>
+      <p id="contractorPasswordMessage" class="contractor-password-message wide" aria-live="polite"></p>
+    </div>
+    <div class="lead-form-actions"><button class="secondary-action" type="button" data-modal-close><span>Cancel</span></button><button id="contractorPasswordSave" class="primary-action" type="submit"><span>Reset Password</span></button></div>
+  </form>`;
+}
+
+function openModal(person = null) {
+  const modal = document.getElementById("contractorModal");
+  const body = document.getElementById("contractorModalBody");
+  const heading = document.getElementById("contractorModalTitle");
+  if (!modal || !body) return;
+  const roleLabel = person?.team === "property_manager" ? "Property Manager" : person?.team === "sales" ? "Sales Team Member" : "Contractor";
+  if (heading) heading.textContent = person ? `Edit ${roleLabel}: ${person.name}` : "Add Contractor / Sales";
+  body.innerHTML = formMarkup(person);
+  modal.hidden = false;
+  setLiveAccountFieldsVisible();
+  document.getElementById("contractorName")?.focus();
+}
+
+function openPasswordModal(person) {
+  const modal = document.getElementById("contractorModal");
+  const body = document.getElementById("contractorModalBody");
+  const heading = document.getElementById("contractorModalTitle");
+  if (!modal || !body || !person) return;
+  if (heading) heading.textContent = `Reset password for ${person.name}`;
+  body.innerHTML = passwordFormMarkup(person);
+  modal.hidden = false;
+  document.getElementById("contractorTempPassword")?.focus();
+}
+
+function closeModal() {
+  const modal = document.getElementById("contractorModal");
+  if (modal) modal.hidden = true;
+}
+
+function value(id) {
+  return (document.getElementById(id)?.value || "").trim();
+}
+
+function setPasswordFormMessage(text, error = false) {
+  const el = document.getElementById("contractorPasswordMessage");
+  if (!el) return;
+  el.textContent = text || "";
+  el.classList.toggle("error", error);
+  el.classList.toggle("success", Boolean(text) && !error);
+}
+
+function setLiveAccountFieldsVisible() {
+  const team = value("contractorTeam") || "contractor";
+  const wrap = document.getElementById("contractorLiveAccountFields");
+  const isContractor = team === "contractor";
+  const isLivePortalAccount = isContractor || team === "sales";
+  const isPropertyManager = team === "property_manager";
+  if (wrap) {
+    wrap.hidden = !isLivePortalAccount;
+    wrap.querySelectorAll("input").forEach((input) => {
+      input.required = isLivePortalAccount;
+      if (!isLivePortalAccount) input.value = "";
+    });
+  }
+  const note = document.getElementById("contractorLiveAccountNote");
+  if (note) {
+    note.textContent = team === "sales"
+      ? "New sales team members are created as live portal users with this temporary password. On first login, Turnly will require them to choose a new password before the Sales Portal opens."
+      : "New contractors are created as live portal users with this temporary password. On first login, Turnly will require them to choose a new password before the contractor portal opens.";
+  }
+  const accessWrap = document.getElementById("contractorAccessControls");
+  if (accessWrap) accessWrap.hidden = !isContractor;
+  const approvalWrap = document.getElementById("contractorApprovedWrap");
+  if (approvalWrap) approvalWrap.hidden = !isContractor;
+  const propertyWrap = document.getElementById("propertyManagerPropertyWrap");
+  if (propertyWrap) propertyWrap.hidden = !isPropertyManager;
+}
+
+function checkedValues(selector) {
+  return Array.from(document.querySelectorAll(selector))
+    .filter((input) => input.checked)
+    .map((input) => input.value)
+    .filter(Boolean);
+}
+
+function accessPayload() {
+  const selectedProperties = Array.from(document.querySelectorAll("[data-access-property-option]"))
+    .filter((input) => input.checked);
+  return {
+    allowed_regions: uniqueList(checkedValues("[data-access-region-option]")),
+    allowed_property_ids: uniqueList(selectedProperties.map((input) => input.dataset.propertyId).filter(Boolean)),
+    allowed_property_names: uniqueList(selectedProperties.map((input) => input.dataset.propertyName).filter(Boolean))
+  };
+}
+
+function formPayload(table) {
+  const team = value("contractorTeam") || "contractor";
+  const approved = team === "contractor" && Boolean(document.getElementById("contractorApproved")?.checked);
+  const status = approved && value("contractorStatus") === "pending_approval" ? "active" : value("contractorStatus") || "active";
+  const services = value("contractorService");
+  const access = team === "contractor" ? accessPayload() : { allowed_regions: [], allowed_property_ids: [], allowed_property_names: [] };
+  const selectedPropertyValue = team === "property_manager" ? value("propertyManagerProperty") : "";
+  const selectedProperty = propertyOptionById(selectedPropertyValue) || state.accessProperties.find((option) => normalizeLookup(option.name) === normalizeLookup(selectedPropertyValue)) || null;
+  const base = {
+    full_name: value("contractorName"),
+    name: value("contractorName"),
+    email: value("contractorEmail"),
+    phone: value("contractorPhone"),
+    role: team === "property_manager" ? "property_manager" : team === "sales" ? "sales" : "contractor",
+    team,
+    status,
+    contractor_approved: team === "property_manager" ? true : approved,
+    approval_status: team === "contractor" ? approved ? "approved" : "pending" : "approved",
+    company_name: value("contractorCompany"),
+    business_name: value("contractorCompany"),
+    service_type: team === "property_manager" ? "" : services,
+    service_types: team === "property_manager" ? [] : services ? services.split(",").map((item) => item.trim()).filter(Boolean) : [],
+    title: team === "sales" ? services : "",
+    department: team === "sales" ? "Sales" : "",
+    market: value("contractorLocation"),
+    region: value("contractorLocation"),
+    location: value("contractorLocation"),
+    notes: value("contractorNotes"),
+    allowed_regions: access.allowed_regions,
+    allowed_property_ids: access.allowed_property_ids,
+    allowed_property_names: access.allowed_property_names,
+    property_manager_property_id: team === "property_manager" ? selectedProperty?.id || null : null,
+    requested_property_name: team === "property_manager" ? selectedProperty?.name || selectedPropertyValue || "" : "",
+    invited_by_admin: team === "property_manager" || approved,
+    invited_at: team === "property_manager" || approved ? new Date().toISOString() : null,
+    contractor_approved_at: approved ? new Date().toISOString() : null
+  };
+  if (table === "profiles") {
+    return {
+      full_name: base.full_name,
+      email: base.email,
+      phone: base.phone,
+      role: team === "property_manager" ? "property_manager" : team === "sales" ? "sales_team" : "contractor",
+      team,
+      status: base.status,
+      contractor_approved: base.contractor_approved,
+      approval_status: base.approval_status,
+      company_name: base.company_name,
+      service_types: base.service_types,
+      service_type: base.service_type,
+      market: base.market,
+      region: base.region,
+      location: base.location,
+      notes: base.notes,
+      allowed_regions: base.allowed_regions,
+      allowed_property_ids: base.allowed_property_ids,
+      allowed_property_names: base.allowed_property_names,
+      department: base.department,
+      title: base.title,
+      property_manager_property_id: base.property_manager_property_id,
+      requested_property_name: base.requested_property_name,
+      invited_by_admin: base.invited_by_admin,
+      invited_at: base.invited_at,
+      contractor_approved_at: base.contractor_approved_at
+    };
+  }
+  return base;
+}
+
+function missingColumn(error) {
+  const msg = String(error?.message || "");
+  return msg.match(/Could not find the '([^']+)' column/)?.[1] || msg.match(/column "([^"]+)"/)?.[1] || "";
+}
+
+async function writeFallback(table, payload, id = "") {
+  const next = { ...payload };
+  for (let i = 0; i < 14; i += 1) {
+    const query = id ? supabase.from(table).update(next).eq("id", id) : supabase.from(table).insert(next);
+    const result = await query.select("*").maybeSingle();
+    if (!result.error) return result;
+    const missing = missingColumn(result.error);
+    if (missing && missing in next && Object.keys(next).length > 2) {
+      delete next[missing];
+      continue;
+    }
+    return result;
+  }
+  return { data: null, error: new Error(`Unable to save ${table}.`) };
+}
+
+async function syncInvite(payload, profileId = "") {
+  const email = String(payload.email || "").trim().toLowerCase();
+  if (!email || payload.team !== "contractor") return { error: null };
+  const { data: userData } = await supabase.auth.getUser();
+  const invite = {
+    email,
+    role: "contractor",
+    status: profileId ? "accepted" : "pending_signup",
+    auto_approve: Boolean(payload.contractor_approved),
+    invited_by: userData?.user?.id || null,
+    accepted_by: profileId || null,
+    accepted_at: profileId ? new Date().toISOString() : null,
+    allowed_regions: payload.allowed_regions || [],
+    allowed_property_ids: payload.allowed_property_ids || [],
+    allowed_property_names: payload.allowed_property_names || [],
+    metadata: {
+      full_name: payload.full_name || payload.name || "",
+      phone: payload.phone || "",
+      company_name: payload.company_name || "",
+      service_type: payload.service_type || "",
+      market: payload.market || "",
+      allowed_regions: payload.allowed_regions || [],
+      allowed_property_ids: payload.allowed_property_ids || [],
+      allowed_property_names: payload.allowed_property_names || []
+    }
+  };
+  const existing = await supabase.from("contractor_invites").select("id").ilike("email", email).maybeSingle();
+  if (existing.error) return existing;
+  if (existing.data?.id) return supabase.from("contractor_invites").update(invite).eq("id", existing.data.id).select("*").maybeSingle();
+  return supabase.from("contractor_invites").insert(invite).select("*").maybeSingle();
+}
+
+async function createLiveContractorAccount() {
+  const team = value("contractorTeam") || "contractor";
+  const password = value("contractorTempPassword");
+  const confirmPassword = value("contractorTempPasswordConfirm");
+  if (team !== "contractor" && team !== "sales") throw new Error("Choose Contractor or Sales Team for a live portal account.");
+  if (!value("contractorEmail")) throw new Error("Email is required for a live portal account.");
+  if (password.length < 8) throw new Error("Temporary password must be at least 8 characters.");
+  if (password !== confirmPassword) throw new Error("Temporary passwords do not match.");
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData?.session?.access_token || "";
+  if (!accessToken) throw new Error("Your admin session expired. Log in again, then retry.");
+
+  const payload = formPayload("profiles");
+  const response = await fetch("/api/admin-upsert-contractor-user", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${accessToken}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      ...payload,
+      name: value("contractorName"),
+      portal_role: team === "sales" ? "sales_team" : "contractor",
+      team,
+      company_name: value("contractorCompany"),
+      service_type: value("contractorService"),
+      market: value("contractorLocation"),
+      notes: value("contractorNotes"),
+      password
+    })
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || "Unable to create live portal account.");
+  return result;
+}
+
+async function saveContractor(event) {
+  event.preventDefault();
+  if (!supabase || state.saving) return;
+  state.saving = true;
+  const form = event.target;
+  const source = form.dataset.source || "";
+  const id = form.dataset.id || "";
+  const profileId = form.dataset.profileId || "";
+  const team = value("contractorTeam") || "contractor";
+  const isNewLivePortalAccount = !id && !profileId && (team === "contractor" || team === "sales");
+
+  if (isNewLivePortalAccount) {
+    const contractorName = value("contractorName") || value("contractorEmail") || (team === "sales" ? "Sales team member" : "Contractor");
+    const roleLabel = team === "sales" ? "sales team member" : "contractor";
+    setMessage(`Creating live ${roleLabel} account for ${contractorName}...`);
+    try {
+      await createLiveContractorAccount();
+      closeModal();
+      if (team === "sales") {
+        state.team = "sales";
+        const filter = document.getElementById("contractorTeamFilter");
+        if (filter) filter.value = "sales";
+      }
+      await loadPeople();
+      setMessage(`${contractorName} was added as a live ${roleLabel}. They must change their temporary password on first login.`);
+    } catch (error) {
+      setMessage(`Unable to create live ${roleLabel}: ` + (error?.message || "Unknown error"), true);
+    } finally {
+      state.saving = false;
+    }
+    return;
+  }
+
+  const table = source || "contractors";
+  const result = await writeFallback(table, formPayload(table), id);
+  if (result.error) {
+    state.saving = false;
+    setMessage("Unable to save account: " + result.error.message, true);
+    return;
+  }
+  const invite = await syncInvite(formPayload("contractors"), table === "profiles" ? id : profileId || result.data?.profile_id || "");
+  state.saving = false;
+  if (invite.error) setMessage("Contractor saved, but invite sync failed: " + invite.error.message, true);
+  closeModal();
+  await loadPeople();
+  setMessage(`${value("contractorName") || "Account"} was saved.`);
+}
+
+async function resetContractorPassword(event) {
+  event.preventDefault();
+  if (!supabase || state.saving) return;
+  const form = event.target;
+  const password = value("contractorTempPassword");
+  const confirmPassword = value("contractorTempPasswordConfirm");
+  const contractorName = form.dataset.name || "This contractor";
+
+  if (password.length < 8) {
+    setPasswordFormMessage("Password must be at least 8 characters.", true);
+    return;
+  }
+  if (password !== confirmPassword) {
+    setPasswordFormMessage("Passwords do not match.", true);
+    return;
+  }
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData?.session?.access_token || "";
+  if (!accessToken) {
+    setPasswordFormMessage("Your admin session expired. Log in again, then retry.", true);
+    return;
+  }
+
+  state.saving = true;
+  setPasswordFormMessage(`Resetting ${contractorName}'s password...`);
+
+  try {
+    const response = await fetch("/api/admin-reset-contractor-password", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${accessToken}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        contractorUserId: form.dataset.profileId || "",
+        email: form.dataset.email || "",
+        password
+      })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || "Unable to reset portal user password.");
+
+    closeModal();
+    await loadPeople();
+    setMessage(`${contractorName}'s password was reset. They will be prompted to change it on their next login.`);
+  } catch (error) {
+    setPasswordFormMessage(error?.message || "Unable to reset portal user password.", true);
+  } finally {
+    state.saving = false;
+  }
+}
+
+function bind(root) {
+  root.addEventListener("input", (event) => {
+    if (event.target?.id === "contractorSearch") {
+      state.search = event.target.value || "";
+      renderRows();
+    }
+    if (event.target?.id === "propertyManagerSearch") {
+      state.managerSearch = event.target.value || "";
+      renderPropertyManagerRows();
+    }
+  });
+  root.addEventListener("change", (event) => {
+    if (event.target?.id === "contractorTeamFilter") state.team = event.target.value || "all";
+    if (event.target?.id === "contractorStatusFilter") state.status = event.target.value || "active";
+    if (event.target?.id === "propertyManagerStatusFilter") state.managerStatus = event.target.value || "active";
+    if (event.target?.id === "contractorTeam") {
+      const label = document.getElementById("contractorService")?.closest(".suite-field")?.querySelector("span");
+      if (label) label.textContent = event.target.value === "property_manager" ? "Role Notes" : event.target.value === "sales" ? "Sales Role" : "Service Types";
+      setLiveAccountFieldsVisible();
+    }
+    renderRows();
+    renderPropertyManagerRows();
+  });
+  root.addEventListener("click", (event) => {
+    if (event.target.closest("#contractorAdd")) return openModal();
+    if (event.target.closest("#contractorRefresh")) return void loadPeople();
+    if (event.target.closest("[data-modal-close]")) return closeModal();
+    const edit = event.target.closest("[data-edit]");
+    if (edit) return openModal(state.people.find((person) => person.key === edit.dataset.edit));
+    const review = event.target.closest("[data-review-account]");
+    if (review) return reviews.openPerson(state.people.find((person) => person.key === review.dataset.reviewAccount));
+    const resetPassword = event.target.closest("[data-reset-password]");
+    if (resetPassword) return openPasswordModal(state.people.find((person) => person.key === resetPassword.dataset.resetPassword));
+  });
+  root.addEventListener("submit", (event) => {
+    if (event.target?.id === "contractorForm") void saveContractor(event);
+    if (event.target?.id === "contractorPasswordForm") void resetContractorPassword(event);
+  });
+}
+
+function start() {
+  const root = install();
+  if (!root) return;
+  bind(root);
+  reviews.bind(root);
+  if (!supabase) {
+    setMessage("Supabase config is missing. Add env.js values before using the directory.", true);
+    return;
+  }
+  void loadPeople();
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", start, { once: true });
+} else {
+  start();
+}

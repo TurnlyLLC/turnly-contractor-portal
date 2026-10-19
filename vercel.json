@@ -16,6 +16,10 @@
     {
       "path": "/api/gift-reconcile",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/recruiting-mail",
+      "schedule": "*/10 * * * *"
     }
   ],
   "functions": {
@@ -51,6 +55,12 @@
       "maxDuration": 60
     },
     "api/crm-sales.js": {
+      "maxDuration": 60
+    },
+    "api/recruiting-mail.js": {
+      "maxDuration": 300
+    },
+    "api/applicants.js": {
       "maxDuration": 60
     }
   },
