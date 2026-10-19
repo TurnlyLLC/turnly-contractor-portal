@@ -78,7 +78,7 @@ async function requireAdmin(supabase, req) {
   const user = userResult?.user || null;
   if (userError || !user) return { error: "Admin session is invalid.", status: 401 };
 
-  const metadataRole = normalizeToken(user.app_metadata?.role || user.user_metadata?.role);
+  const metadataRole = normalizeToken(user.app_metadata?.role);
   if (allowedAdminRoles.has(metadataRole)) return { user };
 
   const { data: profile, error: profileError } = await supabase
@@ -214,6 +214,8 @@ async function createOrUpdateAuthUser(supabase, body, adminUserId) {
     team,
     department,
     title,
+    service_city: String(body.service_city || "").trim() || null,
+    service_state: body.service_city ? "NC" : null,
     allowed_regions: access.allowed_regions,
     allowed_property_ids: access.allowed_property_ids,
     allowed_property_names: access.allowed_property_names,
@@ -297,6 +299,8 @@ async function upsertProfile(supabase, user, body, adminUserId) {
     region: String(body.market || body.region || "").trim(),
     location: String(body.market || body.location || "").trim(),
     notes: String(body.notes || "").trim(),
+    service_city: String(body.service_city || "").trim() || null,
+    service_state: body.service_city ? "NC" : null,
     allowed_regions: access.allowed_regions,
     allowed_property_ids: access.allowed_property_ids,
     allowed_property_names: access.allowed_property_names,
@@ -337,6 +341,8 @@ async function syncContractorInvite(supabase, user, body, adminUserId) {
     invited_by: adminUserId,
     accepted_by: user.id,
     accepted_at: now,
+    service_city: String(body.service_city || "").trim() || null,
+    service_state: body.service_city ? "NC" : null,
     allowed_regions: access.allowed_regions,
     allowed_property_ids: access.allowed_property_ids,
     allowed_property_names: access.allowed_property_names,
@@ -346,7 +352,9 @@ async function syncContractorInvite(supabase, user, body, adminUserId) {
       company_name: String(body.company_name || "").trim(),
       service_type: String(body.service_type || "").trim(),
       market: String(body.market || "").trim(),
-      allowed_regions: access.allowed_regions,
+      service_city: String(body.service_city || "").trim() || null,
+    service_state: body.service_city ? "NC" : null,
+    allowed_regions: access.allowed_regions,
       allowed_property_ids: access.allowed_property_ids,
       allowed_property_names: access.allowed_property_names
     }

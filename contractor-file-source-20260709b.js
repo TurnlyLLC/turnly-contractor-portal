@@ -356,7 +356,7 @@ function contractorAccessSummary() {
   const access = contractorAccess();
   const propertyCount = uniqueList([...access.allowedPropertyIds, ...access.allowedPropertyNames]).length;
   const regionCount = access.allowedRegions.length;
-  if (!propertyCount && !regionCount) return "All open job-board jobs";
+  if (!propertyCount && !regionCount) return state.profile?.service_city ? `${state.profile.service_state} / ${state.profile.service_city} · 25 miles` : "Location needed";
   return [
     propertyCount ? `${propertyCount} ${propertyCount === 1 ? "property/contract" : "properties/contracts"}` : "",
     regionCount ? `${regionCount} ${regionCount === 1 ? "region" : "regions"}` : ""
@@ -738,10 +738,10 @@ function jobAccessForm() {
     }).join("")
     : `<div class="contractor-file-empty">No active properties or contracts found yet.</div>`;
   return `
-    <form class="contractor-file-form" data-job-access-form>
+    <form class="contractor-file-form" data-job-access-form><div class="contractor-file-form-grid"><label><span>Service state</span><select name="serviceState"><option value="NC">North Carolina</option></select></label><label><span>Service city</span><select name="serviceCity"><option value="">Location needed — no jobs visible</option>${['Raleigh','Durham','Asheville','Greensboro'].map(city=>`<option value="${city}" ${(state.profile?.service_city || state.contractor?.service_city)===city?'selected':''}>${city} (25-mile radius)</option>`).join('')}</select></label></div>
       <div class="contractor-file-access-note">
         <strong>Current visibility: ${esc(contractorAccessSummary())}</strong>
-        <span>Leave both lists blank to let this contractor see every open job-board job. Select regions or properties/contracts to restrict what they can see and claim.</span>
+        <span>The service city always limits access to its 25-mile radius. Optional regions and properties narrow access further. A missing service city means no jobs are visible.</span>
       </div>
       <div class="contractor-file-access-grid">
         <section class="contractor-file-access-list"><h3>Allowed Regions</h3>${regionChecks}</section>
@@ -1475,7 +1475,7 @@ function selectedAccessPayload(form = document) {
 
 async function saveJobAccess(form) {
   if (state.savingId) return;
-  const payload = selectedAccessPayload(form);
+  const payload = {...selectedAccessPayload(form),service_city:formText(form,"serviceCity") || null,service_state:formText(form,"serviceCity") ? formText(form,"serviceState") : null};
   state.savingId = "job-access";
   render();
   const results = [];

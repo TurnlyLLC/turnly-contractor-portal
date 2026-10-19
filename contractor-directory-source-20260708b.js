@@ -13,6 +13,7 @@ const state = {
   accessProperties: [],
   accessRegions: [],
   search: "",
+  serviceCity: "",
   managerSearch: "",
   team: "contractor",
   status: "all",
@@ -85,7 +86,7 @@ function accessSummary(person = {}) {
   if (person.team !== "contractor") return "-";
   const propertyCount = uniqueList([...person.allowedPropertyIds, ...person.allowedPropertyNames]).length;
   const regionCount = uniqueList(person.allowedRegions).length;
-  if (!propertyCount && !regionCount) return "All job-board jobs";
+  if (!propertyCount && !regionCount) return person.raw?.service_city ? `${person.raw.service_state} / ${person.raw.service_city} · 25 miles` : "Location needed";
   return [
     propertyCount ? `${propertyCount} ${propertyCount === 1 ? "property" : "properties"}` : "",
     regionCount ? `${regionCount} ${regionCount === 1 ? "region" : "regions"}` : ""
@@ -140,7 +141,7 @@ function workspaceMarkup() {
           <section class="table-card contractor-directory-card">
             <div class="suite-toolbar">
               <div class="toolbar-left">
-                <input id="contractorSearch" class="inline-search" type="search" placeholder="Search contractors..." autocomplete="off" />
+                <label class="suite-field compact-field"><span>State / city</span><select id="contractorCityFilter"><option value="">All service cities</option><option value="missing">Location needed</option><option value="Raleigh">NC / Raleigh</option><option value="Durham">NC / Durham</option><option value="Asheville">NC / Asheville</option><option value="Greensboro">NC / Greensboro</option></select></label><input id="contractorSearch" class="inline-search" type="search" placeholder="Search contractors..." autocomplete="off" />
                 <label class="suite-field compact-field"><span>Team</span><select id="contractorTeamFilter"><option value="contractor" selected>Contractors</option><option value="sales">Sales Team</option><option value="all">All Contractor/Sales</option></select></label>
                 <label class="suite-field compact-field"><span>Status</span><select id="contractorStatusFilter"><option value="all">All Statuses</option><option value="pending_approval">Pending Approval</option><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
               </div>
@@ -296,6 +297,7 @@ function filteredPeople() {
     if (person.team === "property_manager") return false;
     if (state.team !== "all" && person.team !== state.team) return false;
     if (state.status !== "all" && person.status !== state.status) return false;
+    if (state.serviceCity && (person.raw?.service_city || "missing") !== state.serviceCity) return false;
     if (!term) return true;
     return [person.name, person.email, person.phone, person.company, person.service, person.location, person.teamLabel, accessSummary(person), accessDetails(person)]
       .some((value) => String(value || "").toLowerCase().includes(term));
@@ -351,7 +353,7 @@ function renderRows() {
     return `<tr>
       <td>${nameCell}</td>
       <td>${badge(person.teamLabel)}</td><td>${esc(person.company || "-")}</td><td>${badge(person.status)}</td>
-      <td>${esc(person.service || "-")}</td><td>${esc(person.location || "-")}</td><td class="contractor-access-summary"><strong>${esc(accessSummary(person))}</strong><small>${esc(accessDetails(person) || "")}</small></td><td>${esc(person.phone || "-")}</td><td>${esc(person.sourceLabel)}</td>
+      <td>${esc(person.service || "-")}</td><td>${esc(person.team === "contractor" ? [person.raw?.service_state,person.raw?.service_city].filter(Boolean).join(" / ") || "Location needed" : person.location || "-")}</td><td class="contractor-access-summary"><strong>${esc(accessSummary(person))}</strong><small>${esc(accessDetails(person) || "")}</small></td><td>${esc(person.phone || "-")}</td><td>${esc(person.sourceLabel)}</td>
       <td><div class="contractor-actions">${fileLink}${salesLoginLink}${approve}${resetPassword}<button class="secondary-action" type="button" data-edit="${esc(person.key)}"><span>Edit</span></button></div></td>
     </tr>`;
   }).join("");
@@ -455,7 +457,7 @@ function accessScopeMarkup(person = null, team = "contractor") {
     <div id="contractorAccessControls" class="contractor-access-scope wide" ${team === "contractor" ? "" : "hidden"}>
       <div>
         <h3>Contractor Job Access</h3>
-        <p>Choose the regions and properties this contractor can see on the job board. Leave both lists blank to allow every open job.</p>
+        <p>Choose the regions and properties this contractor can see on the job board. The service city above always limits jobs to its 25-mile radius. These optional lists narrow access further.</p>
       </div>
       <div class="contractor-access-grid">
         <div class="contractor-access-list"><strong>Allowed Regions</strong>${regionChecks}</div>
@@ -482,7 +484,7 @@ function formMarkup(person = null) {
       ${selectField("contractorStatus", "Status", [["active", "Active"], ["pending_approval", "Pending Approval"], ["inactive", "Inactive"], ["suspended", "Suspended"]], status)}
       ${field("contractorCompany", "Company", "text", person?.company || "")}
       ${field("contractorService", team === "property_manager" ? "Role Notes" : team === "sales" ? "Sales Role" : "Service Types", "text", team === "property_manager" ? "" : person?.service || "")}
-      ${field("contractorLocation", "Location / Market", "text", person?.location || "")}
+      ${field("contractorLocation", "Location / Market", "text", person?.location || "")}<label class="suite-field"><span>Service state</span><select id="contractorServiceState"><option value="NC">North Carolina</option></select></label><label class="suite-field"><span>Service city</span><select id="contractorServiceCity"><option value="">Location needed — no jobs visible</option>${['Raleigh','Durham','Asheville','Greensboro'].map(city=>`<option value="${city}" ${person?.raw?.service_city===city?'selected':''}>${city} (25-mile radius)</option>`).join('')}</select></label>
       <label class="suite-field wide"><span>Notes</span><textarea id="contractorNotes" rows="3">${esc(person?.notes || "")}</textarea></label>
       <label id="contractorApprovedWrap" class="checkbox-field wide" ${team === "contractor" ? "" : "hidden"}><input id="contractorApproved" type="checkbox" ${approved ? "checked" : ""} /> <span>Approved / auto approve on signup</span></label>
       ${propertyManagerPropertyField(person, team)}
@@ -628,6 +630,8 @@ function formPayload(table) {
     region: value("contractorLocation"),
     location: value("contractorLocation"),
     notes: value("contractorNotes"),
+    service_city: value("contractorServiceCity") || null,
+    service_state: value("contractorServiceCity") ? value("contractorServiceState") : null,
     allowed_regions: access.allowed_regions,
     allowed_property_ids: access.allowed_property_ids,
     allowed_property_names: access.allowed_property_names,
@@ -654,6 +658,7 @@ function formPayload(table) {
       region: base.region,
       location: base.location,
       notes: base.notes,
+      service_city: base.service_city, service_state: base.service_state,
       allowed_regions: base.allowed_regions,
       allowed_property_ids: base.allowed_property_ids,
       allowed_property_names: base.allowed_property_names,
@@ -702,6 +707,7 @@ async function syncInvite(payload, profileId = "") {
     invited_by: userData?.user?.id || null,
     accepted_by: profileId || null,
     accepted_at: profileId ? new Date().toISOString() : null,
+    service_city: payload.service_city || null, service_state: payload.service_state || null,
     allowed_regions: payload.allowed_regions || [],
     allowed_property_ids: payload.allowed_property_ids || [],
     allowed_property_names: payload.allowed_property_names || [],
@@ -711,7 +717,8 @@ async function syncInvite(payload, profileId = "") {
       company_name: payload.company_name || "",
       service_type: payload.service_type || "",
       market: payload.market || "",
-      allowed_regions: payload.allowed_regions || [],
+      service_city: payload.service_city || null, service_state: payload.service_state || null,
+    allowed_regions: payload.allowed_regions || [],
       allowed_property_ids: payload.allowed_property_ids || [],
       allowed_property_names: payload.allowed_property_names || []
     }
@@ -749,7 +756,8 @@ async function createLiveContractorAccount() {
       team,
       company_name: value("contractorCompany"),
       service_type: value("contractorService"),
-      market: value("contractorLocation"),
+      service_city: value("contractorServiceCity") || null, service_state: value("contractorServiceCity") ? "NC" : null,
+    market: value("contractorLocation"),
       notes: value("contractorNotes"),
       password
     })
@@ -872,6 +880,7 @@ function bind(root) {
     }
   });
   root.addEventListener("change", (event) => {
+    if (event.target.id === "contractorCityFilter") { state.serviceCity = event.target.value; renderRows(); }
     if (event.target?.id === "contractorTeamFilter") state.team = event.target.value || "all";
     if (event.target?.id === "contractorStatusFilter") state.status = event.target.value || "active";
     if (event.target?.id === "propertyManagerStatusFilter") state.managerStatus = event.target.value || "active";
