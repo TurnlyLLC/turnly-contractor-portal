@@ -8,6 +8,7 @@ const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
   ? createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY)
   : null;
 
+const managerMode = new URL(location.href).searchParams.get('tab') === 'property-managers';
 const state = {
   people: [],
   accessProperties: [],
@@ -130,7 +131,7 @@ function workspaceMarkup() {
         ${metric("Contractors", "contractorTotal", "service network", "green", "CN")}
         ${metric("Sales Team", "salesTotal", "sales portal", "blue", "ST")}
         ${metric("Property Managers", "propertyManagerTotal", "client access", "purple", "PM")}
-        ${metric("Active", "activeTotal", "ready for work", "green", "A")}
+        ${metric("Active contractors", "activeTotal", "ready for work", "green", "A")}
         ${metric("Pending", "pendingTotal", "needs approval", "yellow", "PA")}
         ${metric("Inactive", "inactiveTotal", "not active", "red", "IA")}
       </section>
@@ -214,11 +215,16 @@ function install() {
   injectStyles();
   const title = document.querySelector(".page-heading h1");
   const subtitle = document.querySelector(".page-heading p");
-  if (title) title.textContent = "Contractor Directory";
+  if (title) title.textContent = managerMode ? "Client Directory · Property Managers" : "Contractor Directory";
   if (subtitle) subtitle.textContent = "Manage contractor accounts separately from property manager portal accounts.";
   const content = document.querySelector(".suite-content");
   if (!content) return null;
   content.innerHTML = workspaceMarkup();
+  const workspace = content.querySelector('[data-contractor-directory-page]');
+  workspace.classList.toggle('manager-mode', managerMode);
+  if (managerMode) content.insertAdjacentHTML('afterbegin', '<nav class="suite-tabs"><a href="client-directory.html">Client Directory</a><a class="active" href="client-directory.html?tab=property-managers">Property Managers</a><a href="contracts.html">Contracts</a></nav>');
+  else content.insertAdjacentHTML('afterbegin', '<p>Property managers are managed in <a href="client-directory.html?tab=property-managers">Client Directory → Property Managers</a>.</p>');
+  const scopeStyle=document.createElement('style');scopeStyle.textContent='.contractor-directory-workspace:not(.manager-mode) .property-manager-directory-card{display:none}.manager-mode .metric-strip,.manager-mode .contractor-directory-card:not(.property-manager-directory-card),.manager-mode .cr-center{display:none}';content.append(scopeStyle);
   return content.querySelector("[data-contractor-directory-page]");
 }
 
@@ -322,7 +328,7 @@ function renderMetrics() {
   setText("contractorTotal", state.people.filter((p) => p.team === "contractor").length.toLocaleString());
   setText("salesTotal", state.people.filter((p) => p.team === "sales").length.toLocaleString());
   setText("propertyManagerTotal", state.people.filter((p) => p.team === "property_manager").length.toLocaleString());
-  setText("activeTotal", state.people.filter((p) => p.status === "active").length.toLocaleString());
+  setText("activeTotal", state.people.filter((p) => p.team === "contractor" && p.approved && p.status === "active").length.toLocaleString());
   setText("pendingTotal", state.people.filter((p) => p.status === "pending_approval").length.toLocaleString());
   setText("inactiveTotal", state.people.filter((p) => ["inactive", "disabled", "suspended"].includes(p.status)).length.toLocaleString());
 }

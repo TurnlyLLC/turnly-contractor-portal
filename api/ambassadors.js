@@ -7,7 +7,7 @@ module.exports=async(req,res)=>{
   const x=await S.body(req),db=S.database();
   if(['context','register'].includes(x.action)){
    await S.rate(db,req,'ba-'+x.action);
-   const m=S.checked(await db.from('ba_members').select('name,code').eq('code',String(x.code||'')).eq('enabled',true).maybeSingle());
+   const m=S.checked(await db.from('ba_members').select('name,code').eq('code',String(x.code||'')).eq('enabled',true).not('onboarding_completed_at','is',null).maybeSingle());
    if(!m)throw S.fail('This referral link is unavailable. Contact Turnly.',404);
    if(x.action==='register'){const c=A.contact(x);S.checked(await db.rpc('register_ba_lead',{p_code:m.code,p_name:c.name,p_email:c.email,p_phone:c.phone,p_consent:'referral-consent-2026-10-19'}));}
    return S.json(res,200,{name:m.name,booking_url:'https://portal.turnlypros.com/residential-referral.html?ba='+encodeURIComponent(m.code)});
@@ -22,7 +22,6 @@ module.exports=async(req,res)=>{
    if(!p||['inactive','disabled','suspended','rejected'].includes(p.status))throw S.fail('This account is inactive.',403);
    let reset=false;
    if(!['admin','owner','super_admin'].includes(p.role)){
-    if(p.role!=='brand_ambassador')throw S.fail('Ambassador access is required.',403);
     const m=S.checked(await db.from('ba_members').update({session_id:A.sessionId(r.data.session.access_token)}).eq('user_id',r.data.user.id).eq('enabled',true).select('must_change_password').maybeSingle());
     if(!m)throw S.fail('Ambassador access is inactive.',403);reset=m.must_change_password;
    }
@@ -38,6 +37,7 @@ module.exports=async(req,res)=>{
    return S.json(res,200,{ok:true});
   }
   if(x.action==='dashboard'){
+   if(!actor.admin&&!actor.member.onboarding_completed_at)return S.json(res,200,{onboarding_required:true});
    const members=actor.admin?S.checked(await db.from('ba_members').select('user_id,name,email,code,enabled,created_at').order('name')):[actor.member];
    const id=actor.admin?(x.member_id||members[0]?.user_id):actor.id;
    const member=members.find(m=>m.user_id===id)||null;

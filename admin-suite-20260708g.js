@@ -7723,6 +7723,7 @@ function setInternalMessageStatus(message, error = false) {
 function renderClients(active) {
   const clientTabs = tabs([
     ["client-directory", "Client Directory", "client-directory.html"],
+    ["property-managers", "Property Managers", "client-directory.html?tab=property-managers"],
     ["contracts", "Contracts", "contracts.html"],
     ["activity", "Activity Log"],
     ["performance", "Client Performance"]
@@ -11528,10 +11529,10 @@ function renderSalesReport() {
         `<button class="secondary-action" type="button" data-sales-report-refresh>${icon("refresh")}<span>Refresh</span></button>`
       )}
       <section class="metric-strip six">
-        ${metric("Completed Revenue", "$0", "customer charges so far", "badge-dollar", "green", 'id="salesCompletedRevenue"')}
+        ${metric("Completed Revenue", "$0", "completed this calendar year", "badge-dollar", "green", 'id="salesCompletedRevenue"')}
         ${metric("Completed Contractor Pay", "$0", "actual paid out", "users", "blue", 'id="salesCompletedContractorPay"')}
         ${metric("Completed Profit", "$0", "revenue minus actual payouts", "line-chart", "purple", 'id="salesCompletedProfit"')}
-        ${metric("Upcoming Revenue", "$0", "future customer charges", "calendar", "green", 'id="salesUpcomingRevenue"')}
+        ${metric("Upcoming Revenue", "$0", "scheduled through December 31", "calendar", "green", 'id="salesUpcomingRevenue"')}
         ${metric("Upcoming Contractor Pay", "$0", "future contractor payout", "briefcase", "orange", 'id="salesUpcomingContractorPay"')}
         ${metric("Projected Profit", "$0", "upcoming revenue minus pay", "target", "yellow", 'id="salesUpcomingProfit"')}
       </section>
@@ -11806,15 +11807,23 @@ function salesPieColor(index) {
   return colors[index % colors.length];
 }
 
+function salesCurrentYear(row, mode) {
+  const date = salesAssignmentFinancialDate(row, mode), now = new Date();
+  const year = value => new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', year: 'numeric' }).format(value);
+  return Boolean(date && !Number.isNaN(date.getTime()) && year(date) === year(now) && (mode !== 'actual' || date <= now));
+}
+
 function salesCompletedAssignments(rows = []) {
   return rows
     .filter(isSalesCompletedAssignment)
+    .filter(row => salesCurrentYear(row, "actual"))
     .sort((a, b) => dateValue(b.completed_at || b.checklist_completed_at || b.end_window || b.start_window, 0) - dateValue(a.completed_at || a.checklist_completed_at || a.end_window || a.start_window, 0));
 }
 
 function salesUpcomingAssignments(rows = []) {
   return rows
     .filter(isSalesUpcomingAssignment)
+    .filter(row => salesCurrentYear(row, "projected"))
     .sort((a, b) => dateValue(a.start_window) - dateValue(b.start_window) || String(a.property_name || a.title || "").localeCompare(String(b.property_name || b.title || ""), undefined, { sensitivity: "base" }));
 }
 

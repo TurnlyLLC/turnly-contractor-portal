@@ -45,7 +45,7 @@ export const navSections = [
     title: "Operations",
     links: [
       { key: "residential-bookings", label: "Residential", href: "admin-residential.html", icon: "calendar" },
-      { key: "schedule", label: "Schedule", href: "schedule.html", icon: "calendar" },
+      { key: "schedule", label: "Commercial", href: "schedule.html", icon: "calendar" },
       { key: "coverage-center", label: "Regions & Access", href: "coverage-center.html", icon: "shield" },
       { key: "assignments", label: "Assignments", href: "assignments.html", icon: "clipboard-list" },
       { key: "property-units", label: "Property Units", href: "property-units.html", icon: "building" }
@@ -55,8 +55,7 @@ export const navSections = [
     title: "Contractors",
     links: [
       { key: "applicants", label: "Cleaner applicants", href: "applicants.html?role=cleaner", icon: "users" },
-      { key: "ambassador-applicants", label: "Ambassador applicants", href: "applicants.html?role=brand_ambassador", icon: "users" },
-      { key: "ambassadors", label: "Brand ambassadors", href: "https://ba.turnlypros.com", icon: "users" },
+      { key: "ambassador-applicants", label: "Brand ambassador applicants", href: "applicants.html?role=brand_ambassador", icon: "users" },
       { key: "directory", label: "Directory", href: "directory.html", icon: "users" }
     ]
   },

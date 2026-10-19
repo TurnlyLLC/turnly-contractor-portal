@@ -1,6 +1,6 @@
 # Brand ambassador portal
 
-Entry: `https://ba.turnlypros.com` (email/password). Existing active admins may sign in with their admin account. Team creates ambassador accounts with a temporary password, forces a first-login password change, and supports password resets and deactivation. Ambassador membership is separate from sales CRM access.
+Entry: `https://ba.turnlypros.com` (email/password). Existing active admins may sign in with their admin account. Applications now enroll ambassadors automatically and send an email verification link. New accounts set a personal password, sign the versioned agreement and marketing/insurance/payout acknowledgments, and upload a signed W-9 before referral links activate. Admin Team still supports manual accounts, resets and deactivation. Ambassador membership is separate from sales CRM access.
 
 Sharing: `/r/BA-…` opens a consent-based referral intake and continues to the existing residential booking form. Each ambassador has a unique random code. First-touch email/phone attribution cannot be overwritten by a subsequent link. Only the first booking is exposed; names are abbreviated for ambassadors. Customer contact, address and billing details are never included in dashboard responses.
 
