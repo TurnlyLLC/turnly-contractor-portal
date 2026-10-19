@@ -90,3 +90,14 @@ test('direct guest booking is idempotent, needs no account, restricts NC and den
  await db.exec('reset role;set role authenticated');await assert.rejects(create(),/permission denied/);
  }finally{await db.close();}
 });
+
+test('gift checkout uses dashboard payment methods, exact totals and reusable session without issuing cards',async()=>{
+ let order,creates=0;const id=randomUUID(),token='a'.repeat(64);
+ const db={from(table){assert.equal(table,'gift_orders');let patch;return{upsert(v){order??={...v,status:'pending',created_at:new Date().toISOString()};return Promise.resolve({data:null})},select(){return this},eq(){return patch?(Object.assign(order,patch),Promise.resolve({data:null})):this},single:async()=>({data:order}),update(v){patch=v;return this}}}};
+ const session={id:'cs_fixture',status:'open',url:'https://checkout.stripe.com/fixture'},stripe={checkout:{sessions:{retrieve:async()=>session,create:async(p,o)=>{creates++;assert(!('payment_method_types'in p));assert.equal(p.line_items[0].quantity,10);assert.equal(p.line_items[0].price_data.unit_amount,10000);assert.equal(p.metadata.purpose,'turnly_gift_cards');assert.equal(o.idempotencyKey,'gift-checkout-v2-'+id);return session}}}};
+ const context={module:{exports:{}},console,require:p=>p==='../lib/residential-server.cjs'?{...S,body:async r=>r.body,database:()=>db,rate:async()=>{},stripe:()=>stripe}:p==='../lib/gift-cards.cjs'?{ready:()=>true,TERMS:'fixture'}:p==='../lib/crm-sales.cjs'?{attribution:async()=>({})}:require('../lib/agent-referrals.cjs')};
+ vm.runInNewContext(fs.readFileSync('api/gift-cards.js','utf8'),context);
+ const input={action:'checkout',id,token,accepted:true,terms:'fixture',quantity:10,name:'Buyer',email:'buyer@example.test'};
+ async function request(body){let result;const res={setHeader(){},end(s){result=JSON.parse(s)}};await context.module.exports({method:'POST',body},res);return{status:res.statusCode,...result}};
+ assert.equal((await request(input)).url,session.url);assert.equal((await request(input)).url,session.url);assert.equal(creates,1);assert.equal(order.amount_cents,100000);assert.equal(order.status,'pending');assert.equal((await request({...input,quantity:2})).status,409);
+});

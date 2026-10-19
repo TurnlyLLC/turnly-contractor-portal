@@ -1881,13 +1881,13 @@ function renderLeadsPage() {
 
 function renderLeadTable(rows) {
  if(!rows.length)return emptyState('No prospects match this view','Try another operator, city, prospect type or search.');
- return `<div class="sales-table-wrap"><table class="sales-table"><thead><tr>${isSalesAdmin()?'<th>Select</th>':''}<th>Prospect</th><th>Contact</th><th>Operator</th><th>Stage</th>${state.page==='tasks'?'<th>Reach out on</th>':''}<th>Open</th></tr></thead><tbody>${rows.map(row=>`<tr>
+ return `<div class="sales-table-wrap"><table class="sales-table"><thead><tr>${isSalesAdmin()?'<th>Select</th>':''}<th>Prospect</th><th>Contact</th><th>Operator</th><th>Stage</th>${state.page==='tasks'?'<th>Follow-up age / first reminder</th>':''}<th>Open</th></tr></thead><tbody>${rows.map(row=>`<tr>
  ${isSalesAdmin()?`<td><input type="checkbox" data-lead-select="${esc(row.id)}" aria-label="Select ${esc(recordTitle(row))}" ${state.selectedLeadIds.has(row.id)?'checked':''}></td>`:''}
  <td><strong>${esc(recordTitle(row))}</strong><small>${esc(row.company_name||prospectTypeLabel(row.prospect_type))}</small><small>${esc([row.sales_city,row.sales_state].filter(Boolean).join(', '))}</small>${row.do_not_contact?'<span class="sales-status-pill lost">Do not contact</span>':''}</td>
  <td>${contactActions(row)}<small>${row.referral_agent_id?'Imported realtor · all contact details inside':''}</small></td>
  <td>${esc(ownerName(row))}${isSalesAdmin()?`<button class="sales-link-action" data-assign-lead="${esc(row.id)}">Assign</button>`:''}</td>
  <td><select class="sales-filter" data-inline-stage="${esc(row.id)}" aria-label="Stage for ${esc(recordTitle(row))}">${stageDefs.map(st=>`<option value="${st.id}" ${stageFor(row)===st.id?'selected':''}>${esc(st.label)}</option>`).join('')}</select></td>
- ${state.page==='tasks'?`<td>${esc(formatDateTime(taskDue(row),{empty:'Not scheduled'}))}</td>`:''}
+ ${state.page==='tasks'?`<td><strong>${followUpAge(row)===null?'Date unavailable':followUpAge(row)+' days'}</strong><small>Entered: ${esc(formatDateTime(row.follow_up_started_at,{empty:'Unknown'}))}</small><small>First reminder: ${esc(formatDateTime(taskDue(row),{empty:'Not scheduled'}))}</small></td>`:''}
  <td><button class="sales-primary-button" data-work-prospect="${esc(row.id)}">Work prospect</button><button class="sales-link-action" data-open-lead="${esc(row.id)}">Edit details</button></td></tr>`).join('')}</tbody></table></div>`;
 }
 
@@ -2185,13 +2185,9 @@ function renderLeadFocusMode(rows) {
  <article class="sales-panel crm-call-panel"><p class="crm-eyebrow">LISTEN → EXPLAIN → AGREE ON A NEXT STEP</p><h2>Work this opportunity</h2><p>Ask about their closing gifts, upcoming clients, service-area fit and preferred next step.</p><a href="crm-scripts.html" target="_blank" rel="noopener" class="sales-secondary-button">Open scripts & objections ↗</a>
  <form data-outreach-form data-record-id="${esc(row.id)}"><div class="sales-form-grid">
  ${selectField('pipeline_stage','Outcome / stage',stageDefs.map(st=>[st.id,st.label]),stageFor(row))}
- ${field('gift_card_quantity','Cards being considered',row.gift_card_quantity||0,'number')}
- ${field('sales_confirmation_ref','Verified order / booking reference',row.sales_confirmation_ref||'')}
- ${field('next_step','Next action',row.next_step||'','text',false,'span-two')}
- ${field('next_step_due_at','Follow-up date & time',toDateTimeLocal(taskDue(row)),'datetime-local')}
  ${textAreaField('outreach_note','Add a conversation note','','span-two')}
- <label class="crm-preserve-owner span-two"><input name="do_not_contact" type="checkbox" ${row.do_not_contact?'checked':''}> Do not contact — stop outreach and clear the follow-up</label>
- </div><p class="crm-help">Record a verified order or booking reference before marking Purchased / Booked. Planned card quantities are not confirmed revenue. Sending a link is a separate, manual action.</p><footer class="sales-modal-footer"><p class="sales-message" data-modal-message role="status"></p><button type="submit" class="sales-primary-button">Save conversation</button></footer></form></article></div>`;
+ <label class="crm-dnc span-two"><input name="do_not_contact" type="checkbox" ${row.do_not_contact?'checked disabled':''}> DO NOT CONTACT — permanently stop outreach and remove from all follow-ups</label>
+ </div><p class="crm-help">Follow-up and Not interested automatically enter the follow-up flow. The first reminder is due in 30 days. Only confirmed payments count as sales.</p><footer class="sales-modal-footer"><p class="sales-message" data-modal-message role="status"></p><button type="submit" class="sales-primary-button">Save conversation</button></footer></form></article></div>`;
 }
 
 function renderQualificationWorksheet(row) {
@@ -2973,9 +2969,14 @@ function renderTaskFocusLanes(groups) {
   `;
 }
 
+function followUpAge(row,now=Date.now()) {const start=Date.parse(row.follow_up_started_at);return Number.isFinite(start)?Math.max(0,Math.floor((now-start)/86400000)):null;}
+function followUpBank(row) {const age=followUpAge(row);return age===null?'unknown':age<=30?'30':age<=60?'60':age<=90?'90':'long';}
 function renderTasksPage() {
- const rows=baseFilteredRows().filter(r=>!r.do_not_contact&&['lost','follow_up'].includes(stageFor(r))).sort((a,b)=>(new Date(taskDue(a)||'9999-01-01'))-(new Date(taskDue(b)||'9999-01-01'))),page=pagedProspects(rows);
- return `<article class="sales-panel"><div class="sales-panel-header"><div><h2>Follow-up pipeline</h2><p>Follow-up and Not interested leads leave the active pipeline. A reminder appears one calendar month later. Do-not-contact leads are excluded.</p></div></div>${renderFilters({placeholder:'Search follow-ups...'})}${renderLeadTable(page.rows)}${renderProspectPager(page)}</article>`;
+ const rows=baseFilteredRows().filter(r=>!r.do_not_contact&&['lost','follow_up'].includes(stageFor(r)));
+ const banks=[['30','30-day','0–30 days'],['60','60-day','31–60 days'],['90','90-day','61–90 days'],['long','Long term','91+ days']];
+ if(rows.some(r=>followUpBank(r)==='unknown'))banks.push(['unknown','Date unavailable','Legacy records']);
+ const selected=state.followUpBank||'30',page=pagedProspects(rows.filter(r=>followUpBank(r)===selected).sort((a,b)=>Date.parse(a.follow_up_started_at)-Date.parse(b.follow_up_started_at)));
+ return `<article class="sales-panel"><h2>Follow-up pipeline</h2><p>Age starts when a lead enters Follow-up or Not interested. Editing notes or switching between these outcomes does not reset its age. Do-not-contact leads are permanently excluded.</p>${renderFilters({placeholder:'Search follow-ups...'})}<div class="crm-linear-pipeline">${banks.map(([id,title,range])=>`<button class="crm-stage-step ${selected===id?'selected':''}" data-followup-bank="${id}"><small>${title} · ${range}</small><strong>${rows.filter(r=>followUpBank(r)===id).length}</strong><span>View leads →</span></button>`).join('')}</div><h3>${banks.find(b=>b[0]===selected)?.[1]||'Follow-ups'}</h3>${renderLeadTable(page.rows)}${renderProspectPager(page)}</article>`;
 }
 
 function renderTaskTable(rows) {
@@ -3106,15 +3107,11 @@ function renderLeadModal(row) {
           ${field("sales_city","City",row?.sales_city||"")}
           ${field("sales_state","State",row?.sales_state||"")}
           ${field("sales_website","Website",row?.sales_website||"")}
-          ${field("gift_card_quantity","Cards being considered",row?.gift_card_quantity||0,"number")}
-          ${field("sales_confirmation_ref","Verified order / booking reference",row?.sales_confirmation_ref||"")}
           ${field("contact_phone", "Phone Number", row?.contact_phone || "")}
           ${field("contact_name", "Contact name", row?.contact_name || "")}
           ${field("contact_email", "Email", row?.contact_email || "", "email")}
           ${field("address", "Address", row?.address || "", "text", false, "span-two")}
           ${selectField("pipeline_stage", "Stage", stageDefs.map((stage) => [stage.id, stage.label]), stageFor(row))}
-          ${field("next_step", "Next Step", row?.next_step || "", "text", false, "span-two")}
-          ${field("next_step_due_at", "Next Step Due", toDateTimeLocal(taskDue(row)), "datetime-local")}
           ${textAreaField("lead_notes", "Notes", row?.lead_notes || row?.default_scope || "", "span-two")}
         </div>
       </div>
@@ -3338,20 +3335,15 @@ async function handleLeadForm(form) {
     property_name: propertyName,
     prospect_type:values.prospect_type||'residential',company_name:(values.company_name||'').trim(),
     sales_city:(values.sales_city||'').trim(),sales_state:(values.sales_state||'').trim(),sales_website:(values.sales_website||'').trim(),
-    gift_card_quantity:Number(values.gift_card_quantity||0),sales_confirmation_ref:(values.sales_confirmation_ref||'').trim(),
     name: propertyName,
     contact_phone: values.contact_phone?.trim() || "",
     contact_name: values.contact_name?.trim() || "",
     contact_email: values.contact_email?.trim() || "",
     address: values.address?.trim() || "",
     pipeline_stage: values.pipeline_stage || "new_leads",
-    next_step: values.next_step?.trim() || "",
-    next_step_due_at: fromDateTimeLocal(values.next_step_due_at),
     lead_notes: values.lead_notes?.trim() || "",
     default_scope: values.lead_notes?.trim() || ""
   };
-  if(!Number.isInteger(payload.gift_card_quantity)||payload.gift_card_quantity<0||payload.gift_card_quantity>10000)return setInlineFormMessage(form,'Enter a whole number of cards from 0 to 10,000.','error');
-  if(payload.pipeline_stage==='active'&&!payload.sales_confirmation_ref)return setInlineFormMessage(form,'Enter the verified order or booking reference first.','error');
   if (!id) Object.assign(payload, ownerPayload(""));
 
   await persistForm(form, id, payload, id ? "Prospect updated." : "Prospect created.");
@@ -3846,7 +3838,6 @@ async function updateStage(id, stage) {
     const payload = { pipeline_stage: stage };
     if(!stageDefs.some(item=>item.id===stage))throw new Error('Choose a valid stage.');
     if(row?.do_not_contact&&stage!=='lost')throw new Error('This prospect has requested no contact. Review the record before reopening outreach.');
-    if(stage==='active'&&!row?.sales_confirmation_ref)throw new Error('Open the prospect and record the verified order or booking reference first.');
     await saveRecord(id, payload, `Moved to ${stageLabel(stage)}.`);
     await refreshData(false);
     setMessage(`Moved to ${stageLabel(stage)}.`, "success");
@@ -4744,7 +4735,7 @@ function contactActions(row) {
 function renderContactCard(row) {
  const source=row.source_contact||{},phones=[...new Set([source.phone,source.phone_1,source.phone_2,source.phone_3].filter(Boolean))],emails=[...new Set([source.email,source.email_2,source.email_3].filter(Boolean))];
  let website='';try{const u=new URL(row.sales_website||source.website);if(['http:','https:'].includes(u.protocol))website=u.href;}catch{}
- return `<article class="sales-panel crm-call-panel"><p class="crm-eyebrow">CONTACT DETAILS</p><h2>${esc(row.contact_name||recordTitle(row))}</h2><p>${esc(row.company_name||'')}</p>${contactActions(row)}<p>${esc([row.address,row.sales_city,row.sales_state,source.postal_code].filter(Boolean).join(', '))}</p>${website?`<a class="sales-link-action" href="${esc(website)}" target="_blank" rel="noopener">Website ↗</a>`:''}<button class="sales-secondary-button" data-open-lead="${esc(row.id)}">Edit primary details</button>
+ return `<article class="sales-panel crm-call-panel"><p class="crm-eyebrow">CONTACT DETAILS</p><h2>${esc(row.contact_name||recordTitle(row))}</h2><p>${esc(row.company_name||'')}</p>${contactActions(row)}<p>${esc([row.address,row.sales_city,row.sales_state,source.postal_code].filter(Boolean).join(', '))}</p>${website?`<a class="sales-link-action" href="${esc(website)}" target="_blank" rel="noopener">Website ↗</a>`:''}<button class="sales-primary-button crm-edit-primary" data-open-lead="${esc(row.id)}">Edit primary details</button>
  ${row.referral_agent_id?`<details class="crm-source-contact"><summary>All imported realtor contact information</summary><p>Original record details. Primary details above can be edited for sales outreach.</p><h3>Phone numbers</h3>${phones.map(v=>`<p>${row.do_not_contact?esc(v):`<a href="tel:${esc(v.replace(/[^\d+]/g,''))}">${esc(v)}</a>`}</p>`).join('')||'<p>None recorded</p>'}<h3>Email addresses</h3>${emails.map(v=>`<p>${row.do_not_contact?esc(v):`<a href="mailto:${esc(v)}">${esc(v)}</a>`}</p>`).join('')||'<p>None recorded</p>'}<p>${['email_1_phone','email_2_phone','email_3_phone'].filter(k=>source[k]).map(k=>`${esc(k.replaceAll('_',' '))}: ${esc(source[k])}`).join('<br>')}</p><p class="crm-note-text"><strong>Source notes:</strong> ${esc(source.notes||'None')}</p><small>Source: ${esc(source.source_file||row.lead_source||'Agent records')} · original status: ${esc(source.status||'new')} · text consent recorded: ${source.sms_consent?'yes':'no'}</small></details>`:''}</article>`;
 }
 
@@ -4753,13 +4744,10 @@ async function handleOutreachForm(form) {
  if(button)button.disabled=true;
  try {
   const values=readForm(form),id=form.dataset.recordId,stop=form.querySelector('[name="do_not_contact"]').checked;
-  const qty=Number(values.gift_card_quantity||0);if(!Number.isInteger(qty)||qty<0||qty>10000)throw new Error('Enter a whole number of cards from 0 to 10,000.');
   const stage=stop?'lost':values.pipeline_stage;if(!stageDefs.some(s=>s.id===stage))throw new Error('Choose a valid stage.');
-  const reference=(values.sales_confirmation_ref||'').trim();
-  if(stage==='active'&&!reference)throw new Error('Add the verified order or booking reference before marking Purchased / Booked.');
-  const payload={pipeline_stage:stage,gift_card_quantity:qty,sales_confirmation_ref:reference,do_not_contact:stop,next_step:stop?'Do not contact':(values.next_step||'').trim(),next_step_due_at:stop?null:fromDateTimeLocal(values.next_step_due_at),task_due_at:stop?null:fromDateTimeLocal(values.next_step_due_at),task_status:stop?'completed':'open'};
+  const payload={pipeline_stage:stage,do_not_contact:stop};
   await saveRecord(id,payload,`${stop?'Do not contact requested.':`Conversation saved · ${stageLabel(stage)}.`}${values.outreach_note?.trim()?' '+values.outreach_note.trim():''}`);
-  form.dataset.dirty='';await refreshData(false);setMessage('Conversation and next step saved.','success');
+  form.dataset.dirty='';await refreshData(false);setMessage('Conversation saved. Follow-up timing is automatic.','success');
  }catch(error){setInlineFormMessage(form,error.message,'error');}finally{if(button)button.disabled=false;}
 }
 
@@ -4798,23 +4786,25 @@ function renderSalesDashboard(){
  return `<div class="crm-welcome"><div><p class="crm-eyebrow">ACTUAL GIFT-CARD SALES</p><h2>Revenue you can reconcile.</h2><p>All-time Stripe-confirmed orders, recorded in Supabase. Pending checkouts and manually edited stages never count.</p></div><button class="sales-secondary-button" data-retry-workspace>Refresh totals</button></div><section class="sales-metric-grid crm-four">${metricCard('Gross sales',salesMoney(stats.gross_cents),'Before refunds','check')}${metricCard('Cards purchased',number(stats.cards||0),'$100 cards issued','file-text')}${metricCard('Completed purchases',number(stats.purchases||0),'One per paid order','check')}${metricCard('Realtor buyers',number(stats.realtor_buyers||0),'Distinct normalized buyer emails','users')}</section><article class="sales-panel"><h2>Sales reconciliation</h2><p>Refunds: <strong>${salesMoney(stats.refund_cents)}</strong> · After refunds: <strong>${salesMoney((stats.gross_cents||0)-(stats.refund_cents||0))}</strong> · Under review / disputed: <strong>${salesMoney(stats.held_cents)}</strong></p><p>${number(stats.buyers||0)} unique buying clients. Realtor buyers identify themselves at checkout. Repeat purchases by the same email count as one buyer and separate purchases. Commissions: 10% of the buyer’s first completed purchase only, matched by checkout email. Refunds reduce earned commissions; disputed orders are held. Historical purchases remain counted after refunds; refunded dollars are shown separately.</p><p>Conversion rate is measured for attributed realtor leads below; buyers without a matched lead are included in buyer totals.</p>${state.salesContext?.conversion?`<p><strong>${state.salesContext.conversion.buyers}</strong> matched realtor leads purchased / <strong>${state.salesContext.conversion.prospects}</strong> realtor prospects · <strong>${state.salesContext.conversion.prospects?(100*state.salesContext.conversion.buyers/state.salesContext.conversion.prospects).toFixed(1):'0.0'}%</strong> conversion</p>`:''}</article><article class="sales-panel"><h2>Sales by team member</h2><div class="sales-table-wrap"><table class="sales-table"><thead><tr><th>Sales member</th><th>Purchases</th><th>Cards</th><th>Gross sales</th><th>Earned commissions · unpaid</th></tr></thead><tbody>${(state.salesContext?.memberStats||[]).map(m=>`<tr><td>${esc(state.reps.find(r=>r.id===m.user_id)?.full_name||'Sales member')}</td><td>${m.purchases}</td><td>${m.cards}</td><td>${salesMoney(m.gross_cents)}</td><td>${salesMoney(m.commission_cents)}</td></tr>`).join('')||'<tr><td colspan="5">No attributed completed purchases yet.</td></tr>'}</tbody></table></div></article><article class="sales-panel"><div class="sales-panel-header"><h2>Sales by client</h2><input id="crmBuyerSearch" type="search" value="${esc(state.buyerSearch||'')}" placeholder="Search buyer name or email" aria-label="Search buyers"></div><div class="sales-table-wrap"><table class="sales-table"><thead><tr><th>Buyer</th><th>Type</th><th>Purchases</th><th>Cards</th><th>Gross sales</th><th>Refunds</th></tr></thead><tbody>${shown.map(c=>`<tr><td><strong>${esc(c.name)}</strong><small>${esc(c.email)}</small></td><td>${c.realtor?'Realtor':'Other buyer'}</td><td>${c.purchases}</td><td>${c.cards}</td><td>${salesMoney(c.gross_cents)}</td><td>${salesMoney(c.refund_cents)}</td></tr>`).join('')||'<tr><td colspan="6">No completed purchases match this view.</td></tr>'}</tbody></table></div><div class="crm-pager"><button class="sales-secondary-button" data-buyer-page="${page-1}" ${page===1?'disabled':''}>Previous</button><span>${matches.length} clients · Page ${page}</span><button class="sales-secondary-button" data-buyer-page="${page+1}" ${page*50>=matches.length?'disabled':''}>Next</button></div></article>`;
 }
 function renderQuickSend(row){
- return `<article class="sales-panel crm-call-panel"><h2>Send your purchase link</h2><p>Recipient details come from this lead. Confirm permission before sending.</p><div class="sales-row-actions"><button class="sales-primary-button" data-send-link="${esc(row.id)}" data-channel="email" ${row.do_not_contact||!row.contact_email?'disabled':''}>Email link</button><button class="sales-secondary-button" data-send-link="${esc(row.id)}" data-channel="sms" ${row.do_not_contact||!row.contact_phone?'disabled':''}>Text link</button></div></article>`;
+ return `<article class="sales-panel crm-call-panel"><h2>Send your purchase link</h2><p>Recipient details come from this lead. Confirm permission before sending.</p><div class="sales-row-actions"><button class="sales-primary-button" data-send-link="${esc(row.id)}" data-channel="email" ${row.do_not_contact||!row.contact_email?'disabled':''}>Email link</button><button class="sales-secondary-button" data-send-link="${esc(row.id)}" data-channel="sms" ${row.do_not_contact||!row.contact_phone?'disabled':''}>Text link</button><button class="sales-secondary-button" data-send-link="${esc(row.id)}" data-channel="email" data-alternate-recipient ${row.do_not_contact?'disabled':''}>Send to different email</button><button class="sales-secondary-button" data-send-link="${esc(row.id)}" data-channel="sms" data-alternate-recipient ${row.do_not_contact?'disabled':''}>Send to different number</button></div></article>`;
 }
+function recipientOptions(m,channel){return state.rows.filter(r=>!r.do_not_contact&&(r.id===m.leadId||!m.recipientSearch||normalize(recordTitle(r)+' '+r.contact_email+' '+r.contact_phone).includes(normalize(m.recipientSearch)))).sort((a,b)=>(b.id===m.leadId)-(a.id===m.leadId)).slice(0,50).map(r=>`<option value="${esc(r.id)}" ${r.id===m.leadId?'selected':''}>${esc(recordTitle(r))} · ${esc(channel==='email'?r.contact_email||'No email':r.contact_phone||'No phone')}</option>`).join('');}
 function renderSendModal(){
  const m=state.modal,row=recordById(m.leadId),channel=m.channel||'email';
- return renderModalShell('Send gift-card checkout','Your credited sales link',`<form data-send-checkout><div class="sales-modal-body"><label>Find a contact<input type="search" id="crmRecipientSearch" placeholder="Search name or email" value="${esc(m.recipientSearch||'')}"></label><label>Contact<select name="lead_id" data-send-recipient required><option value="">Choose a saved lead</option>${state.rows.filter(r=>!r.do_not_contact&&(r.id===m.leadId||!m.recipientSearch||normalize(recordTitle(r)+' '+r.contact_email+' '+r.contact_phone).includes(normalize(m.recipientSearch)))).sort((a,b)=>(b.id===m.leadId)-(a.id===m.leadId)).slice(0,50).map(r=>`<option value="${esc(r.id)}" ${r.id===m.leadId?'selected':''}>${esc(recordTitle(r))} · ${esc(channel==='email'?r.contact_email||'No email':r.contact_phone||'No phone')}</option>`).join('')}</select></label><p>Sending by <strong>${channel==='email'?'email':'text'}</strong> to <strong>${esc(row?(channel==='email'?row.contact_email:row.contact_phone)||'Missing contact information':'Select a contact above')}</strong>.</p><p>Your message includes the contact’s name, your name, your tracked checkout link, the $100 card amount, service-area restrictions, and opt-out instructions.</p><label class="crm-consent"><input type="checkbox" name="consent" required> I verified that this contact agreed to receive ${channel==='email'?'emails':'text messages'} from Turnly at this address or number.</label><p>${state.salesContext?.sending?.[channel]?'Sending records the consent confirmation and provider receipt in lead activity.':'This channel needs its sending service connected before messages can be sent.'}</p><p>Only an accepted provider response is reported as accepted; it does not guarantee delivery.</p></div>${modalFooter('Send '+(channel==='email'?'email':'text'))}</form>`,'',true);
+ return renderModalShell('Send gift-card checkout','Your credited sales link',`<form data-send-checkout><div class="sales-modal-body"><label>Find a contact<input type="search" id="crmRecipientSearch" placeholder="Search name or email" value="${esc(m.recipientSearch||'')}"></label><label>Contact<select name="lead_id" data-send-recipient required><option value="">Choose a saved lead</option>${recipientOptions(m,channel)}</select></label><p>${m.alternate?'Saved contact (overridden below). ':''}Sending by <strong>${channel==='email'?'email':'text'}</strong> to <strong>${esc(row?(channel==='email'?row.contact_email:row.contact_phone)||'Missing contact information':'Select a contact above')}</strong>.</p>${m.alternate?`<label>Send to a different ${channel==='email'?'email address':'phone number'}<input name="recipient_override" type="${channel==='email'?'email':'tel'}" required maxlength="254" placeholder="${channel==='email'?'name@example.com':'+1 919 555 0123'}"></label><p>This changes only this message’s recipient. The saved lead stays unchanged.</p>`:''}<p>Your message includes the contact’s name, your name, your tracked checkout link, the $100 card amount, service-area restrictions, and opt-out instructions.</p><label class="crm-consent"><input type="checkbox" name="consent" required> I verified that this contact agreed to receive ${channel==='email'?'emails':'text messages'} from Turnly at this address or number.</label><p>${state.salesContext?.sending?.[channel]?'Sending records the consent confirmation and provider receipt in lead activity.':'This channel needs its sending service connected before messages can be sent.'}</p><p>Only an accepted provider response is reported as accepted; it does not guarantee delivery.</p></div>${modalFooter('Send '+(channel==='email'?'email':'text'))}</form>`,'',true);
 }
 function renderRemoveModal(){
  const p=state.reps.find(p=>p.id===state.modal.userId),rows=state.rows.filter(r=>r.sales_owner_id===p?.id);
- return renderModalShell('Remove assigned leads','Return leads to the shared pool',`<form data-remove-leads-form><div class="sales-modal-body"><h3>${esc(p?.full_name||'Team member')}</h3><p>Notes and pipeline stages stay with each lead. Their owner is cleared, so they can be assigned again.</p><label>Leads to remove<select name="scope"><option value="new">Only New leads (${rows.filter(r=>stageFor(r)==='new_leads').length})</option><option value="all">All assigned leads (${rows.length})</option></select></label></div>${modalFooter('Remove assignments')}</form>`,'',true);
+ return renderModalShell('Remove assigned leads','Return leads to the shared pool',`<form data-remove-leads-form><div class="sales-modal-body"><h3>${esc(p?.full_name||'Team member')}</h3><p>Notes and pipeline stages stay with each lead. Their owner is cleared, so they can be assigned again.</p><label>Leads to remove<select name="scope">${stageDefs.map(st=>`<option value="${st.id}">${esc(st.label)} (${rows.filter(r=>stageFor(r)===st.id).length})</option>`).join('')}<option value="followups">All follow-up flow (${rows.filter(r=>['lost','follow_up'].includes(stageFor(r))).length})</option><option value="all">All assigned leads (${rows.length})</option></select></label></div>${modalFooter('Remove assignments')}</form>`,'',true);
 }
 function bindSalesOperations(){
  Object.assign(pageConfig,{sales:{title:'Sales dashboard',subtitle:'Confirmed gift-card purchases, clients, and sales totals.'}});
  document.addEventListener('click',async event=>{
-  const b=event.target.closest?.('[data-copy-referral],[data-send-link],[data-pipeline-stage],[data-ack-notice],[data-remove-leads],[data-buyer-page]');if(!b)return;
+  const b=event.target.closest?.('[data-copy-referral],[data-send-link],[data-followup-bank],[data-pipeline-stage],[data-ack-notice],[data-remove-leads],[data-buyer-page]');if(!b)return;
   try{
    if(b.hasAttribute('data-copy-referral')){await navigator.clipboard.writeText(state.salesContext.link.url);setMessage('Your checkout link was copied.','success');}
-   if(b.hasAttribute('data-send-link')){state.modal={type:'sendLink',leadId:b.dataset.sendLink,channel:b.dataset.channel,requestId:crypto.randomUUID()};render();}
+   if(b.hasAttribute('data-send-link')){state.modal={type:'sendLink',leadId:b.dataset.sendLink,channel:b.dataset.channel,alternate:b.hasAttribute('data-alternate-recipient'),requestId:crypto.randomUUID()};render();}
+   if(b.dataset.followupBank){state.followUpBank=b.dataset.followupBank;state.prospectPage=1;render();}
    if(b.dataset.pipelineStage){state.pipelineStage=b.dataset.pipelineStage;state.prospectPage=1;render();}
    if(b.dataset.ackNotice){await crmSalesRequest('ack',{id:b.dataset.ackNotice});state.salesContext.notifications=state.salesContext.notifications.filter(n=>n.id!==b.dataset.ackNotice);render();}
    if(b.dataset.removeLeads&&isSalesAdmin()){state.modal={type:'removeLeads',userId:b.dataset.removeLeads};render();}
@@ -4822,12 +4812,12 @@ function bindSalesOperations(){
   }catch(e){setMessage(e.message,'error');}
  });
  document.addEventListener('change',event=>{if(event.target.matches('[data-send-recipient]')){state.modal.leadId=event.target.value;state.modal.requestId=crypto.randomUUID();render();}});
- document.addEventListener('input',event=>{if(event.target.id==='crmRecipientSearch'){state.modal.recipientSearch=event.target.value;render();const field=document.querySelector('#crmRecipientSearch');field?.focus();}if(event.target.id==='crmBuyerSearch'){state.buyerSearch=event.target.value;state.buyerPage=1;render();const field=document.querySelector('#crmBuyerSearch');field?.focus();field?.setSelectionRange(field.value.length,field.value.length);}});
+ document.addEventListener('input',event=>{if(event.target.name==='recipient_override'){state.modal.requestId=crypto.randomUUID();event.target.form.elements.consent.checked=false;}if(event.target.id==='crmRecipientSearch'){state.modal.recipientSearch=event.target.value;document.querySelector('[data-send-recipient]').innerHTML='<option value="">Choose a saved lead</option>'+recipientOptions(state.modal,state.modal.channel);}if(event.target.id==='crmBuyerSearch'){state.buyerSearch=event.target.value;state.buyerPage=1;render();const field=document.querySelector('#crmBuyerSearch');field?.focus();field?.setSelectionRange(field.value.length,field.value.length);}});
  document.addEventListener('submit',async event=>{
   const f=event.target;if(!f.matches('[data-send-checkout],[data-remove-leads-form]'))return;event.preventDefault();const b=f.querySelector('[type=submit]');if(b.disabled)return;b.disabled=true;
   try{
-   if(f.matches('[data-send-checkout]')){const r=await crmSalesRequest('send',{lead_id:f.elements.lead_id.value,consent:f.elements.consent.checked,channel:state.modal.channel,request_id:state.modal.requestId});if(r.message.status!=='accepted')throw new Error(r.message.error||'This message is still processing. Do not send it again until its status is confirmed.');state.modal=null;await refreshData(false);setMessage('Message accepted by the sending service.','success');}
-   else{const r=await supabase.rpc('crm_remove_operator_leads',{p_operator:state.modal.userId,p_only_new:f.elements.scope.value==='new'});if(r.error)throw r.error;state.modal=null;await refreshData(false);setMessage(`${r.data} lead assignments removed. Notes were preserved.`,'success');}
+   if(f.matches('[data-send-checkout]')){const r=await crmSalesRequest('send',{lead_id:f.elements.lead_id.value,consent:f.elements.consent.checked,channel:state.modal.channel,request_id:state.modal.requestId,recipient_override:f.elements.recipient_override?.value});if(r.message.status!=='accepted')throw new Error(r.message.error||'This message is still processing. Do not send it again until its status is confirmed.');state.modal=null;await refreshData(false);setMessage('Message accepted by the sending service.','success');}
+   else{const r=await supabase.rpc('crm_remove_operator_leads_by_status',{p_operator:state.modal.userId,p_status:f.elements.scope.value});if(r.error)throw r.error;state.modal=null;await refreshData(false);setMessage(`${r.data} lead assignments removed. Notes were preserved.`,'success');}
   }catch(e){setInlineFormMessage(f,e.message,'error');}finally{b.disabled=false;}
  });
 }
