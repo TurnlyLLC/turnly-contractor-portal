@@ -54,6 +54,7 @@ export const navSections = [
   {
     title: "Contractors",
     links: [
+      { key: "applicants", label: "Applicants", href: "applicants.html", icon: "users" },
       { key: "directory", label: "Directory", href: "directory.html", icon: "users" }
     ]
   },
