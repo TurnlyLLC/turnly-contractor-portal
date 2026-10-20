@@ -9,6 +9,7 @@ function harness({role='admin',status='active',configured=true,consent=true,prov
   const agent={id:randomUUID(),name:'Jane Agent',email:'jane@example.com',email_2:'alt@example.com',phone:'+19195550100',sms_consent:consent,status:agentStatus,referral_code:null};
   const deliveries=[],calls=[],writes=[];
   const client={auth:{getUser:async()=>({data:{user:{id:randomUUID(),user_metadata:{role:'admin'}}}})},
+    rpc:async()=>({data:{reserved_cents:5}}),
     from(table){
       const q={filters:[],op:'read',value:null,select(){return q},order(){return q},limit(){return q},range(){return q.run()},eq(k,v){q.filters.push([k,v]);return q},
         insert(v){q.op='insert';q.value=v;return q},update(v){q.op='update';q.value=v;return q},
@@ -28,7 +29,7 @@ function harness({role='admin',status='active',configured=true,consent=true,prov
     storage:{from(){return {download:async()=>({data:{arrayBuffer:async()=>new ArrayBuffer(1)}}),upload:async()=>({data:{}}),getPublicUrl:()=>({data:{publicUrl:'https://example.com/flyer.pdf'}})}}}
   };
   const sandbox={module:{exports:{}},Buffer,console,URLSearchParams,AbortSignal,process:{env:{SUPABASE_SERVICE_ROLE_KEY:'test-only',...(configured?{RESEND_API_KEY:'test-only',REFERRAL_FROM_EMAIL:'sales@example.com',TWILIO_ACCOUNT_SID:'test-only',TWILIO_AUTH_TOKEN:'test-only',TWILIO_MESSAGING_SERVICE_SID:'test-only'}:{})}},
-    require(name){if(name==='@supabase/supabase-js')return {createClient:()=>client};if(name==='../lib/agent-referrals.cjs')return {...helpers,makeFlyer:async()=>Buffer.from('test flyer')};return require(name);},
+    require(name){if(name==='../lib/communication-budget.cjs'){const budget={...sandbox,module:{exports:{}},require(n){return require(n==='./residential-server.cjs'?'../lib/residential-server.cjs':n);}};vm.runInNewContext(fs.readFileSync(require.resolve(name),'utf8'),budget);return budget.module.exports;}if(name==='@supabase/supabase-js')return {createClient:()=>client};if(name==='../lib/agent-referrals.cjs')return {...helpers,makeFlyer:async()=>Buffer.from('test flyer')};return require(name);},
     fetch:async(url,options)=>{calls.push({url,options});if(providerFailure)throw new Error('Network timeout');return {ok:true,json:async()=>url.includes('twilio')?{sid:'SMtest',status:'queued'}:{id:'email-test'}};}
   };
   vm.runInNewContext(fs.readFileSync(require.resolve('../api/agent-referrals.js'),'utf8'),sandbox);

@@ -20,6 +20,10 @@
     {
       "path": "/api/recruiting-mail",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/communication-budget",
+      "schedule": "*/5 * * * *"
     }
   ],
   "functions": {
@@ -66,6 +70,9 @@
     "api/ba-onboarding.js": {
       "maxDuration": 60,
       "includeFiles": "assets/irs-w9.pdf"
+    },
+    "api/communication-budget.js": {
+      "maxDuration": 300
     }
   },
   "routes": [
@@ -88,7 +95,9 @@
         }
       ],
       "status": 307,
-      "headers": {"Location": "https://portal.turnlypros.com/residential-referral.html?ba=$1"}
+      "headers": {
+        "Location": "https://portal.turnlypros.com/residential-referral.html?ba=$1"
+      }
     },
     {
       "src": "^/(?:index\\.html)?$",

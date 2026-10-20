@@ -1,3 +1,4 @@
+const B=require('../lib/communication-budget.cjs');
 const {requireCrmSession}=require('../lib/crm-access.cjs');
 const { createClient }=require('@supabase/supabase-js');
 const { randomUUID,createHash }=require('node:crypto');
@@ -67,11 +68,11 @@ async function sendChannel(client,a,user,channel,requestId,asset){
       if(!result.id)throw new Error('Sending service returned no message ID.');
       update={status:'accepted',provider_id:result.id,error:null};
     }else{
-      result=await providerFetch(`https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_ACCOUNT_SID}/Messages.json`,{method:'POST',headers:{Authorization:'Basic '+Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64'),'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({To:recipient,MessagingServiceSid:process.env.TWILIO_MESSAGING_SERVICE_SID,Body:messages.sms}).toString()});
+      result=await B.sendSms(client,{id:'referral-sms:'+record.id,user:user.id,to:recipient,body:messages.sms,source:'Referral portal',messagingServiceSid:process.env.TWILIO_MESSAGING_SERVICE_SID});
       if(!result.sid)throw new Error('Sending service returned no message ID.');
       update={status:result.status||'queued',provider_id:result.sid,error:null};
     }
-  }catch(error){update={status:error.definitive?'failed':'unknown',error:error.definitive?error.message:'Delivery could not be confirmed. Check the sending service before retrying to avoid duplicate messages.'};}
+  }catch(error){update={status:error.definitive||error.status===409||error.status===400?'failed':'unknown',error:error.definitive||error.status?error.message:'Delivery could not be confirmed. Check the sending service before retrying to avoid duplicate messages.'};}
   const saved=await client.from('referral_deliveries').update({...update,updated_at:new Date().toISOString()}).eq('id',record.id).select('*').single();
   if(saved.error)return {...record,...update,warning:'Message result could not be saved. Check the sending service before retrying.'};
   return saved.data;
