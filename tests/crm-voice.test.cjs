@@ -17,12 +17,13 @@ test('one-use dialing verifies identity, ownership, opt-outs and deactivation; c
  create table profiles(id uuid primary key,role text,status text,full_name text);
  create table sales_leads(id uuid primary key,business_segment text,sales_owner_id uuid,do_not_contact boolean);
  create table crm_user_access(user_id uuid,enabled boolean,must_change_password boolean);
- create function crm_server_session_ready(uuid,uuid) returns boolean language sql as $$select true$$;
+ create function crm_server_session_ready(uuid,text) returns boolean language sql as $$select true$$;
  create table sales_activities(id uuid primary key,lead_id uuid,user_id uuid,user_name text,activity_type text,activity_text text,metadata jsonb);
  insert into profiles values('${id(1)}','sales','active','Rep');
  insert into sales_leads values('${id(2)}','residential','${id(1)}',false);
  insert into crm_user_access values('${id(1)}',true,false);`);
  await db.exec(fs.readFileSync('supabase/migrations/20261020195812_crm_browser_voice.sql','utf8'));
+ await db.exec(fs.readFileSync('supabase/migrations/20261020203454_crm_voice_session_type_fix.sql','utf8'));
  const prepared=async()=>{const r=await db.query('select crm_prepare_voice_call($1,$2,$3,$4) id',[id(1),id(2),id(3),'+19195550100']);return r.rows[0].id;};
  const consume=async(intent,who=`client:sales_${id(1)}`)=> (await db.query('select crm_consume_voice_call($1,$2,$3) result',[intent,who,'CA'+'1'.repeat(32)])).rows[0].result;
  const intent=await prepared();assert.equal(await consume(intent,'client:other'),null);
