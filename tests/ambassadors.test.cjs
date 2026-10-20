@@ -65,11 +65,11 @@ test('HTTP dashboard forces ambassador ownership and strips private profile fiel
 
 test('referral access requires completed onboarding and every current passed module',async()=>{
  const course=require('../lib/ba-training-course.json');
- let rows=[],member={user_id:'mine',name:'Example',code:'BA-1111111111111111',enabled:true,onboarding_completed_at:'2026-10-20'};
- const db={from(table){let filters=[];return{select(){return this},eq(k,v){filters.push([k,v]);return this},in(k,v){filters.push([k,v]);return this},not(){return this},maybeSingle:async()=>({data:member}),then(resolve){resolve({data:rows.filter(r=>filters.every(([k,v])=>Array.isArray(v)?v.includes(r[k]):r[k]===v))})}}}};
+ let agreement=true,rows=[],member={user_id:'mine',name:'Example',code:'BA-1111111111111111',enabled:true,onboarding_completed_at:'2026-10-20'};
+ const db={from(table){let filters=[];return{select(){return this},eq(k,v){filters.push([k,v]);return this},in(k,v){filters.push([k,v]);return this},not(){return this},maybeSingle:async()=>({data:member}),then(resolve){resolve({data:(table==='ba_documents'?(agreement?[{user_id:'mine',kind:'agreement',version:require('../lib/ba-agreement.cjs').VERSION}]:[]):rows).filter(r=>filters.every(([k,v])=>Array.isArray(v)?v.includes(r[k]):r[k]===v))})}}}};
  const all=course.lessons.map(l=>({user_id:'mine',course_version:course.version,lesson_id:l.id,score:l.questions.length,completed_at:'2026-10-20'}));
  for(const invalid of [[],all.slice(1),all.map(r=>({...r,course_version:'old'})),all.map(r=>({...r,user_id:'other'})),all.map(r=>({...r,score:0}))]){rows=invalid;assert.equal(await A.referralMember(db,member.code),null);}
- rows=all;assert.equal((await A.referralMember(db,member.code)).code,member.code);
+ rows=all;agreement=false;assert.equal(await A.referralMember(db,member.code),null);agreement=true;assert.equal((await A.referralMember(db,member.code)).code,member.code);
  member.onboarding_completed_at=null;assert.equal(await A.referralMember(db,member.code),null);
  member.onboarding_completed_at='2026-10-20';member.enabled=false;assert.equal(await A.referralMember(db,member.code),null);
  rows=[...all,...all];member.enabled=true;assert.equal((await A.referralReadiness(db,[member]))[0].training.completed,8);
