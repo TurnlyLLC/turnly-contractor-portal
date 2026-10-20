@@ -1,3 +1,4 @@
+const B=require('../lib/communication-budget.cjs');
 const { createClient } = require("@supabase/supabase-js");
 
 const allowedRoles = new Set(["admin", "owner", "super_admin", "property_manager"]);
@@ -264,41 +265,10 @@ function twilioConfig() {
   return { accountSid, authUser, authSecret, messagingServiceSid, from, to };
 }
 
-async function sendTwilioMessage(message) {
-  const config = twilioConfig();
-  if (config.error) return { error: config.error };
-
-  const params = new URLSearchParams();
-  params.set("To", config.to);
-  params.set("Body", message);
-  if (config.messagingServiceSid) params.set("MessagingServiceSid", config.messagingServiceSid);
-  else params.set("From", config.from);
-
-  const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(config.accountSid)}/Messages.json`, {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${Buffer.from(`${config.authUser}:${config.authSecret}`).toString("base64")}`,
-      "Content-Type": "application/x-www-form-urlencoded"
-    },
-    body: params.toString()
-  });
-
-  const text = await response.text();
-  let body = null;
-  try {
-    body = text ? JSON.parse(text) : null;
-  } catch {
-    body = { message: text };
-  }
-
-  if (!response.ok) {
-    return {
-      error: new Error(body?.message || `Twilio returned ${response.status}.`),
-      status: response.status
-    };
-  }
-
-  return { data: body };
+async function sendTwilioMessage(message, db, assignmentId) {
+ const config=twilioConfig();if(config.error)return {error:config.error};
+ try{return {data:await B.sendSms(db,{id:'turn-sms:'+assignmentId,user:null,to:config.to,body:message,source:'Turn request notification',messagingServiceSid:config.messagingServiceSid,from:config.from})};}
+ catch(error){return {error,status:error.status||503};}
 }
 
 async function markSmsSent(supabase, row, twilioResult) {
@@ -361,7 +331,7 @@ module.exports = async function handler(req, res) {
     return sendJson(res, 200, { ok: true, skipped: "already_sent" });
   }
 
-  const result = await sendTwilioMessage(smsBody(row, body));
+  const result = await sendTwilioMessage(smsBody(row, body), supabase, row.id);
   if (result.error) return sendJson(res, result.status || 502, { error: result.error.message });
 
   await markSmsSent(supabase, row, result.data);

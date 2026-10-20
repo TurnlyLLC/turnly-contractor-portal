@@ -1,3 +1,4 @@
+import {mountBudget} from './crm-budget.mjs?v=20261020';
 import { installCalling } from './crm-calling.mjs?v=20261020';
 import {GIFT_CARD_URL,RESIDENTIAL_URL,PRODUCT_FACTS,PLAYBOOK,SALES_SCRIPTS,SALES_OBJECTIONS} from './crm-sales-content.mjs?v=20261016-gift-sales';
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/+esm";
@@ -52,13 +53,14 @@ const pageConfig = {
   }
 };
 
-Object.assign(pageConfig,{pipeline:{title:"Deal pipeline",subtitle:"Move opportunities forward, one meaningful conversation at a time."},contacts:{title:"Contacts",subtitle:"The people and properties behind every relationship."},quotes:{title:"Proposals",subtitle:"Prepare, review, and follow up on your quotes."},contracts:{title:"Closing",subtitle:"Track management review, contracts, and won business."},team:{title:"Team",subtitle:"Ownership, workload, and results across your sales team."}});
+Object.assign(pageConfig,{communications:{title:'Calling & texting',subtitle:'Budgets, usage and outreach controls.'},pipeline:{title:"Deal pipeline",subtitle:"Move opportunities forward, one meaningful conversation at a time."},contacts:{title:"Contacts",subtitle:"The people and properties behind every relationship."},quotes:{title:"Proposals",subtitle:"Prepare, review, and follow up on your quotes."},contracts:{title:"Closing",subtitle:"Track management review, contracts, and won business."},team:{title:"Team",subtitle:"Ownership, workload, and results across your sales team."}});
 const navItems = [
  ['dashboard','Overview','sales.html','dashboard'],
  ['leads','Prospects','sales-leads.html','users'],
  ['pipeline','Deal pipeline','crm-pipeline.html','dashboard'],
  ['tasks','Follow-ups','sales-tasks.html','clipboard-check'],
  ['scripts','Scripts','crm-scripts.html','file-text'],
+ ['communications','Calling & texting','crm-communications.html','phone'],
  ['sales','Sales dashboard','crm-sales.html','dashboard'],
  ['team','Team','crm-team.html','users'],
  ['guide','Team playbook','crm-guide.html','file-check']
@@ -1208,7 +1210,7 @@ async function loadReps() {
  const result=await crmTeamRequest('list');return result.members||[];
 }
 async function refreshData(showLoading = true,accessChecked=false) {
-  if(["scripts","guide"].includes(state.page)){state.loading=false;render();return;}
+  if(["scripts","guide","communications"].includes(state.page)){state.loading=false;render();return;}
   if(showLoading){state.loading=true;state.loadFailed=false;state.message='';render();}
   try {
     if(!accessChecked&&!await withCrmTimeout(requireSalesAccess())){state.rows=[];state.leads=[];return;}
@@ -1246,6 +1248,8 @@ function render() {
       ${renderModal()}
     </main>
   `;
+  const budgetRoot=document.getElementById('communicationBudget');
+  if(budgetRoot)void mountBudget(budgetRoot,async values=>{const {data}=await supabase.auth.getSession();if(!data?.session)throw Error('Sign in again.');const response=await fetch('/api/communication-budget',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+data.session.access_token},body:JSON.stringify(values)});const result=await response.json();if(!response.ok)throw Error(result.error||'Unable to load budgets.');return result;});
   if(['salesGlobalSearch','salesPageSearch','crmLibrarySearch','crmTeamSearch'].includes(focusId)){const input=document.getElementById(focusId);input?.focus();if(caret!=null)input?.setSelectionRange(caret,caret);}
 
 }
@@ -1262,7 +1266,7 @@ function renderSidebar() {
       </a>
       <p class="sales-side-kicker">Workspace</p>
       <nav class="sales-nav" aria-label="Sales navigation">
-        ${navItems.filter(([key])=>key!=='sales'||isSalesAdmin()).map(([key, label, href, iconName]) => `
+        ${navItems.filter(([key])=>!['sales','communications'].includes(key)||isSalesAdmin()).map(([key, label, href, iconName]) => `
           <a class="sales-nav-link ${state.page === key ? "active" : ""}" href="${href}">
             ${icon(iconName)}<span>${label}</span>
           </a>
@@ -1384,6 +1388,7 @@ function renderLoading() {
 }
 
 function renderPage() {
+ if(state.page==='communications')return isSalesAdmin()?'<div id="communicationBudget"></div>':emptyState('Administrator access required','Open Overview for your results.');
  if(state.page==='scripts')return renderScriptsPage();
  if(state.page==='guide')return renderPlaybookPage();
  if(state.page==='pipeline')return renderCrmPipeline();
