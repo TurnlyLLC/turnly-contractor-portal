@@ -13,7 +13,7 @@ async function api(action,values={}){
 function notice(text){const el=document.querySelector('#baMessage');el.hidden=false;el.className='ba-note';el.textContent=text;}
 function player(media,lessonId,walkthrough=false){
  if(!media.video_path)return `<iframe class="ba-training-player" src="${esc(media.video_url)}?fullscreen=1" title="${esc(media.title)} video" allow="autoplay; fullscreen" allowfullscreen loading="lazy" referrerpolicy="no-referrer"></iframe>`;
- return `<div class="ba-video"><video class="ba-training-player ba-native-player" controls playsinline preload="metadata" data-lesson="${lessonId}" data-walkthrough="${walkthrough}" aria-label="${esc(media.title)} video" ${walkthrough?'poster="assets/ba-training/01-start.png"':''}></video><p class="ba-media-status" role="status">Loading video…</p><button type="button" class="ba-secondary" data-retry-video hidden>Reload video</button></div>`;
+ return `<div class="ba-video"><video class="ba-training-player ba-native-player" controls playsinline preload="metadata" data-lesson="${lessonId}" data-walkthrough="${walkthrough}" aria-label="${esc(media.title)} video" ${walkthrough?'poster="assets/ba-training/01-start.png"':lessonId==='onboarding'?'poster="assets/ba-training/portal/01-overview.png"':''}></video><p class="ba-media-status" role="status">Loading video…</p><button type="button" class="ba-secondary" data-retry-video hidden>Reload video</button></div>`;
 }
 async function loadPlayer(video){
  const box=video.closest('.ba-video'),status=box.querySelector('.ba-media-status'),retry=box.querySelector('button');
@@ -29,7 +29,7 @@ function bookingGuide(){
 }
 function portalGuide(lesson){
  const w=lesson.walkthrough;
- return `<section class="ba-booking-guide"><p class="ba-eyebrow">ACTUAL TURNLY PORTAL SCREENS</p><h3>${esc(w.title)}</h3><p>${esc(w.disclosure)}</p>${bookingSlides(w.steps,true)}</section><details><summary>Watch the portal orientation video</summary>${player(lesson,lesson.id)}</details>`;
+ return `<section class="ba-booking-guide"><p class="ba-eyebrow">ACTUAL TURNLY PORTAL SCREENS</p><h3>Watch: what to click in your portal</h3><p>Follow the narrated tour through your overview, referral pipeline, activity, earnings, links, documents and training.</p>${player(lesson,lesson.id)}<h3>${esc(w.title)}</h3><p>${esc(w.disclosure)}</p>${bookingSlides(w.steps,true)}</section>`;
 }
 function render(){
  const c=state.course,done=new Set(state.progress.map(p=>p.lesson_id)),lesson=c.lessons.find(l=>l.id===selected);
