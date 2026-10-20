@@ -51,3 +51,16 @@
 .ba-slides-dialog .ba-slides-top button{margin-left:auto}
 @media(max-width:700px){.ba-slides-top{align-items:flex-start;flex-direction:column}.ba-slides-jumps{gap:6px;padding:12px}.ba-slides-jumps button{width:30px;height:30px}.ba-slide-caption{padding:16px}.ba-slide-controls{padding:12px;flex-wrap:wrap}.ba-slide-controls [role=status]{order:-1;width:100%}.ba-slide-controls button{flex:1}.ba-slide-screen{padding-left:4px;padding-right:4px}.ba-slide-caption p:last-child{min-height:0}}
 @media(max-width:700px){.ba-slides-dialog .ba-slides{grid-template-columns:1fr;grid-template-rows:auto auto minmax(130px,1fr) minmax(80px,.6fr) auto}.ba-slides-dialog .ba-slides-top{flex-direction:row;align-items:center;padding:10px;font-size:13px}.ba-slides-dialog .ba-slides-top span,.ba-slides-dialog .ba-slide-help{display:none}.ba-slides-dialog .ba-slides-top button{padding:8px}.ba-slides-dialog .ba-slide-caption{border-left:0;padding:12px}.ba-slides-dialog .ba-slide-caption h4{font-size:17px}.ba-slides-dialog .ba-slide-caption p{font-size:13px}.ba-slides-dialog .ba-slide-counter{margin:0}}
+/* Large screenshot mode: keep controls fixed while the image can be explored. */
+.ba-slides-dialog{width:calc(100vw - 16px);max-width:none;height:calc(100dvh - 16px)}
+.ba-slides-dialog .ba-slides{grid-template-columns:minmax(0,1fr)}
+.ba-slides-dialog .ba-slides.ba-show-notes{grid-template-columns:minmax(0,4fr) minmax(260px,1fr)}
+.ba-slides-dialog .ba-slide-caption[hidden]{display:none}
+.ba-slides-dialog .ba-slide-screen{overflow:auto;padding:8px 12px 24px;overscroll-behavior:contain}
+.ba-slides-dialog .ba-slide-screen img{height:auto;max-width:none;object-fit:contain;margin:0 auto}
+.ba-slides-dialog .ba-fit-screen .ba-slide-screen img{height:100%;width:100%;object-fit:contain}
+.ba-slides-dialog .ba-slide-example{display:none}
+.ba-slide-view-tools{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-left:auto}
+.ba-slides-jumps .ba-slide-view-tools button{width:auto;height:32px;border-radius:7px;padding:4px 10px;font-size:12px}
+.ba-slide-view-tools [data-zoom-label]{font-size:12px;min-width:38px;text-align:center;color:#163549}
+@media(max-width:700px){.ba-slides-dialog .ba-slides{grid-template-rows:auto auto minmax(0,1fr) auto}.ba-slides-dialog .ba-slides.ba-show-notes{grid-template-columns:1fr;grid-template-rows:auto auto minmax(100px,1fr) minmax(80px,.6fr) auto}.ba-slide-view-tools{width:100%;margin-left:0}.ba-slides-dialog .ba-slide-screen{padding:4px}.ba-slides-dialog .ba-slides-jumps{padding:8px}}
