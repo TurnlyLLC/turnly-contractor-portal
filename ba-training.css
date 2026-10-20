@@ -1,0 +1,13 @@
+.ba-training-player{display:block;width:100%;height: min(70vh,680px);min-height:340px;border:1px solid #dce4e8;border-radius:12px;background:#16233b;margin:20px 0}
+.ba-training-lesson{max-width:1100px;width:100%;box-sizing:border-box;margin:auto}
+.ba-training-lesson details{border:1px solid #dce4e8;border-radius:12px;padding:20px;margin:24px 0}
+.ba-training-lesson summary{font-weight:750;cursor:pointer;color:#007f75}
+.ba-training-lesson details section{margin-top:24px;max-width:78ch;line-height:1.8}
+.ba-training-practice{padding:22px;background:#eaf5f0;border-left:4px solid #007f75;border-radius:10px;margin:24px 0}
+#knowledgeCheck fieldset{border:1px solid #dce4e8;border-radius:12px;margin:20px 0;padding:20px}
+#knowledgeCheck legend{font-weight:750;padding:0 8px;line-height:1.6}
+#knowledgeCheck .ba-training-choice{display:flex;align-items:flex-start;gap:12px;margin:14px 0;font-weight:400;line-height:1.6}
+#knowledgeCheck input{width:20px;height:20px;flex-shrink:0;margin:3px 0 0;accent-color:#007f75}
+#trainingFeedback:not(:empty){border:1px solid #bdd9cf;background:#f2f8f5;border-radius:12px;margin-top:22px;padding:20px}
+.ba-training-lesson h2,.ba-training-lesson h3,.ba-training-lesson p,.ba-training-lesson legend{color:#16233b}
+@media(max-width:700px){.ba-training-player{min-height:240px;height:55vh}.ba-training-lesson{padding:18px}#knowledgeCheck fieldset{padding:12px}}
