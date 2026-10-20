@@ -1,0 +1,579 @@
+{
+  "version": "2026-10-20-v1",
+  "title": "Turnly Brand Ambassador Academy",
+  "description": "Eight short video lessons, practical exercises and knowledge checks for responsible residential referrals.",
+  "reviewed_at": "2026-10-20",
+  "sources": [
+    {
+      "title": "Turnly ambassador agreement and current portal procedures",
+      "url": "https://ba.turnlypros.com/ba-onboarding.html"
+    },
+    {
+      "title": "FTC: Disclosures 101 for Social Media Influencers",
+      "url": "https://www.ftc.gov/business-guidance/resources/disclosures-101-social-media-influencers"
+    },
+    {
+      "title": "FTC: CAN-SPAM guidance",
+      "url": "https://www.ftc.gov/business-guidance/resources/can-spam-act-compliance-guide-business"
+    }
+  ],
+  "lessons": [
+    {
+      "id": "role",
+      "title": "Turnly Ambassador: Your Role",
+      "objective": "Explain your role accurately and identify a suitable residential introduction.",
+      "scene": "An independent ambassador talks respectfully with a homeowner beside moving boxes on a North Carolina front porch.",
+      "sections": [
+        [
+          "Residential focus",
+          "Homes • new customers • first cleans",
+          "This ambassador program introduces new residential cleaning customers. Ask whether the person needs help at home and whether they have used Turnly before. Commercial property management and the sales team's gift-card commissions follow separate workflows. Do not present those programs as ambassador earnings."
+        ],
+        [
+          "The Turnly introduction",
+          "Listen first. Offer a relevant next step.",
+          "Try this introduction: I am an independent Turnly brand ambassador. I help people explore residential cleaning, and I may earn a referral payment if you book through my link. What kind of cleaning help are you looking for? Pause and let the person explain."
+        ],
+        [
+          "Current service areas",
+          "Raleigh • Durham • Asheville • Greensboro",
+          "Turnly currently serves these North Carolina cities and their surrounding twenty-five-mile service areas. The customer's full address must pass the booking system's service-area check. A familiar city name or ZIP code alone does not confirm eligibility. Refer uncertain addresses to Turnly."
+        ],
+        [
+          "Independent participation",
+          "Choose your schedule and methods within program rules.",
+          "You choose when and how to promote Turnly within its marketing rules. There are no required shifts, quotas or guaranteed earnings in this program. You are responsible for your business expenses. Read your signed agreement rather than treating a training example as a change to your terms."
+        ],
+        [
+          "Promises you can make",
+          "Share the official link and explain the process.",
+          "You can help a customer find the current booking information. You cannot guarantee a specific cleaner, appointment, outcome, discount or price. Say: The booking page will show current options, and Turnly will confirm the request. Never describe an unconfirmed request as a scheduled clean."
+        ],
+        [
+          "Knowledge check",
+          "A homeowner asks you to promise tomorrow morning.",
+          "Pause and answer: should you promise tomorrow morning to secure the referral? No. Direct the person to the available booking options and explain that Turnly confirms service. Honest expectations protect the customer's plans and prevent a referral from becoming a service complaint."
+        ],
+        [
+          "Practice your introduction",
+          "Record a 20-second introduction with a referral disclosure.",
+          "Practice a short introduction aloud. Include your independent ambassador role, residential cleaning, and a clear referral-payment disclosure. Finish with one question about the person's needs. Remove any unsupported claims about prices or availability. Your goal is an informed next step that the customer freely chooses."
+        ]
+      ],
+      "activity": "Record a 20-second introduction. Include your role, referral disclosure, and one question about the customer's needs.",
+      "questions": [
+        [
+          "What may an ambassador promise?",
+          [
+            "A guaranteed appointment tomorrow",
+            "Access to the official booking information",
+            "A discount they invent"
+          ],
+          1
+        ],
+        [
+          "A nearby ZIP code means the address is eligible.",
+          [
+            "Yes",
+            "No—the full address must be checked"
+          ],
+          1
+        ]
+      ],
+      "order": 1,
+      "video_url": "https://scrimba.com/explain/guide00639ldda",
+      "duration_seconds": 181
+    },
+    {
+      "id": "services",
+      "title": "Turnly Services and Booking",
+      "objective": "Help a customer select the official booking path without promising scope or availability.",
+      "scene": "On the left a homeowner considers a tidy kitchen; on the right another homeowner packs moving boxes, illustrating two distinct cleaning needs.",
+      "sections": [
+        [
+          "Discover the need",
+          "Ask about the home, cleaning goal and timing.",
+          "Begin with a few practical questions: Is this a routine clean, a deeper clean, or preparation for a move? What is the preferred date? Let the customer describe their priorities. Do not assume a package includes a particular task without checking the current service description."
+        ],
+        [
+          "Use current service descriptions",
+          "Standard • deep • move-related options",
+          "The booking page is the source for available residential service options, scope, add-ons and pricing. Explain differences using those descriptions. Do not promise specialist work, hazardous cleanup, repairs or tasks that are absent from the published scope. Ask Turnly when a request falls outside the listed options."
+        ],
+        [
+          "Check the full address",
+          "Current NC service areas extend 25 miles from service cities.",
+          "Ask the customer to enter their actual service address in the booking flow. Raleigh, Durham, Asheville and Greensboro are the current service cities. Surrounding coverage is validated by the system. Never change an address or use a different city to force an out-of-area request through."
+        ],
+        [
+          "Choose available timing",
+          "Bookings require at least 36 hours of lead time.",
+          "Customers choose from available times at least thirty-six hours in advance. Where offered, a time-range request can communicate flexibility. A requested range is not a guarantee that any time within it will be accepted. Turnly's confirmation establishes the actual booking."
+        ],
+        [
+          "Customer enters their details",
+          "Keep addresses and payment information in approved forms.",
+          "The customer should complete their own contact, property and payment details in the official booking flow. Do not collect card numbers in a message or pay on their behalf. You can explain where information belongs without asking them to share passwords or sensitive information with you."
+        ],
+        [
+          "Request versus confirmation",
+          "Submitted request → Turnly confirmation",
+          "A submitted request can still need review. Explain that the customer should read Turnly's confirmation and service instructions. Avoid telling them that a cleaner is assigned unless Turnly has confirmed it. Your referral pipeline distinguishes a booking request from a confirmed first booking."
+        ],
+        [
+          "Scope objection",
+          "Can you include extra work at the same price?",
+          "Say: Please check the listed scope and available add-ons. I cannot change the price or include extra work, but Turnly can clarify the request. That gives the customer a useful answer without creating an unauthorized promise that the cleaning provider cannot honor."
+        ],
+        [
+          "Practice the handoff",
+          "Find scope, address check and available times.",
+          "Open the public residential booking information and locate the service description, address check and timing options. Practice explaining them without submitting a fake booking. If the system rejects an address or date, explain the result and offer the Turnly support contact."
+        ]
+      ],
+      "activity": "Walk through the booking information without submitting a booking. Locate scope, address eligibility and timing options.",
+      "questions": [
+        [
+          "A request is submitted. Is it necessarily confirmed?",
+          [
+            "Yes",
+            "No—wait for confirmation"
+          ],
+          1
+        ],
+        [
+          "How far ahead must a selectable booking time be?",
+          [
+            "At least 36 hours",
+            "At least 2 hours"
+          ],
+          0
+        ]
+      ],
+      "order": 2,
+      "video_url": "https://scrimba.com/explain/guide075vk2v9e",
+      "duration_seconds": 194
+    },
+    {
+      "id": "onboarding",
+      "title": "Turnly Account and Onboarding",
+      "objective": "Complete online documents and protect account and tax information.",
+      "scene": "An ambassador sits at a private home desk with a laptop facing away from other people; a closed door and simple desk emphasize privacy.",
+      "sections": [
+        [
+          "Create your account",
+          "Apply → set password → open workspace",
+          "After submitting the ambassador application, continue to password setup at the ambassador portal. Your email is your username. New applicants do not need an email-verification step. If that email already has an account, use its existing password; a new application does not replace it."
+        ],
+        [
+          "Use your own credentials",
+          "Keep your password private.",
+          "Use a strong personal password and sign out on shared devices. Never let another person use your account or referral identity. If you cannot sign in, use the available account help or contact Turnly. Do not create duplicate applications to bypass a disabled account."
+        ],
+        [
+          "Read and sign the agreement",
+          "Review every section before signing.",
+          "Open Onboarding and complete your contractor agreement online. Read the marketing, compensation, privacy and insurance provisions. Review your name and other details before typing your electronic signature and accepting electronic records. Ask Turnly about anything you do not understand before signing."
+        ],
+        [
+          "Complete the W-9 privately",
+          "Enter tax details only in the secure document workflow.",
+          "Open the W-9 editor and use the official instructions to complete your own information. This course does not determine your tax classification. The eye icon temporarily reveals the Social Security or taxpayer ID number for checking. Hide it again when finished and avoid using a shared screen."
+        ],
+        [
+          "Autosaved progress",
+          "Check the saved indicator before leaving.",
+          "The online editor saves draft progress to your account. Check its saved indicator, and use Save and close when leaving. If it reports a save error or another-tab conflict, resolve that message before continuing. A typed draft signature is not final until you choose Sign and save."
+        ],
+        [
+          "Keep signed records online",
+          "My documents contains the signed agreement and W-9.",
+          "After signing, open My documents to view the stored record. Signed documents are locked to preserve what you agreed to. If your tax or other information changes, contact Turnly for the proper update process. Never send a Social Security number through ordinary email or notes."
+        ],
+        [
+          "Activate referral tools",
+          "Finish onboarding after both documents are complete.",
+          "Once the agreement and W-9 are complete, choose Finish onboarding and activate referrals. You can view the dashboard earlier, but your sharing tools depend on completed onboarding. General liability and errors and omissions insurance are recommended under the agreement; they are not presented as automatic protection from every claim."
+        ],
+        [
+          "Practice and check",
+          "Find Onboarding, My documents and Referral links.",
+          "Locate these three portal sections. Confirm that your draft saves, then complete your own documents when ready. If someone asks for your tax ID by email, stop and verify the request with Turnly. Keep tax details in the private workflow, not in a reply or screenshot."
+        ]
+      ],
+      "activity": "Locate Onboarding and My documents. Check the saved indicator and confirm you know how to request a document correction.",
+      "questions": [
+        [
+          "Where should you enter your tax ID?",
+          [
+            "An ordinary email",
+            "The private online W-9 workflow"
+          ],
+          1
+        ],
+        [
+          "What activates referral tools?",
+          [
+            "Opening the dashboard",
+            "Completing documents and finishing onboarding"
+          ],
+          1
+        ]
+      ],
+      "order": 3,
+      "video_url": "https://scrimba.com/explain/guide0n0si5ojr",
+      "duration_seconds": 195
+    },
+    {
+      "id": "referrals",
+      "title": "Turnly Referral Tracking",
+      "objective": "Share the correct link and interpret first-clean pipeline stages.",
+      "scene": "An ambassador on the left shares a link from a phone while a homeowner on the right uses their own device; no readable screens or personal information.",
+      "sections": [
+        [
+          "Copy your assigned link",
+          "Referral links → Copy link",
+          "Open Referral links in your ambassador workspace. Copy your personal link rather than a generic home-page address. The assigned code ties eligible introductions to your account. Check that the copied link is complete before sharing it with a person who has agreed to receive it."
+        ],
+        [
+          "Keep the customer's choice",
+          "Disclose compensation before sharing.",
+          "Say: I may earn a referral payment if you book through this link. Would you like me to send it? Use the channel the person agreed to. Let them enter their own information and choose whether to book. Do not create a referral without their permission."
+        ],
+        [
+          "Lead stage",
+          "An introduction has been recorded.",
+          "A lead is an introduction, not earned commission. The customer's first clean must meet the program requirements and progress through the appropriate milestones. A lead may not book at all. Avoid repeated pressure or implying that submitting details commits them to a service."
+        ],
+        [
+          "Booking requested",
+          "The customer has requested service.",
+          "Booking requested means the customer has taken a step toward a clean, but confirmation is still pending. Keep the distinction clear in conversations and earnings expectations. If they need a status update, direct them to Turnly's official confirmation or support channel."
+        ],
+        [
+          "First clean booked",
+          "Confirmed first booking earns the first $25.",
+          "The first qualifying booking confirmation creates the first twenty-five-dollar milestone. Check the pipeline and earnings record. The ambassador rule uses confirmation, not full payment, for this milestone. A later completion is a separate event with a separate earning."
+        ],
+        [
+          "First clean completed",
+          "Completion creates the second $25 milestone.",
+          "When that same qualifying first clean is recorded as completed, the second twenty-five-dollar milestone is earned. Later cleans do not add ambassador commissions under this program. Open the referral activity view to review first-booking, completion and recorded payment events."
+        ],
+        [
+          "Exceptions and attribution",
+          "Existing customers, duplicates and cancellations need care.",
+          "Existing customers and leads already attributed to another ambassador do not become new qualifying referrals by changing their email. Never fabricate a referral or refer yourself. If attribution appears wrong, send Turnly the relevant reference and a factual explanation without sharing unnecessary personal data. Cancelled or refunded bookings are reviewed."
+        ],
+        [
+          "Practice the pipeline",
+          "Explain lead, requested, booked and completed.",
+          "Use these four stages to explain a sample customer journey aloud. State exactly when each earning occurs. If a referral is absent, check that you shared your own link, then contact Turnly. Do not submit duplicate bookings or promise that support will change attribution."
+        ]
+      ],
+      "activity": "Copy your link and identify each pipeline stage. Practice explaining the difference between a request and a confirmed booking.",
+      "questions": [
+        [
+          "Which link should you share?",
+          [
+            "Your assigned ambassador referral link",
+            "Only the generic home page"
+          ],
+          0
+        ],
+        [
+          "Do later cleans earn more ambassador commissions?",
+          [
+            "Yes, every clean",
+            "No, only the first qualifying clean"
+          ],
+          1
+        ]
+      ],
+      "order": 4,
+      "video_url": "https://scrimba.com/explain/guide00g6slpev",
+      "duration_seconds": 185
+    },
+    {
+      "id": "earnings",
+      "title": "Turnly Earnings and Payments",
+      "objective": "Calculate earned milestones and distinguish them from payments already made.",
+      "scene": "An ambassador reviews a simple ledger at a desk; two separate coin groups sit beside a calendar, illustrating milestone earnings without readable numbers.",
+      "sections": [
+        [
+          "Two fixed milestones",
+          "$25 confirmed + $25 completed = up to $50",
+          "For a qualifying new customer's first clean, you earn twenty-five dollars on confirmation and another twenty-five on completion. The first milestone does not wait for full payment. This is the ambassador program's fixed-dollar rule, not the sales team's gift-card commission formula."
+        ],
+        [
+          "Qualification matters",
+          "New customer • correct attribution • first clean",
+          "The customer must qualify as new and be attributed to you under the program. Repeat cleans, self-referrals, fabricated customers, duplicates and recruiting other ambassadors do not earn these payments. A large number of introductions is not the same as a large number of qualifying confirmed bookings."
+        ],
+        [
+          "Worked example",
+          "3 confirmed; 2 completed → $125 earned",
+          "Imagine three qualifying first bookings are confirmed, and two of those cleans are completed. Three times twenty-five is seventy-five dollars. Two more completion milestones add fifty dollars. Total earned is one hundred twenty-five dollars. The remaining completion milestone is not earned yet."
+        ],
+        [
+          "Earned versus paid",
+          "An earning entry is not a bank transfer.",
+          "Your portal separates earnings from recorded payments. An earned amount can remain unpaid while Turnly arranges payment. Read the actual payment status and reference rather than assuming that a dashboard total reached your account. No payment date is promised by this training."
+        ],
+        [
+          "Payout readiness",
+          "Complete tax documents; use approved secure setup.",
+          "Complete the required W-9 and follow Turnly's secure payout setup instructions when provided. Do not put bank account details or tax IDs in referral notes or ordinary messages. Ask Turnly for the applicable payment schedule before relying on a particular payment date."
+        ],
+        [
+          "Cancellation or refund",
+          "Flagged for review; do not assume the outcome.",
+          "A cancelled or refunded first booking may be flagged for review. Do not assume that every earned milestone disappears or that every flagged amount will be paid. Turnly reviews the case under the agreement. Preserve relevant factual references and ask for clarification if the status seems incorrect."
+        ],
+        [
+          "Keep an accurate record",
+          "Check referral, milestone, amount and payment reference.",
+          "When checking earnings, match each line to its referral and milestone. Report a missing or duplicate earning with the reference, dates and issue. Never edit customer details or manufacture a booking to correct a ledger problem. Turnly handles the review and any authorized correction."
+        ],
+        [
+          "Knowledge check",
+          "One confirmed, completed first clean; no recorded payment.",
+          "Pause and calculate: one qualifying first clean has been confirmed and completed, but no payment is recorded. The earned total is fifty dollars. The portal does not show that fifty dollars as paid merely because it was earned. Review the payment record before describing money as received."
+        ]
+      ],
+      "activity": "Calculate earnings for 3 confirmed first bookings and 2 completed first cleans. Explain the difference between earned, unpaid and paid.",
+      "questions": [
+        [
+          "3 qualifying confirmations and 2 completions earn:",
+          [
+            "$75",
+            "$125",
+            "$150"
+          ],
+          1
+        ],
+        [
+          "Does an earned entry prove a transfer occurred?",
+          [
+            "No",
+            "Yes"
+          ],
+          0
+        ]
+      ],
+      "order": 5,
+      "video_url": "https://scrimba.com/explain/guide0vlf5l3bs",
+      "duration_seconds": 192
+    },
+    {
+      "id": "outreach",
+      "title": "Turnly Responsible Outreach",
+      "objective": "Use transparent, permission-based promotion and stop contact when asked.",
+      "scene": "At a community gathering, an ambassador asks permission before offering a small plain card; the other person comfortably chooses whether to accept it.",
+      "sections": [
+        [
+          "Disclose your relationship",
+          "I may earn a referral payment if you book.",
+          "Make the financial relationship clear with the recommendation itself. Do not hide it only in your profile or after a long list of hashtags. For a promotional video, include the disclosure in the video. An honest explanation helps the customer judge your recommendation with the relevant context."
+        ],
+        [
+          "Permission comes first",
+          "A public contact detail is not permission.",
+          "Turnly policy requires appropriate permission for the channel and message. A business directory, public social profile or purchased list does not prove that someone agreed to your outreach. Do not use scraped or purchased lists, unsolicited automated calls or texts, or another person's account to contact leads."
+        ],
+        [
+          "Keep a consent record",
+          "Channel • purpose • date • source",
+          "Keep a minimal record of what the person agreed to, how they agreed, when, and which channel it covers. Permission to email does not automatically mean permission to text. If the scope is unclear, clarify before contacting them. Avoid collecting sensitive information as proof."
+        ],
+        [
+          "Honor stop requests",
+          "Stop promptly; do not switch channels to continue.",
+          "When someone asks you to stop, stop the promotional contact and record the opt-out through the approved process. Do not move from texting to email to get around that choice. If you cannot record the restriction yourself, tell Turnly and avoid further outreach while it is resolved."
+        ],
+        [
+          "Email needs an approved format",
+          "Accurate identity • honest subject • address • opt-out",
+          "Marketing email needs more than a friendly message. Use an approved format with accurate sender details, an honest subject, appropriate advertising identification, a valid postal address and a clear opt-out method. A short sample script is not a complete campaign template. Ask Turnly before launching a campaign."
+        ],
+        [
+          "Respect places and platforms",
+          "Group rules, property rules and local requirements apply.",
+          "Ask event organizers or group administrators before promoting where permission is required. Respect no-solicitation signs and people's personal space. Check local requirements before door-to-door activity. This course teaches Turnly policy and does not authorize every marketing channel or replace advice about applicable law."
+        ],
+        [
+          "Make truthful claims",
+          "No fake reviews, invented experience or guaranteed results.",
+          "Describe only facts you can support. Do not claim you personally used a service if you have not, fabricate testimonials, or promise health outcomes or guaranteed income. Use Turnly's current approved materials. If someone asks a question you cannot verify, say you will obtain an accurate answer."
+        ],
+        [
+          "Practice the stop decision",
+          "A public phone number; no consent; automatic text campaign.",
+          "Should you add that number to an automatic campaign? No. Public availability is not permission, and Turnly prohibits this approach. Choose a permitted relationship-building method instead. Your next action must respect the person's choice, program rules and applicable requirements."
+        ]
+      ],
+      "activity": "Rewrite one promotional message with a clear referral disclosure. Explain how you will record consent and honor an opt-out.",
+      "questions": [
+        [
+          "A publicly listed phone number proves consent to promotional texts.",
+          [
+            "True",
+            "False"
+          ],
+          1
+        ],
+        [
+          "Where should the referral disclosure appear?",
+          [
+            "With the recommendation",
+            "Only in a profile page"
+          ],
+          0
+        ]
+      ],
+      "order": 6,
+      "video_url": "https://scrimba.com/explain/guide0a45b5l9l",
+      "duration_seconds": 199
+    },
+    {
+      "id": "conversations",
+      "title": "Turnly Conversations That Help",
+      "objective": "Use low-pressure scripts for homeowners, realtors and common objections.",
+      "scene": "A homeowner and an ambassador talk calmly at a community table, with a realtor greeting a family in the background; no pressure or aggressive sales gestures.",
+      "sections": [
+        [
+          "Ask before pitching",
+          "What cleaning help would be useful right now?",
+          "Start with the person's needs. Ask what they are trying to accomplish and when. Listen for routine maintenance, a move, or a busy household schedule. Do not guess a price or assume they want a recurring plan. One relevant question is more useful than a long rehearsed pitch."
+        ],
+        [
+          "Homeowner script",
+          "Identify yourself, disclose, ask permission.",
+          "Try: I am an independent Turnly ambassador, and I may earn a referral payment if you book through my link. Turnly offers residential cleaning in its current service areas. Would it help if I sent you the booking information to review? Give them room to decline."
+        ],
+        [
+          "Realtor conversation",
+          "Focus on the client's move-related cleaning needs.",
+          "Ask a realtor whether a client needs help exploring residential cleaning around a move. Offer current service information and your disclosure. Let the client choose to use your link. Do not promise priority scheduling, share a client's details without permission, or imply that the realtor must recommend Turnly."
+        ],
+        [
+          "Keep gift cards separate",
+          "Ambassador first-clean rewards differ from sales commissions.",
+          "If a realtor asks about gift cards, direct them to Turnly's official gift-card or sales information. Do not claim the ambassador link earns ten percent on gift-card purchases. This ambassador program tracks qualifying first cleans at twenty-five dollars per milestone. Ask Turnly how a specific cross-program situation should be handled."
+        ],
+        [
+          "Price objection",
+          "Let the customer compare the current scope and quote.",
+          "If someone says the price is too high, respond: I understand. The booking page shows the current options and scope so you can decide whether it fits your needs. I cannot change the price. Avoid discount promises, criticizing competitors or implying that a lower-cost option is unsafe."
+        ],
+        [
+          "Not ready or already has a cleaner",
+          "Respect their choice; request permission for any follow-up.",
+          "Say: That makes sense. If you ever want the information, I am happy to share it. If they want a later follow-up, agree on a channel and timing. If they decline or ask you to stop, close the conversation. Do not treat every objection as permission for repeated contact."
+        ],
+        [
+          "Trust or service question",
+          "Give verified information; route unresolved questions.",
+          "If asked about insurance, screening, specific products or a service guarantee, use only current approved information. Say: I do not want to give you an inaccurate answer; Turnly can confirm that detail. Do not invent credentials or pretend to know the assigned cleaner's qualifications."
+        ],
+        [
+          "Practice a respectful close",
+          "Would you like the link, or should we leave it here?",
+          "Practice three short conversations: a homeowner who wants information, a realtor asking about a move, and someone who is not interested. Include your referral disclosure and a clear choice. A successful close can be permission to share, a mutually agreed follow-up, or a respectful goodbye."
+        ]
+      ],
+      "activity": "Role-play a homeowner, realtor and price objection. Include a disclosure and accept a clear no without another pitch.",
+      "questions": [
+        [
+          "A realtor asks about gift-card commissions. What do you do?",
+          [
+            "Promise 10% through your ambassador link",
+            "Refer them to the official sales/gift-card program"
+          ],
+          1
+        ],
+        [
+          "A prospect says stop. Your next step is:",
+          [
+            "Try another channel",
+            "Stop contact and record the opt-out"
+          ],
+          1
+        ]
+      ],
+      "order": 7,
+      "video_url": "https://scrimba.com/explain/guide0j28o5snq",
+      "duration_seconds": 207
+    },
+    {
+      "id": "handoff",
+      "title": "Turnly Handoffs and Launch Plan",
+      "objective": "Escalate issues accurately and build a voluntary, responsible outreach routine.",
+      "scene": "An ambassador at a laptop calmly prepares a support message while a homeowner reads their own booking confirmation nearby, showing a clear handoff.",
+      "sections": [
+        [
+          "Before sharing",
+          "Onboarding complete • right link • accurate information",
+          "Before promoting, finish onboarding and check your personal referral link. Review the current service areas and official booking information. Prepare a clear disclosure and know the support contact. These checks help you avoid sending an unusable link or making an outdated promise."
+        ],
+        [
+          "After sharing",
+          "Let the customer control their booking.",
+          "Let the customer enter their own details and make their own choice. If they ask for help, explain the process without collecting credentials or payment information. A follow-up should match their permission and agreed timing. You do not need to chase someone simply because a link was shared."
+        ],
+        [
+          "Service changes or complaints",
+          "Turnly handles booking and service decisions.",
+          "For rescheduling, scope questions, dissatisfaction or refund requests, acknowledge the concern and direct the customer to Turnly support or their booking tools. Do not promise a refund, waive a charge, assign a cleaner or change a booking yourself. Record only the facts needed for the handoff."
+        ],
+        [
+          "Escalation message",
+          "Reference • date • factual issue • requested help",
+          "Contact admin@turnlypros.com with the relevant referral or booking reference, date, concise description and the help requested. Avoid Social Security numbers, payment cards, passwords and unnecessary customer details. Distinguish what you personally observed from what someone told you. Never guarantee the outcome of a review."
+        ],
+        [
+          "Privacy incident",
+          "Stop sharing; report promptly; protect the record.",
+          "If you send information to the wrong person or suspect account access, stop further sharing and notify Turnly promptly. Explain what happened without forwarding sensitive information again. Follow Turnly's response instructions. Keep the incident factual rather than hiding it or deleting evidence needed for review."
+        ],
+        [
+          "Your voluntary first-week plan",
+          "Learn → practice → permitted introductions → review",
+          "Choose a schedule that suits your independent work. Finish the course, practice your introduction, and identify relationships or permitted community settings where your offer may be useful. Set your own manageable activity goals. These are planning suggestions, not required hours, quotas or an earnings guarantee."
+        ],
+        [
+          "Review useful measures",
+          "Permission, qualified referrals, confirmations and completions",
+          "Review whether your conversations are relevant and permission-based, then check actual referral stages and earnings. Do not measure success only by messages sent. If many requests fail address checks or remain unconfirmed, review your explanation and ask Turnly for guidance instead of increasing pressure."
+        ],
+        [
+          "Final scenario",
+          "Wrong address, no confirmation and an impatient customer.",
+          "A person outside the service area wants you to promise tomorrow's clean. Explain that the address must qualify and the booking must meet availability and lead-time rules. Do not alter the address or promise confirmation. Offer the support contact, record a factual handoff if requested, and respect their decision."
+        ]
+      ],
+      "activity": "Create a voluntary first-week plan and write a sample support handoff using fictional details only.",
+      "questions": [
+        [
+          "Who can promise a refund or booking change?",
+          [
+            "The ambassador on their own",
+            "Turnly through its authorized process"
+          ],
+          1
+        ],
+        [
+          "What belongs in a support handoff?",
+          [
+            "A factual issue and relevant reference",
+            "Customer card numbers and passwords"
+          ],
+          0
+        ]
+      ],
+      "order": 8,
+      "video_url": "https://scrimba.com/explain/guide0oqkhvubu",
+      "duration_seconds": 193
+    }
+  ]
+}
