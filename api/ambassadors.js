@@ -50,7 +50,7 @@ module.exports=async(req,res)=>{
    }
    // No customer email, phone, address, billing details or later bookings leave this endpoint.
    if(!actor.admin)leads=leads.map(l=>({...l,name:l.name.split(/\s+/).map((part,i)=>i===0?part:part[0]+'.').join(' ')}));
-   const safeMember=m=>m?(({user_id,name,email,enabled,onboarding_completed_at,training,referrals_ready})=>({user_id,name,email,enabled,onboarding_completed_at,training,referrals_ready,...(referrals_ready?{code:m.code}:{})}))(m):null;
+   const safeMember=m=>m?(({user_id,name,email,enabled,onboarding_completed_at,training,agreement_current,referrals_ready})=>({user_id,name,email,enabled,onboarding_completed_at,training,agreement_current,referrals_ready,...(referrals_ready?{code:m.code}:{})}))(m):null;
    return S.json(res,200,{admin:actor.admin,onboarding_required:!actor.admin&&!actor.member.onboarding_completed_at,members:members.map(safeMember),member:safeMember(member),leads,earnings});
   }
   if(!actor.admin)throw S.fail('Admin access required.',403);
