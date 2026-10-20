@@ -1,6 +1,6 @@
 const {database,body,json,admin,rate,fail,hash}=require('../lib/residential-server.cjs');
 const R=require('../lib/recruiting-workflows.cjs');
-const {validate,review,ROLES,STATUSES}=require('../lib/applicants.cjs');
+const {validate,review,ROLES,STATUSES,CITIES}=require('../lib/applicants.cjs');
 const checked=r=>{if(r.error)throw fail('Applications are temporarily unavailable. Please try again.',503);return r.data;};
 const origins=new Set(['https://portal.turnlypros.com','https://turnlypros.com','https://www.turnlypros.com','https://res.turnlypros.com']);
 module.exports=async(req,res)=>{
@@ -38,10 +38,10 @@ module.exports=async(req,res)=>{
   if(input.action==='list'){
    const role=input.role||'cleaner';if(!ROLES.includes(role))throw fail('Choose cleaner or brand ambassador applications.');
    const page=Math.max(1,Math.min(10000,parseInt(input.page)||1));
-   let q=db.from('recruiting_applications').select('id,role,name,email,phone,city,state,service_city,status,created_at,version',{count:'exact'}).order('created_at',{ascending:false});
+   let q=db.from('recruiting_applications').select('id,role,name,email,phone,city,state,service_city,service_cities:answers->service_cities,status,created_at,version',{count:'exact'}).order('created_at',{ascending:false});
    q=q.eq('role',role);
    if(STATUSES.includes(input.status))q=q.eq('status',input.status);
-   if(input.city)q=q.eq('service_city',String(input.city).slice(0,30));
+   if(input.city){if(!CITIES.includes(input.city))throw fail('Choose a valid service zone.');q=q.or(`service_city.eq.${input.city},answers->service_cities.cs.${JSON.stringify([input.city])}`);}
    const search=String(input.search||'').replace(/[^a-zA-Z0-9@. +_-]/g,'').slice(0,100);
    if(search)q=q.or(`name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`);
    const result=await q.range((page-1)*30,page*30-1);checked(result);
