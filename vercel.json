@@ -87,7 +87,8 @@
           "value": "ba.turnlypros.com"
         }
       ],
-      "dest": "/ba-referral.html?code=$1"
+      "status": 307,
+      "headers": {"Location": "https://portal.turnlypros.com/residential-referral.html?ba=$1"}
     },
     {
       "src": "^/(?:index\\.html)?$",

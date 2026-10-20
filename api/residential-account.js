@@ -5,15 +5,21 @@ module.exports=async(req,res)=>{
  if(req.method!=='POST')return S.json(res,405,{error:'Method not allowed.'});
  try{
   A.sameOrigin(req);const input=await S.body(req),db=S.database();
-  if(!['setup','verify','login','forgot','reset','list','logout'].includes(input.action))throw S.fail('Unknown account action.');
+  if(!['create','setup','verify','login','forgot','reset','list','logout'].includes(input.action))throw S.fail('Unknown account action.');
   if(input.action==='list'){
    const a=await A.account(db,req),page=Math.max(1,Math.min(10000,Math.floor(Number(input.page)||1)));
-   const result=await db.from('referral_bookings').select('id,name,property_address,city,state,zip,service_date,arrival_start,arrival_end,quote,amount_cents,status,payment_status,agent_name,created_at',{count:'exact'}).eq('email',a.email).is('assignment_deleted_at',null).in('status',['scheduled','completed','cancelled']).order('service_date',{ascending:false}).range((page-1)*20,page*20-1);S.checked(result);
+   let listing=db.from('referral_bookings').select('id,name,property_address,city,state,zip,service_date,arrival_start,arrival_end,quote,amount_cents,status,payment_status,agent_name,created_at',{count:'exact'}).is('assignment_deleted_at',null).in('status',['scheduled','completed','cancelled']).order('service_date',{ascending:false});const result=await (Array.isArray(a.booking_ids)?listing.in('id',a.booking_ids):listing.eq('email',a.email)).range((page-1)*20,page*20-1);S.checked(result);
    let jobs=[];if(result.data.length)jobs=S.checked(await db.from('assignment_blocks').select('id,status,assigned_to_name,claimed_by_name').in('id',result.data.map(b=>b.id)));
    return S.json(res,200,{account:{name:a.name,email:a.email},bookings:result.data.map(b=>({...b,job:jobs.find(j=>j.id===b.id)||null})),page,total:result.count});
   }
   if(input.action==='logout'){const token=A.sessionToken(req);if(token)S.checked(await db.from('residential_sessions').update({revoked_at:new Date().toISOString()}).eq('token_hash',S.hash(token)));A.setCookie(res,'',0);return S.json(res,200,{ok:true});}
   await S.rate(db,req,'account-'+input.action);
+  if(input.action==='create'){
+   const b=await S.owned(db,input);
+   const hashed=await A.hashPassword(input.password);
+   const created=S.checked(await db.rpc('create_booking_customer',{p_booking:b.id,p_token:S.hash(input.token),p_password:hashed}));
+   return S.json(res,200,{ok:true,created,email:b.email});
+  }
   if(input.action==='setup'){
    const b=await S.owned(db,input);if(!['scheduled','completed'].includes(b.status))throw S.fail('Finish saving your card before creating your account.');
    const hashed=await A.hashPassword(input.password);
