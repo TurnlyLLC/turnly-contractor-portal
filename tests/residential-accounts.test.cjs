@@ -17,7 +17,7 @@ function harness(){
 }
 test('account history uses the verified session email, never the posted email or customer ID',async()=>{
  const h=harness(),r=await h.call({action:'list',email:'victim@example.com',customer_id:'victim'});
- assert.equal(r.status,200);assert.equal(JSON.stringify(h.seen.find(x=>x.table==='referral_bookings').filters),JSON.stringify([['email','owner@example.com'],['assignment_deleted_at',null],['status',['scheduled','completed','cancelled']]]));assert.equal(JSON.stringify(h.seen.find(x=>x.table==='assignment_blocks').filters),JSON.stringify([['id',['mine']]]));
+ assert.equal(r.status,200);assert.equal(JSON.stringify(h.seen.find(x=>x.table==='referral_bookings').filters),JSON.stringify([['assignment_deleted_at',null],['status',['scheduled','completed','cancelled']],['email','owner@example.com']]));assert.equal(JSON.stringify(h.seen.find(x=>x.table==='assignment_blocks').filters),JSON.stringify([['id',['mine']]]));
  assert.equal((await h.call({action:'list'},'https://attacker.example')).status,403);
 });
 test('setup uses receipt ownership and its stored email, and does not register unconfirmed bookings',async()=>{

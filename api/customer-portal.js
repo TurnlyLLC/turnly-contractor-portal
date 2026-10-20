@@ -9,16 +9,16 @@ module.exports=async(req,res)=>{
   if(input.action==='login'){
    await S.rate(db,req,'customer-login');const em=email(input.email);if(!em||typeof input.password!=='string'||input.password.length>128)throw S.fail('Enter your email and password.');
    if(!S.checked(await db.rpc('allow_referral_request',{p_key:S.hash('customer-login:'+em)})))throw S.fail('Too many attempts. Try again later.',429);
-   const legacy=S.checked(await db.from('residential_accounts').select('id,password_hash').eq('email',em).maybeSingle());
+   const legacy=S.checked(await db.from('residential_accounts').select('id,password_hash,booking_ids').eq('email',em).maybeSingle());
    if(await A.verifyPassword(input.password,legacy?.password_hash)){
-    await A.signIn(db,res,legacy.id,legacy.password_hash);return S.json(res,200,{ok:true});
+    await P.claimBooking(db,{...legacy,email:em},input);await A.signIn(db,res,legacy.id,legacy.password_hash);return S.json(res,200,{ok:true});
    }
    // Use a separate client: sign-in changes a client's authorization header.
    const auth=await S.database().auth.signInWithPassword({email:em,password:input.password});
    if(auth.error||!auth.data?.session)throw S.fail('The email or password is incorrect.',401);
    const p=S.checked(await db.from('profiles').select('role,status').eq('id',auth.data.user.id).maybeSingle());
    if(p?.role!=='customer'||['disabled','inactive','suspended','rejected'].includes(p.status))throw S.fail('Use your customer account to sign in.',403);
-   P.appCookie(res,auth.data.session.access_token,auth.data.session.expires_in);return S.json(res,200,{ok:true});
+   await P.claimBooking(db,{uid:auth.data.user.id,email:em},input);P.appCookie(res,auth.data.session.access_token,auth.data.session.expires_in);return S.json(res,200,{ok:true});
   }
   if(input.action==='logout'){
    const t=A.sessionToken(req);if(t)S.checked(await db.from('residential_sessions').update({revoked_at:new Date().toISOString()}).eq('token_hash',S.hash(t)));
@@ -64,6 +64,7 @@ module.exports=async(req,res)=>{
    const pm=await S.stripe().paymentMethods.retrieve(b.stripe_payment_method);if(pm.customer!==b.stripe_customer)throw S.fail('Update your payment card before rebooking.');
    const result=await db.rpc('customer_portal_rebook',{p_anchor:b.id,p_email:a.uid?null:a.email,p_uid:a.uid,p_request:S.hash(a.kind+':'+a.id+':'+input.request_id),p_data:{...slot,quote,token_hash:S.hash(require('node:crypto').randomBytes(32)),notes:clean(input.notes,1500),consent_text:'I authorize Turnly to charge my saved card for this cleaning on the morning of the visit (6 AM Eastern, or at the start of an earlier arrival window).'}});
    if(result.error)throw S.fail('We could not complete this booking. Please try again.',409);
+   if(!a.uid&&Array.isArray(a.booking_ids))S.checked(await db.rpc('link_customer_rebooking',{p_account:a.id,p_anchor:b.id,p_booking:result.data}));
    const created=await P.owned(db,scope.email?scope:{ids:[...scope.ids,result.data]},result.data);
    try{await require('../lib/residential-jobs.cjs').syncBooking(db,created);}catch{console.error('Customer portal booking assignment deferred to reconciliation.');}
    return S.json(res,200,{id:result.data});

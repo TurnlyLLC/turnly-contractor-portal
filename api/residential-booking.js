@@ -61,18 +61,25 @@ module.exports=async(req,res)=>{
     return S.json(res,200,{url:session.url});
    }
    if(b.stripe_session)await S.reconcileSession(db,S.stripe(),b.stripe_session);
-   b=await S.owned(db,input);return S.json(res,200,{booking:S.summary(b)});
+   b=await S.owned(db,input);const referral=S.checked(await db.from('ba_leads').select('ba_members(name)').eq('first_booking_id',b.id).maybeSingle());return S.json(res,200,{booking:{...S.summary(b),...(referral?.ba_members?.name?{agent_name:referral.ba_members.name}:{})}});
   }
   const gift=input.gift?await G.card(db,input.gift):null;
   if(gift&&gift.status!=='active')throw S.fail('This gift card is not available. Contact Turnly.',409);
   const direct=!gift&&!input.code;
   const a=gift?{name:'Turnly gift card',referral_code:''}:direct?{name:'Turnly Residential',referral_code:''}:await S.agent(db,input.code);
-  if(input.action==='context')return S.json(res,200,{agent:{name:a.name,code:a.referral_code},direct,payments_ready:S.ready(),property_lookup:!!process.env.RENTCAST_API_KEY,gift:gift?{balance_cents:gift.balance_cents,available_cents:gift.balance_cents-gift.reserved_cents}:null,consent:gift?CONSENT+' I authorize application of my gift card to this visit; only the remaining amount will be charged to my saved card.':CONSENT});
+  let ambassador=null;
+  if(input.ba){
+   if(!/^BA-[A-Z0-9]{16}$/.test(String(input.ba)))throw S.fail('Use the complete ambassador referral link.');
+   ambassador=S.checked(await db.from('ba_members').select('name,code').eq('code',input.ba).eq('enabled',true).not('onboarding_completed_at','is',null).maybeSingle());
+   if(!ambassador)throw S.fail('This ambassador referral link is unavailable.',404);
+  }
+  if(input.action==='context')return S.json(res,200,{agent:{name:a.name,code:a.referral_code},ambassador,direct,payments_ready:S.ready(),property_lookup:!!process.env.RENTCAST_API_KEY,gift:gift?{balance_cents:gift.balance_cents,available_cents:gift.balance_cents-gift.reserved_cents}:null,consent:gift?CONSENT+' I authorize application of my gift card to this visit; only the remaining amount will be charged to my saved card.':CONSENT});
   if(input.action==='property'){await S.rate(db,req,'property');return S.json(res,200,await require('../lib/residential-property.cjs').lookup(input));}
   if(input.action==='quote'){await S.rate(db,req,'quote');const q=quote(input);if(gift){if(String(input.state).toUpperCase()!=='NC')throw S.fail('Gift cards can only be used in North Carolina.');q.gift_cents=Math.min(q.amount_cents,gift.balance_cents-gift.reserved_cents);q.card_charge_cents=q.amount_cents-q.gift_cents;}return S.json(res,200,{quote:q});}
   if(!['checkout','request'].includes(input.action))throw S.fail('Unknown booking action.');
   await S.rate(db,req,'book');if(input.website)throw S.fail('Unable to submit this request.');
   if(!uuid(input.id)||!/^[-a-zA-Z0-9_]{40,100}$/.test(String(input.token||'')))throw S.fail('Refresh this page and try again.');
+  if(ambassador&&input.ba_consent!==true)throw S.fail('Accept the referral disclosure to continue.');
   const data=S.validate(input),checkout=input.action==='checkout';
   if(direct&&data.state!=='NC')throw S.fail('Online booking is available only in North Carolina.');
   if(checkout&&(!S.ready()||data.quote.review_required))throw S.fail('This booking needs a request first. Please go back and request a review.',409);
