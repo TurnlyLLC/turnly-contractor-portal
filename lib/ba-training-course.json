@@ -158,74 +158,79 @@
     },
     {
       "id": "onboarding",
-      "title": "Turnly Account and Onboarding",
-      "objective": "Complete online documents and protect account and tax information.",
-      "scene": "An ambassador sits at a private home desk with a laptop facing away from other people; a closed door and simple desk emphasize privacy.",
+      "title": "Using Your Turnly Ambassador Portal",
+      "objective": "Find your personal referral link, navigate first-clean stages and review rewards and saved documents.",
+      "scene": "An ambassador reviews their own referral workspace at a private desk.",
       "sections": [
         [
-          "Create your account",
-          "Apply → set password → open workspace",
-          "After submitting the ambassador application, continue to password setup at the ambassador portal. Your email is your username. New applicants do not need an email-verification step. If that email already has an account, use its existing password; a new application does not replace it."
+          "Start with Overview",
+          "Your daily workspace",
+          "Open Overview when you begin. Use its totals as a quick summary, then open the relevant section to investigate a referral or reward. The sidebar stays available as you move between your workspace, training and documents."
         ],
         [
-          "Use your own credentials",
-          "Keep your password private.",
-          "Use a strong personal password and sign out on shared devices. Never let another person use your account or referral identity. If you cannot sign in, use the available account help or contact Turnly. Do not create duplicate applications to bypass a disabled account."
+          "Find your referral link",
+          "Referral links → Copy link",
+          "Open Referral links and copy your personal booking link. Keep the whole link intact so your referral identity travels with it. Before sharing, explain that you may earn a referral payment and ask whether the person wants the link. Use their preferred, agreed contact channel."
         ],
         [
-          "Read and sign the agreement",
-          "Review every section before signing.",
-          "Open Onboarding and complete your contractor agreement online. Read the marketing, compensation, privacy and insurance provisions. Review your name and other details before typing your electronic signature and accepting electronic records. Ask Turnly about anything you do not understand before signing."
+          "Check the customer destination",
+          "Your referring name should appear",
+          "Open your copied link to check its destination without submitting a booking. It should open the Turnly booking process and show your name as the referring agent. If the name is missing or incorrect, contact Turnly before sending the link. Let the customer enter their own information."
         ],
         [
-          "Complete the W-9 privately",
-          "Enter tax details only in the secure document workflow.",
-          "Open the W-9 editor and use the official instructions to complete your own information. This course does not determine your tax classification. The eye icon temporarily reveals the Social Security or taxpayer ID number for checking. Hide it again when finished and avoid using a shared screen."
+          "Read the referral pipeline",
+          "Lead → requested → booked → completed",
+          "Open Referral pipeline. The stage buttons show counts and filter the list. Use Search referrals to locate a person, then open their record for the first-clean details. Booking requested means a request is recorded; it does not yet mean the first clean is confirmed."
         ],
         [
-          "Autosaved progress",
-          "Check the saved indicator before leaving.",
-          "The online editor saves draft progress to your account. Check its saved indicator, and use Save and close when leaving. If it reports a save error or another-tab conflict, resolve that message before continuing. A typed draft signature is not final until you choose Sign and save."
+          "Handle review stages",
+          "Cancelled / review • Existing customer",
+          "A referral in Cancelled or review needs clarification rather than a promise of earnings. Existing customer means the record is outside the new-customer first-clean path. Contact Turnly about a mismatch. Do not submit duplicate referrals to try to change the result."
         ],
         [
-          "Keep signed records online",
-          "My documents contains the signed agreement and W-9.",
-          "After signing, open My documents to view the stored record. Signed documents are locked to preserve what you agreed to. If your tax or other information changes, contact Turnly for the proper update process. Never send a Social Security number through ordinary email or notes."
+          "Review earnings",
+          "Earned and paid are separate",
+          "Open Earnings to review reward records and payment information. An eligible confirmed first booking earns twenty-five dollars, and that first clean completing earns another twenty-five dollars. An earned amount is not proof that a payment has been sent. Check the recorded payment status and ask Turnly about discrepancies."
         ],
         [
-          "Activate referral tools",
-          "Finish onboarding after both documents are complete.",
-          "Once the agreement and W-9 are complete, choose Finish onboarding and activate referrals. You can view the dashboard earlier, but your sharing tools depend on completed onboarding. General liability and errors and omissions insurance are recommended under the agreement; they are not presented as automatic protection from every claim."
+          "Find saved documents",
+          "My documents",
+          "Use My documents to refer back to your signed agreement and W-9. Keep tax information inside the private document workflow. If details need correction, contact Turnly for the update process. Do not send a tax ID in ordinary email, referral notes or a screenshot."
         ],
         [
-          "Practice and check",
-          "Find Onboarding, My documents and Referral links.",
-          "Locate these three portal sections. Confirm that your draft saves, then complete your own documents when ready. If someone asks for your tax ID by email, stop and verify the request with Turnly. Keep tax details in the private workflow, not in a reply or screenshot."
+          "Get useful support",
+          "admin@turnlypros.com",
+          "If a link, referral stage or reward looks wrong, tell Turnly which portal section you were using and what you expected to see. Include the relevant reference if available and a brief description. Keep passwords and taxpayer IDs out of the message. Use Refresh to check for current information before reporting a stale display."
+        ],
+        [
+          "Practice your daily check",
+          "Overview → pipeline → earnings",
+          "Return to your workspace and locate your own referral link. Inspect the pipeline stage filters, find the earnings view and locate My documents. Use existing records only; if your pipeline is empty, simply identify the controls. Do not create a test customer or booking to finish this exercise."
         ]
       ],
-      "activity": "Locate Onboarding and My documents. Check the saved indicator and confirm you know how to request a document correction.",
+      "activity": "Locate your referral link, inspect the pipeline stage filters, open Earnings and find My documents. Use existing records only; do not create a test referral or booking.",
       "questions": [
         [
-          "Where should you enter your tax ID?",
+          "Where do you find your personal booking link?",
           [
-            "An ordinary email",
-            "The private online W-9 workflow"
+            "Referral links",
+            "A generic Turnly homepage address"
           ],
-          1
+          0
         ],
         [
-          "What activates referral tools?",
+          "Does an earned reward mean payment has already been sent?",
           [
-            "Opening the dashboard",
-            "Completing documents and finishing onboarding"
+            "Yes",
+            "No—check the recorded payment status"
           ],
           1
         ]
       ],
       "order": 3,
-      "video_url": "https://scrimba.com/explain/guide0n0si5ojr",
-      "duration_seconds": 195,
-      "video_path": "ambassadors-20261020/onboarding.mp4"
+      "video_url": "https://scrimba.com/explain/guide0hktshpmc",
+      "duration_seconds": 160,
+      "video_path": "ambassadors-20261020/portal-orientation.mp4"
     },
     {
       "id": "referrals",
