@@ -21,3 +21,33 @@
 #trainingFeedback:not(:empty){border:1px solid #bdd9cf;background:#f2f8f5;border-radius:12px;margin-top:22px;padding:20px}
 .ba-training-lesson h2,.ba-training-lesson h3,.ba-training-lesson p,.ba-training-lesson legend{color:#16233b}
 @media(max-width:700px){.ba-training-player{min-height:240px;height:55vh}.ba-training-lesson{padding:18px}#knowledgeCheck fieldset{padding:12px}}
+.ba-slides{background:white;border:1px solid #c9ddd7;border-radius:16px;overflow:hidden;margin:24px 0}
+.ba-slides-top{display:flex;justify-content:space-between;gap:12px;align-items:center;background:#102d42;color:white;padding:16px 20px}
+.ba-slides-top span{font-size:10px;font-weight:750;letter-spacing:1px;color:#a5eee0}
+.ba-slides-jumps{display:flex;flex-wrap:wrap;gap:8px;padding:14px 20px}
+.ba-slides-jumps button{width:34px;height:34px;border:1px solid #cbdad7;border-radius:50%;background:white;color:#163549;cursor:pointer;font-weight:700}
+.ba-slides-jumps button[aria-current]{background:#007f75;color:white;border-color:#007f75}
+.ba-slide-screen{position:relative;padding:10px 16px 30px;background:#e9efef;height:clamp(240px,52vh,540px)}
+.ba-slide-screen img{display:block;width:100%;height:100%;object-fit:contain}
+.ba-slide-example{position:absolute;bottom:7px;left:8px;right:8px;text-align:center;font-size:11px;color:#475e68}
+.ba-slide-caption{padding:18px 22px}
+.ba-slide-caption .ba-eyebrow{margin:0 0 8px}
+.ba-slide-caption h4{font-size:21px;color:#123249;margin:0 0 8px}
+.ba-slide-caption p:last-child{line-height:1.65;margin:0;font-size:14px;min-height:7em}
+.ba-slide-controls{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 22px;border-top:1px solid #e1eae7;background:#f8fbfa}
+.ba-slide-controls [role=status]{font-size:12px;color:#42596a;text-align:center}
+.ba-slide-controls button{white-space:nowrap;cursor:pointer}
+.ba-slide-controls button:disabled{opacity:.45;cursor:default}
+.ba-slide-help{font-size:12px;line-height:1.5;padding:0 22px 16px;margin:8px 0 0}
+.ba-slides button:focus-visible,.ba-slides:focus-visible{outline:3px solid #11b6a7;outline-offset:3px}
+.ba-practice-launch{background:white;border:1px solid #c9ddd7;border-radius:16px;padding:24px}
+.ba-slides-dialog{width:calc(100vw - 24px);max-width:1500px;height:calc(100dvh - 24px);max-height:none;padding:0;border:0;border-radius:16px;color:#123249;background:white}
+.ba-slides-dialog::backdrop{background:#102338d9}
+.ba-slides-dialog .ba-slides{height:100%;margin:0;border:0;display:grid;grid-template-columns:minmax(0,2fr) minmax(260px,1fr);grid-template-rows:auto auto minmax(0,1fr) auto auto}
+.ba-slides-dialog .ba-slides-top,.ba-slides-dialog .ba-slides-jumps,.ba-slides-dialog .ba-slide-controls,.ba-slides-dialog .ba-slide-help{grid-column:1/-1}
+.ba-slides-dialog .ba-slide-screen{height:100%;min-height:0}
+.ba-slides-dialog .ba-slide-caption{overflow:auto;min-height:0;border-left:1px solid #dce5e3}
+.ba-slides-dialog .ba-slide-caption p{color:#123249}
+.ba-slides-dialog .ba-slides-top button{margin-left:auto}
+@media(max-width:700px){.ba-slides-top{align-items:flex-start;flex-direction:column}.ba-slides-jumps{gap:6px;padding:12px}.ba-slides-jumps button{width:30px;height:30px}.ba-slide-caption{padding:16px}.ba-slide-controls{padding:12px;flex-wrap:wrap}.ba-slide-controls [role=status]{order:-1;width:100%}.ba-slide-controls button{flex:1}.ba-slide-screen{padding-left:4px;padding-right:4px}.ba-slide-caption p:last-child{min-height:0}}
+@media(max-width:700px){.ba-slides-dialog .ba-slides{grid-template-columns:1fr;grid-template-rows:auto auto minmax(130px,1fr) minmax(80px,.6fr) auto}.ba-slides-dialog .ba-slides-top{flex-direction:row;align-items:center;padding:10px;font-size:13px}.ba-slides-dialog .ba-slides-top span,.ba-slides-dialog .ba-slide-help{display:none}.ba-slides-dialog .ba-slides-top button{padding:8px}.ba-slides-dialog .ba-slide-caption{border-left:0;padding:12px}.ba-slides-dialog .ba-slide-caption h4{font-size:17px}.ba-slides-dialog .ba-slide-caption p{font-size:13px}.ba-slides-dialog .ba-slide-counter{margin:0}}
