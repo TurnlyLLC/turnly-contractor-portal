@@ -3,3 +3,4 @@ env.js
 .vercel/
 .tmp/
 supabase/.temp/
+assets/vendor/twilio-voice-*.min.js

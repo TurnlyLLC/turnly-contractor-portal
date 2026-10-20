@@ -1,3 +1,4 @@
+import { installCalling } from './crm-calling.mjs?v=20261020';
 import {GIFT_CARD_URL,RESIDENTIAL_URL,PRODUCT_FACTS,PLAYBOOK,SALES_SCRIPTS,SALES_OBJECTIONS} from './crm-sales-content.mjs?v=20261016-gift-sales';
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/+esm";
 import {
@@ -4597,6 +4598,12 @@ function bindEvents() {
 bindEvents();
 
 if (await requireSalesAccess()) {
+ installCalling({request:async values=>{
+  const {data}=await supabase.auth.getSession();
+  if(!data.session)throw new Error('Sign in again to call.');
+  const r=await fetch('/api/crm-voice',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+data.session.access_token},body:JSON.stringify(values),signal:AbortSignal.timeout(20000)});
+  const result=await r.json();if(!r.ok)throw new Error(result.error||'Calling is unavailable.');return result;
+ }});
   const hashId = window.location.hash.replace("#", "");
   if (hashId&&hashId!=='notifications') {
     state.selectedId = hashId;
@@ -4729,7 +4736,7 @@ function renderProspectFilters() {
 
 function contactActions(row) {
  if(row.do_not_contact)return '<span class="sales-status-pill lost">Do not contact</span>';
- return `${row.contact_phone?`<a class="sales-link-action" href="tel:${esc(String(row.contact_phone).replace(/[^\d+]/g,''))}">${esc(row.contact_phone)}</a>`:'<span>No primary phone</span>'}${row.contact_email?`<a class="sales-link-action" href="mailto:${esc(row.contact_email)}">${esc(row.contact_email)}</a>`:'<small>No primary email</small>'}`;
+ return `${row.contact_phone?`<button type="button" class="sales-primary-button" data-call-lead="${esc(row.id)}" data-call-label="${esc(row.contact_name||row.company_name||'Lead')}">Call lead · ${esc(row.contact_phone)}</button>`:'<span>No primary phone</span>'}${row.contact_email?`<a class="sales-link-action" href="mailto:${esc(row.contact_email)}">${esc(row.contact_email)}</a>`:'<small>No primary email</small>'}`;
 }
 
 function renderContactCard(row) {
