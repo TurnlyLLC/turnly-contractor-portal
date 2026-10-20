@@ -70,7 +70,7 @@ module.exports=async(req,res)=>{
   let ambassador=null;
   if(input.ba){
    if(!/^BA-[A-Z0-9]{16}$/.test(String(input.ba)))throw S.fail('Use the complete ambassador referral link.');
-   ambassador=S.checked(await db.from('ba_members').select('name,code').eq('code',input.ba).eq('enabled',true).not('onboarding_completed_at','is',null).maybeSingle());
+   ambassador=await require('../lib/ambassadors.cjs').referralMember(db,input.ba);
    if(!ambassador)throw S.fail('This ambassador referral link is unavailable.',404);
   }
   if(input.action==='context')return S.json(res,200,{agent:{name:a.name,code:a.referral_code},ambassador,direct,payments_ready:S.ready(),property_lookup:!!process.env.RENTCAST_API_KEY,gift:gift?{balance_cents:gift.balance_cents,available_cents:gift.balance_cents-gift.reserved_cents}:null,consent:gift?CONSENT+' I authorize application of my gift card to this visit; only the remaining amount will be charged to my saved card.':CONSENT});
