@@ -54,11 +54,23 @@ test('contact consent and stored access are required; metadata cannot grant acce
 test('HTTP dashboard forces ambassador ownership and strips private profile fields',async()=>{
  const vm=require('node:vm'),S=require('../lib/residential-server.cjs');let selected;
  const member={user_id:'mine',name:'Ambassador',email:'agent@example.com',code:'BA-1111111111111111',enabled:true,session_id:'private-session',must_change_password:false,onboarding_completed_at:'2026-10-19'};
- const db={from(table){return {select(){return this},eq(key,value){selected=value;return this},order(){return this},range:async()=>({data:[{id:'lead',name:'Example Person',stage:'lead'}]}),in:async()=>({data:[]})};}};
+ const db={from(table){return {select(){return this},eq(key,value){selected=value;return this},order(){return this},range:async()=>({data:[{id:'lead',name:'Example Person',stage:'lead'}]}),in(){return this},then(resolve){resolve({data:[]})}};}};
  const context={module:{exports:{}},require:p=>p==='../lib/residential-server.cjs'?{...S,database:()=>db}:p==='../lib/ambassadors.cjs'?{...A,access:async()=>({id:'mine',admin:false,member})}:p==='../lib/agent-referrals.cjs'?require('../lib/agent-referrals.cjs'):require(p),console,Buffer,process};
  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../api/ambassadors.js'),'utf8'),context);
  let output;const res={setHeader(){},end(s){output=JSON.parse(s)}};
  await context.module.exports({method:'POST',headers:{authorization:'Bearer local'},body:{action:'dashboard',member_id:'someone-else'}},res);
- assert.equal(res.statusCode,200);assert.equal(selected,'mine');assert.equal(output.leads[0].name,'Example P.');assert.equal(output.member.session_id,undefined);assert.equal(output.members.length,1);
+ assert.equal(res.statusCode,200);assert.equal(selected,'mine');assert.equal(output.leads[0].name,'Example P.');assert.equal(output.member.session_id,undefined);assert.equal(output.members.length,1);assert.equal(output.member.code,undefined);assert.equal(output.members[0].code,undefined);assert.equal(output.member.referrals_ready,false);assert.equal(output.member.training.completed,0);
  await context.module.exports({method:'POST',headers:{authorization:'Bearer local'},body:{action:'create',name:'Escalate'}},res);assert.equal(res.statusCode,403);
+});
+
+test('referral access requires completed onboarding and every current passed module',async()=>{
+ const course=require('../lib/ba-training-course.json');
+ let rows=[],member={user_id:'mine',name:'Example',code:'BA-1111111111111111',enabled:true,onboarding_completed_at:'2026-10-20'};
+ const db={from(table){let filters=[];return{select(){return this},eq(k,v){filters.push([k,v]);return this},in(k,v){filters.push([k,v]);return this},not(){return this},maybeSingle:async()=>({data:member}),then(resolve){resolve({data:rows.filter(r=>filters.every(([k,v])=>Array.isArray(v)?v.includes(r[k]):r[k]===v))})}}}};
+ const all=course.lessons.map(l=>({user_id:'mine',course_version:course.version,lesson_id:l.id,score:l.questions.length,completed_at:'2026-10-20'}));
+ for(const invalid of [[],all.slice(1),all.map(r=>({...r,course_version:'old'})),all.map(r=>({...r,user_id:'other'})),all.map(r=>({...r,score:0}))]){rows=invalid;assert.equal(await A.referralMember(db,member.code),null);}
+ rows=all;assert.equal((await A.referralMember(db,member.code)).code,member.code);
+ member.onboarding_completed_at=null;assert.equal(await A.referralMember(db,member.code),null);
+ member.onboarding_completed_at='2026-10-20';member.enabled=false;assert.equal(await A.referralMember(db,member.code),null);
+ rows=[...all,...all];member.enabled=true;assert.equal((await A.referralReadiness(db,[member]))[0].training.completed,8);
 });

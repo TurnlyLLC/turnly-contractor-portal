@@ -8,7 +8,7 @@ module.exports=async(req,res)=>{
   const x=await S.body(req),db=S.database();
   if(['context','register'].includes(x.action)){
    await S.rate(db,req,'ba-'+x.action);
-   const m=S.checked(await db.from('ba_members').select('name,code').eq('code',String(x.code||'')).eq('enabled',true).not('onboarding_completed_at','is',null).maybeSingle());
+   const m=await A.referralMember(db,x.code);
    if(!m)throw S.fail('This referral link is unavailable. Contact Turnly.',404);
    if(x.action==='register'){const c=A.contact(x);S.checked(await db.rpc('register_ba_lead',{p_code:m.code,p_name:c.name,p_email:c.email,p_phone:c.phone,p_consent:'referral-consent-2026-10-19'}));}
    return S.json(res,200,{name:m.name,booking_url:'https://portal.turnlypros.com/residential-referral.html?ba='+encodeURIComponent(m.code)});
@@ -38,7 +38,8 @@ module.exports=async(req,res)=>{
    return S.json(res,200,{ok:true});
   }
   if(x.action==='dashboard'){
-   const members=actor.admin?S.checked(await db.from('ba_members').select('user_id,name,email,code,enabled,onboarding_completed_at,created_at').order('name')):[actor.member];
+   const rawMembers=actor.admin?S.checked(await db.from('ba_members').select('user_id,name,email,code,enabled,onboarding_completed_at,created_at').order('name')):[actor.member];
+   const members=await A.referralReadiness(db,rawMembers);
    const id=actor.admin?(x.member_id||members[0]?.user_id):actor.id;
    const member=members.find(m=>m.user_id===id)||null;
    let leads=[],earnings=[];
@@ -49,7 +50,7 @@ module.exports=async(req,res)=>{
    }
    // No customer email, phone, address, billing details or later bookings leave this endpoint.
    if(!actor.admin)leads=leads.map(l=>({...l,name:l.name.split(/\s+/).map((part,i)=>i===0?part:part[0]+'.').join(' ')}));
-   const safeMember=m=>m?(({user_id,name,email,code,enabled,onboarding_completed_at})=>({user_id,name,email,code,enabled,onboarding_completed_at}))(m):null;
+   const safeMember=m=>m?(({user_id,name,email,enabled,onboarding_completed_at,training,referrals_ready})=>({user_id,name,email,enabled,onboarding_completed_at,training,referrals_ready,...(referrals_ready?{code:m.code}:{})}))(m):null;
    return S.json(res,200,{admin:actor.admin,onboarding_required:!actor.admin&&!actor.member.onboarding_completed_at,members:members.map(safeMember),member:safeMember(member),leads,earnings});
   }
   if(!actor.admin)throw S.fail('Admin access required.',403);
