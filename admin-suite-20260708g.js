@@ -12676,7 +12676,8 @@ function assignmentForm() {
         leadInputField("address", "Address", "text", { className: "wide" }),
         leadInputField("service_type", "Service Type"),
         `<label class="suite-field"><span>QR Tracker ID</span><input id="qr_tracker_id" type="text" maxlength="64" placeholder="VFH-001" autocomplete="off" /><small>Optional. Cleaning assignments after unit 2330-2 only. Leasing and staging assignments never receive a tracker ID.</small></label>`,
-        leadInputField("pay_amount", "Pay Amount", "number", { min: "0", step: "0.01" }),
+        leadInputField("clean_customer_price", "Cleaning price · new cleans pay 40%", "number", { min: "0", step: "0.01" }),
+        leadInputField("pay_amount", "Contractor pay · existing jobs / review", "number", { min: "0", step: "0.01" }),
         leadSelectField("assignment_status", "Status", assignmentStatusOptions, { required: true })
       ])}
       ${assignmentBulkUnitSection()}
@@ -15516,6 +15517,7 @@ function assignmentFormMetadata(frequency, weekdays, currentRow = null, extraMet
     ...(extraMetadata && typeof extraMetadata === "object" && !Array.isArray(extraMetadata) ? extraMetadata : {})
   };
   const selectedProperty = assignmentState.properties.find((item) => item.id === assignmentValue("property_id") || item.id === assignmentValue("propertySelect"));
+  if (!currentRow && Number(assignmentValue('clean_customer_price')) > 0) metadata.customer_price = Number(assignmentValue('clean_customer_price'));
   const accessNotes = assignmentValue("special_instructions") || assignmentPropertyAccessNotes(selectedProperty);
   if (frequency === "weekly") {
     metadata.recurrence_weekdays = weekdays;

@@ -8,6 +8,8 @@ window.__ENV = {
 `;
 
 fs.writeFileSync("./env.js", envFile);
+fs.mkdirSync('./assets/vendor',{recursive:true});
+fs.copyFileSync('./node_modules/@twilio/voice-sdk/dist/twilio.min.js','./assets/vendor/twilio-voice-2.18.5.min.js');
 
 if (process.env.TURNLY_EMAIL_SETUP_CHECK === '1') {
   require('./scripts/check-referral-email.cjs')().catch(error => {
