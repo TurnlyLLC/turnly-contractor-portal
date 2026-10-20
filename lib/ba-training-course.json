@@ -208,7 +208,7 @@
           "Return to your workspace and locate your own referral link. Inspect the pipeline stage filters, find the earnings view and locate My documents. Use existing records only; if your pipeline is empty, simply identify the controls. Do not create a test customer or booking to finish this exercise."
         ]
       ],
-      "activity": "Locate your referral link, inspect the pipeline stage filters, open Earnings and find My documents. Use existing records only; do not create a test referral or booking.",
+      "activity": "Click through the seven portal screenshots, identify each pipeline stage and explain earned versus paid rewards. Then locate these same sections in your own portal using existing records only. Do not create test referrals or bookings.",
       "questions": [
         [
           "Where do you find your personal booking link?",
@@ -230,7 +230,55 @@
       "order": 3,
       "video_url": "https://scrimba.com/explain/guide0hktshpmc",
       "duration_seconds": 160,
-      "video_path": "ambassadors-20261020/portal-orientation.mp4"
+      "video_path": "ambassadors-20261020/portal-orientation.mp4",
+      "walkthrough": {
+        "title": "Your ambassador portal: a guided screen tour",
+        "disclosure": "Screenshots captured from the actual Turnly portal interface using fictional training records. No customer information, real referral code, tax details, payment or live account changes are included. These slides demonstrate controls; they do not operate your account.",
+        "steps": [
+          {
+            "id": "overview",
+            "title": "Your daily overview",
+            "body": "Start with the four summary cards: referrals, first cleans booked, first cleans completed and total earned. Counts include different milestones, so a completed clean can also count as booked. Use Refresh for current information. The names and $75 total in this screenshot are fictional examples, not promised earnings.",
+            "image": "assets/ba-training/portal/01-overview.png"
+          },
+          {
+            "id": "pipeline",
+            "title": "Follow a referral through the pipeline",
+            "body": "Open Referral pipeline and select a stage to narrow the list, or search by name. Lead and Booking requested do not mean a clean is confirmed. First clean booked is the confirmed-booking milestone; First clean completed is the completion milestone. Cancelled or review items need Turnly review. Only the first clean is tracked here.",
+            "image": "assets/ba-training/portal/02-pipeline.png"
+          },
+          {
+            "id": "activity",
+            "title": "Read the referral activity timeline",
+            "body": "Select a referral name to open its activity. This example shows introduction, the first confirmed booking ($25), completion of that same clean (another $25), and a separately recorded $25 payment. A $50 earned total does not mean all $50 has been paid. Close details to return to the list.",
+            "image": "assets/ba-training/portal/03-activity.png"
+          },
+          {
+            "id": "earnings",
+            "title": "Separate earned, unpaid and paid rewards",
+            "body": "Open Earnings. Total earned combines qualifying milestones. Unpaid is not money already received; Paid reflects recorded payments, and Under review identifies unpaid rewards requiring review. Match each activity row to its referral and milestone. The example has $75 earned, $25 paid and $50 unpaid. Ask Turnly about discrepancies; this page does not itself transfer funds.",
+            "image": "assets/ba-training/portal/04-earnings.png"
+          },
+          {
+            "id": "links",
+            "title": "Find and share your own referral link",
+            "body": "Open Referral links after signing the current agreement, completing onboarding and passing every training module. Copy link copies your personal booking URL; Email link and Text link open your messaging apps for you to review and send. Share only with people who agreed to hear from you. This screenshot uses an invalid training code: never copy it. Use your own live portal link and verify the referring name on the booking page.",
+            "image": "assets/ba-training/portal/05-links.png"
+          },
+          {
+            "id": "documents",
+            "title": "Find your signed documents safely",
+            "body": "Open My documents to locate your signed contractor agreement, W-9 and document history. The screenshot shows document cards only, not tax details. Signed records remain available for reference. If an updated agreement is required, follow Onboarding to sign it before continuing referrals. Contact Turnly for corrections; never email a taxpayer ID or include it in a support screenshot.",
+            "image": "assets/ba-training/portal/06-documents.png"
+          },
+          {
+            "id": "training",
+            "title": "Return to training and get help",
+            "body": "The Training page shows completed lessons and your saved progress. Open any lesson to review it, then complete its exercise and knowledge check. The example shows 3 of 8 lessons; all eight and completed onboarding are required before your link unlocks. Use Contact Turnly in the sidebar for questions, and explain the screen and issue without sharing passwords or tax information.",
+            "image": "assets/ba-training/portal/07-training.png"
+          }
+        ]
+      }
     },
     {
       "id": "referrals",
