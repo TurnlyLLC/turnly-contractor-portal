@@ -1,0 +1,70 @@
+{
+  "title": "Book a clean: screen-by-screen",
+  "reviewed_at": "2026-10-20",
+  "video_url": "https://scrimba.com/explain/guide0e063er3a",
+  "duration_seconds": 247,
+  "disclosure": "Captured from Turnly’s actual booking interface using fictional sample details. No real customer, booking, payment, or account was created. Screens and prices are examples; follow the current booking page.",
+  "steps": [
+    {
+      "id": "start",
+      "title": "Start from your referral link",
+      "body": "Open the link copied from your ambassador portal. Confirm the Referred by name before the customer starts. If it is wrong or missing, contact Turnly.",
+      "image": "assets/ba-training/01-start.png"
+    },
+    {
+      "id": "home",
+      "title": "Confirm the home",
+      "body": "Type the full address, choose the matching result, and check bedrooms, bathrooms, and the square footage to be cleaned. Only finished interior space counts. The example address is fictional. A real address must qualify within Turnly's North Carolina service area. Check the confirmation box only after reviewing the details. Never change an address to get around a service-area rejection.",
+      "image": "assets/ba-training/02-home.png"
+    },
+    {
+      "id": "details",
+      "title": "Enter customer details",
+      "body": "The customer enters their own name, email, and phone number. Their email will become their customer username. The address is gray and read-only on this step; use Back to correct it on Your home. Read the referral consent together. It allows coordination of this request and limited referral tracking; it is not permission for unrelated marketing.",
+      "image": "assets/ba-training/03-details.png"
+    },
+    {
+      "id": "service",
+      "title": "Choose the cleaning service",
+      "body": "Choose standard, deep, move-in or move-out, or listing and staging according to the customer's actual needs. For standard and deep cleans, review the frequency options. Future maintenance visits are arranged separately; this flow books the first visit. Explain the current published scope and ask Turnly about anything unclear. Do not promise unlisted work or your own discount.",
+      "image": "assets/ba-training/04-service.png"
+    },
+    {
+      "id": "quote",
+      "title": "Review the quote",
+      "body": "The example quote reflects a two-thousand-square-foot standard clean. It is a training example, not a promised price for every customer. Check the first-visit amount, rate, and minimum on the customer's own screen. Read any maintenance price or custom-review notice. Homes over three thousand square feet require a review before a booking is confirmed.",
+      "image": "assets/ba-training/05-quote.png"
+    },
+    {
+      "id": "time",
+      "title": "Choose a date and arrival window",
+      "body": "Choose an enabled date and an arrival window at least thirty-six hours in advance. All times are Eastern. The start of the window must meet the notice rule, and its end must be later than its start. The page describes this as a preferred arrival window. Turnly coordinates the visit; an ambassador must not promise a specific appointment before confirmation.",
+      "image": "assets/ba-training/06-time.png"
+    },
+    {
+      "id": "visit",
+      "title": "Explain access and parking",
+      "body": "The customer tells Turnly about pets, parking, and how the cleaner can enter. If they choose guest parking, the form asks for parking instructions. Codes belong in the official form, not in an ambassador's personal notes or messages. Ask for useful access information without collecting it yourself. Add any special request for Turnly to review; entering it does not guarantee extra work is included.",
+      "image": "assets/ba-training/07-visit.png"
+    },
+    {
+      "id": "review",
+      "title": "Review before submitting",
+      "body": "Read the address, date, arrival window, price, and referring name before submitting. This example shows the request-only path: no card is collected and no visit is reserved yet. If secure card setup is offered instead, the customer follows Stripe and reads the payment authorization. Never call a request confirmed just because the customer clicked Submit. Use the actual status Turnly returns.",
+      "image": "assets/ba-training/08-review.png"
+    },
+    {
+      "id": "account",
+      "title": "Create the customer account",
+      "body": "Keep the reference and read the status message. The customer can create an account with their booking email and a password of at least twelve characters. They enter the password privately; an ambassador never needs to know it. Creating the account does not change a pending request into a confirmed appointment. Existing customers use their existing password rather than replacing it through this form.",
+      "image": "assets/ba-training/09-account.png"
+    },
+    {
+      "id": "login",
+      "title": "Sign in and open My cleans",
+      "body": "After creating the account, the customer reaches sign-in with their email and newly chosen password filled for that immediate handoff. They click Sign in to open My cleans. On a later visit, they enter their credentials normally or use Forgot password. My cleans shows their request or booking status. For a request still awaiting confirmation, contact Turnly rather than telling the customer a cleaner has been assigned.",
+      "image": "assets/ba-training/10-login.png"
+    }
+  ],
+  "video_path": "ambassadors-20261020/booking-walkthrough.mp4"
+}

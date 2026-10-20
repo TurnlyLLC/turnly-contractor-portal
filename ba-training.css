@@ -1,5 +1,15 @@
 .ba-training-player{display:block;width:100%;height: min(70vh,680px);min-height:340px;border:1px solid #dce4e8;border-radius:12px;background:#16233b;margin:20px 0}
 .ba-training-lesson{max-width:1100px;width:100%;box-sizing:border-box;margin:auto}
+.ba-native-player{height:auto;min-height:0;aspect-ratio:16/9;object-fit:contain;background:#102b3c}
+.ba-booking-guide{margin:32px 0;padding:24px;border:1px solid #c9ddd7;border-radius:16px;background:#f5faf8}
+.ba-booking-guide .ba-booking-step{background:white;margin:12px 0;padding:16px}
+.ba-booking-step summary{display:flex;align-items:center;gap:12px;line-height:1.5}
+.ba-step-number{display:inline-grid;place-items:center;width:30px;height:30px;flex-shrink:0;border-radius:50%;background:#007f75;color:#fff}
+.ba-booking-step p{line-height:1.8}
+.ba-booking-step figure{margin:16px 0 0}
+.ba-booking-step img{display:block;width:100%;height:auto;border:1px solid #dce4e8;border-radius:8px}
+.ba-booking-step figcaption,.ba-media-status{font-size:14px;line-height:1.6;color:#526477}
+@media(max-width:700px){.ba-booking-guide{padding:12px}.ba-training-player.ba-native-player{height:auto;min-height:0}}
 .ba-training-lesson details{border:1px solid #dce4e8;border-radius:12px;padding:20px;margin:24px 0}
 .ba-training-lesson summary{font-weight:750;cursor:pointer;color:#007f75}
 .ba-training-lesson details section{margin-top:24px;max-width:78ch;line-height:1.8}

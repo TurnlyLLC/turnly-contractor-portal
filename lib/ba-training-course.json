@@ -82,7 +82,8 @@
       ],
       "order": 1,
       "video_url": "https://scrimba.com/explain/guide00639ldda",
-      "duration_seconds": 181
+      "duration_seconds": 181,
+      "video_path": "ambassadors-20261020/role.mp4"
     },
     {
       "id": "services",
@@ -131,7 +132,7 @@
           "Open the public residential booking information and locate the service description, address check and timing options. Practice explaining them without submitting a fake booking. If the system rejects an address or date, explain the result and offer the Turnly support contact."
         ]
       ],
-      "activity": "Walk through the booking information without submitting a booking. Locate scope, address eligibility and timing options.",
+      "activity": "Use the screenshot walkthrough to explain each booking step without submitting a test booking. Identify the referral name, the 36-hour arrival rule, the read-only address, and the difference between a request and a confirmed clean.",
       "questions": [
         [
           "A request is submitted. Is it necessarily confirmed?",
@@ -152,7 +153,8 @@
       ],
       "order": 2,
       "video_url": "https://scrimba.com/explain/guide075vk2v9e",
-      "duration_seconds": 194
+      "duration_seconds": 194,
+      "video_path": "ambassadors-20261020/services.mp4"
     },
     {
       "id": "onboarding",
@@ -222,7 +224,8 @@
       ],
       "order": 3,
       "video_url": "https://scrimba.com/explain/guide0n0si5ojr",
-      "duration_seconds": 195
+      "duration_seconds": 195,
+      "video_path": "ambassadors-20261020/onboarding.mp4"
     },
     {
       "id": "referrals",
@@ -292,7 +295,8 @@
       ],
       "order": 4,
       "video_url": "https://scrimba.com/explain/guide00g6slpev",
-      "duration_seconds": 185
+      "duration_seconds": 185,
+      "video_path": "ambassadors-20261020/referrals.mp4"
     },
     {
       "id": "earnings",
@@ -363,7 +367,8 @@
       ],
       "order": 5,
       "video_url": "https://scrimba.com/explain/guide0vlf5l3bs",
-      "duration_seconds": 192
+      "duration_seconds": 192,
+      "video_path": "ambassadors-20261020/earnings.mp4"
     },
     {
       "id": "outreach",
@@ -433,7 +438,8 @@
       ],
       "order": 6,
       "video_url": "https://scrimba.com/explain/guide0a45b5l9l",
-      "duration_seconds": 199
+      "duration_seconds": 199,
+      "video_path": "ambassadors-20261020/outreach.mp4"
     },
     {
       "id": "conversations",
@@ -503,7 +509,8 @@
       ],
       "order": 7,
       "video_url": "https://scrimba.com/explain/guide0j28o5snq",
-      "duration_seconds": 207
+      "duration_seconds": 207,
+      "video_path": "ambassadors-20261020/conversations.mp4"
     },
     {
       "id": "handoff",
@@ -573,7 +580,8 @@
       ],
       "order": 8,
       "video_url": "https://scrimba.com/explain/guide0oqkhvubu",
-      "duration_seconds": 193
+      "duration_seconds": 193,
+      "video_path": "ambassadors-20261020/handoff.mp4"
     }
   ]
 }

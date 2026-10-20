@@ -1,10 +1,30 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),{randomUUID}=require('node:crypto'),course=require('../lib/ba-training-course.json'),S=require('../lib/residential-server.cjs');
-function fixture(admin=false){
+function fixture(admin=false,denied=false){
  const writes=[],filters=[],db={from(table){return{select(){return this},eq(k,v){filters.push([table,k,v]);return this},maybeSingle:async()=>({data:{user_id:'own',name:'Example'}}),upsert:async value=>{writes.push(value);return{data:null}},then(resolve){resolve({data:[]})}}}};
- const ctx={module:{exports:{}},require:p=>p==='../lib/residential-server.cjs'?{...S,database:()=>db}:p==='../lib/ambassadors.cjs'?{access:async()=>({id:'own',admin})}:require(path.resolve(__dirname,'..','api',p)),Date,console};
+ const signed=[];db.storage={from(bucket){return{async createSignedUrl(key,ttl){signed.push({bucket,key,ttl});return{data:{signedUrl:'https://example.com/signed-video'}};}}}};
+ const ctx={module:{exports:{}},require:p=>p==='../lib/residential-server.cjs'?{...S,database:()=>db}:p==='../lib/ambassadors.cjs'?{access:async()=>{if(denied)throw S.fail('Sign in.',401);return{id:'own',admin};}}:require(path.resolve(__dirname,'..','api',p)),Date,console};
  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../api/ba-training.js'),'utf8'),ctx);
- return{writes,filters,async request(body){let data;const res={setHeader(){},end(s){data=JSON.parse(s)}};await ctx.module.exports({method:'POST',body,headers:{}},res);return{status:res.statusCode,data}}};
+ return{writes,filters,signed,async request(body){let data;const res={setHeader(){},end(s){data=JSON.parse(s)}};await ctx.module.exports({method:'POST',body,headers:{}},res);return{status:res.statusCode,data}}};
 }
+test('video signing requires access and signs only allowlisted course media',async()=>{
+ const f=fixture();
+ assert.equal((await fixture(false,true).request({action:'media',lesson_id:'role'})).status,401);
+ assert.equal((await f.request({action:'media',lesson_id:'../../private'})).status,400);
+ assert.equal(f.signed.length,0);
+ assert.equal((await f.request({action:'media',lesson_id:'role',path:'private/w9.pdf'})).status,200);
+ assert.deepEqual(f.signed[0],{bucket:'turnly-academy',key:'ambassadors-20261020/role.mp4',ttl:3600});
+ await f.request({action:'media',lesson_id:'services',walkthrough:true});
+ assert.equal(f.signed[1].key,'ambassadors-20261020/booking-walkthrough.mp4');
+});
+test('booking walkthrough includes all captured steps without changing completion version',()=>{
+ const w=require('../lib/ba-booking-walkthrough.json');
+ assert.equal(course.version,'2026-10-20-v1');
+ assert.equal(w.steps.length,10);
+ for(const step of w.steps){assert.ok(step.body);assert.ok(fs.existsSync(path.join(__dirname,'..',step.image)));}
+ assert.match(w.steps.find(s=>s.id==='details').body,/read-only/);
+ assert.match(w.steps.find(s=>s.id==='time').body,/thirty-six/);
+ assert.match(w.steps.find(s=>s.id==='review').body,/request-only/);
+});
 test('curriculum has eight unique video lessons, practical exercises and valid questions',()=>{
  assert.equal(course.lessons.length,8);assert.equal(new Set(course.lessons.map(l=>l.video_url)).size,8);
  for(const l of course.lessons){assert.match(l.video_url,/^https:\/\/scrimba.com\/explain\/guide[a-z0-9]+$/);assert.ok(l.activity);assert.ok(l.sections.length>=7);assert.equal(l.questions.length,2);for(const [,options,answer]of l.questions)assert.ok(Number.isInteger(answer)&&answer>=0&&answer<options.length);}
