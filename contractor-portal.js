@@ -45,7 +45,12 @@ const navItems = [
   ["video-library", "Video Library", contractorRoute("video-library", contractorSurface)]
 ];
 
-const mobileNavItems = [
+const mobileNavItems = contractorSurface === "pwa" ? [
+  ["job-board", "Job Board", contractorRoute("job-board", "pwa")],
+  ["schedule", "Schedule", contractorRoute("schedule", "pwa")],
+  ["past-jobs", "Past Jobs", contractorRoute("my-jobs", "pwa") + "?view=past"],
+  ["payments", "Earnings", contractorRoute("payments", "pwa")]
+] : [
   ["dashboard", "Today", contractorRoute("dashboard", contractorSurface)],
   ["job-board", "Jobs", contractorRoute("job-board", contractorSurface)],
   ["schedule", "Schedule", contractorRoute("schedule", contractorSurface)],
@@ -122,12 +127,15 @@ const state = {
     search: "",
     jobType: "all",
     payRange: "all",
-    myStatus: "active",
+    myStatus: new URLSearchParams(window.location.search).get("view") === "past" ? "completed" : "active",
     payoutSearch: "",
     payoutWeek: "",
     videoPhase: "all"
   },
-  scheduleCursor: startOfWeek(new Date())
+  scheduleView: "calendar",
+  scheduleDay: new Date(),
+  scheduleProperty: "",
+  scheduleCursor: contractorSurface === "pwa" ? nativeWeekStart(new Date()) : startOfWeek(new Date())
 };
 
 const boardVisibleStatuses = new Set(["open", "preferred-pending"]);
@@ -180,7 +188,7 @@ const cpIconPaths = {
 };
 
 function cpIcon(name, className = "") {
-  const path = cpIconPaths[name] || cpIconPaths.users;
+  const path = name === "more" ? '<circle cx="12" cy="12" r="9"/><path d="M7 12h.01M12 12h.01M17 12h.01"/>' : cpIconPaths[name] || cpIconPaths.users;
   return `<span class="suite-icon ${esc(className)}" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path}</svg></span>`;
 }
 
@@ -202,7 +210,7 @@ function writeDashboardTheme(theme) {
 
 function applyDashboardTheme() {
   if (!document.body) return;
-  document.body.dataset.dashboardTheme = readDashboardTheme();
+  document.body.dataset.dashboardTheme = contractorSurface === "pwa" ? "light" : readDashboardTheme();
 }
 
 function dashboardThemeIcon(theme) {
@@ -221,6 +229,7 @@ function dashboardThemeToggleContent(theme) {
 }
 
 function dashboardThemeToggle() {
+  if (contractorSurface === "pwa") return "";
   const theme = readDashboardTheme();
   const nextLabel = theme === "light" ? "dark" : "light";
   return `
@@ -998,6 +1007,7 @@ function openJobCard(item, className = "cp-job-row") {
         ${details.map((detail, index) => index === 0
           ? `<strong>${esc(detail)}</strong>`
           : `<span>${esc(detail)}</span>`).join("")}
+        ${contractorSurface === "pwa" ? `<span>${esc(item.address || "")}</span><strong class="cp-native-job-pay">${esc(money(item.pay_amount))}</strong>` : ""}
       </div>
       ${actions ? `<div class="cp-open-job-actions">${actions}</div>` : ""}
     </article>
@@ -1105,13 +1115,15 @@ function contractorTopbar() {
 }
 
 function mobileNav() {
-  const moreIsActive = mobileMoreItems.some(([key]) => key === pageKey);
+  const nativePast = contractorSurface === "pwa" && new URLSearchParams(window.location.search).get("view") === "past";
+  const activeTab = nativePast ? "past-jobs" : pageKey === "dashboard" && contractorSurface === "pwa" ? "schedule" : pageKey;
+  const moreIsActive = mobileMoreItems.some(([key]) => key === pageKey) && !nativePast;
   const moreOpen = document.body?.classList.contains("cp-mobile-more-open");
   return `
     <div class="cp-mobile-more-panel" id="cpMobileMorePanel" ${moreOpen ? "" : "hidden"}>
       <div class="cp-mobile-more-grid">
         ${mobileMoreItems.map(([key, label, href]) => `
-          <a class="cp-mobile-more-link ${key === pageKey ? "active" : ""}" href="${esc(href)}"><span>${esc(label)}</span>${cpNavBadge(key)}</a>
+          <a class="cp-mobile-more-link ${key === pageKey ? "active" : ""}" href="${esc(href)}">${cpIcon(navIcon(key))}<span>${esc(label)}</span>${cpNavBadge(key)}<span aria-hidden="true">›</span></a>
         `).join("")}
       </div>
       <div class="cp-mobile-profile-account">
@@ -1125,27 +1137,36 @@ function mobileNav() {
     </div>
     <nav class="cp-mobile-nav" aria-label="Contractor mobile navigation">
       ${mobileNavItems.map(([key, label, href]) => `
-        <a class="${key === pageKey ? "active" : ""}" href="${esc(href)}">
-          <strong>${esc(label)}</strong>
+        <a class="${key === activeTab ? "active" : ""}" ${key === activeTab ? 'aria-current="page"' : ""} href="${esc(href)}">
+          ${cpIcon(key === "past-jobs" ? "document" : key === "payments" ? "chart" : navIcon(key))}${cpNavBadge(key)}<strong>${esc(label)}</strong>
         </a>
       `).join("")}
       <button class="${moreIsActive ? "active" : ""}" type="button" aria-expanded="${moreOpen ? "true" : "false"}" aria-controls="cpMobileMorePanel" data-mobile-more-toggle>
-        <strong>...</strong>
+        ${cpIcon("more")}<strong>More</strong>
         ${cpUnreadMessageCount() ? cpNavBadge("messages") : ""}
       </button>
     </nav>
   `;
 }
 
+function nativeHeader() {
+  return `<header class="cp-native-header">
+    <a class="cp-native-wordmark" href="${esc(contractorRoute("schedule", "pwa"))}" aria-label="Turnly Pro schedule"><strong>Turnly Pro</strong><span>CLEANERS</span></a>
+    <span class="cp-native-tagline">CLEAN SPACES<br>BRIGHTER DAYS</span>
+    <section class="cp-profile-wrap"><button class="cp-native-account" type="button" data-contractor-profile-toggle aria-label="Your account" aria-expanded="${state.profileMenuOpen}" aria-controls="cpNativeAccount">${cpIcon("users")}</button>${profileAccountMenu("cpNativeAccount")}</section>
+  </header>`;
+}
+
 function renderShell() {
   if (!root) return;
   applyDashboardTheme();
+  document.body.classList.toggle("cp-native", contractorSurface === "pwa");
   root.innerHTML = `
     <main class="cp-shell">
       ${sidebar()}
       <section class="cp-main" id="${pageKey === "dashboard" ? "contractorDashboard" : "contractorPortalMain"}">
-        ${contractorSurface === "desktop" ? contractorTopbar() : renderContractorAdminPreviewSwitcher()}
-        ${renderPage()}
+        ${contractorSurface === "desktop" ? contractorTopbar() : nativeHeader() + renderContractorAdminPreviewSwitcher()}
+        ${contractorSurface === "pwa" ? `<div class="cp-page-content">${renderPage()}</div>` : renderPage()}
       </section>
       ${jobDetailDrawer()}
       ${mobileNav()}
@@ -1207,7 +1228,7 @@ function renderPage() {
     case "performance": return renderPerformance();
     case "job-board": return renderJobBoard();
     case "video-library": return renderVideoLibrary();
-    default: return renderDashboard();
+    default: return contractorSurface === "pwa" ? renderPwaSchedule() : renderDashboard();
   }
 }
 
@@ -1551,6 +1572,7 @@ function renderChart(rows) {
 }
 
 function renderMyJobs() {
+  if (contractorSurface === "pwa" && new URLSearchParams(window.location.search).get("view") === "past") return renderNativePastJobs();
   const rows = filteredMyAssignments();
   return `
     ${renderMetrics()}
@@ -1765,38 +1787,50 @@ function renderDesktopSchedule() {
   `;
 }
 
+function nativeWeekStart(value) {
+  const date = new Date(value);
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() - (date.getDay() + 6) % 7);
+  return date;
+}
+
+function nativeScheduleRows(start) {
+  const end = addDays(start, 7);
+  return state.myAssignments.filter(item => dateValue(item.start_window) >= start.getTime() && dateValue(item.start_window) < end.getTime() && !["cancelled", "declined"].includes(normalizeToken(item.status)) && (!state.scheduleProperty || assignmentTitle(item) === state.scheduleProperty)).sort((a,b) => dateValue(a.start_window) - dateValue(b.start_window));
+}
+
 function renderPwaSchedule() {
-  const start = startOfWeek(state.scheduleCursor);
+  const start = nativeWeekStart(state.scheduleCursor);
   const days = Array.from({ length: 7 }, (_, index) => addDays(start, index));
-  const rows = scheduleWeekAssignments(start);
-  const scheduledCount = rows.filter((item) => ["open", "preferred-pending", "claimed", "scheduled"].includes(normalizeToken(item.status))).length;
-  const activeCount = rows.filter((item) => normalizeToken(item.status) === "in-progress").length;
-  const completedCount = rows.filter(isCompletedAssignment).length;
-  return `
-    <section class="cp-pwa-schedule">
-      <section class="cp-pwa-schedule-hero">
-        <div class="cp-pwa-schedule-title">
-          <span class="cp-panel-kicker">Weekly Schedule</span>
-          <h2>${esc(formatShortDate(days[0]))} - ${esc(formatDate(days[6]))}</h2>
-          <p>${esc(rows.length ? `${rows.length} assignment${rows.length === 1 ? "" : "s"} scheduled for this Sunday through Saturday window.` : "No assignments are scheduled for this Sunday through Saturday window.")}</p>
-        </div>
-        <div class="cp-pwa-week-stepper" aria-label="Week navigation">
-          <button class="cp-ghost-action" type="button" data-schedule-nav="prev">Prev</button>
-          <button class="cp-ghost-action" type="button" data-schedule-nav="today">Today</button>
-          <button class="cp-ghost-action" type="button" data-schedule-nav="next">Next</button>
-        </div>
-      </section>
-      <section class="cp-pwa-schedule-stats" aria-label="Week summary">
-        ${renderPwaScheduleStat("Scheduled", scheduledCount, "ready to work", "scheduled")}
-        ${renderPwaScheduleStat("In Progress", activeCount, "active now", "active")}
-        ${renderPwaScheduleStat("Completed", completedCount, "finished this week", "completed")}
-        ${renderPwaScheduleStat("Week Pay", money(totalPay(rows)), "scheduled earnings", "pay")}
-      </section>
-      <section class="cp-pwa-schedule-agenda" aria-label="Weekly assignment list">
-        ${days.map((day) => renderPwaScheduleDay(day, rows)).join("")}
-      </section>
-    </section>
-  `;
+  const rows = nativeScheduleRows(start);
+  const selectedDay = days.find(day => isSameDay(day, state.scheduleDay)) || days[0];
+  const dayRows = rows.filter(item => item.start_window && isSameDay(new Date(item.start_window), selectedDay));
+  const properties = [...new Set(state.myAssignments.map(assignmentTitle))].sort();
+  const active = activeAssignments().find(item => normalizeToken(item.status) === "in-progress");
+  return `<section class="cp-native-schedule">
+    <div class="cp-native-schedule-controls">
+      <div class="cp-native-segment" role="group" aria-label="Schedule view">${["calendar", "list"].map(view => `<button type="button" data-native-schedule-view="${view}" aria-pressed="${state.scheduleView === view}" class="${state.scheduleView === view ? "active" : ""}">${cpIcon(view === "calendar" ? "calendar" : "clipboard")}${titleCase(view)}</button>`).join("")}</div>
+      <div class="cp-native-filters"><label>${cpIcon("briefcase")}<select id="cpNativeProperty" aria-label="Filter schedule by property"><option value="">All properties</option>${properties.map(name => option(name, name, state.scheduleProperty)).join("")}</select></label><a href="${esc(contractorRoute("resources", "pwa"))}#availability">Availability</a></div>
+      <div class="cp-native-week-nav"><button type="button" data-schedule-nav="prev" aria-label="Previous week">‹</button><button type="button" data-schedule-nav="today" aria-label="Go to this week">${esc(formatShortDate(days[0]))} – ${esc(formatShortDate(days[6]))}</button><button type="button" data-schedule-nav="next" aria-label="Next week">›</button></div>
+      ${state.scheduleView === "calendar" ? `<div class="cp-native-week" aria-label="Choose a day">${days.map((day,index) => `<button type="button" data-native-day="${index}" aria-pressed="${isSameDay(day, selectedDay)}" class="${isSameDay(day, selectedDay) ? "active" : ""}"><small>${esc(day.toLocaleDateString([], {weekday:"short"}))}</small><strong>${day.getDate()}</strong><i ${rows.some(item => item.start_window && isSameDay(new Date(item.start_window),day)) ? "" : "hidden"}></i></button>`).join("")}</div>` : ""}
+    </div>
+    ${active ? `<div class="cp-native-in-progress"><span>JOB IN PROGRESS</span><strong>${esc(assignmentTitle(active))}</strong><button type="button" data-tj-open-checklist="${esc(active.id)}">Continue checklist →</button></div>` : ""}
+    <div class="cp-native-agenda">${state.scheduleView === "calendar" ? `<p class="cp-panel-kicker">${isSameDay(selectedDay,new Date()) ? "Today" : esc(formatDate(selectedDay))} · ${dayRows.length} accepted jobs</p>${dayRows.length ? dayRows.map(renderPwaScheduleCard).join("") : `<div class="cp-native-empty">${cpIcon("calendar")}<h2>Nothing scheduled</h2><p>Accept jobs from the Job Board and they’ll show up here.</p><a class="cp-action" href="${esc(contractorRoute("job-board", "pwa"))}">Browse Job Board</a></div>`}` : days.filter(day => rows.some(item => item.start_window && isSameDay(new Date(item.start_window),day))).map(day => renderPwaScheduleDay(day, rows)).join("") || emptyState("No jobs scheduled this week.")}</div>
+  </section>`;
+}
+
+function nativePastAssignments() {
+  const term = state.filters.search.trim().toLowerCase();
+  return completedPayAssignments().filter(item => (state.filters.myStatus !== "unpaid" || !isPaidAssignment(item)) && (!term || [assignmentTitle(item),item.address].some(value => String(value || "").toLowerCase().includes(term))));
+}
+
+function renderNativePastJobs() {
+  return `<section class="cp-native-past"><div class="cp-native-list-controls"><label class="cp-search">${cpIcon("search")}<input id="cpNativePastSearch" type="search" placeholder="Search property or address" value="${esc(state.filters.search)}" aria-label="Search past jobs"></label><div class="cp-tabs">${["all","completed","unpaid"].map(status => `<button type="button" data-my-status="${status}" class="cp-tab ${state.filters.myStatus === status ? "active" : ""}" aria-pressed="${state.filters.myStatus === status}">${titleCase(status)}</button>`).join("")}</div></div><div id="cpNativePastRows">${renderNativePastRows()}</div></section>`;
+}
+
+function renderNativePastRows() {
+  const rows = nativePastAssignments();
+  return rows.map(item => `<article class="cp-native-past-row"><div><h2>${esc(assignmentTitle(item))}</h2><p>${esc(item.address || assignmentSubtitle(item))}</p><small>${esc(formatDate(item.completed_at || item.start_window))}</small></div><div><strong>${esc(money(item.pay_amount))}</strong><span class="cp-pill">${isPaidAssignment(item) ? "Paid" : "Completed · unpaid"}</span></div></article>`).join("") || emptyState("No completed jobs match this view.");
 }
 
 function renderPwaScheduleStat(label, value, meta, tone) {
@@ -1970,7 +2004,7 @@ function renderResources() {
     ["Forms", "Reusable field forms and service records."],
     ["Announcements", "Operational updates from the Turnly team."]
   ];
-  return panel("Resource Hub", `<div class="cp-resource-grid">${resources.map(([title, body]) => `<article class="cp-resource-item"><strong>${esc(title)}</strong><p>${esc(body)}</p></article>`).join("")}</div>`);
+  return (contractorSurface === "pwa" ? `<section id="availability">${panel("Availability", renderAvailabilityEditor())}</section>` : "") + panel("Resource Hub", `<div class="cp-resource-grid">${resources.map(([title, body]) => `<article class="cp-resource-item"><strong>${esc(title)}</strong><p>${esc(body)}</p></article>`).join("")}</div>`);
 }
 
 function renderMessages() {
@@ -1989,7 +2023,7 @@ function renderMessages() {
         ${state.messageComposerOpen
           ? renderCpNewMessageComposer()
           : `<div id="cpConversation" class="cp-conversation">${renderCpConversation()}</div>`}
-      `, { className: "cp-message-panel" })}
+      `, { className: `cp-message-panel ${!state.selectedThreadId && !state.messageComposerOpen ? "cp-message-idle" : ""}` })}
     </section>
   `;
 }
@@ -2093,12 +2127,21 @@ function renderDocuments() {
   `;
 }
 
+function renderNativeEarningsHero() {
+  const start = nativeWeekStart(new Date());
+  const days = Array.from({length:7}, (_,index) => addDays(start,index));
+  const totals = days.map(day => totalPay(completedPayAssignments().filter(item => isSameDay(new Date(item.completed_at || item.updated_at),day))));
+  const max = Math.max(1,...totals);
+  return `<section class="cp-native-earnings"><span>THIS WEEK</span><h1>${esc(money(totals.reduce((sum,value) => sum+value,0)))}</h1><p>${esc(formatShortDate(start))} – ${esc(formatShortDate(days[6]))} · completed job pay</p><div class="cp-native-bars" aria-label="Completed earnings by day">${days.map((day,index) => `<div><span>${esc(money(totals[index]))}</span><i style="height:${Math.max(2,totals[index]/max*90)}px"></i><small>${esc(day.toLocaleDateString([], {weekday:"short"}))}</small></div>`).join("")}</div></section>`;
+}
+
 function renderPayments() {
   const accepted = acceptedPayAssignments();
   const owed = completedOwedAssignments();
   const paid = paidAssignments();
   const completedYtd = completedPayAssignments().filter((item) => isCurrentYear(item.completed_at || item.updated_at));
   return `
+    ${contractorSurface === "pwa" ? renderNativeEarningsHero() : ""}
     ${renderPayMetrics({ accepted, owed, paid, completedYtd })}
     <section class="cp-payments-layout">
       <div class="cp-stack">
@@ -2809,7 +2852,7 @@ function attachEvents() {
     const logoutButton = event.target.closest("[data-contractor-logout], #logoutBtn");
     if (logoutButton) {
       await supabase?.auth.signOut();
-      window.location.href = "https://portal.turnlypros.com/";
+      window.location.href = contractorSurface === "pwa" ? "contractor-login.html" : "https://portal.turnlypros.com/";
       return;
     }
 
@@ -2888,10 +2931,14 @@ function attachEvents() {
       return;
     }
 
+    const nativeView = event.target.closest("[data-native-schedule-view]");
+    if (nativeView) { state.scheduleView = nativeView.dataset.nativeScheduleView; renderShell(); return; }
+    const nativeDay = event.target.closest("[data-native-day]");
+    if (nativeDay) { state.scheduleDay = addDays(nativeWeekStart(state.scheduleCursor), Number(nativeDay.dataset.nativeDay)); renderShell(); return; }
     const scheduleNav = event.target.closest("[data-schedule-nav]");
     if (scheduleNav) {
       const action = scheduleNav.dataset.scheduleNav;
-      if (action === "today") state.scheduleCursor = startOfWeek(new Date());
+      if (action === "today") { state.scheduleCursor = contractorSurface === "pwa" ? nativeWeekStart(new Date()) : startOfWeek(new Date()); state.scheduleDay = new Date(); }
       if (action === "prev") state.scheduleCursor = addDays(state.scheduleCursor, -7);
       if (action === "next") state.scheduleCursor = addDays(state.scheduleCursor, 7);
       renderShell();
@@ -2906,7 +2953,11 @@ function attachEvents() {
     }
   });
 
+  root?.addEventListener("change", event => {
+    if (event.target.id === "cpNativeProperty") { state.scheduleProperty = event.target.value; renderShell(); }
+  });
   root?.addEventListener("input", (event) => {
+    if (event.target.id === "cpNativePastSearch") { state.filters.search = event.target.value; document.getElementById("cpNativePastRows").innerHTML = renderNativePastRows(); }
     if (event.target.matches("#cpGlobalSearch, #cpBoardSearch, #cpVideoSearch")) {
       state.filters.search = event.target.value;
       refreshFilterOnly();
