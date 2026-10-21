@@ -172,6 +172,19 @@ body.contractor-portal-body.cp-native .tc-step-actions { background: #f5f5f2; bo
 body.contractor-portal-body.cp-native .tc-next-btn, body.contractor-portal-body.cp-native .primary-btn { background: #c9a24b; color: #16233b; border-color: #c9a24b; }
 body.contractor-portal-body.cp-native .tc-back-btn { background: white; color: #16233b; border-color: #16233b33; }
 body.contractor-portal-body.cp-native .tc-overview-panel { background: #f5f5f2; color: #16233b; }
+body.contractor-portal-body.cp-native :is(.tc-panel, .tc-feedback-panel, .tj-panel) :is(h1, h2, h3, strong, b) { color: #16233b; }
+body.contractor-portal-body.cp-native :is(.tc-card-title small, .tc-upload-frame em, .tc-upload-frame small, .tc-item-note span, .tc-message, .tj-note, .tc-note, .tc-feedback-message) { color: #5b6474; }
+body.contractor-portal-body.cp-native :is(.tj-detail-grid div, .tj-detail-note, .tj-detail-panel-inner, .tc-empty, .tc-feedback-job) { background: white; color: #16233b; border-color: #16233b1f; box-shadow: none; }
+body.contractor-portal-body.cp-native :is(.tj-note textarea, .tc-note textarea) { background: white; color: #16233b; border-color: #16233b33; }
+body.contractor-portal-body.cp-native :is(.tj-note textarea, .tc-note textarea)::placeholder { color: #5b6474; }
+body.contractor-portal-body.cp-native :is(.tc-card-icon, .tc-upload-icon) { color: #8a6a20; border-color: #c9a24b66; background: #c9a24b14; }
+body.contractor-portal-body.cp-native .tc-check-row input:checked + .tc-check-box { box-shadow: inset 0 0 0 5px #fff; }
+body.contractor-portal-body.cp-native .tj-map-label strong { color: white; }
+body.contractor-portal-body.cp-native .tc-topbar { background: #16233b; margin: -26px -18px 0; padding: 20px 18px; }
+body.contractor-portal-body.cp-native .tc-topbar h2 { color: white; }
+body.contractor-portal-body.cp-native .tc-topbar .tc-icon-button { color: white; background: transparent; border-color: #ffffff33; }
+body.contractor-portal-body.cp-native .tc-progress { background: #16233b; margin: -20px -18px 0; padding: 0 18px 20px; }
+body.contractor-portal-body.cp-native .tc-progress small { color: #ffffffaa; }
 body.contractor-portal-body.cp-native .tj-panel, body.contractor-portal-body.cp-native .tc-panel, body.contractor-portal-body.cp-native .tc-feedback-panel { background: #f5f5f2; color: #16233b; border-color: var(--cp-line); border-radius: 12px; box-shadow: none; }
 body.contractor-portal-body.cp-native .tj-actions, body.contractor-portal-body.cp-native .tc-footer, body.contractor-portal-body.cp-native .tc-shell { background: #f5f5f2; color: #16233b; }
 body.contractor-portal-body.cp-native .tj-title h2, body.contractor-portal-body.cp-native .tj-section h3, body.contractor-portal-body.cp-native .tc-card-title h3, body.contractor-portal-body.cp-native .tc-topbar h2, body.contractor-portal-body.cp-native .tc-check-copy strong { color: #16233b; font-family: var(--native-serif); }
@@ -203,3 +216,7 @@ body.contractor-portal-body.cp-native .tc-button-primary, body.contractor-portal
 @media (prefers-reduced-motion: reduce) {
   body.contractor-portal-body.cp-native *, body.contractor-portal-body.cp-native *::before, body.contractor-portal-body.cp-native *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
 }
+body.contractor-portal-body.cp-native .tc-panel .tc-topbar h2 { color: #fff; }
+body.contractor-portal-body.cp-native .tc-panel .tc-progress small { color: #ffffffb5; }
+body.contractor-portal-body.cp-native .tc-panel .tc-check-copy strong { font-family: inherit; font-size: 17px; font-weight: 600; }
+body.contractor-portal-body.cp-native .tc-step-actions button { font-size: 16px; font-weight: 600; border-radius: 14px; }
