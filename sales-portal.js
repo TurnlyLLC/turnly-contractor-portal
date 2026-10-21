@@ -1,3 +1,4 @@
+import {mountMessages} from './crm-messages.mjs?v=20261021';
 import {mountTraining} from './crm-training.mjs?v=20261021-required';
 import {mountBudget} from './crm-budget.mjs?v=20261020';
 import { installCalling } from './crm-calling.mjs?v=20261021-required';
@@ -55,7 +56,9 @@ const pageConfig = {
 };
 
 Object.assign(pageConfig,{communications:{title:'Calling & texting',subtitle:'Budgets, usage and outreach controls.'},pipeline:{title:"Deal pipeline",subtitle:"Move opportunities forward, one meaningful conversation at a time."},contacts:{title:"Contacts",subtitle:"The people and properties behind every relationship."},quotes:{title:"Proposals",subtitle:"Prepare, review, and follow up on your quotes."},contracts:{title:"Closing",subtitle:"Track management review, contracts, and won business."},team:{title:"Team",subtitle:"Ownership, workload, and results across your sales team."}});
+pageConfig.messages={title:'Messages',subtitle:'Stay connected with Turnly admin and your sales team.'};
 const navItems = [
+ ['messages','Messages','crm-messages.html','users'],
  ['dashboard','Overview','sales.html','dashboard'],
  ['leads','Prospects','sales-leads.html','users'],
  ['pipeline','Deal pipeline','crm-pipeline.html','dashboard'],
@@ -1211,7 +1214,7 @@ async function loadReps() {
  const result=await crmTeamRequest('list');return result.members||[];
 }
 async function refreshData(showLoading = true,accessChecked=false) {
-  if(["scripts","guide","communications"].includes(state.page)){state.loading=false;render();return;}
+  if(["scripts","guide","communications","messages"].includes(state.page)){state.loading=false;render();return;}
   if(showLoading){state.loading=true;state.loadFailed=false;state.message='';render();}
   try {
     if(!accessChecked&&!await withCrmTimeout(requireSalesAccess())){state.rows=[];state.leads=[];return;}
@@ -1249,6 +1252,8 @@ function render() {
       ${renderModal()}
     </main>
   `;
+  const messagesRoot=document.getElementById('crmMessages');
+  if(messagesRoot)void mountMessages(messagesRoot,async values=>{const {data}=await supabase.auth.getSession();if(!data?.session)throw Error('Sign in again.');const response=await fetch('/api/crm-messages',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+data.session.access_token},body:JSON.stringify(values)});const result=await response.json();if(!response.ok)throw Error(result.error||'Unable to load messages.');return result;});
   const trainingRoot=document.getElementById('crmTrainingGate');
   if(trainingRoot)void mountTraining(trainingRoot,async values=>{const {data}=await supabase.auth.getSession();if(!data?.session)throw Error('Sign in again to save training.');const response=await fetch('/api/crm-training',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+data.session.access_token},body:JSON.stringify(values)});const result=await response.json();if(!response.ok)throw Error(result.error||'Unable to save training.');return result;});
   const budgetRoot=document.getElementById('communicationBudget');
@@ -1391,6 +1396,7 @@ function renderLoading() {
 }
 
 function renderPage() {
+ if(state.page==='messages')return '<div id="crmMessages"></div>';
  if(state.page==='communications')return isSalesAdmin()?'<div id="communicationBudget"></div>':emptyState('Administrator access required','Open Overview for your results.');
  if(state.page==='scripts')return renderScriptsPage();
  if(state.page==='guide')return renderPlaybookPage();
