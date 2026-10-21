@@ -206,7 +206,7 @@ async function renderPasswordChangeRequired(user) {
 }
 
 async function loadContractorPortal() {
-  await import("./contractor-portal.js?v=20261021-native");
+  await import("./contractor-portal.js?v=20261021-onboarding");
   await import("./contractor-job-flow-mobile.js?v=20261008-checklists");
 }
 
@@ -292,14 +292,10 @@ if (!supabase) {
       window.location.href = getPortalHome(role);
     } else if (requiresPasswordChange(user)) {
       await renderPasswordChangeRequired(user);
+    } else if (["deleted", "deletion_pending", "disabled", "suspended", "inactive", "deactivated", "rejected"].includes(normalizeStatus(profile.status))) {
+      renderNotice("Account unavailable", "Please contact Turnly about your contractor account.");
     } else if (!isActiveProfile(profile)) {
-      const setupNote = profile.access_setup_error
-        ? " Ask Turnly to finish the account-access setup if this does not appear in the admin requests panel."
-        : "";
-      renderNotice(
-        "Approval pending",
-        `Your contractor account is active, but it must be approved by Turnly before assignment data is visible.${setupNote}`
-      );
+      window.location.replace("contractor-onboarding.html");
     } else {
       await loadContractorPortal();
     }

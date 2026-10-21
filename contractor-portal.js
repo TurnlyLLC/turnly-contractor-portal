@@ -33,6 +33,7 @@ const contractorSurface = currentContractorSurface();
 const contractorDashboardThemeStorageKey = "turnlyContractorDashboardTheme";
 
 const navItems = [
+  ["onboarding", "Onboarding", "contractor-onboarding.html"],
   ["dashboard", "Dashboard", contractorRoute("dashboard", contractorSurface)],
   ["my-jobs", "My Jobs", contractorRoute("my-jobs", contractorSurface)],
   ["job-board", "Job Board", contractorRoute("job-board", contractorSurface)],
@@ -58,6 +59,7 @@ const mobileNavItems = contractorSurface === "pwa" ? [
 ];
 
 const mobileMoreItems = [
+  ["onboarding", "Onboarding", "contractor-onboarding.html"],
   ["my-jobs", "My Jobs", contractorRoute("my-jobs", contractorSurface)],
   ["messages", "Messages", contractorRoute("messages", contractorSurface)],
   ["resources", "Resources", contractorRoute("resources", contractorSurface)],
@@ -2108,24 +2110,9 @@ function renderCpMessageBubble(message) {
 }
 
 function renderDocuments() {
-  const docs = [
-    ["Contractor Agreement", "Ready"],
-    ["Insurance", "Valid"],
-    ["W-9", "Ready"],
-    ["Training SOPs", "Ready"],
-    ["Company Policies", "Ready"],
-    ["Emergency Information", "Ready"]
-  ];
-  return `
-    <section class="cp-documents-layout">
-      ${panel("Document Hub", `<div class="cp-document-grid">${docs.map(([title, status]) => `<article class="cp-document-tile"><strong>${esc(title)}</strong><p>${esc(status)}</p></article>`).join("")}</div>`)}
-      <aside class="cp-stack">
-        ${panel("Recent Uploads", emptyState("No recent uploads."))}
-        ${panel("Quick Actions", `<div class="cp-mini-list"><a class="cp-ghost-action" href="#">Upload Document</a><a class="cp-ghost-action" href="#">Request Document</a><a class="cp-ghost-action" href="#">Download All</a></div>`)}
-      </aside>
-    </section>
-  `;
+  return panel("Your onboarding documents", `<p>Complete forms, sign documents, upload insurance, and view your submitted copies in your secure onboarding space.</p><a class="cp-action" href="contractor-onboarding.html">Open documents & onboarding →</a>`);
 }
+
 
 function renderNativeEarningsHero() {
   const start = nativeWeekStart(new Date());
