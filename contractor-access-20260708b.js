@@ -48,7 +48,7 @@ function normalizeStatus(status) {
 }
 
 function isActiveProfile(profile) {
-  return profile?.contractor_approved === true ||
+  return profile?.contractor_approved === true &&
     ["active", "approved", "enabled"].includes(normalizeStatus(profile?.status));
 }
 
@@ -206,7 +206,7 @@ async function renderPasswordChangeRequired(user) {
 }
 
 async function loadContractorPortal() {
-  await import("./contractor-portal.js?v=20261021-release");
+  await import("./contractor-portal.js?v=20261021-claim-gate");
   await import("./contractor-job-flow-mobile.js?v=20261008-checklists");
 }
 
@@ -297,7 +297,19 @@ if (!supabase) {
     } else if (!isActiveProfile(profile)) {
       window.location.replace("contractor-onboarding.html");
     } else {
-      await loadContractorPortal();
+      try {
+        const {data} = await supabase.auth.getSession();
+        const response = await fetch('/api/contractor-claim-job', {
+          method:'POST', headers:{'Content-Type':'application/json',Authorization:`Bearer ${data?.session?.access_token || ''}`},
+          body:JSON.stringify({action:'eligibility'})
+        });
+        const eligibility = await response.json();
+        if (!response.ok) throw new Error(eligibility.error || 'Unable to verify onboarding.');
+        if (!eligibility.eligible) window.location.replace('contractor-onboarding.html');
+        else await loadContractorPortal();
+      } catch (error) {
+        renderNotice('Onboarding verification needed', error.message + ' Refresh to retry, or open contractor-onboarding.html to review your requirements.');
+      }
     }
     }
   }

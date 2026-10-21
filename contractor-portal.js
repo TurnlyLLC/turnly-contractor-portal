@@ -2652,56 +2652,29 @@ function formatMessageTime(value) {
 }
 
 async function claimAssignment(assignmentId) {
-  state.message = "Claiming assignment...";
+  if (state.adminPreview) {
+    state.message = "Switch to the contractor account to accept a job after onboarding is verified.";
+    state.messageError = true;
+    renderShell();
+    return;
+  }
+  state.message = "Checking onboarding and claiming job...";
   state.messageError = false;
   renderShell();
-
-  let result = null;
-  if (!state.adminPreview) {
-    result = await supabase.rpc("claim_assignment_block", { target_assignment_id: assignmentId });
-  }
-  if (state.adminPreview || (result?.error && /function|schema cache|not found/i.test(result.error.message || ""))) {
-    const contractor = contractorName();
-    const claimPayload = {
-      status: "claimed",
-      claimed_by: state.user.id,
-      claimed_by_name: contractor,
-      claimed_by_email: state.user.email || null,
-      claimed_at: new Date().toISOString()
-    };
-    result = await supabase
-      .from("assignment_blocks")
-      .update(claimPayload)
-      .eq("id", assignmentId)
-      .eq("status", "open")
-      .is("claimed_by", null)
-      .select("*")
-      .maybeSingle();
-    if (result.error && /claimed_by_name|claimed_by_email|schema cache|could not find/i.test(result.error.message || "")) {
-      result = await supabase
-        .from("assignment_blocks")
-        .update({
-          status: claimPayload.status,
-          claimed_by: claimPayload.claimed_by,
-          claimed_at: claimPayload.claimed_at
-        })
-        .eq("id", assignmentId)
-        .eq("status", "open")
-        .is("claimed_by", null)
-        .select("*")
-        .maybeSingle();
-    }
-  }
-
-  if (result?.error) {
-    state.message = `Unable to claim assignment: ${result.error.message}`;
-    state.messageError = true;
-  } else {
+  try {
+    const {data} = await supabase.auth.getSession();
+    const response = await fetch('/api/contractor-claim-job', {
+      method: 'POST', headers: {'Content-Type': 'application/json', Authorization: `Bearer ${data?.session?.access_token || ''}`},
+      body: JSON.stringify({id: assignmentId})
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Unable to claim this job.');
     state.message = "Assignment claimed. It is now in My Jobs.";
-    state.messageError = false;
+    await Promise.all([loadOpenAssignments(), loadMyAssignments()]);
+  } catch (error) {
+    state.message = error.message || "Unable to claim this job. Please retry.";
+    state.messageError = true;
   }
-
-  await Promise.all([loadOpenAssignments(), loadMyAssignments()]);
   renderShell();
 }
 
