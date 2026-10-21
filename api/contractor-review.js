@@ -79,12 +79,34 @@ async function run(db,actor,input,token,transport) {
     }
     if(['approve_deletion','decline_deletion'].includes(input.action))return await deletion(db,actor,input,call);
   }
-  let result;
+  let result,portalSync;
   if(input.action==='review_document'){
-    const doc=checked(await db.from('contractor_documents').select('storage_path').eq('id',input.id).maybeSingle());
+    const doc=checked(await db.from('contractor_documents').select('*').eq('id',input.id).maybeSingle());
     if(doc?.storage_path?.includes('/onboarding/'))throw fail('Review this upload in the mobile onboarding checklist so the app receives the decision.',409);
     if(!['approved','rejected'].includes(input.status)) throw fail('Choose an approval decision.');
     if(!input.updated_at||!Number.isFinite(Date.parse(input.updated_at))) throw fail('Refresh this document before reviewing it.');
+    if(((input.item_id||input.auto_match)&&input.status==='approved')||input.status==='rejected'){
+      if(!doc?.storage_path)throw fail('Upload a document before approving this requirement.');
+      const ownerId=doc.profile_id||doc.contractor_id;
+      let owner;
+      if(ownerId)owner=checked(await db.from('profiles').select('id,role').eq('id',ownerId).maybeSingle());
+      else if(doc.contractor_email)owner=checked(await db.from('profiles').select('id,role').eq('email',doc.contractor_email).maybeSingle());
+      if(owner?.role!=='contractor'&&input.status==='approved'&&input.item_id)throw fail('Link this upload to a contractor account before completing a requirement.',409);
+      if(owner?.role==='contractor'){
+        const call=mobile.client(token,transport),current=await mobile.file(call,owner.id);
+        if(input.status==='approved'){
+          const itemId=input.item_id||(input.auto_match?mobile.matchingRequirement(current.items,doc)?.id:null);
+          if(input.item_id&&!current.items.some(i=>i.id===itemId))throw fail('Choose a current onboarding requirement.',409);
+          if(itemId)portalSync=()=>mobile.approvePortalUpload(call,owner.id,doc,itemId,reason);
+        }else{
+          const linked=current.items.filter(i=>i.portalDocumentId===doc.id);
+          if(linked.length){
+            checked(await db.rpc('review_contractor_account',{p_actor:actor,p_profile:owner.id,p_action:'remove_override',p_reason:'Correction requested for an approved onboarding upload.'}));
+            portalSync=async()=>{for(const item of linked)await call(`contractors/${owner.id}/items/${item.id}/reset`,{note:`[Portal approved document: ${doc.id}] Correction required: ${reason.slice(0,150)}`});};
+          }
+        }
+      }
+    }
     result=await db.rpc('review_contractor_document',{p_actor:actor,p_document:input.id,p_status:input.status,p_reason:reason,p_expected_updated_at:input.updated_at});
   } else if(['approve','override','remove_override'].includes(input.action)) {
     if(['override','remove_override'].includes(input.action)&&reason.length<5) throw fail('Enter a reason for this override decision.');
@@ -94,6 +116,7 @@ async function run(db,actor,input,token,transport) {
     if(result.error.code==='P0001') throw fail(result.error.message,409);
     throw fail('The review could not be saved. Refresh and try again.',503);
   }
+  if(portalSync)await portalSync();
   return result.data;
 }
 async function deletion(db,actor,input,call){
