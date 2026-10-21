@@ -206,7 +206,7 @@ async function renderPasswordChangeRequired(user) {
 }
 
 async function loadContractorPortal() {
-  await import("./contractor-portal.js?v=20261021-onboarding");
+  await import("./contractor-portal.js?v=20261021-release");
   await import("./contractor-job-flow-mobile.js?v=20261008-checklists");
 }
 
