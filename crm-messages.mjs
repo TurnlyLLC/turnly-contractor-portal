@@ -16,5 +16,6 @@ export async function mountMessages(root,request){
  $('#threadList').onclick=e=>{const b=e.target.closest('[data-thread]');if(b&&!busy)void safely(()=>open(b.dataset.thread));};
  root.addEventListener('submit',e=>{if(!['composeForm','replyForm'].includes(e.target.id))return;e.preventDefault();if(busy)return;const form=e.target,values=Object.fromEntries(new FormData(form));busy=true;const button=form.querySelector('button');button.disabled=true;void safely(async()=>{const id=selected;const d=await request(form.id==='composeForm'?{action:'create',...values}:{action:'reply',thread:id,body:values.body});await load();await open(d.id||id);status('Message sent.');}).finally(()=>{busy=false;button.disabled=false;});});
  await safely(load);
+ const linked=location.hash.slice(1);if(threads.some(t=>t.id===linked))await safely(()=>open(linked));
  const timer=setInterval(()=>{if(!root.isConnected){clearInterval(timer);return;}if(document.hidden||busy)return;void safely(async()=>{await load();const id=selected;if(id){const d=await request({action:'read',thread:id});if(selected===id){drawMessages(d.messages);const t=threads.find(t=>t.id===id);if(t)t.unread=false;list();}}});},20000);
 }
