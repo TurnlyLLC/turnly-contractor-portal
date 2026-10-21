@@ -1,0 +1,8 @@
+export const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+export function visible(q,fields){if(!q.when)return true;const v=fields[q.when.ref],want=q.when.value.toLowerCase();return Array.isArray(v)?v.some(a=>String(a).toLowerCase()===want):v===true?['yes','agreed','true'].includes(want):typeof v==='string'&&v.trim().toLowerCase()===want;}
+export function initialFields(item,profile,identity){const values={};for(const q of item.fields||[]){const old=item.submission?.answers?.find?.(a=>a.id===q.id);if(old&&!q.sensitive&&!['tin','account','routing'].includes(q.type)){values[q.id]=q.type==='check'?old.value==='Agreed':q.type==='multi'?String(old.value||'').split(', ').filter(Boolean):old.value;}else if(q.profile&&profile[q.profile]!==undefined)values[q.id]=profile[q.profile];else if(q.prefill&&identity[q.prefill])values[q.id]=identity[q.prefill];}return values;}
+export class SaveQueue{
+ constructor(save,notify=()=>{}){this.save=save;this.notify=notify;this.dirty=false;this.pending=false;this.serial=Promise.resolve();this.timer=null;this.error=null;}
+ changed(){this.dirty=true;this.notify('Unsaved changes');clearTimeout(this.timer);this.timer=setTimeout(()=>this.flush().catch(()=>{}),650);}
+ flush(){clearTimeout(this.timer);this.serial=this.serial.catch(()=>{}).then(async()=>{while(this.dirty){this.dirty=false;this.notify('Saving…');this.pending=true;try{await this.save();this.error=null;}catch(e){this.dirty=true;this.error=e;this.notify(e.message,true);throw e;}finally{this.pending=false;}}this.notify('All changes saved');});return this.serial;}
+}
