@@ -1,0 +1,75 @@
+{
+  "duration_seconds": 292.29,
+  "scenes": [
+    {
+      "file": "01-overview",
+      "title": "Start with your overview",
+      "narration": "Your Turnly sales portal brings your prospect list, calling, purchase links, and follow-ups together. These are actual portal screens with fictional training records. Start on Overview. Check your open prospects, follow-ups due, and completed purchases. Completed purchases come from confirmed gift-card payments. Changing a lead's stage by hand does not create a paid order.",
+      "start_seconds": 0,
+      "duration_seconds": 28.055
+    },
+    {
+      "file": "02-link",
+      "title": "Find your personal checkout link",
+      "narration": "Scroll to Your link. Your credited sales. Copy link puts your personal gift-card checkout address on your clipboard. Use your own link so a completed purchase can be attributed to you. Email a contact and Text a contact open the sending form. This example link is for training only. In your account, use the real link shown here.",
+      "start_seconds": 28.055,
+      "duration_seconds": 24.986
+    },
+    {
+      "file": "03-prospects",
+      "title": "Choose a prospect",
+      "narration": "Open Prospects in the left menu. Use the search box and filters to find the person you need. My leads limits the view to your assignments. Filter by stage when you want to work new prospects first. Review the name and contact details, then choose Work prospect. Start calling opens the lead-working flow; it does not automatically place a telephone call.",
+      "start_seconds": 53.04,
+      "duration_seconds": 25.82
+    },
+    {
+      "file": "04-work-lead",
+      "title": "Prepare the conversation",
+      "narration": "The lead workspace puts contact details on the left and your conversation outcome on the right. Read the saved notes before contacting someone. Use Edit primary details to correct a name, email, or phone number. Open scripts and objections gives you conversation guidance. Ask about upcoming closings, current closing gifts, and whether their clients live within Turnly's service area.",
+      "start_seconds": 78.861,
+      "duration_seconds": 26.929
+    },
+    {
+      "file": "05-call",
+      "title": "Call without leaving the portal",
+      "narration": "Click Call lead beside the phone number. The call panel opens at the lower right. Check that it names the correct prospect, then click Start call when you are ready. Allow microphone access in your browser and use a headset. Once connected, the panel provides mute, keypad, and hang-up controls. End the call before navigating away. Recent calls to this lead shows call results. If dialing is blocked by a budget limit, contact your administrator.",
+      "start_seconds": 105.79,
+      "duration_seconds": 33.039
+    },
+    {
+      "file": "06-email",
+      "title": "Email the gift-card link",
+      "narration": "Choose Email link in the lead workspace. Confirm the selected contact and the destination email. The message includes your tracked checkout link and the contact's name. Check the consent box only after verifying that the recipient agreed to receive Turnly emails at that address. Then choose Send email. A provider acceptance means the sending service accepted the message; it does not guarantee delivery. No message is being sent in this training.",
+      "start_seconds": 138.829,
+      "duration_seconds": 30.769
+    },
+    {
+      "file": "07-text",
+      "title": "Text the right recipient",
+      "narration": "Text link uses the phone number saved on the lead. If the person asks you to use another number, choose Send to different number. Enter that number, confirm consent for texts to that number, then scroll down to Send text. This override applies only to that message; it does not change the saved contact. Send to different email works the same way for email. Never use an alternate recipient to bypass an opt-out.",
+      "start_seconds": 169.598,
+      "duration_seconds": 29.379
+    },
+    {
+      "file": "08-outcome",
+      "title": "Save notes and honor opt-outs",
+      "narration": "After the conversation, select the accurate Outcome or Stage, add a useful conversation note, and click Save conversation. Follow-up and Not interested move the lead out of the active pipeline and into the follow-up flow. The first reminder is due in thirty days. If the person says not to contact them again, select the red Do Not Contact checkbox and save. That permanently stops outreach and removes the lead from follow-ups.",
+      "start_seconds": 198.978,
+      "duration_seconds": 29.809
+    },
+    {
+      "file": "09-followups",
+      "title": "Work the follow-up banks",
+      "narration": "Open Follow-ups to see the age-based groups. Thirty-day means zero through thirty days. Sixty-day means thirty-one through sixty. Ninety-day means sixty-one through ninety. Long term means ninety-one days or more. Click a group's count to see its leads. Age starts when the lead enters Follow-up or Not interested. Editing notes or switching between those two outcomes does not restart the clock. Review prior notes and contact preferences before reaching out.",
+      "start_seconds": 228.786,
+      "duration_seconds": 33.194
+    },
+    {
+      "file": "10-pipeline",
+      "title": "Finish with a clear pipeline",
+      "narration": "Deal pipeline shows the active stages and the number of leads in each one. Click a stage count to work that group. Follow-up and Not interested leads are handled in Follow-ups, and Do Not Contact leads are excluded. Your daily routine is simple: review your assigned prospects, prepare, call, share your personal checkout link with permission, and save the outcome. Return to Team playbook whenever you need the training or sales guidance.",
+      "start_seconds": 261.98,
+      "duration_seconds": 30.309
+    }
+  ]
+}
