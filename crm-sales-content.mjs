@@ -21,8 +21,8 @@ export const PLAYBOOK = [
     'Use a brief permission-based opening. Ask about their current closing gifts, clients’ locations, upcoming closings and gifting budget. Listen before presenting the card.',
     'Connect one concrete benefit to that need. Offer a $100 card as a practical welcome-home or thank-you gift. Explain that it is cleaning credit and that any extra service cost is the recipient’s responsibility.',
     'Ask for a small, clear next step: permission to send the purchase page, a specific follow-up time, or a first purchase for a suitable upcoming client.',
-    'Save the call outcome, quantity being considered, useful notes, next action and follow-up date. Move the pipeline only when the corresponding event happens.',
-    'Verify a completed gift-card order or confirmed service booking before marking Purchased / Booked. Record the order or booking reference. A link click, verbal yes, draft checkout or referral activation is not a completed sale.',
+    'Save a useful conversation note and the accurate outcome. Follow-up and Not interested leave the active pipeline and start the follow-up flow; the first reminder is due in 30 days. Use DO NOT CONTACT and save when someone asks to stop outreach.',
+    'Verify a completed gift-card order or confirmed service booking before marking Purchased / Booked. Check the actual sales data; a link click, verbal yes, draft checkout or referral activation is not a completed sale.',
     'After a verified purchase, confirm that the purchaser received the PDF. Offer help with redemption instructions and ask permission for future follow-up. Do not repeatedly contact someone who declines.'
   ]},
   {title:'Pipeline definitions', steps:[
@@ -30,9 +30,9 @@ export const PLAYBOOK = [
     'Contacted — an outreach attempt or conversation is recorded. Note whether you actually reached the person.',
     'Interested — the prospect has expressed interest and you know the intended use, service area and next step.',
     'Purchase link sent — you actually sent the authorized purchase link through an agreed channel. Changing the stage does not send a message.',
-    'Follow-up — a specific next conversation or decision is due. Record a date and reason.',
-    'Purchased / Booked — completed payment or a confirmed service booking has been checked, with a reference recorded. This is a manually maintained sales stage, not an automatic Stripe receipt.',
-    'Not interested — the prospect declines or the offer is unsuitable. Record the reason and any request to stop contact. Reopen only if the prospect re-engages or explicitly asks for a later follow-up.'
+    'Follow-up — moved into the follow-up pipeline. Age begins at entry: 0–30 days, 31–60 days, 61–90 days, then Long term. Editing notes does not reset age.',
+    'Purchased / Booked — completed payment or a confirmed service booking has been checked. This manually maintained stage does not create a paid order or commission; completed gift-card purchases are counted from payment records.',
+    'Not interested — moves into the follow-up flow. Record the reason. If the person asks for no further contact, select DO NOT CONTACT and save; this permanently excludes the lead from follow-ups and outreach.'
   ]},
   {title:'Why realtors may choose Turnly gift cards', paragraphs:[
     'Moving creates a long task list. Cleaning credit offers practical help with settling into a home or arranging an eligible residential cleaning, rather than another item to pack.',
