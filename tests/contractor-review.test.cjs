@@ -76,3 +76,16 @@ test('review decisions are atomic, audited, private, and preserve contractor his
     await assert.rejects(db.query(account,[admin,contractor,'approve','']),/permission denied/);
   } finally {await db.close();}
 });
+test('portal upload approval syncs only the stored owner and selected requirement after review succeeds',async()=>{
+ const actor=randomUUID(),owner=randomUUID(),id=randomUUID(),events=[];
+ const doc={id,profile_id:owner,storage_path:'uploads/w9.pdf',document_type:'tax_document',title:'W-9',updated_at:'2026-10-21T12:00:00Z'};
+ let item={id:'w9',title:'Form W-9',required:true,state:'todo'};
+ const db={from:table=>({select(){return this;},eq(){return this;},maybeSingle:async()=>({data:table==='contractor_documents'?doc:{id:owner,role:'contractor'}})}),rpc:async(name,args)=>{events.push(name);return {data:{ok:true}};}};
+ const transport=async(url,options)=>{if(url.endsWith('/mark')){events.push('mark');assert(url.includes(owner));const body=JSON.parse(options.body);item={...item,state:'done',submission:{id:'approved',source:'admin',reviewerNote:body.note}};}return {ok:true,json:async()=>({complete:item.state==='done',items:[item]})};};
+ await run(db,actor,{action:'review_document',id,status:'approved',auto_match:true,profile_id:randomUUID(),updated_at:doc.updated_at},'admin-token',transport);
+ assert.deepEqual(events,['review_contractor_document','mark']);
+ events.length=0;item={id:'w9',title:'Form W-9',required:true,state:'todo'};
+ db.rpc=async()=>({error:{code:'P0001',message:'This upload changed'}});
+ await assert.rejects(run(db,actor,{action:'review_document',id,status:'approved',item_id:'w9',updated_at:doc.updated_at},'admin-token',transport),/upload changed/);
+ assert(!events.includes('mark'));
+});

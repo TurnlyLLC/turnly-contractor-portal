@@ -61,3 +61,15 @@ test('deletion requires a current request and confirmation, soft deletes, and su
   events.length=0;db.auth.admin.deleteUser=async()=>({error:{message:'Unavailable'}});
   await assert.rejects(deletion(db,actor,{...input,confirm:true},call),/Retry approval/);assert.deepEqual(events,['begin']);
 });
+test('approved portal uploads complete their requirement without creating a waiver',async()=>{
+ const id='00000000-0000-0000-0000-000000000001',doc={id:'00000000-0000-0000-0000-000000000002',expiration_date:'2027-10-21'};
+ const mobile=require('../lib/mobile-contractor-review.cjs');
+ let item={id:'insurance',title:'Insurance',required:true,state:'todo'},calls=[];
+ const call=async(path,body)=>{calls.push({path,body});if(path.endsWith('/mark')){item={...item,state:'done',submission:{source:'admin',id:'approval',reviewerNote:body.note}};return {ok:true};}return {complete:item.state==='done',items:[item]};};
+ const result=await mobile.approvePortalUpload(call,id,doc,'insurance','Valid insurance');
+ assert.equal(result.complete,true);assert.equal(mobile.waived(item),false);
+ const current=await mobile.file(call,id);assert.equal(current.items[0].portalDocumentId,doc.id);
+ assert.equal(calls.find(c=>c.path.endsWith('/mark')).body.expirationDate,'2027-10-21');
+ await assert.rejects(mobile.approvePortalUpload(call,id,doc,'missing',''),/matching onboarding/);
+ calls=[];await mobile.approvePortalUpload(call,id,doc,'insurance','');assert(!calls.some(c=>c.path.endsWith('/mark')));
+});

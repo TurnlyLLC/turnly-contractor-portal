@@ -1531,6 +1531,15 @@ async function saveBackgroundCheck(form) {
   render();
 }
 
+async function syncDocumentApproval(row) {
+  const {data:sessionData} = await supabase.auth.getSession();
+  const latest = await supabase.from('contractor_documents').select('*').eq('id',row.id).single();
+  if(latest.error)throw new Error('File saved. Refresh and retry its approval.');
+  const response = await fetch('/api/contractor-review', {method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${sessionData?.session?.access_token || ''}`},body:JSON.stringify({action:'review_document',id:row.id,status:'approved',updated_at:latest.data.updated_at,reason:row.notes||'',auto_match:true})});
+  const result=await response.json();if(!response.ok)throw new Error(result.error||'File saved, but onboarding approval needs a retry.');
+  return {...latest.data,status:'approved'};
+}
+
 async function saveDocumentUpload(form) {
   if (state.savingId) return;
   const file = form.elements.documentFile?.files?.[0];
@@ -1556,6 +1565,8 @@ async function saveDocumentUpload(form) {
       notes: formText(form, "notes"),
       uploaded_at: new Date().toISOString()
     };
+    const approve = payload.status === 'approved';
+    if (approve) payload.status = 'uploaded';
     const result = await insertRowWithFallback("contractor_documents", payload);
     state.savingId = "";
     if (result.error) {
@@ -1563,7 +1574,8 @@ async function saveDocumentUpload(form) {
       render();
       return;
     }
-    state.documents = [{ ...(result.data || payload), __sourceTable: "contractor_documents" }, ...state.documents];
+    const saved = approve ? await syncDocumentApproval(result.data || payload) : (result.data || payload);
+    state.documents = [{ ...saved, __sourceTable: "contractor_documents" }, ...state.documents];
     message("Contractor document uploaded.");
     render();
   } catch (error) {
@@ -1602,12 +1614,15 @@ async function saveDocumentEdit(form) {
         uploaded_by: replacementUpload.userId
       });
     }
+    const approve = patch.status === 'approved';
+    if (approve) patch.status = 'uploaded';
     const result = await updateRowWithFallback("contractor_documents", id, patch);
     if (result.error) {
       if (replacementUpload) await supabase.storage.from(DOCUMENT_BUCKET).remove([replacementUpload.path]).catch(() => null);
       throw result.error;
     }
-    const next = result.data || { ...row, ...patch };
+    let next = result.data || { ...row, ...patch };
+    if (approve) next = await syncDocumentApproval(next);
     state.documents = state.documents.map((item) => String(item.id || "") === id ? { ...item, ...next, __sourceTable: "contractor_documents" } : item);
     state.editingDocumentId = "";
     state.savingId = "";
