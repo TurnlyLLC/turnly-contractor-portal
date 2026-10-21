@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-contractor-pwa-v20261021-onboarding";
+const CACHE_NAME = "turnly-contractor-pwa-v20261021-onboarding-pdf";
 
 const PRECACHE_URLS = [
   "/",
