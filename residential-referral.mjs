@@ -8,7 +8,7 @@ const labels=['YOUR HOME','YOUR DETAILS','YOUR CLEAN','YOUR QUOTE','YOUR TIME','
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=c=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:2}).format(c/100);
 let step=0,context=null,quote=null,busy=false,attempt=null,receiptParams=null;
-const addressFlow=setupAddress({form,api,enabled:()=>!!context?.property_lookup,onChange:()=>{attempt=null;quote=null;}});
+const addressFlow=setupAddress({form,api,enabled:()=>!!context?.property_lookup,onChange:()=>{attempt=null;quote=null;$('#coverageStatus').hidden=true;}});
 
 const today=new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const tomorrow=new Date(earliestDay()+'T12:00:00Z');f.service_date.min=earliestDay();
@@ -62,7 +62,7 @@ form.addEventListener('submit',async e=>{
  if(step===4&&f.arrival_end.value<=f.arrival_start.value){notice('Choose an arrival window with an end time after its start time.',true);f.arrival_end.focus();return;}
  lock(true);
  try{
-  if(step===0)f.profile_address.value=[f.property_address.value,f.city.value,f.state.value,f.zip.value].join(', ');
+  if(step===0){const coverage=await api('coverage',values());if(!coverage.approved)throw new Error(coverage.message);f.profile_address.value=[f.property_address.value,f.city.value,f.state.value,f.zip.value].join(', ');$('#coverageStatus').textContent=coverage.message;$('#coverageStatus').hidden=false;}
   if(step===2){quote=(await api('quote',values())).quote;renderQuote();}
   if(step===5)renderReview();
   if(step<6){showStep(step+1);return;}

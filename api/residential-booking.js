@@ -10,6 +10,7 @@ module.exports=async(req,res)=>{
   const input=await S.body(req);
   if(input.action==='address_suggestions')return S.json(res,200,await require('../lib/residential-address.cjs').publicSuggest(input,req));
   const db=S.database();
+  if(input.action==='coverage'){await S.rate(db,req,'coverage');return S.json(res,200,await require('../lib/service-coverage.cjs').verify(input));}
   if(['admin_list','admin_inquiries','admin_clients','admin_approve_job','admin_complete','admin_cancel','admin_sync'].includes(input.action)){
    const actor=await S.admin(db,req);
    if(input.action==='admin_inquiries'){
@@ -81,6 +82,7 @@ module.exports=async(req,res)=>{
   if(!uuid(input.id)||!/^[-a-zA-Z0-9_]{40,100}$/.test(String(input.token||'')))throw S.fail('Refresh this page and try again.');
   if(ambassador&&input.ba_consent!==true)throw S.fail('Accept the referral disclosure to continue.');
   const data=S.validate(input),checkout=input.action==='checkout';
+  await require('../lib/service-coverage.cjs').requireCoverage(data);
   if(direct&&data.state!=='NC')throw S.fail('Online booking is available only in North Carolina.');
   if(checkout&&(!S.ready()||data.quote.review_required))throw S.fail('This booking needs a request first. Please go back and request a review.',409);
   if(checkout&&input.consent!==true)throw S.fail('Authorize the service-date charge to continue.');
