@@ -1,3 +1,4 @@
+import {paintDesktopControl,toggleDesktop,notifyDesktop} from './crm-desktop-notifications.mjs?v=20261021';
 let unread=0,refresh=()=>{},audio,toastTimer;
 const muteKey='turnly-message-sound-muted';
 const muted=()=>{try{return localStorage.getItem(muteKey)==='true';}catch{return false;}};
@@ -23,6 +24,7 @@ function showAlert(messages){
  toast.append(title,text,link,close);document.body.append(toast);clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.remove(),12000);chime();
 }
 export function paintMessageBadge(){
+ paintDesktopControl();
  for(const badge of document.querySelectorAll('[data-message-unread]')){
   badge.hidden=unread===0;
   badge.textContent=unread>99?'99+':String(unread);
@@ -34,7 +36,7 @@ export function refreshMessageBadge(){return refresh();}
 export function startMessageBadge(request){
  let pending=false,previous=null,account=null;
  refresh=async()=>{
-  if(pending||document.hidden)return;
+  if(pending)return;
   pending=true;
   try{const result=await request({action:'unread'});unread=Math.max(0,Number(result.unread)||0);paintMessageBadge();
    const conversations=result.conversations||[];
@@ -42,7 +44,7 @@ export function startMessageBadge(request){
    const fresh=incomingMessages(previous,conversations);
    previous=Object.fromEntries(conversations.map(c=>[c.id,c.at]));
    try{sessionStorage.setItem('turnly-message-seen:'+account,JSON.stringify(previous));}catch{}
-   if(fresh.length)showAlert(fresh);
+   if(fresh.length){if(document.hidden||document.hasFocus?.()===false){void notifyDesktop(fresh,muted()).catch(()=>{});}else showAlert(fresh);}
   }
   catch{/* Keep the last confirmed count during a temporary connection failure. */}
   finally{pending=false;}
@@ -53,5 +55,5 @@ export function startMessageBadge(request){
  document.addEventListener('visibilitychange',refresh);
  document.addEventListener('pointerdown',unlockAudio);
  document.addEventListener('keydown',unlockAudio);
- document.addEventListener('click',e=>{if(!e.target.closest?.('[data-message-sound]'))return;try{localStorage.setItem(muteKey,String(!muted()));}catch{}paintMessageBadge();});
+ document.addEventListener('click',e=>{if(e.target.closest?.('[data-message-desktop]')){void toggleDesktop().catch(err=>window.alert(err.message));return;}if(!e.target.closest?.('[data-message-sound]'))return;try{localStorage.setItem(muteKey,String(!muted()));}catch{}paintMessageBadge();});
 }

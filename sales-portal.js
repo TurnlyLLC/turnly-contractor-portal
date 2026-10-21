@@ -1,4 +1,4 @@
-import {startMessageBadge,paintMessageBadge,refreshMessageBadge} from './crm-message-badge.mjs?v=20261021-alerts';
+import {startMessageBadge,paintMessageBadge,refreshMessageBadge} from './crm-message-badge.mjs?v=20261021-desktop';
 import {mountMessages} from './crm-messages.mjs?v=20261021-alerts';
 import {mountTraining} from './crm-training.mjs?v=20261021-required';
 import {mountBudget} from './crm-budget.mjs?v=20261020';
@@ -1282,7 +1282,7 @@ function renderSidebar() {
           </a>
         `).join("")}
       </nav>
-      <div class="sales-sidebar-footer"><button type="button" class="crm-message-sound" data-message-sound aria-pressed="true">Message sound: on</button>
+      <div class="sales-sidebar-footer"><button type="button" class="crm-message-sound" data-message-desktop aria-pressed="false">Enable desktop alerts</button><button type="button" class="crm-message-sound" data-message-sound aria-pressed="true">Message sound: on</button>
         <div class="crm-workspace-note"><span class="crm-live-dot"></span> Team workspace</div>
       </div>
     </aside>
