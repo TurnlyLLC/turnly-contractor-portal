@@ -1,4 +1,5 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+import { canReleaseJob } from "./contractor-release-policy.mjs";
 import {
   adminPreviewPortalOptions,
   adminPreviewPropertyOptions,
@@ -952,6 +953,11 @@ function assignmentActions(item, mode) {
   const status = normalizeToken(item.status);
   const directions = mapLink(item);
   const actions = [];
+  if (mode === "mine" && !state.adminPreview && item.claimed_by === state.user?.id && ["claimed", "scheduled"].includes(status)) {
+    actions.push(canReleaseJob(item, state.user.id)
+      ? `<button type="button" class="cp-ghost-action" data-release-assignment-id="${esc(item.id)}">Release job</button>`
+      : `<small>Release unavailable within 48 hours of start. Contact Turnly for help.</small>`);
+  }
   if (mode === "open") {
     actions.push(`<button type="button" class="cp-action" data-claim-assignment-id="${esc(item.id)}">Claim</button>`);
   }
@@ -2699,6 +2705,29 @@ async function claimAssignment(assignmentId) {
   renderShell();
 }
 
+async function releaseAssignment(assignmentId) {
+  if (state.adminPreview) return;
+  if (!window.confirm("Release this job? It will leave your schedule and become available for another contractor to claim. This is allowed only more than 48 hours before its start.")) return;
+  state.message = "Releasing job...";
+  state.messageError = false;
+  renderShell();
+  try {
+    const {data} = await supabase.auth.getSession();
+    const response = await fetch('/api/contractor-release-job', {
+      method: 'POST', headers: {'Content-Type': 'application/json', Authorization: `Bearer ${data?.session?.access_token || ''}`},
+      body: JSON.stringify({id: assignmentId})
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Unable to release this job.');
+    state.message = "Job released. It is now available for another contractor.";
+    await Promise.all([loadOpenAssignments(), loadMyAssignments()]);
+  } catch (error) {
+    state.message = error.message || "Unable to release this job. Please try again.";
+    state.messageError = true;
+  }
+  renderShell();
+}
+
 async function saveAvailability(form) {
   const formData = new FormData(form);
   const selectedDays = new Set(formData.getAll("available_days").map(String));
@@ -2890,6 +2919,13 @@ function attachEvents() {
       return;
     }
 
+    const releaseButton = event.target.closest("[data-release-assignment-id]");
+    if (releaseButton) {
+      releaseButton.disabled = true;
+      await releaseAssignment(releaseButton.dataset.releaseAssignmentId);
+      releaseButton.disabled = false;
+      return;
+    }
     const claimButton = event.target.closest("[data-claim-assignment-id]");
     if (claimButton) {
       claimButton.disabled = true;
