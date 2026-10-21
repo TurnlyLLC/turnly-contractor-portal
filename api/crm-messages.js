@@ -8,9 +8,10 @@ module.exports=async(req,res)=>{
   const db=S.database(),user=await C.access(db,req),i=await S.body(req);
   // Use the caller's JWT for all conversation operations, preserving existing inbox RLS.
   const scoped=createClient(process.env.SUPABASE_URL||'https://nwnzdoveskthebfyndcs.supabase.co',process.env.SUPABASE_ANON_KEY,{auth:{persistSession:false,autoRefreshToken:false},global:{headers:{Authorization:req.headers.authorization}}});
-  if(i.action==='list'){
+  if(i.action==='list'||i.action==='unread'){
    const rows=checked(await scoped.from('message_thread_participants').select('thread_id,last_read_at,message_threads(id,subject,last_message_at,last_message_preview,created_by_name)').eq('user_id',user.id).eq('is_archived',false));
    const threads=rows.filter(r=>r.message_threads).map(r=>({...r.message_threads,unread:!r.last_read_at||r.message_threads.last_message_at>r.last_read_at})).sort((a,b)=>String(b.last_message_at).localeCompare(String(a.last_message_at)));
+   if(i.action==='unread')return S.json(res,200,{unread:threads.filter(t=>t.unread).length});
    const people=checked(await db.from('profiles').select('id,full_name,role').in('role',['admin','sales','sales_team']).eq('status','active').neq('id',user.id));
    return S.json(res,200,{threads,people,user_id:user.id});
   }

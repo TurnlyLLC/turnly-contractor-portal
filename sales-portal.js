@@ -1,3 +1,4 @@
+import {startMessageBadge,paintMessageBadge,refreshMessageBadge} from './crm-message-badge.mjs?v=20261021';
 import {mountMessages} from './crm-messages.mjs?v=20261021';
 import {mountTraining} from './crm-training.mjs?v=20261021-required';
 import {mountBudget} from './crm-budget.mjs?v=20261020';
@@ -1253,7 +1254,8 @@ function render() {
     </main>
   `;
   const messagesRoot=document.getElementById('crmMessages');
-  if(messagesRoot)void mountMessages(messagesRoot,async values=>{const {data}=await supabase.auth.getSession();if(!data?.session)throw Error('Sign in again.');const response=await fetch('/api/crm-messages',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+data.session.access_token},body:JSON.stringify(values)});const result=await response.json();if(!response.ok)throw Error(result.error||'Unable to load messages.');return result;});
+  if(messagesRoot)void mountMessages(messagesRoot,async values=>{const result=await crmMessageRequest(values);if(['read','reply','create'].includes(values.action))void refreshMessageBadge();return result;});
+  paintMessageBadge();
   const trainingRoot=document.getElementById('crmTrainingGate');
   if(trainingRoot)void mountTraining(trainingRoot,async values=>{const {data}=await supabase.auth.getSession();if(!data?.session)throw Error('Sign in again to save training.');const response=await fetch('/api/crm-training',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+data.session.access_token},body:JSON.stringify(values)});const result=await response.json();if(!response.ok)throw Error(result.error||'Unable to save training.');return result;});
   const budgetRoot=document.getElementById('communicationBudget');
@@ -1276,7 +1278,7 @@ function renderSidebar() {
       <nav class="sales-nav" aria-label="Sales navigation">
         ${navItems.filter(([key])=>!['sales','communications'].includes(key)||isSalesAdmin()).map(([key, label, href, iconName]) => `
           <a class="sales-nav-link ${state.page === key ? "active" : ""}" href="${href}">
-            ${icon(iconName)}<span>${label}</span>
+            ${icon(iconName)}<span>${label}</span>${key==='messages'?'<span data-message-unread class="crm-message-unread" role="status" hidden></span>':''}
           </a>
         `).join("")}
       </nav>
@@ -4623,7 +4625,13 @@ function bindEvents() {
 
 bindEvents();
 
+async function crmMessageRequest(values){
+ const {data}=await supabase.auth.getSession();if(!data?.session)throw Error('Sign in again.');
+ const response=await fetch('/api/crm-messages',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+data.session.access_token},body:JSON.stringify(values),signal:AbortSignal.timeout(15000)});
+ const result=await response.json();if(!response.ok)throw Error(result.error||'Unable to load messages.');return result;
+}
 if (await requireSalesAccess()) {
+ startMessageBadge(crmMessageRequest);
  installCalling({request:async values=>{
   const {data}=await supabase.auth.getSession();
   if(!data.session)throw new Error('Sign in again to call.');
