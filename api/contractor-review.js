@@ -54,10 +54,17 @@ async function run(db,actor,input,token,transport) {
   const reason=String(input.reason||'').trim();
   if(reason.length>1000) throw fail('Keep the review note under 1,000 characters.');
   if(['override','remove_override'].includes(input.action)&&reason.length<5)throw fail('Enter a reason for this override decision.');
-  if(['mobile_account','mobile_file','mobile_review','approve','override','remove_override','approve_deletion','decline_deletion'].includes(input.action)){
+  if(['mobile_requirement','mobile_account','mobile_file','mobile_review','approve','override','remove_override','approve_deletion','decline_deletion'].includes(input.action)){
     const profile=checked(await db.from('profiles').select('id,role,status').eq('id',input.id).maybeSingle());
     if(profile?.role!=='contractor')throw fail('Contractor account not found.',404);
     const call=mobile.client(token,transport);
+    if(input.action==='mobile_requirement'){
+      if(['deleted','deletion_pending','disabled','suspended','inactive','deactivated','rejected'].includes(profile.status))throw fail('Requirements cannot be changed on this inactive account.',409);
+      return mobile.requirement(call,input.id,input,async()=>{
+        const pause=await db.rpc('review_contractor_account',{p_actor:actor,p_profile:input.id,p_action:'remove_override',p_reason:'Onboarding requirement restored: '+String(input.item_id).slice(0,120)});
+        if(pause.error)throw fail('Unable to pause job access. The requirement was not changed.',503);
+      });
+    }
     if(input.action==='mobile_account')return await mobile.file(call,input.id);
     if(input.action==='mobile_file'||input.action==='mobile_review')return await mobile.review(call,input.id,input);
     if(input.action==='approve'&&!(await mobile.file(call,input.id)).complete)throw fail('Review all required onboarding items first, or grant an established-employee override.',409);
