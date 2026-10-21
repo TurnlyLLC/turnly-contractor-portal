@@ -1,0 +1,203 @@
+/* Turnly Pro Executive Navy — matched to the contractor iOS/Android design contract.
+   Scoped to the PWA so the separate desktop and admin portals retain their themes. */
+body.contractor-portal-body.cp-native {
+  --cp-bg: #f5f5f2;
+  --cp-rail: #16233b;
+  --cp-panel: #fff;
+  --cp-panel-2: #f5f5f2;
+  --cp-text: #16233b;
+  --cp-muted: #5b6474;
+  --cp-line: #16233b1f;
+  --cp-line-strong: #16233b33;
+  --cp-green: #8a6a20;
+  --cp-blue: #8a6a20;
+  --cp-yellow: #c9a24b;
+  --cp-red: #a8402f;
+  --cp-violet: #8a6a20;
+  --admin-green: #8a6a20;
+  --admin-blue: #8a6a20;
+  --admin-muted: #5b6474;
+  --native-gold: #c9a24b;
+  --native-serif: ui-serif, 'New York', Georgia, 'Times New Roman', serif;
+  color-scheme: light;
+  background: #f5f5f2;
+  color: #16233b;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 15px;
+  line-height: 1.45;
+  margin: 0;
+}
+body.contractor-portal-body.cp-native *, body.contractor-portal-body.cp-native *::before, body.contractor-portal-body.cp-native *::after { box-sizing: border-box; }
+body.contractor-portal-body.cp-native [hidden] { display: none !important; }
+body.contractor-portal-body.cp-native :focus-visible { outline: 3px solid #8a6a20; outline-offset: 3px; }
+body.contractor-portal-body.cp-native .cp-shell { display: block; min-height: 100dvh; }
+body.contractor-portal-body.cp-native .cp-sidebar { display: none; }
+body.contractor-portal-body.cp-native .cp-main { padding: 0 0 calc(100px + env(safe-area-inset-bottom, 0px)); margin: 0 auto; width: 100%; max-width: 960px; min-width: 0; display: block; }
+body.contractor-portal-body.cp-native .cp-page-content { padding: 20px; }
+body.contractor-portal-body.cp-native .cp-native-header { background: #16233b; color: white; display: flex; align-items: center; gap: 16px; padding: calc(25px + env(safe-area-inset-top, 0px)) 20px 20px; position: relative; z-index: 5; }
+body.contractor-portal-body.cp-native .cp-native-wordmark { display: grid; color: white; text-decoration: none; flex: 1; }
+body.contractor-portal-body.cp-native .cp-native-wordmark strong { font-family: var(--native-serif); font-size: 34px; line-height: 1.05; letter-spacing: -.9px; font-weight: 700; }
+body.contractor-portal-body.cp-native .cp-native-wordmark span { font-size: 12px; letter-spacing: 5px; font-weight: 500; margin-top: 5px; }
+body.contractor-portal-body.cp-native .cp-native-tagline { text-align: right; font-size: 9px; letter-spacing: 1.4px; line-height: 1.5; color: #ffffffaa; }
+body.contractor-portal-body.cp-native .cp-native-account { border: 1px solid #ffffff55; border-radius: 50%; width: 36px; height: 36px; padding: 7px; background: transparent; color: #fff; cursor: pointer; }
+body.contractor-portal-body.cp-native .suite-icon { display: inline-flex; width: 22px; height: 22px; flex-shrink: 0; }
+body.contractor-portal-body.cp-native .suite-icon svg { width: 100%; height: 100%; }
+body.contractor-portal-body.cp-native .cp-profile-menu { background: white; color: #16233b; border: 1px solid var(--cp-line); box-shadow: 0 8px 28px #16233b20; }
+body.contractor-portal-body.cp-native .cp-profile-menu-action { color: #16233b; background: white; }
+body.contractor-portal-body.cp-native .cp-native-schedule, body.contractor-portal-body.cp-native .cp-native-past { margin: -20px; }
+body.contractor-portal-body.cp-native .cp-native-schedule-controls, body.contractor-portal-body.cp-native .cp-native-list-controls { background: #16233b; color: #fff; padding: 0 20px 20px; }
+body.contractor-portal-body.cp-native .cp-native-segment { display: flex; border: 1px solid #ffffff28; border-radius: 30px; padding: 3px; gap: 4px; }
+body.contractor-portal-body.cp-native .cp-native-segment button { border: 0; display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px; flex: 1; border-radius: 25px; color: #ffffffb5; background: transparent; font: inherit; cursor: pointer; }
+body.contractor-portal-body.cp-native .cp-native-segment button.active { background: #c9a24b; color: #16233b; font-weight: 600; }
+body.contractor-portal-body.cp-native .cp-native-segment .suite-icon { width: 18px; height: 18px; }
+body.contractor-portal-body.cp-native .cp-native-filters { display: flex; gap: 8px; margin-top: 14px; align-items: center; flex-wrap: wrap; }
+body.contractor-portal-body.cp-native .cp-native-filters label, body.contractor-portal-body.cp-native .cp-native-filters a { display: flex; gap: 6px; align-items: center; border: 1px solid #ffffff33; border-radius: 22px; padding: 7px 10px; min-height: 38px; color: #ffffffc5; text-decoration: none; font-size: 13px; max-width: 100%; }
+body.contractor-portal-body.cp-native .cp-native-filters select { background: transparent; color: white; border: 0; font: inherit; max-width: 185px; }
+body.contractor-portal-body.cp-native select option { color: #16233b; background: white; }
+body.contractor-portal-body.cp-native .cp-native-filters .suite-icon { width: 16px; height: 16px; }
+body.contractor-portal-body.cp-native .cp-native-week-nav { display: flex; align-items: center; justify-content: space-between; padding: 10px 0 5px; }
+body.contractor-portal-body.cp-native .cp-native-week-nav button { border: 0; color: #ffffffb5; background: transparent; padding: 4px 8px; min-height: 40px; font-size: 24px; cursor: pointer; }
+body.contractor-portal-body.cp-native .cp-native-week-nav button:nth-child(2) { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; }
+body.contractor-portal-body.cp-native .cp-native-week { display: grid; grid-template-columns: repeat(7,minmax(0,1fr)); }
+body.contractor-portal-body.cp-native .cp-native-week button { color: white; background: transparent; border: 0; display: grid; justify-items: center; align-content: start; gap: 5px; padding: 0; cursor: pointer; min-height: 70px; }
+body.contractor-portal-body.cp-native .cp-native-week small { color: #ffffff99; font-size: 10px; text-transform: uppercase; }
+body.contractor-portal-body.cp-native .cp-native-week strong { display: grid; place-items: center; width: 36px; height: 36px; font-size: 17px; font-weight: 500; border-radius: 50%; }
+body.contractor-portal-body.cp-native .cp-native-week .active strong { color: #16233b; background: #c9a24b; font-weight: 700; }
+body.contractor-portal-body.cp-native .cp-native-week i { width: 4px; height: 4px; background: #c9a24b; border-radius: 50%; }
+body.contractor-portal-body.cp-native .cp-native-agenda { padding: 20px; }
+body.contractor-portal-body.cp-native .cp-native-in-progress { background: #16233b; color: white; padding: 18px 20px; border-top: 1px solid #ffffff22; display: grid; gap: 5px; }
+body.contractor-portal-body.cp-native .cp-native-in-progress span { color: #c9a24b; font-size: 11px; letter-spacing: 1.4px; }
+body.contractor-portal-body.cp-native .cp-native-in-progress strong { font: 700 21px var(--native-serif); }
+body.contractor-portal-body.cp-native .cp-native-in-progress button { color: #c9a24b; background: transparent; border: 0; text-align: left; padding: 7px 0; font: inherit; cursor: pointer; }
+body.contractor-portal-body.cp-native .cp-native-empty { text-align: center; padding: 42px 12px; max-width: 340px; margin: 0 auto; }
+body.contractor-portal-body.cp-native .cp-native-empty > .suite-icon { width: 34px; height: 34px; color: #8a6a20; background: #c9a24b1f; padding: 6px; border-radius: 50%; }
+body.contractor-portal-body.cp-native .cp-native-empty h2 { font: 700 23px var(--native-serif); margin: 16px 0 6px; }
+body.contractor-portal-body.cp-native .cp-native-empty p { color: #5b6474; font-size: 14px; margin: 0 0 20px; }
+body.contractor-portal-body.cp-native .cp-action { background: #c9a24b; color: #16233b; border: 1px solid #c9a24b; border-radius: 12px; box-shadow: none; min-height: 44px; padding: 11px 16px; font-weight: 650; text-decoration: none; }
+body.contractor-portal-body.cp-native .cp-action:hover { background: #d5b461; color: #16233b; box-shadow: none; }
+body.contractor-portal-body.cp-native .cp-ghost-action { color: #16233b; background: transparent; border: 1px solid #16233b33; border-radius: 12px; min-height: 44px; box-shadow: none; }
+body.contractor-portal-body.cp-native .cp-pill { border: 1px solid #c9a24b; background: transparent; color: #8a6a20; font-size: 11px; font-weight: 500; border-radius: 20px; padding: 3px 9px; width: fit-content; }
+body.contractor-portal-body.cp-native .cp-pill.in-progress, body.contractor-portal-body.cp-native .cp-pill.in_progress { background: #c9a24b24; }
+body.contractor-portal-body.cp-native .cp-pill.completed { color: #5b6474; border-color: #5b647455; background: transparent; }
+body.contractor-portal-body.cp-native .cp-panel, body.contractor-portal-body.cp-native .cp-metric, body.contractor-portal-body.cp-native .cp-document-tile, body.contractor-portal-body.cp-native .cp-video-card { border: 1px solid var(--cp-line); border-radius: 12px; background: white; color: #16233b; box-shadow: none; }
+body.contractor-portal-body.cp-native .cp-panel { padding: 18px; }
+body.contractor-portal-body.cp-native .cp-panel-heading { border-color: var(--cp-line); }
+body.contractor-portal-body.cp-native .cp-panel-heading h2 { color: #16233b; font: 700 22px var(--native-serif); }
+body.contractor-portal-body.cp-native .cp-panel-kicker { color: #5b6474; font-size: 11px; letter-spacing: 1.4px; font-weight: 600; text-transform: uppercase; margin: 0 0 14px; }
+body.contractor-portal-body.cp-native .cp-metric strong { color: #16233b; font-family: var(--native-serif); }
+body.contractor-portal-body.cp-native .cp-metric-icon { background: #c9a24b1f; color: #8a6a20; box-shadow: none; }
+body.contractor-portal-body.cp-native .cp-metric small, body.contractor-portal-body.cp-native .cp-muted, body.contractor-portal-body.cp-native .cp-detail-list span { color: #5b6474; }
+body.contractor-portal-body.cp-native .cp-job-row, body.contractor-portal-body.cp-native .cp-open-job-card, body.contractor-portal-body.cp-native .cp-pay-card, body.contractor-portal-body.cp-native .cp-home-job-card, body.contractor-portal-body.cp-native .cp-mini-row { border: 0; border-bottom: 1px solid var(--cp-line); border-radius: 0; background: transparent; box-shadow: none; padding: 18px 0; }
+body.contractor-portal-body.cp-native .cp-open-job-lines strong, body.contractor-portal-body.cp-native .cp-job-main strong, body.contractor-portal-body.cp-native .cp-pay-card strong, body.contractor-portal-body.cp-native .cp-home-job-main strong { color: #16233b; font: 700 20px var(--native-serif); }
+body.contractor-portal-body.cp-native .cp-open-job-lines span, body.contractor-portal-body.cp-native .cp-job-main small, body.contractor-portal-body.cp-native .cp-job-meta, body.contractor-portal-body.cp-native .cp-pay-card small { color: #5b6474; }
+body.contractor-portal-body.cp-native .cp-job-row-clickable:hover { background: #c9a24b0d; border-color: var(--cp-line); box-shadow: none; }
+body.contractor-portal-body.cp-native .cp-pwa-schedule-day { border: 0; border-radius: 0; background: transparent; box-shadow: none; margin-bottom: 24px; }
+body.contractor-portal-body.cp-native .cp-pwa-schedule-day-head { border: 0; background: transparent; color: #5b6474; padding: 0; margin: 0 0 10px; }
+body.contractor-portal-body.cp-native .cp-pwa-schedule-day-head strong, body.contractor-portal-body.cp-native .cp-pwa-schedule-day-head span, body.contractor-portal-body.cp-native .cp-pwa-schedule-day-head em { color: #5b6474; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; font-style: normal; }
+body.contractor-portal-body.cp-native .cp-pwa-schedule-jobs { padding: 0; display: block; }
+body.contractor-portal-body.cp-native .cp-pwa-schedule-card { border: 0; border-bottom: 1px solid var(--cp-line); border-radius: 0; background: transparent; box-shadow: none; margin: 0; padding: 16px 0; }
+body.contractor-portal-body.cp-native .cp-pwa-schedule-card::before { display: none; }
+body.contractor-portal-body.cp-native .cp-pwa-schedule-card-link { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; padding: 0; text-decoration: none; }
+body.contractor-portal-body.cp-native .cp-pwa-schedule-card-time { grid-row: 2; color: #5b6474; background: transparent; border: 0; padding: 0; font-size: 13px; }
+body.contractor-portal-body.cp-native .cp-pwa-schedule-card-main { grid-row: 1; grid-column: 1; min-width: 0; }
+body.contractor-portal-body.cp-native .cp-pwa-schedule-card-main strong { color: #16233b; font: 700 20px var(--native-serif); display: block; }
+body.contractor-portal-body.cp-native .cp-pwa-schedule-card-main small { color: #5b6474; font-size: 13px; display: block; margin-top: 5px; }
+body.contractor-portal-body.cp-native .cp-pwa-schedule-card-meta { grid-row: 3; grid-column: 1 / -1; color: #5b6474; font-size: 12px; gap: 15px; }
+body.contractor-portal-body.cp-native .cp-pwa-schedule-card-meta span { background: transparent; padding: 0; }
+body.contractor-portal-body.cp-native .cp-pwa-schedule-card-meta b { color: #5b6474; }
+body.contractor-portal-body.cp-native .cp-pwa-schedule-card-link > .cp-pill { grid-column: 2; grid-row: 1; align-self: start; }
+body.contractor-portal-body.cp-native .cp-pwa-schedule-card-actions { padding: 12px 0 0; border: 0; background: transparent; }
+body.contractor-portal-body.cp-native .cp-empty { background: transparent; color: #5b6474; border: 0; border-radius: 0; padding: 28px 10px; }
+body.contractor-portal-body.cp-native .cp-search, body.contractor-portal-body.cp-native .cp-select, body.contractor-portal-body.cp-native .cp-field input, body.contractor-portal-body.cp-native .cp-field textarea { background: #fff; color: #16233b; border: 1px solid var(--cp-line-strong); box-shadow: none; border-radius: 10px; }
+body.contractor-portal-body.cp-native input, body.contractor-portal-body.cp-native textarea, body.contractor-portal-body.cp-native select, body.contractor-portal-body.cp-native button { font-family: inherit; }
+body.contractor-portal-body.cp-native .cp-search input { background: transparent; color: inherit; }
+body.contractor-portal-body.cp-native .cp-tab { color: #5b6474; background: transparent; border: 1px solid var(--cp-line-strong); border-radius: 24px; min-height: 38px; }
+body.contractor-portal-body.cp-native .cp-tab.active { color: #16233b; background: #c9a24b; border-color: #c9a24b; }
+body.contractor-portal-body.cp-native .cp-native-list-controls .cp-search { background: transparent; border-color: #ffffff33; color: white; width: 100%; margin-bottom: 16px; }
+body.contractor-portal-body.cp-native .cp-native-list-controls input::placeholder { color: #ffffff88; }
+body.contractor-portal-body.cp-native .cp-native-list-controls .cp-tab:not(.active) { border-color: #ffffff33; color: #ffffffc5; }
+body.contractor-portal-body.cp-native .cp-native-past-row { display: flex; gap: 12px; justify-content: space-between; margin: 0 20px; padding: 18px 0; border-bottom: 1px solid var(--cp-line); }
+body.contractor-portal-body.cp-native .cp-native-past-row h2 { font: 700 20px/1.2 var(--native-serif); margin: 0; }
+body.contractor-portal-body.cp-native .cp-native-past-row p, body.contractor-portal-body.cp-native .cp-native-past-row small { color: #5b6474; font-size: 13px; margin: 5px 0 0; }
+body.contractor-portal-body.cp-native .cp-native-past-row > div:last-child { display: grid; justify-items: end; align-content: start; gap: 8px; flex-shrink: 0; }
+body.contractor-portal-body.cp-native .cp-native-past-row > div:last-child strong { font: 700 20px var(--native-serif); }
+body.contractor-portal-body.cp-native .cp-native-earnings { text-align: center; padding: 12px 0 26px; }
+body.contractor-portal-body.cp-native .cp-native-earnings > span { font-size: 11px; letter-spacing: 1.4px; color: #5b6474; }
+body.contractor-portal-body.cp-native .cp-native-earnings h1 { font: 700 46px var(--native-serif); color: #16233b; margin: 5px 0; }
+body.contractor-portal-body.cp-native .cp-native-earnings p { color: #5b6474; font-size: 12px; }
+body.contractor-portal-body.cp-native .cp-native-bars { display: grid; grid-template-columns: repeat(7,minmax(0,1fr)); gap: 10px; height: 145px; max-width: 500px; margin: 0 auto; }
+body.contractor-portal-body.cp-native .cp-native-bars div { display: flex; flex-direction: column; justify-content: end; align-items: center; gap: 6px; color: #5b6474; font-size: 10px; }
+body.contractor-portal-body.cp-native .cp-native-bars i { width: min(100%, 24px); border-radius: 3px 3px 0 0; background: #c9a24b; }
+body.contractor-portal-body.cp-native .cp-chat-item { border: 0; border-bottom: 1px solid var(--cp-line); background: white; border-radius: 0; color: #16233b; box-shadow: none; }
+body.contractor-portal-body.cp-native .cp-chat-item.active { background: #c9a24b14; }
+body.contractor-portal-body.cp-native .cp-chat-item.unread { border-left: 3px solid #c9a24b; }
+body.contractor-portal-body.cp-native .cp-chat-item strong, body.contractor-portal-body.cp-native .cp-conversation-head h2 { color: #16233b; }
+body.contractor-portal-body.cp-native .cp-chat-item p, body.contractor-portal-body.cp-native .cp-chat-item small, body.contractor-portal-body.cp-native .cp-chat-item span { color: #5b6474; }
+body.contractor-portal-body.cp-native .cp-conversation-box, body.contractor-portal-body.cp-native .cp-message-bubbles, body.contractor-portal-body.cp-native .cp-message-reply-bar { background: transparent; border-color: var(--cp-line); }
+body.contractor-portal-body.cp-native .cp-message-bubble { background: #efefeb; border: 0; color: #16233b; border-radius: 14px; }
+body.contractor-portal-body.cp-native .cp-message-bubble p, body.contractor-portal-body.cp-native .cp-message-bubble strong { color: inherit; }
+body.contractor-portal-body.cp-native .cp-message-bubble.mine { background: #16233b; color: white; }
+body.contractor-portal-body.cp-native .cp-message-bubble.mine small { color: #ffffffaa; }
+body.contractor-portal-body.cp-native .cp-message-bubble small { color: #5b6474; }
+body.contractor-portal-body.cp-native .cp-table th, body.contractor-portal-body.cp-native .cp-table td { color: #16233b; border-color: var(--cp-line); background: transparent; }
+body.contractor-portal-body.cp-native .cp-table small, body.contractor-portal-body.cp-native .cp-table th { color: #5b6474; }
+body.contractor-portal-body.cp-native .cp-chart-bar { background: #c9a24b; }
+body.contractor-portal-body.cp-native .cp-mobile-nav { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); position: fixed; z-index: 80; bottom: 0; left: 0; right: 0; width: 100%; max-width: 960px; margin: 0 auto; padding: 8px 10px calc(8px + env(safe-area-inset-bottom,0px)); background: #ffffffed; backdrop-filter: blur(20px); border: 0; border-top: 1px solid #16233b1f; border-radius: 0; gap: 2px; box-shadow: none; }
+body.contractor-portal-body.cp-native .cp-mobile-nav a, body.contractor-portal-body.cp-native .cp-mobile-nav button { min-width: 0; min-height: 49px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 3px 0; background: transparent; color: #5b6474; border: 0; border-radius: 16px; position: relative; text-decoration: none; cursor: pointer; }
+body.contractor-portal-body.cp-native .cp-mobile-nav strong { font-size: 10px; line-height: 1.3; font-weight: 500; white-space: nowrap; }
+body.contractor-portal-body.cp-native .cp-mobile-nav .suite-icon { width: 23px; height: 23px; }
+body.contractor-portal-body.cp-native .cp-mobile-nav .active { color: #8a6a20; background: #c9a24b14; box-shadow: none; }
+body.contractor-portal-body.cp-native .cp-mobile-nav .cp-nav-badge { position: absolute; top: 0; right: calc(50% - 24px); background: #a8402f; color: white; border: 0; font-size: 10px; min-width: 17px; height: 17px; padding: 0 4px; }
+body.contractor-portal-body.cp-native .cp-mobile-more-panel { display: block; position: fixed; z-index: 79; inset: auto 0 calc(66px + env(safe-area-inset-bottom,0px)); width: 100%; max-width: 960px; max-height: calc(100dvh - 150px); overflow: auto; margin: 0 auto; padding: 20px; background: #f5f5f2; color: #16233b; border: 1px solid var(--cp-line); border-radius: 16px 16px 0 0; box-shadow: 0 -12px 40px #16233b24; }
+body.contractor-portal-body.cp-native .cp-mobile-more-grid { display: grid; grid-template-columns: 1fr; gap: 0; background: white; border-radius: 12px; padding: 0 16px; }
+body.contractor-portal-body.cp-native .cp-mobile-more-link { display: flex; gap: 13px; align-items: center; background: transparent; color: #16233b; padding: 15px 0; min-height: 55px; border: 0; border-bottom: 1px solid var(--cp-line); border-radius: 0; text-decoration: none; }
+body.contractor-portal-body.cp-native .cp-mobile-more-link .suite-icon { color: #8a6a20; }
+body.contractor-portal-body.cp-native .cp-mobile-more-link > span:nth-child(2) { flex: 1; }
+body.contractor-portal-body.cp-native .cp-mobile-more-link { text-align: left; font-weight: 500; font-size: 15px; }
+body.contractor-portal-body.cp-native .cp-mobile-nav button[aria-expanded="true"] { background: #c9a24b14; color: #8a6a20; }
+body.contractor-portal-body.cp-native .cp-mobile-nav:has(button[aria-expanded="true"]) a.active { background: transparent; color: #5b6474; }
+body.contractor-portal-body.cp-native .cp-native-job-pay { color: #8a6a20; margin-top: 4px; }
+body.contractor-portal-body.cp-native .cp-profile { background: white; color: #16233b; border-color: var(--cp-line); }
+body.contractor-portal-body.cp-native .cp-profile small { color: #5b6474; }
+body.contractor-portal-body.cp-native .cp-profile-avatar { background: #c9a24b24; color: #8a6a20; }
+body.contractor-portal-body.cp-native .cp-theme-toggle { display: none; }
+body.contractor-portal-body.cp-native .cp-message-idle { display: none; }
+body.contractor-portal-body.cp-native .cp-ghost-action, body.contractor-portal-body.cp-native .cp-tab { font-weight: 600; }
+/* Existing guided job workflow keeps its controls and persistence, with native colors. */
+body.contractor-portal-body.cp-native .cp-native-filters select { padding: 0; width: auto; min-height: 22px; }
+body.contractor-portal-body.cp-native .cp-native-in-progress button { justify-content: start; }
+body.contractor-portal-body.cp-native .tc-step-actions { background: #f5f5f2; border-top: 1px solid #16233b1f; }
+body.contractor-portal-body.cp-native .tc-next-btn, body.contractor-portal-body.cp-native .primary-btn { background: #c9a24b; color: #16233b; border-color: #c9a24b; }
+body.contractor-portal-body.cp-native .tc-back-btn { background: white; color: #16233b; border-color: #16233b33; }
+body.contractor-portal-body.cp-native .tc-overview-panel { background: #f5f5f2; color: #16233b; }
+body.contractor-portal-body.cp-native .tj-panel, body.contractor-portal-body.cp-native .tc-panel, body.contractor-portal-body.cp-native .tc-feedback-panel { background: #f5f5f2; color: #16233b; border-color: var(--cp-line); border-radius: 12px; box-shadow: none; }
+body.contractor-portal-body.cp-native .tj-actions, body.contractor-portal-body.cp-native .tc-footer, body.contractor-portal-body.cp-native .tc-shell { background: #f5f5f2; color: #16233b; }
+body.contractor-portal-body.cp-native .tj-title h2, body.contractor-portal-body.cp-native .tj-section h3, body.contractor-portal-body.cp-native .tc-card-title h3, body.contractor-portal-body.cp-native .tc-topbar h2, body.contractor-portal-body.cp-native .tc-check-copy strong { color: #16233b; font-family: var(--native-serif); }
+body.contractor-portal-body.cp-native .tj-stat, body.contractor-portal-body.cp-native .tj-active-panel, body.contractor-portal-body.cp-native .tc-summary div, body.contractor-portal-body.cp-native .tc-item, body.contractor-portal-body.cp-native .tc-checklist-card, body.contractor-portal-body.cp-native .tc-task-card, body.contractor-portal-body.cp-native .tc-upload-card, body.contractor-portal-body.cp-native .tc-module-link { background: white; color: #16233b; border-color: var(--cp-line); border-radius: 12px; box-shadow: none; }
+body.contractor-portal-body.cp-native .tj-location, body.contractor-portal-body.cp-native .tj-due, body.contractor-portal-body.cp-native .tc-progress small, body.contractor-portal-body.cp-native .tc-standard, body.contractor-portal-body.cp-native .tc-check-copy small, body.contractor-portal-body.cp-native .tc-item-note, body.contractor-portal-body.cp-native .tc-upload-card small { color: #5b6474; }
+body.contractor-portal-body.cp-native .tc-progress-track span { background: #c9a24b; }
+body.contractor-portal-body.cp-native .tc-check-row input:checked + .tc-check-box { background: #c9a24b; border-color: #c9a24b; color: #16233b; }
+body.contractor-portal-body.cp-native .tc-check-box { border-color: #8a6a20; border-radius: 6px; }
+body.contractor-portal-body.cp-native .tj-row, body.contractor-portal-body.cp-native .tc-icon-button { background: white; color: #16233b; border-color: var(--cp-line); }
+body.contractor-portal-body.cp-native .tj-row.active, body.contractor-portal-body.cp-native .tc-module-link.active { background: #c9a24b24; color: #8a6a20; border-color: #c9a24b; }
+body.contractor-portal-body.cp-native .tj-row span, body.contractor-portal-body.cp-native .tj-detail-note p { color: #5b6474; }
+body.contractor-portal-body.cp-native .tc-item-note textarea, body.contractor-portal-body.cp-native .tj-detail-field textarea, body.contractor-portal-body.cp-native .tc-feedback-field textarea { background: white; color: #16233b; border-color: var(--cp-line-strong); }
+body.contractor-portal-body.cp-native .tc-button-primary, body.contractor-portal-body.cp-native .tj-primary, body.contractor-portal-body.cp-native .tc-feedback-submit { background: #c9a24b; color: #16233b; border: 1px solid #c9a24b; box-shadow: none; border-radius: 14px; }
+@media (max-width: 700px) {
+  body.contractor-portal-body.cp-native .cp-two-column, body.contractor-portal-body.cp-native .cp-job-board-layout, body.contractor-portal-body.cp-native .cp-payments-layout, body.contractor-portal-body.cp-native .cp-documents-layout, body.contractor-portal-body.cp-native .cp-messages-layout { grid-template-columns: minmax(0,1fr); }
+  body.contractor-portal-body.cp-native .cp-payment-grid, body.contractor-portal-body.cp-native .cp-metric-strip { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  body.contractor-portal-body.cp-native .cp-job-board-layout > aside { display: none; }
+  body.contractor-portal-body.cp-native .cp-native-tagline { display: none; }
+  body.contractor-portal-body.cp-native .cp-job-board-layout > .cp-panel { background: transparent; border: 0; padding: 0; }
+  body.contractor-portal-body.cp-native .cp-filter-row { flex-wrap: wrap; }
+  body.contractor-portal-body.cp-native .cp-filter-row > * { min-width: 0; }
+  body.contractor-portal-body.cp-native .cp-search { max-width: 100%; }
+  body.contractor-portal-body.cp-native .cp-job-row { grid-template-columns: minmax(0,1fr); }
+  body.contractor-portal-body.cp-native .cp-job-actions { flex-wrap: wrap; }
+  body.contractor-portal-body.cp-native .cp-native-past-row > div:last-child { max-width: 125px; }
+  body.contractor-portal-body.cp-native .cp-native-past-row .cp-pill { white-space: normal; text-align: right; }
+  body.contractor-portal-body.cp-native .tj-panel, body.contractor-portal-body.cp-native .tc-panel { border-radius: 0; max-height: 100dvh; }
+}
+@media (prefers-reduced-motion: reduce) {
+  body.contractor-portal-body.cp-native *, body.contractor-portal-body.cp-native *::before, body.contractor-portal-body.cp-native *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+}

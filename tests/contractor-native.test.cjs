@@ -1,0 +1,56 @@
+const {test} = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+
+function portal({page='schedule',search='',surface='pwa'}={}) {
+  const markup={innerHTML:'',addEventListener(){}};
+  const body={dataset:{contractorPage:page},classList:{toggle(){},contains(){return false;}}};
+  const context=vm.createContext({URLSearchParams,Date,Map,Set,console,
+    window:{__ENV:{},location:{search},localStorage:{getItem(){return 'dark';}}},
+    document:{body,getElementById(){return markup;}},
+    currentContractorSurface:()=>surface,
+    contractorRoute:(page)=>`contractor-${page}.html`,
+  });
+  const source=fs.readFileSync('contractor-portal.js','utf8')
+    .replace(/import[\s\S]*?from\s+"[^"]+";\s*/g,'')
+    .replace(/attachEvents\(\);\s*applyDashboardTheme\(\);\s*renderShell\(\);\s*void loadData\(\);\s*$/,'');
+  vm.runInContext(source,context);
+  return code=>vm.runInContext(code,context);
+}
+
+test('native calendar uses Monday through Sunday, including Sunday but not adjacent weeks',()=>{
+  const run=portal();
+  run(`state.myAssignments=[
+    {id:'before',start_window:'2026-10-18T12:00:00',status:'scheduled'},
+    {id:'monday',start_window:'2026-10-19T00:00:00',status:'scheduled'},
+    {id:'sunday',start_window:'2026-10-25T23:59:00',status:'scheduled'},
+    {id:'next',start_window:'2026-10-26T00:00:00',status:'scheduled'},
+    {id:'cancelled',start_window:'2026-10-21T12:00:00',status:'cancelled'}];`);
+  assert.equal(run(`nativeWeekStart(new Date('2026-10-25T12:00:00')).getDate()`),19);
+  assert.equal(run(`nativeScheduleRows(nativeWeekStart(new Date('2026-10-21T12:00:00'))).map(x=>x.id).join(',')`),'monday,sunday');
+});
+test('property filter restricts the calendar rows',()=>{
+  const run=portal();
+  run(`state.myAssignments=[{id:'a',title:'Oak',status:'scheduled',start_window:'2026-10-21T12:00:00'},{id:'b',title:'Maple',status:'scheduled',start_window:'2026-10-21T12:00:00'}]; state.scheduleProperty='Maple';`);
+  assert.equal(run(`nativeScheduleRows(nativeWeekStart(new Date('2026-10-21T12:00:00'))).map(x=>x.id).join(',')`),'b');
+});
+test('past jobs never mixes in active work, and search uses property or address',()=>{
+  const run=portal({page:'my-jobs',search:'?view=past'});
+  run(`state.myAssignments=[{id:'active',title:'Oak',status:'scheduled'},{id:'done',title:'Oak',address:'Durham',status:'completed'},{id:'other',title:'Maple',address:'Raleigh',status:'completed'}];state.filters.myStatus='all';state.filters.search='Durham';`);
+  assert.equal(run(`nativePastAssignments().map(x=>x.id).join(',')`),'done');
+  assert.match(run(`renderNativePastJobs()`),/Oak/);
+  assert.doesNotMatch(run(`renderNativePastJobs()`),/data-start-assignment-id/);
+});
+test('native and desktop themes stay independent',()=>{
+  assert.equal(portal()(`applyDashboardTheme(); document.body.dataset.dashboardTheme`),'light');
+  assert.equal(portal({surface:'desktop'})(`applyDashboardTheme(); document.body.dataset.dashboardTheme`),'dark');
+});
+test('native view toggles render selected day or a full week without writing job data',()=>{
+  const run=portal();
+  run(`state.scheduleCursor=new Date('2026-10-19T12:00:00');state.scheduleDay=new Date('2026-10-21T12:00:00');state.myAssignments=[{id:'a',title:'Wednesday home',start_window:'2026-10-21T12:00:00',status:'scheduled'},{id:'b',title:'Friday home',start_window:'2026-10-23T12:00:00',status:'scheduled'}];`);
+  assert.match(run(`renderPwaSchedule()`),/Wednesday home/);
+  // Property options contain both titles; the schedule rows must contain only Wednesday.
+  assert.equal(run(`(renderPwaSchedule().match(/cp-pwa-schedule-card-link/g)||[]).length`),1);
+  assert.equal(run(`state.scheduleView='list';(renderPwaSchedule().match(/cp-pwa-schedule-card-link/g)||[]).length`),2);
+});

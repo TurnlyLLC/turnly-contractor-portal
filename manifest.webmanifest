@@ -1,16 +1,22 @@
 {
-  "name": "Turnly Contractor Portal",
-  "short_name": "Turnly",
+  "name": "Turnly Pro",
+  "short_name": "Turnly Pro",
   "description": "Field-ready contractor portal for Turnly assignments, schedules, messages, documents, payments, and QA videos.",
   "id": "/contractor.html",
   "start_url": "/contractor.html",
   "scope": "/",
   "display": "standalone",
-  "display_override": ["standalone", "minimal-ui"],
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
   "orientation": "portrait-primary",
-  "background_color": "#07111f",
-  "theme_color": "#07111f",
-  "categories": ["business", "productivity"],
+  "background_color": "#F5F5F2",
+  "theme_color": "#16233B",
+  "categories": [
+    "business",
+    "productivity"
+  ],
   "icons": [
     {
       "src": "/icons/turnly-icon-192.png",
