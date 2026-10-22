@@ -1,6 +1,7 @@
 const {createClient} = require('@supabase/supabase-js');
 const {uuid} = require('../lib/agent-referrals.cjs');
 const mobile = require('../lib/mobile-contractor-review.cjs');
+const training = require('../lib/contractor-training.cjs');
 
 const fail = (message,status=400) => Object.assign(new Error(message),{status});
 function checked(result) {
@@ -40,6 +41,7 @@ async function run(db,actor,input,token,transport) {
     let remote=[],mobile_error='';
     try{remote=(await mobile.client(token,transport)('contractors',{profiles:contractors.map(p=>({id:p.id,full_name:p.full_name,email:p.email,status:p.status}))})).contractors||[];}
     catch(error){mobile_error=error.message;}
+    try {const progress=await training.rows(db);remote=remote.map(p=>{const items=training.items(progress,p.userId);return {...p,complete:p.complete&&items.every(i=>i.state==='done'),doneCount:(p.doneCount||0)+items.filter(i=>i.state==='done').length,requiredCount:(p.requiredCount||0)+items.length};});}catch(error){mobile_error=error.message;remote=[];}
     const deletion_reviews=await allRows(db,'contractor_deletion_reviews','*','profile_id');
     return {documents,profiles:contractors,mobile:remote,mobile_error,deletion_reviews};
   }
@@ -60,14 +62,15 @@ async function run(db,actor,input,token,transport) {
     const call=mobile.client(token,transport);
     if(input.action==='mobile_requirement'){
       if(['deleted','deletion_pending','disabled','suspended','inactive','deactivated','rejected'].includes(profile.status))throw fail('Requirements cannot be changed on this inactive account.',409);
+      if(String(input.item_id).startsWith('academy-'))return training.requirement(db,actor,input.id,input);
       return mobile.requirement(call,input.id,input,async()=>{
         const pause=await db.rpc('review_contractor_account',{p_actor:actor,p_profile:input.id,p_action:'remove_override',p_reason:'Onboarding requirement restored: '+String(input.item_id).slice(0,120)});
         if(pause.error)throw fail('Unable to pause job access. The requirement was not changed.',503);
       });
     }
-    if(input.action==='mobile_account')return await mobile.file(call,input.id);
+    if(input.action==='mobile_account')return training.withTraining(db,input.id,await mobile.file(call,input.id));
     if(input.action==='mobile_file'||input.action==='mobile_review')return await mobile.review(call,input.id,input);
-    if(input.action==='approve'&&!(await mobile.file(call,input.id)).complete)throw fail('Review all required onboarding items first, or grant an established-employee override.',409);
+    if(input.action==='approve'&&!(await training.withTraining(db,input.id,await mobile.file(call,input.id))).complete)throw fail('Review all required onboarding items first, or grant an established-employee override.',409);
     if(['override','remove_override'].includes(input.action)){
       if(reason.length<5)throw fail('Enter a reason for this override decision.');
       if(['deleted','deletion_pending','disabled','suspended'].includes(profile.status))throw fail('This account cannot receive an override.',409);
@@ -75,6 +78,8 @@ async function run(db,actor,input,token,transport) {
       // fails, a retry finishes the remaining resets without reopening jobs.
       if(input.action==='remove_override')checked(await db.rpc('review_contractor_account',{p_actor:actor,p_profile:input.id,p_action:input.action,p_reason:reason}));
       await mobile.override(call,input.id,reason,input.action==='remove_override');
+      const modules=training.items(await training.rows(db,input.id),input.id);
+      for(const item of modules){if(input.action==='remove_override'?item.waived:item.state!=='done')await training.requirement(db,actor,input.id,{item_id:item.id,required:input.action==='remove_override',expected_revision:item.revision});}
       if(input.action==='remove_override')return {ok:true};
     }
     if(['approve_deletion','decline_deletion'].includes(input.action))return await deletion(db,actor,input,call);
