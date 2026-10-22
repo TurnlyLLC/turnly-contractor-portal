@@ -6,7 +6,7 @@ const fs=require('node:fs');
 function fixture(items,approval={contractor_approved:true,status:'active'}) {
  const id=randomUUID(),calls=[];
  const profile={id,role:'contractor',status:'active'};
- const db={auth:{getUser:async()=>({data:{user:{id}}})},from(){return {select(){return this;},eq(){return this;},maybeSingle:async()=>({data:profile}),single:async()=>({data:approval})};},rpc:async(name,args)=>{calls.push({name,args});return {data:null};}};
+ const db={auth:{getUser:async()=>({data:{user:{id}}})},from(){return {select(){return this;},eq(){return this;},maybeSingle:async()=>({data:profile}),single:async()=>({data:approval})};},rpc:async(name,args)=>{if(name==='contractor_training_status')return {data:Array.from({length:12},(_,i)=>({profile_id:id,module_number:i+1,lessons_done:5,score:90,waived:false}))};calls.push({name,args});return {data:null};}};
  const remote=async()=>({ok:true,json:async()=>({items})});
  return {db,remote,calls,id};
 }
@@ -40,6 +40,8 @@ test('SQL closes old claim paths and serializes successful claims',async()=>{
  grant usage on schema public,auth,turnly_private to authenticated,service_role;
  grant all on all tables in schema public to authenticated,service_role;`);
  await db.exec(fs.readFileSync('supabase/migrations/20261021185731_contractor_onboarding_claim_gate.sql','utf8'));
+ await db.exec(`create table academy_learning_progress(user_id uuid,lesson_key text);create table academy_practice_attempts(user_id uuid,module_number integer,score integer);grant all on academy_learning_progress,academy_practice_attempts to service_role;`);
+ await db.exec(fs.readFileSync('supabase/migrations/20261022113559_contractor_academy_onboarding.sql','utf8'));
  await db.query("insert into profiles values($1,'One','one@example.invalid','contractor','active',true),($2,'Two','two@example.invalid','contractor','active',false)",[owner,other]);
  await db.query("insert into assignment_blocks(id,status,visibility) values($1,'open','open')",[job]);
  await db.query("select set_config('test.uid',$1,false)",[owner]);await db.exec('set role authenticated');
@@ -49,6 +51,9 @@ test('SQL closes old claim paths and serializes successful claims',async()=>{
  await assert.rejects(db.query("insert into assignment_blocks(id,status,claimed_by) values($1,'claimed',$2)",[randomUUID(),owner]),/cannot create/);
  await db.exec('set role service_role');
  await assert.rejects(db.query('select claim_onboarded_contractor_job($1,$2)',[other,job]),/Complete onboarding/);
+ await assert.rejects(db.query('select claim_onboarded_contractor_job($1,$2)',[owner,job]),/required training/);
+ await db.query("insert into academy_learning_progress select $1,'M'||lpad(m::text,2,'0')||'_L'||lpad(l::text,2,'0') from generate_series(1,12) m cross join generate_series(1,5) l",[owner]);
+ await db.query('insert into academy_practice_attempts select $1,m,90 from generate_series(1,12) m',[owner]);
  await db.query('select claim_onboarded_contractor_job($1,$2)',[owner,job]);
  assert.equal((await db.query('select claimed_by from assignment_blocks')).rows[0].claimed_by,owner);
  await assert.rejects(db.query('select claim_onboarded_contractor_job($1,$2)',[owner,job]),/no longer available/);
