@@ -2,10 +2,10 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),{randomUU
 const {PGlite}=require('@electric-sql/pglite'),fs=require('node:fs'),training=require('../lib/contractor-training.cjs');
 test('training uses all lessons and passing quiz, while waivers retain real progress',()=>{
  const id=randomUUID(),rows=Array.from({length:12},(_,i)=>({profile_id:id,module_number:i+1,lessons_done:5,score:90,waived:false}));
- assert.equal(training.merge({items:[{required:true,state:'done'}]},training.items(rows,id)).complete,true);
+ assert.equal(training.items(rows,id).length,1);assert.equal(training.items(rows,id)[0].title,'Contractor training');assert.equal(training.merge({items:[{required:true,state:'done'}]},training.items(rows,id)).requiredCount,2);assert.equal(training.merge({items:[{required:true,state:'done'}]},training.items(rows,id)).complete,true);
  rows[0].lessons_done=4;assert.equal(training.merge({items:[]},training.items(rows,id)).complete,false);
- rows[0].waived=true;assert.equal(training.merge({items:[]},training.items(rows,id)).complete,true);
- rows[1].score=80;assert.equal(training.merge({items:[]},training.items(rows,id)).complete,false);
+ rows.forEach(r=>r.waived=true);assert.equal(training.merge({items:[]},training.items(rows,id)).complete,true);
+ rows.forEach(r=>r.waived=false);rows[1].score=80;assert.equal(training.merge({items:[]},training.items(rows,id)).complete,false);
  assert.throws(()=>training.items([],id),/unavailable|incomplete/);
 });
 test('training switches are admin only, isolated, audited and reject stale saves',async()=>{
@@ -16,6 +16,7 @@ test('training switches are admin only, isolated, audited and reject stale saves
  grant usage on schema public to service_role,authenticated;grant all on all tables in schema public to service_role;`);
  // This test exercises training state independently; the claim function is exercised in claim-gate.test.
  await db.exec(fs.readFileSync('supabase/migrations/20261022113559_contractor_academy_onboarding.sql','utf8').split('create or replace function public.claim_onboarded')[0]);
+ await db.exec(fs.readFileSync('supabase/migrations/20261022120231_contractor_single_training_requirement.sql','utf8').split('create or replace function public.claim_onboarded')[0]);
  await db.query("insert into profiles values($1,'admin','active'),($2,'contractor','active'),($3,'contractor','active')",[admin,a,b]);
  await db.exec('set role authenticated');await assert.rejects(db.query('select * from contractor_training_requirements'),/permission denied/);
  await assert.rejects(db.query('select set_contractor_training_requirement($1,$2,1,false,null)',[admin,a]),/permission denied/);
@@ -28,6 +29,14 @@ test('training switches are admin only, isolated, audited and reject stale saves
  await db.query('select set_contractor_training_requirement($1,$2,1,true,$3)',[admin,a,saved.revision]);
  assert.equal((await db.query('select * from contractor_training_status($1)',[a])).rows.some(r=>r.waived),false);
  assert.equal((await db.query('select count(*)::int n from contractor_training_requirement_events')).rows[0].n,2);
+ const revisions=async()=>Object.fromEntries((await db.query('select * from contractor_training_status($1)',[a])).rows.map(r=>[r.module_number,r.revision]));
+ const before=await revisions();
+ await db.query('select set_contractor_training_required($1,$2,false,$3)',[admin,a,JSON.stringify(before)]);
+ assert.equal((await db.query('select * from contractor_training_status($1)',[a])).rows.filter(r=>r.waived).length,12);
+ assert.equal((await db.query('select * from contractor_training_status($1)',[b])).rows.filter(r=>r.waived).length,0);
+ await assert.rejects(db.query('select set_contractor_training_required($1,$2,true,$3)',[admin,a,JSON.stringify(before)]),/changed/);
+ await db.query('select set_contractor_training_required($1,$2,true,$3)',[admin,a,JSON.stringify(await revisions())]);
+ assert.equal((await db.query('select * from contractor_training_status($1)',[a])).rows.filter(r=>r.waived).length,0);
  }finally{await db.close();}
 });
 

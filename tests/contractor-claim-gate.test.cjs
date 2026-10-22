@@ -42,6 +42,7 @@ test('SQL closes old claim paths and serializes successful claims',async()=>{
  await db.exec(fs.readFileSync('supabase/migrations/20261021185731_contractor_onboarding_claim_gate.sql','utf8'));
  await db.exec(`create table academy_learning_progress(user_id uuid,lesson_key text);create table academy_practice_attempts(user_id uuid,module_number integer,score integer);grant all on academy_learning_progress,academy_practice_attempts to service_role;`);
  await db.exec(fs.readFileSync('supabase/migrations/20261022113559_contractor_academy_onboarding.sql','utf8'));
+ await db.exec(fs.readFileSync('supabase/migrations/20261022120231_contractor_single_training_requirement.sql','utf8'));
  await db.query("insert into profiles values($1,'One','one@example.invalid','contractor','active',true),($2,'Two','two@example.invalid','contractor','active',false)",[owner,other]);
  await db.query("insert into assignment_blocks(id,status,visibility) values($1,'open','open')",[job]);
  await db.query("select set_config('test.uid',$1,false)",[owner]);await db.exec('set role authenticated');
