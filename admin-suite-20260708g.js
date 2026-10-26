@@ -1,4 +1,4 @@
-import { assignmentServiceScope } from "./assignment-service-scope.mjs?v=20261026-tabs";
+import { assignmentServiceScope, assignmentAwaitsApproval } from "./assignment-service-scope.mjs?v=20261026-approval";
 import { loadActiveCleaningContractors } from "./contractor-directory-model.mjs?v=20261012-active";
 import { isResidentialAssignment, configureResidentialForm, residentialRecurrence } from "./residential-assignment.mjs?v=20261026-scopes";
 import {navSections, renderAdminNavigation} from "./admin-navigation.mjs?v=20261019-sales-link";
@@ -3944,8 +3944,8 @@ function renderAssignments() {
     <section class="assignments-layout" data-assignments-page>
       <div class="suite-stack">
         <nav class="suite-tabs assignment-service-tabs" aria-label="Assignment type">
-          <button type="button" class="suite-tab active" data-assignment-scope="residential" aria-pressed="true">Residential <span data-assignment-scope-count="residential">0</span></button>
-          <button type="button" class="suite-tab" data-assignment-scope="commercial" aria-pressed="false">Commercial <span data-assignment-scope-count="commercial">0</span></button>
+          <button type="button" class="suite-tab active" data-assignment-scope="residential" aria-pressed="true">${icon("home", "assignment-service-icon")}<span class="assignment-service-label">Residential</span><span class="assignment-approval-alert" data-assignment-approval-alert="residential" hidden title="Assignments awaiting approval">${icon("bell")}<span class="sr-only">Assignments awaiting approval</span></span></button>
+          <button type="button" class="suite-tab" data-assignment-scope="commercial" aria-pressed="false">${icon("building", "assignment-service-icon")}<span class="assignment-service-label">Commercial</span><span class="assignment-approval-alert" data-assignment-approval-alert="commercial" hidden title="Assignments awaiting approval">${icon("bell")}<span class="sr-only">Assignments awaiting approval</span></span></button>
         </nav>
         <section class="metric-strip five">
           ${metric("Job Board", "0", "not completed", "calendar", "green", 'id="assignmentTotalCount"')}
@@ -13296,6 +13296,10 @@ function initAssignments() {
 
   clearAssignmentForm({ keepMessage: true });
   void loadAssignments();
+  if (document.body.dataset.adminPage === "assignments") {
+    window.setInterval(() => void refreshAssignmentApprovalAlerts(), 30000);
+    document.addEventListener("visibilitychange", () => void refreshAssignmentApprovalAlerts());
+  }
 }
 
 function openAssignmentModal(row = null) {
@@ -13543,7 +13547,9 @@ function handleAssignmentClick(event) {
     assignmentState.scopeFilter = scopeTab.dataset.assignmentScope === "commercial" ? "commercial" : "residential";
     assignmentState.currentPage = 1;
     clearAssignmentSelection();
+    if (event.target.closest("[data-assignment-approval-alert]")) assignmentState.statusFilter = "pending";
     renderAssignmentData();
+    void loadAssignments();
     return;
   }
 
@@ -14010,6 +14016,29 @@ function renderAssignmentData() {
   renderAssignmentTable();
 }
 
+function renderAssignmentApprovalAlerts(rows) {
+  document.querySelectorAll("[data-assignment-approval-alert]").forEach(element => {
+    const pending = rows.some(row => assignmentServiceScope(row) === element.dataset.assignmentApprovalAlert && assignmentAwaitsApproval(row));
+    element.hidden = !pending;
+  });
+}
+
+let assignmentApprovalRefreshBusy = false;
+async function refreshAssignmentApprovalAlerts() {
+  if (document.hidden || assignmentApprovalRefreshBusy || assignmentState.profile?.role !== "admin") return;
+  assignmentApprovalRefreshBusy = true;
+  try {
+    const rows = [];
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await suiteSupabase.from(assignmentTable).select("id,status,metadata").eq("status", "pending").order("id").range(from, from + 999);
+      if (error) return;
+      rows.push(...(data || []));
+      if (!data || data.length < 1000) break;
+    }
+    renderAssignmentApprovalAlerts(rows);
+  } finally { assignmentApprovalRefreshBusy = false; }
+}
+
 function scopedAssignmentRows() {
   return document.body.dataset.adminPage === "assignments" ? assignmentState.rows.filter(row => assignmentServiceScope(row) === assignmentState.scopeFilter) : assignmentState.rows;
 }
@@ -14020,9 +14049,7 @@ function renderAssignmentFilterControls() {
     button.classList.toggle("active", selected);
     button.setAttribute("aria-pressed", String(selected));
   });
-  document.querySelectorAll("[data-assignment-scope-count]").forEach(element => {
-    element.textContent = assignmentState.rows.filter(row => assignmentServiceScope(row) === element.dataset.assignmentScopeCount).length.toLocaleString();
-  });
+  renderAssignmentApprovalAlerts(assignmentState.rows);
   const heading = document.getElementById("assignmentScopeHeading");
   if (heading) heading.textContent = assignmentState.scopeFilter === "commercial" ? "Commercial Assignments" : "Residential Assignments";
   const search = document.getElementById("assignmentSearchInput");

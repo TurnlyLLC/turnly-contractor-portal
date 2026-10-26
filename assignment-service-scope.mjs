@@ -4,3 +4,8 @@ export function assignmentServiceScope(row) {
   if (metadata.source === 'residential_booking' || metadata.scope_type === 'residential' || metadata.residential_booking_id) return 'residential';
   return 'commercial';
 }
+
+export function assignmentAwaitsApproval(row) {
+  // Approval metadata can remain on historical rows; current status is authoritative.
+  return String(row?.status || '').toLowerCase() === 'pending';
+}

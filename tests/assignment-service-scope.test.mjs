@@ -1,7 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { assignmentServiceScope } from '../assignment-service-scope.mjs';
+import { assignmentServiceScope, assignmentAwaitsApproval } from '../assignment-service-scope.mjs';
 import { readFileSync } from 'node:fs';
+test('approval alert follows current pending status, not stale approval metadata', () => {
+  assert.equal(assignmentAwaitsApproval({status:'pending'}),true);
+  for (const status of ['open','claimed','completed','cancelled','draft']) {
+    assert.equal(assignmentAwaitsApproval({status,metadata:{admin_approval_status:'pending'}}),false);
+  }
+});
 test('residential bookings and explicit test/manual homes are separated from commercial work', () => {
   assert.equal(assignmentServiceScope({metadata:{source:'residential_booking'}}),'residential');
   assert.equal(assignmentServiceScope({metadata:{source:'admin_test_assignment',residential_booking_id:'test'}}),'residential');
