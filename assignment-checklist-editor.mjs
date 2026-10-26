@@ -1,4 +1,5 @@
 import { isResidentialAssignment, residentialCounts, matchingResidentialChecklist } from "./residential-assignment.mjs?v=20261026-scopes";
+import {consentRecordHtml} from './video-consent.mjs?v=20261026-video';
 const itemsOf = (row) => Array.isArray(row?.checklist_items) ? row.checklist_items : [];
 const metaOf = (row) => row?.metadata && typeof row.metadata === 'object' ? row.metadata : {};
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -95,6 +96,13 @@ export function createAssignmentChecklistEditor(client, flatten) {
              ${hasProgress(fresh) ? '<label class="checkbox-field"><input id="assignmentChecklistReset" type="checkbox" /> <span>Replace this checklist and reset its progress. Previous responses will be kept in assignment history. The contractor must reopen the job.</span></label>' : ''}`
           : '';
       });
+      if(isResidentialAssignment(fresh)){
+        const consent=await client.from('assignment_video_consents').select('*').eq('assignment_id',fresh.id).maybeSingle();
+        if(ticket===generation){
+          if(consent.error)target.insertAdjacentHTML('beforeend','<p role="alert">Video consent could not be loaded. Reopen the assignment to retry.</p>');
+          else if(consent.data)target.insertAdjacentHTML('beforeend',consentRecordHtml(consent.data));
+        }
+      }
     } catch (error) {
       if (ticket !== generation) return;
       target.innerHTML = `<h3>Contractor Checklist</h3><p role="alert">Unable to load the checklist: ${esc(error.message)}. Close and reopen this assignment to retry.</p>`;

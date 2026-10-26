@@ -1,4 +1,5 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+import {videoConsentItem, videoConsentRequest, collectVideoConsent, consentRecordHtml} from './video-consent.mjs?v=20261026-video';
 
 const env = window.__ENV || {};
 const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
@@ -25,6 +26,13 @@ let checklistMediaDbPromise = null;
 let activeQaJobId = null;
 let activeDirectoryDetails = null;
 let activeIssueDraft = "";
+let activeVideoConsent = null;
+let activeVideoConsentText = '';
+const videoWaived = item => Boolean(activeVideoConsent && videoConsentItem(item));
+function applyVideoWaiver() {
+  if (!activeVideoConsent) return;
+  activeChecklistItems.forEach((item,index)=>{if(videoConsentItem(item)){const draft=checklistDraft(index);draft.checked=true;draft.completed_at=activeVideoConsent.signed_at;draft.note='Customer declined both videos. Signed record: '+activeVideoConsent.id;}});
+}
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -491,6 +499,7 @@ function checklistDraft(index) {
 }
 
 function checklistResponseFromDraft(item, index) {
+  applyVideoWaiver();
   const draft = checklistDraft(index);
   const response = {
     category: item.category || "General",
@@ -506,6 +515,7 @@ function checklistResponseFromDraft(item, index) {
     completed_at: draft.checked ? (draft.completed_at || new Date().toISOString()) : null
   };
   if (draft.media) response.media = draft.media;
+  if (videoWaived(item)) response.video_consent_id = activeVideoConsent.id;
   return response;
 }
 
@@ -608,7 +618,7 @@ function validateChecklistModule(module = currentChecklistModule(), showMessage 
   }
   const missingMedia = module.items.filter(({ item, index }) => {
     const draft = checklistDraft(index);
-    return checklistMediaKind(item) && draft.checked && !draft.file && !draft.media;
+    return checklistMediaKind(item) && !videoWaived(item) && draft.checked && !draft.file && !draft.media;
   });
   if (missingMedia.length) {
     if (showMessage) setChecklistMessage(`Upload ${missingMedia.length} required media file${missingMedia.length === 1 ? "" : "s"} before moving on.`, "error");
@@ -633,6 +643,7 @@ function checklistOverviewHtml() {
 }
 
 function checklistUploadCard(item, index) {
+  if(videoWaived(item)) return consentRecordHtml(activeVideoConsent);
   const kind = checklistMediaKind(item);
   if (!kind) return "";
   const draft = checklistDraft(index);
@@ -665,7 +676,7 @@ function checklistTaskHtml(entry, itemNumber) {
   return `
     <section class="tc-task-card">
       <label class="tc-check-row">
-        <input type="checkbox" data-tc-check="${index}" ${draft.checked ? "checked" : ""} />
+        <input type="checkbox" data-tc-check="${index}" ${draft.checked ? "checked" : ""} ${videoWaived(item)?'disabled':''} />
         <span class="tc-check-box" aria-hidden="true"></span>
         <span class="tc-check-copy">
           <strong>${itemNumber}. ${escapeHtml(item.task || item.label || "Untitled task")}</strong>
@@ -678,11 +689,13 @@ function checklistTaskHtml(entry, itemNumber) {
         <textarea rows="2" data-tc-note="${index}" placeholder="Optional notes, issues, blocked areas...">${escapeHtml(draft.note)}</textarea>
       </label>
       ${checklistUploadCard(item, index)}
+      ${videoConsentItem(item)&&!activeVideoConsent?'<button type="button" class="secondary-btn" data-video-opt-out>Customer declines video — collect signature</button><p>A signed opt-out covers both videos for this visit. If the customer is unavailable, contact Turnly; do not sign for them.</p>':''}
     </section>
   `;
 }
 
 function renderChecklistStep() {
+  applyVideoWaiver();
   const module = currentChecklistModule();
   const title = document.getElementById("tcModuleTitle");
   const counter = document.getElementById("tcStepCounter");
@@ -730,6 +743,16 @@ function renderChecklistStep() {
     </section>
   `;
   overview.innerHTML = checklistOverviewHtml();
+  content.querySelector('[data-video-opt-out]')?.addEventListener('click',async event=>{
+    const button=event.currentTarget;button.disabled=true;
+    try {
+      const fresh=await videoConsentRequest(supabase,activeAssignment.id);
+      activeVideoConsent=fresh.consent;activeVideoConsentText=fresh.consent_text;
+      if(!activeVideoConsent) activeVideoConsent=await collectVideoConsent(supabase,activeAssignment.id,activeVideoConsentText);
+      if(activeVideoConsent){captureChecklistInputs();applyVideoWaiver();await saveChecklistProgress();renderChecklistStep();}
+    } catch(error){setChecklistMessage(error.message,'error');}
+    finally {button.disabled=false;}
+  });
   back.disabled = activeChecklistIndex === 0;
   next.disabled = false;
   next.querySelector("[data-tc-next-label]").textContent = activeChecklistIndex === total - 1 ? "Complete" : "Next";
@@ -1107,7 +1130,7 @@ async function insertChecklistMediaRecord(item, media, kind, index, completedAt,
     payload.qa_job_id = await ensureAssignmentQaJob();
     payload.room_name = item.module_name || item.category || assignmentUnit(activeAssignment) || "";
     payload.file_size_bytes = file.size || 0;
-    payload.video_phase = "other";
+    payload.video_phase = videoConsentItem(item) ? ((item.source_item_id||item.id).includes('before')?'before':'after') : "other";
     payload.duration_seconds = media.duration_seconds || null;
     payload.review_status = "pending_review";
   } else {
@@ -3017,12 +3040,18 @@ async function openChecklistModal(assignmentOrId) {
   activeDirectoryDetails = await fetchDirectoryDetails(activeAssignment);
   activeQaJobId = assignmentQaJobId(activeAssignment);
   activeChecklistItems = await checklistItems(activeAssignment);
+  activeVideoConsent=null;
+  if(activeChecklistItems.some(videoConsentItem)){
+    try{const result=await videoConsentRequest(supabase,activeAssignment.id);activeVideoConsent=result.consent;activeVideoConsentText=result.consent_text;}
+    catch(error){showPageMessage('Unable to load video consent. Reopen the checklist to retry. '+error.message);return;}
+  }
   activeChecklistModules = buildChecklistModules(activeChecklistItems);
   activeChecklistIndex = 0;
   activeChecklistDrafts = [];
   ensureChecklistDrafts(activeChecklistItems);
   hydrateChecklistDraftsFromSavedResponses();
   await hydrateChecklistMediaDrafts();
+  applyVideoWaiver();
   const modal = ensureChecklistModal();
   modal.hidden = false;
   toggleChecklistOverview(false);
@@ -3059,7 +3088,7 @@ async function completeJob() {
     return;
   }
 
-  const missingMedia = drafts.filter((draft) => draft.mediaKind && draft.response.completed && !draft.response.media && !draft.mediaFile);
+  const missingMedia = drafts.filter((draft) => draft.mediaKind && !videoWaived(draft.item) && draft.response.completed && !draft.response.media && !draft.mediaFile);
   if (missingMedia.length) {
     if (message) message.textContent = `Upload ${missingMedia.length} required photo/video file${missingMedia.length === 1 ? "" : "s"} before finishing the job.`;
     return;

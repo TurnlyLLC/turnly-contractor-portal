@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-contractor-pwa-v20261022-single-training";
+const CACHE_NAME = "turnly-contractor-pwa-v20261026-video-consent";
 
 const PRECACHE_URLS = [
   "/",
@@ -175,6 +175,7 @@ function isAdminRuntimeAsset(request) {
     || pathname.startsWith("/contractor-portal-")
     || pathname === "/contractor-routing.js"
     || pathname === "/contractor-job-flow-mobile.js"
+    || pathname === "/video-consent.mjs"
     || pathname.startsWith("/property-units-")
     || pathname.startsWith("/property-unit-");
 }
