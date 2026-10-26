@@ -207,7 +207,7 @@ async function renderPasswordChangeRequired(user) {
 
 async function loadContractorPortal() {
   await import("./contractor-portal.js?v=20261021-claim-gate");
-  await import("./contractor-job-flow-mobile.js?v=20261026-video");
+  await import("./contractor-job-flow-mobile.js?v=20261026-signature-app");
 }
 
 function redirectToMatchingContractorSurface() {

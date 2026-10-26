@@ -1,5 +1,5 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
-import {videoConsentItem, videoConsentRequest, collectVideoConsent, consentRecordHtml} from './video-consent.mjs?v=20261026-video';
+import {videoConsentItem, videoConsentRequest, collectVideoConsent, consentRecordHtml} from './video-consent.mjs?v=20261026-signature-app';
 
 const env = window.__ENV || {};
 const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
@@ -748,7 +748,7 @@ function renderChecklistStep() {
     try {
       const fresh=await videoConsentRequest(supabase,activeAssignment.id);
       activeVideoConsent=fresh.consent;activeVideoConsentText=fresh.consent_text;
-      if(!activeVideoConsent) activeVideoConsent=await collectVideoConsent(supabase,activeAssignment.id,activeVideoConsentText);
+      if(!activeVideoConsent) activeVideoConsent=await collectVideoConsent(supabase,activeAssignment.id,activeVideoConsentText,fresh.customer_name||activeAssignment.metadata?.customer_name||'');
       if(activeVideoConsent){captureChecklistInputs();applyVideoWaiver();await saveChecklistProgress();renderChecklistStep();}
     } catch(error){setChecklistMessage(error.message,'error');}
     finally {button.disabled=false;}
@@ -3036,7 +3036,7 @@ async function openChecklistModal(assignmentOrId) {
   activeUser = activeUser || await currentUser();
   if (!activeUser) return;
 
-  activeAssignment = typeof assignmentOrId === "string" ? await fetchAssignment(assignmentOrId) : assignmentOrId;
+  activeAssignment = await fetchAssignment(typeof assignmentOrId === "string" ? assignmentOrId : assignmentOrId.id);
   activeDirectoryDetails = await fetchDirectoryDetails(activeAssignment);
   activeQaJobId = assignmentQaJobId(activeAssignment);
   activeChecklistItems = await checklistItems(activeAssignment);

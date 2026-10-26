@@ -1,4 +1,4 @@
-import { isResidentialAssignment, residentialCounts, matchingResidentialChecklist } from "./residential-assignment.mjs?v=20261026-scopes";
+import { isResidentialAssignment, residentialCounts, matchingResidentialChecklist } from "./residential-assignment.mjs?v=20261026-sync";
 import {consentRecordHtml} from './video-consent.mjs?v=20261026-video';
 const itemsOf = (row) => Array.isArray(row?.checklist_items) ? row.checklist_items : [];
 const metaOf = (row) => row?.metadata && typeof row.metadata === 'object' ? row.metadata : {};
@@ -77,7 +77,7 @@ export function createAssignmentChecklistEditor(client, flatten) {
       target.innerHTML = `<h3>Contractor Checklist</h3>
         ${meta.checklist_review_required?`<p role="alert"><strong>Scope review required:</strong> ${esc(meta.checklist_review_reason)} No checklist is attached automatically.</p>`:''}
         <p><strong>${esc(name)}</strong> · ${items.length} item${items.length === 1 ? '' : 's'}</p>
-        <p>${esc(items.length ? source : 'Choose a saved checklist for this request.')}</p>
+        <p>${esc(items.length ? source : 'Choose a saved checklist for this request.')}</p><p>Template edits sync to active requests. Unchanged task progress is retained; completed records remain unchanged.</p>
         ${preview(items, 'View attached checklist')}
         ${checklistLocked(fresh) ? '<p>This checklist is read-only because the assignment is completed, submitted for review, or cancelled.</p>' : `
         <label class="suite-field"><span>Change checklist</span><select id="assignmentChecklistSelect">

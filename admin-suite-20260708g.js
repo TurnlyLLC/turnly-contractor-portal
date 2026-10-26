@@ -1,6 +1,6 @@
 import { assignmentServiceScope, assignmentAwaitsApproval } from "./assignment-service-scope.mjs?v=20261026-approval";
 import { loadActiveCleaningContractors } from "./contractor-directory-model.mjs?v=20261012-active";
-import { isResidentialAssignment, configureResidentialForm, residentialRecurrence } from "./residential-assignment.mjs?v=20261026-scopes";
+import { isResidentialAssignment, configureResidentialForm, residentialRecurrence } from "./residential-assignment.mjs?v=20261026-sync";
 import {navSections, renderAdminNavigation} from "./admin-navigation.mjs?v=20261026-map";
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 import {
@@ -25,7 +25,7 @@ import {
   normalizeAssignmentQrTrackerId
 } from "./assignment-qr-policy.js?v=20260929-qr-policy";
 
-import { createAssignmentChecklistEditor } from "./assignment-checklist-editor.mjs?v=20261026-video";
+import { createAssignmentChecklistEditor } from "./assignment-checklist-editor.mjs?v=20261026-sync";
 
 const suiteEnv = window.__ENV || {};
 const suiteSupabase = suiteEnv.SUPABASE_URL && suiteEnv.SUPABASE_ANON_KEY
