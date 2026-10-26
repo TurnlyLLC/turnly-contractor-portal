@@ -69,7 +69,11 @@ module.exports=async(req,res)=>{
    try{await require('../lib/residential-jobs.cjs').syncBooking(db,created);}catch{console.error('Customer portal booking assignment deferred to reconciliation.');}
    return S.json(res,200,{id:result.data});
   }
-  if(input.action==='detail')return S.json(res,200,{booking:(await P.present(db,[b],true))[0]});
+  if(input.action==='detail'){
+   const booking=(await P.present(db,[b],true))[0];
+   booking.video_consent=S.checked(await db.from('assignment_video_consents').select('id,assignment_id,customer_name,signature,consent_text,consent_version,signed_at').eq('assignment_id',b.id).maybeSingle());
+   return S.json(res,200,{booking});
+  }
   if(input.action==='update'){
    await S.rate(db,req,'customer-change');if(!['reschedule','cancel','notes'].includes(input.op))throw S.fail('Choose a supported change.');
    let data={notes:clean(input.notes,1500),reason:clean(input.reason,300)};

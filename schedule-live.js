@@ -1,4 +1,4 @@
-import { createAssignmentChecklistEditor } from "./assignment-checklist-editor.mjs?v=20261026-scopes";
+import { createAssignmentChecklistEditor } from "./assignment-checklist-editor.mjs?v=20261026-video";
 import { residentialChecklistItems } from "./residential-assignment.mjs?v=20261026-scopes";
 import { visibleScheduleAssignment } from "./schedule-visibility.mjs?v=20261012-cancelled";
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
