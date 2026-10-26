@@ -27,6 +27,7 @@
     }
   ],
   "functions": {
+    "api/admin-map.js": {"maxDuration": 60},
     "api/residential-charge.js": {
       "maxDuration": 300
     },

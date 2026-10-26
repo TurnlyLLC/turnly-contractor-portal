@@ -1,7 +1,7 @@
 import { assignmentServiceScope, assignmentAwaitsApproval } from "./assignment-service-scope.mjs?v=20261026-approval";
 import { loadActiveCleaningContractors } from "./contractor-directory-model.mjs?v=20261012-active";
 import { isResidentialAssignment, configureResidentialForm, residentialRecurrence } from "./residential-assignment.mjs?v=20261026-scopes";
-import {navSections, renderAdminNavigation} from "./admin-navigation.mjs?v=20261019-sales-link";
+import {navSections, renderAdminNavigation} from "./admin-navigation.mjs?v=20261026-map";
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 import {
   adminPreviewPortalOptions,
@@ -13241,7 +13241,7 @@ function preferredContractorDropdownField() {
 }
 
 function initAssignments() {
-  const residentialJob=new URLSearchParams(location.search).get('residential_job');
+  const residentialJob=new URLSearchParams(location.search).get('residential_job')||new URLSearchParams(location.search).get('assignment');
   if(/^[a-f0-9-]{36}$/i.test(residentialJob||'')){assignmentState.search=residentialJob;assignmentState.statusFilter='all';}
   const root = document.querySelector("[data-assignments-page]");
   if (!root) return;
