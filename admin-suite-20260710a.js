@@ -3793,7 +3793,7 @@ function renderChecklists() {
         </div>
         <div class="checklist-builder-toolbar">
           <label class="suite-field">
-            <span>Checklist Library</span>
+            <span>Checklist Library — Residential and Commercial</span>
             <select id="checklistTemplateSelect">${checklistTemplateOptions()}</select>
           </label>
           <label class="inline-search checklist-template-search"><span class="sr-only">Search checklists</span>${icon("search")}<input id="checklistTemplateSearch" type="search" placeholder="Search checklists..." /></label>
@@ -4087,6 +4087,7 @@ function normalizeChecklistTemplate(row = {}) {
   const sections = checklistArray(row.sections).map(normalizeChecklistSection);
   return {
     id: row.id || "",
+    scope_type: row.scope_type || "commercial",
     name: row.name || "Untitled Checklist",
     department: row.department || "Cleaning",
     subdepartment: row.subdepartment || "",
@@ -4315,7 +4316,7 @@ function checklistTemplateOptions() {
   }
   return [
     `<option value="">New unsaved checklist</option>`,
-    ...templates.map((template) => `<option value="${esc(template.id)}" ${template.id === checklistState.selectedTemplateId ? "selected" : ""}>${esc(template.name)}</option>`)
+    ...['residential','commercial'].map(group=>`<optgroup label="${group==='residential'?'Residential — Standard & Deep':'Commercial / Apartment Turnovers'}">${templates.filter(t=>t.scope_type===group).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).map(template=>`<option value="${esc(template.id)}" ${template.id===checklistState.selectedTemplateId?'selected':''}>${esc(template.name)}</option>`).join('')}</optgroup>`)
   ].join("");
 }
 
