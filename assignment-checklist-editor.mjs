@@ -1,4 +1,4 @@
-import { isResidentialAssignment, residentialCounts, matchingResidentialChecklist } from "./residential-assignment.mjs?v=20261012-editor";
+import { isResidentialAssignment, residentialCounts, matchingResidentialChecklist } from "./residential-assignment.mjs?v=20261026-scopes";
 const itemsOf = (row) => Array.isArray(row?.checklist_items) ? row.checklist_items : [];
 const metaOf = (row) => row?.metadata && typeof row.metadata === 'object' ? row.metadata : {};
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -66,14 +66,15 @@ export function createAssignmentChecklistEditor(client, flatten) {
         }
       }
       if (ticket !== generation) return;
-      const templates = library.data || [];
+      const templates = (library.data || []).filter(t=>isResidentialAssignment(fresh)?t.scope_type==='residential':t.scope_type!=='residential');
       const name = (source === 'Attached to this request' ? meta.checklist_template_name : '') || templates.find(t => t.id === templateId)?.name
         || (items.length ? 'Saved assignment checklist' : 'No checklist attached');
       const counts=residentialCounts(fresh);
-      const autoTemplate=isResidentialAssignment(fresh)&&!items.length&&!hasProgress(fresh)&&!checklistLocked(fresh)?matchingResidentialChecklist(templates,counts.beds,counts.baths):null;
+      const autoTemplate=isResidentialAssignment(fresh)&&!items.length&&!hasProgress(fresh)&&!checklistLocked(fresh)?matchingResidentialChecklist(templates,counts.beds,counts.baths,fresh.metadata?.residential_service||fresh.service_type):null;
       const automatic=autoTemplate&&flatten(autoTemplate).length?autoTemplate:null;
       state = { row: fresh, templates, items, name, templateId, selected: automatic?.id || '' };
       target.innerHTML = `<h3>Contractor Checklist</h3>
+        ${meta.checklist_review_required?`<p role="alert"><strong>Scope review required:</strong> ${esc(meta.checklist_review_reason)} No checklist is attached automatically.</p>`:''}
         <p><strong>${esc(name)}</strong> · ${items.length} item${items.length === 1 ? '' : 's'}</p>
         <p>${esc(items.length ? source : 'Choose a saved checklist for this request.')}</p>
         ${preview(items, 'View attached checklist')}

@@ -4,16 +4,19 @@ export function residentialCounts(row) {
   const match=String(row?.scope||'').match(/(\d+(?:\.\d+)?) bedrooms?,\s*(\d+(?:\.\d+)?) bathrooms?/i);
   return {beds:m.beds ?? match?.[1],baths:m.baths ?? match?.[2]};
 }
-export function matchingResidentialChecklist(templates,beds,baths) {
-  if(beds===undefined||beds===null||baths===undefined||baths===null)return null;
-  const candidates=templates.filter(t=>{
-    const name=String(t.name||'');
-    const bed=name.match(/(?:^|[^\d.])(\d+(?:\.\d+)?)\s*(?:bed(?:room)?s?|br)\b/i);
-    const bath=name.match(/(?:^|[^\d.])(\d+(?:\.\d+)?)\s*(?:bath(?:room)?s?|ba)\b/i);
-    return bed&&bath&&Number(bed[1])===Number(beds)&&Number(bath[1])===Number(baths);
-  });
-  // An ambiguous match needs an admin's choice instead of guessing.
-  return candidates.length===1?candidates[0]:null;
+export function residentialChecklistService(value) {
+ return ({standard:'standard','standard clean':'standard',deep:'deep','deep clean':'deep'})[String(value||'').toLowerCase().trim()]||null;
+}
+export function residentialChecklistReviewReason(beds,baths,service) {
+ if(!Number.isInteger(Number(beds))||Number(beds)<1||Number(beds)>7||!Number.isFinite(Number(baths))||Number(baths)<1||Number(baths)>7||!Number.isInteger(Number(baths)*2))return 'Room counts outside the supported 1–7 bedrooms / 1–7 bathrooms (half-bath increments). Review scope and manually attach an appropriate checklist before approval.';
+ if(!residentialChecklistService(service))return 'This service has a separate scope. Review and manually attach its checklist before approval.';
+ return '';
+}
+export function matchingResidentialChecklist(templates,beds,baths,service) {
+ if(residentialChecklistReviewReason(beds,baths,service))return null;
+ const kind=residentialChecklistService(service);
+ const candidates=templates.filter(t=>t.scope_type==='residential'&&t.residential_service===kind&&Number(t.residential_beds)===Number(beds)&&Number(t.residential_baths)===Number(baths));
+ return candidates.length===1?candidates[0]:null;
 }
 export function residentialRecurrence(value) {
   return {frequency:value==='biweekly'?'weekly':value,interval:value==='biweekly'?2:1};

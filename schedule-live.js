@@ -1,5 +1,5 @@
-import { createAssignmentChecklistEditor } from "./assignment-checklist-editor.mjs?v=20261013-schedule";
-import { residentialChecklistItems } from "./residential-assignment.mjs?v=20261012-editor";
+import { createAssignmentChecklistEditor } from "./assignment-checklist-editor.mjs?v=20261026-scopes";
+import { residentialChecklistItems } from "./residential-assignment.mjs?v=20261026-scopes";
 import { visibleScheduleAssignment } from "./schedule-visibility.mjs?v=20261012-cancelled";
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 

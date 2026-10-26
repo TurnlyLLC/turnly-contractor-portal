@@ -43,7 +43,8 @@ module.exports=async(req,res)=>{
     const b=S.checked(await db.from('referral_bookings').select('*').eq('id',input.id).single());
     if(b.status!=='scheduled')throw S.fail('Only a confirmed booking can be released to contractors.');
     const job=await J.syncBooking(db,b,actor);if(!job||job.status!=='pending')throw S.fail('This job is no longer awaiting approval.');
-    S.checked(await db.from('assignment_blocks').update({pay_amount:pay,status:'open',visibility:'open',metadata:{...job.metadata,pay_review_required:false,admin_approval_status:'approved',approved_by:actor,approved_at:new Date().toISOString()}}).eq('id',b.id).eq('status','pending'));
+    let checklistReview;try{checklistReview=J.approvalChecklistReview(job,input,actor);}catch(e){throw S.fail(e.message,409);}
+    S.checked(await db.from('assignment_blocks').update({pay_amount:pay,status:'open',visibility:'open',metadata:{...job.metadata,...checklistReview,pay_review_required:false,admin_approval_status:'approved',approved_by:actor,approved_at:new Date().toISOString()}}).eq('id',b.id).eq('status','pending'));
     return S.json(res,200,{ok:true});
    }
    if(input.action==='admin_sync'){
