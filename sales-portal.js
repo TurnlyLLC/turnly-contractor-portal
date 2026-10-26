@@ -1,4 +1,5 @@
 import {startMessageBadge,paintMessageBadge,refreshMessageBadge} from './crm-message-badge.mjs?v=20261021-desktop';
+import {mountDemandMap} from "./demand-map.mjs?v=20261026";
 import {mountMessages} from './crm-messages.mjs?v=20261021-alerts';
 import {mountTraining} from './crm-training.mjs?v=20261021-required';
 import {mountBudget} from './crm-budget.mjs?v=20261020';
@@ -58,7 +59,9 @@ const pageConfig = {
 
 Object.assign(pageConfig,{communications:{title:'Calling & texting',subtitle:'Budgets, usage and outreach controls.'},pipeline:{title:"Deal pipeline",subtitle:"Move opportunities forward, one meaningful conversation at a time."},contacts:{title:"Contacts",subtitle:"The people and properties behind every relationship."},quotes:{title:"Proposals",subtitle:"Prepare, review, and follow up on your quotes."},contracts:{title:"Closing",subtitle:"Track management review, contracts, and won business."},team:{title:"Team",subtitle:"Ownership, workload, and results across your sales team."}});
 pageConfig.messages={title:'Messages',subtitle:'Stay connected with Turnly admin and your sales team.'};
+pageConfig.map={title:'Realtor lead map',subtitle:'Explore outreach coverage and find your next market.'};
 const navItems = [
+ ['map','Lead map','crm-map.html','dashboard'],
  ['messages','Messages','crm-messages.html','users'],
  ['dashboard','Overview','sales.html','dashboard'],
  ['leads','Prospects','sales-leads.html','users'],
@@ -1215,7 +1218,7 @@ async function loadReps() {
  const result=await crmTeamRequest('list');return result.members||[];
 }
 async function refreshData(showLoading = true,accessChecked=false) {
-  if(["scripts","guide","communications","messages"].includes(state.page)){state.loading=false;render();return;}
+  if(["scripts","guide","communications","messages","map"].includes(state.page)){state.loading=false;render();return;}
   if(showLoading){state.loading=true;state.loadFailed=false;state.message='';render();}
   try {
     if(!accessChecked&&!await withCrmTimeout(requireSalesAccess())){state.rows=[];state.leads=[];return;}
@@ -1253,6 +1256,8 @@ function render() {
       ${renderModal()}
     </main>
   `;
+  const mapRoot=document.getElementById('crmLeadMap');
+  if(mapRoot)void mountDemandMap(mapRoot,{dataset:'sales',request:async values=>{const {data}=await supabase.auth.getSession();if(!data?.session)throw Error('Sign in again.');const r=await crmFetch('/api/admin-map',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+data.session.access_token},body:JSON.stringify(values)});const result=await r.json();if(!r.ok)throw Error(result.error||'Unable to load map.');return result;}});
   const messagesRoot=document.getElementById('crmMessages');
   if(messagesRoot)void mountMessages(messagesRoot,async values=>{const result=await crmMessageRequest(values);if(['read','reply','create'].includes(values.action))void refreshMessageBadge();return result;});
   paintMessageBadge();
@@ -1276,7 +1281,7 @@ function renderSidebar() {
       </a>
       <p class="sales-side-kicker">Workspace</p>
       <nav class="sales-nav" aria-label="Sales navigation">
-        ${navItems.filter(([key])=>!['sales','communications'].includes(key)||isSalesAdmin()).map(([key, label, href, iconName]) => `
+        ${navItems.filter(([key])=>!['sales','communications','map'].includes(key)||isSalesAdmin()).map(([key, label, href, iconName]) => `
           <a class="sales-nav-link ${state.page === key ? "active" : ""}" href="${href}">
             ${icon(iconName)}<span>${label}</span>${key==='messages'?'<span data-message-unread class="crm-message-unread" role="status" hidden></span>':''}
           </a>
@@ -1398,6 +1403,7 @@ function renderLoading() {
 }
 
 function renderPage() {
+ if(state.page==='map')return isSalesAdmin()?'<div id="crmLeadMap"></div>':emptyState('Administrator access required','Open Overview for your results.');
  if(state.page==='messages')return '<div id="crmMessages"></div>';
  if(state.page==='communications')return isSalesAdmin()?'<div id="communicationBudget"></div>':emptyState('Administrator access required','Open Overview for your results.');
  if(state.page==='scripts')return renderScriptsPage();
