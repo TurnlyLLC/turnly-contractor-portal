@@ -5057,7 +5057,8 @@ async function duplicateChecklistTemplate() {
   let suffix = 2;
   while (checklistState.templates.some(template => template.name === name)) name = `${baseName} ${suffix++}`;
   const sections = source.sections.map(section => ({ ...cloneChecklistSection(section), saved_module_id: "" }));
-  const payload = { name, department: source.department, subdepartment: source.subdepartment,
+  const payload = { name, scope_type: checklistState.builder?.scope_type || "commercial",
+    department: source.department, subdepartment: source.subdepartment,
     priority: source.priority, description: source.description, sections, created_by: checklistState.user?.id || null };
   checklistState.isDuplicating = true;
   const button = document.querySelector("[data-checklist-duplicate]");
