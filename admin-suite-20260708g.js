@@ -1,3 +1,4 @@
+import { assignmentServiceScope } from "./assignment-service-scope.mjs?v=20261026-tabs";
 import { loadActiveCleaningContractors } from "./contractor-directory-model.mjs?v=20261012-active";
 import { isResidentialAssignment, configureResidentialForm, residentialRecurrence } from "./residential-assignment.mjs?v=20261026-scopes";
 import {navSections, renderAdminNavigation} from "./admin-navigation.mjs?v=20261019-sales-link";
@@ -366,6 +367,7 @@ const assignmentVideoBucket = "qa-videos";
 const assignmentVideoMaxBytes = 524288000;
 const assignmentVideoSignedUrlSeconds = 60 * 60 * 4;
 const assignmentState = {
+  scopeFilter: "residential",
   rows: [],
   properties: [],
   units: [],
@@ -3941,6 +3943,10 @@ function renderAssignments() {
   return `
     <section class="assignments-layout" data-assignments-page>
       <div class="suite-stack">
+        <nav class="suite-tabs assignment-service-tabs" aria-label="Assignment type">
+          <button type="button" class="suite-tab active" data-assignment-scope="residential" aria-pressed="true">Residential <span data-assignment-scope-count="residential">0</span></button>
+          <button type="button" class="suite-tab" data-assignment-scope="commercial" aria-pressed="false">Commercial <span data-assignment-scope-count="commercial">0</span></button>
+        </nav>
         <section class="metric-strip five">
           ${metric("Job Board", "0", "not completed", "calendar", "green", 'id="assignmentTotalCount"')}
           ${metric("Today's Assignments", "0", "due today", "calendar", "purple", 'id="assignmentTodayCount"')}
@@ -3951,8 +3957,8 @@ function renderAssignments() {
         <section class="suite-panel assignment-list-panel">
           <div class="panel-head assignment-list-head">
             <div>
-              <h2>Assignment Admin Board</h2>
-              <p>All assignment history synced from Supabase</p>
+              <h2 id="assignmentScopeHeading">Residential Assignments</h2>
+              <p>Review and manage assignments in the selected category.</p>
             </div>
             ${assignmentNewButton("New Assignment", "assignmentPanelNewBtn")}
           </div>
@@ -13532,6 +13538,15 @@ function handleAssignmentClick(event) {
     closeAssignmentContractorDropdowns();
   }
 
+  const scopeTab = event.target.closest("[data-assignment-scope]");
+  if (scopeTab) {
+    assignmentState.scopeFilter = scopeTab.dataset.assignmentScope === "commercial" ? "commercial" : "residential";
+    assignmentState.currentPage = 1;
+    clearAssignmentSelection();
+    renderAssignmentData();
+    return;
+  }
+
   const statusTab = event.target.closest("[data-assignment-status-tab]");
   if (statusTab) {
     assignmentState.statusFilter = statusTab.dataset.assignmentStatusTab || "all";
@@ -13995,7 +14010,21 @@ function renderAssignmentData() {
   renderAssignmentTable();
 }
 
+function scopedAssignmentRows() {
+  return activeKey === "assignments" ? assignmentState.rows.filter(row => assignmentServiceScope(row) === assignmentState.scopeFilter) : assignmentState.rows;
+}
+
 function renderAssignmentFilterControls() {
+  document.querySelectorAll("[data-assignment-scope]").forEach(button => {
+    const selected = button.dataset.assignmentScope === assignmentState.scopeFilter;
+    button.classList.toggle("active", selected);
+    button.setAttribute("aria-pressed", String(selected));
+  });
+  document.querySelectorAll("[data-assignment-scope-count]").forEach(element => {
+    element.textContent = assignmentState.rows.filter(row => assignmentServiceScope(row) === element.dataset.assignmentScopeCount).length.toLocaleString();
+  });
+  const heading = document.getElementById("assignmentScopeHeading");
+  if (heading) heading.textContent = assignmentState.scopeFilter === "commercial" ? "Commercial Assignments" : "Residential Assignments";
   const search = document.getElementById("assignmentSearchInput");
   if (search && search.value !== assignmentState.search) search.value = assignmentState.search;
   const status = document.getElementById("assignmentStatusFilter");
@@ -14178,7 +14207,7 @@ function populateAssignmentContractorFilter() {
 }
 
 function renderAssignmentMetrics() {
-  const rows = assignmentState.rows;
+  const rows = scopedAssignmentRows();
   const setText = (id, value) => {
     const element = document.getElementById(id);
     if (element) element.textContent = value;
@@ -14227,7 +14256,7 @@ function pruneAssignmentSelection() {
 }
 
 function selectedAssignmentRows() {
-  return assignmentState.rows.filter((row) => assignmentState.selectedIds.has(String(row.id || "")));
+  return scopedAssignmentRows().filter((row) => assignmentState.selectedIds.has(String(row.id || "")));
 }
 
 function renderAssignmentBulkControls(pageRows = []) {
@@ -14401,7 +14430,7 @@ function getFilteredAssignments() {
   const term = assignmentState.search.trim().toLowerCase();
   const statusFilter = normalizeToken(assignmentState.statusFilter);
   const frequencyFilter = assignmentFrequencyKey(assignmentState.frequencyFilter);
-  const rows = assignmentState.rows.filter((row) => {
+  const rows = scopedAssignmentRows().filter((row) => {
     if (statusFilter && statusFilter !== "all") {
       if (statusFilter === assignmentBoardStatusFilter) {
         if (!isAssignmentOpen(row)) return false;
@@ -15142,6 +15171,7 @@ async function saveAssignmentForm(event) {
   let payloads = [];
   try {
     payloads = collectAssignmentPayloads();
+    if (activeKey === "assignments") payloads = payloads.map(payload => ({ ...payload, metadata: { ...payload.metadata, scope_type: assignmentState.scopeFilter } }));
   } catch (error) {
     assignmentState.isSaving = false;
     setAssignmentSaving(false);
