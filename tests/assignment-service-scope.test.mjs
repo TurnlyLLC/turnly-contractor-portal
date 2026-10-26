@@ -13,8 +13,8 @@ test('tab-scoped rows protect counts and bulk selection without changing other a
   const source=readFileSync(new URL('../admin-suite-20260708g.js',import.meta.url),'utf8');
   const body=source.match(/function scopedAssignmentRows\(\) \{([\s\S]*?)\n\}/)[1];
   const rows=[{id:'r',metadata:{scope_type:'residential'}},{id:'c',metadata:{}}];
-  const run=new Function('activeKey','assignmentState','assignmentServiceScope',body);
-  assert.deepEqual(run('assignments',{rows,scopeFilter:'residential'},assignmentServiceScope).map(r=>r.id),['r']);
-  assert.deepEqual(run('assignments',{rows,scopeFilter:'commercial'},assignmentServiceScope).map(r=>r.id),['c']);
-  assert.equal(run('claimed-assignments',{rows,scopeFilter:'residential'},assignmentServiceScope),rows);
+  const run=new Function('document','assignmentState','assignmentServiceScope',body);
+  assert.deepEqual(run({body:{dataset:{adminPage:'assignments'}}},{rows,scopeFilter:'residential'},assignmentServiceScope).map(r=>r.id),['r']);
+  assert.deepEqual(run({body:{dataset:{adminPage:'assignments'}}},{rows,scopeFilter:'commercial'},assignmentServiceScope).map(r=>r.id),['c']);
+  assert.equal(run({body:{dataset:{adminPage:'claimed-assignments'}}},{rows,scopeFilter:'residential'},assignmentServiceScope),rows);
 });

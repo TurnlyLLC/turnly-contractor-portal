@@ -14011,7 +14011,7 @@ function renderAssignmentData() {
 }
 
 function scopedAssignmentRows() {
-  return activeKey === "assignments" ? assignmentState.rows.filter(row => assignmentServiceScope(row) === assignmentState.scopeFilter) : assignmentState.rows;
+  return document.body.dataset.adminPage === "assignments" ? assignmentState.rows.filter(row => assignmentServiceScope(row) === assignmentState.scopeFilter) : assignmentState.rows;
 }
 
 function renderAssignmentFilterControls() {
@@ -15171,7 +15171,7 @@ async function saveAssignmentForm(event) {
   let payloads = [];
   try {
     payloads = collectAssignmentPayloads();
-    if (activeKey === "assignments") payloads = payloads.map(payload => ({ ...payload, metadata: { ...payload.metadata, scope_type: assignmentState.scopeFilter } }));
+    if (document.body.dataset.adminPage === "assignments") payloads = payloads.map(payload => ({ ...payload, metadata: { ...payload.metadata, scope_type: assignmentState.scopeFilter } }));
   } catch (error) {
     assignmentState.isSaving = false;
     setAssignmentSaving(false);
