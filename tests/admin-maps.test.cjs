@@ -60,3 +60,11 @@ test('cleaning map merges assignments without duplicating linked residential boo
  const db={from:t=>({select:()=>({order:()=>({range:async()=>({data:data[t]})})})})};
  const rows=await M.records(db,'cleans');assert.equal(rows.length,3);assert.equal(rows.find(r=>r.id==='r1').status,'pending');assert.equal(rows.find(r=>r.id==='c1').category,'commercial');assert.equal(rows.find(r=>r.id==='c1').state,'NC');assert.equal(rows.find(r=>r.id==='o1').status,'out_of_range');
 });
+
+test('identical assignment addresses share known site coordinates without external geocoding',async()=>{
+ const db={from:()=>({select:()=>({in:async()=>({data:[]})})})};
+ const rows=await M.attach(db,[{address:'123 Site St',latitude:35.9,longitude:-78.9},{address:'123 SITE ST'}]);
+ assert.equal(rows[1].latitude,35.9);assert.equal(rows[1].location_status,'matched');
+ const conflict=await M.attach(db,[{address:'123 Site St',latitude:35.9,longitude:-78.9},{address:'123 Site St',latitude:36,longitude:-79},{address:'123 Site St'}]);
+ assert.equal(conflict[2].latitude,null);
+});
