@@ -12,25 +12,39 @@ export async function videoConsentRequest(client,id,action='get',data={}){
  const response=await fetch('/api/assignment-video-consent',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${auth.session.access_token}`},body:JSON.stringify({id,action,...data})});
  const result=await response.json();if(!response.ok)throw new Error(result.error||'Unable to save video opt-out.');return result;
 }
-export function collectVideoConsent(client,id,text){
+export function collectVideoConsent(client,id,text,customerName=''){
  return new Promise(resolve=>{
-  const dialog=document.createElement('dialog');dialog.style.cssText='width:min(650px,94vw);max-height:90vh;overflow:auto;border:0;border-radius:18px;padding:24px;color:#123a46;background:white;z-index:100000;font:16px/1.5 system-ui,sans-serif';
-  dialog.innerHTML=`<h2>Customer video opt-out</h2><p>Hand the device to the customer to review and sign. Contractors must not sign on the customer’s behalf.</p><p>${esc(text)}</p><form><label style="display:block">Customer or authorized adult’s full name<input name="customer_name" required minlength="2" maxlength="160" autocomplete="off" style="display:block;width:100%;padding:12px;margin:8px 0"></label><p>Draw your signature below.</p><canvas width="600" height="200" aria-label="Draw customer signature" style="width:100%;height:180px;touch-action:none;background:#fff;border:2px solid #78979b;border-radius:8px"></canvas><button type="button" data-clear>Clear signature</button><label style="display:flex;gap:12px;margin:18px 0"><input type="checkbox" name="agreed" required> I am the customer or an authorized adult. I decline both videos for this visit and agree to save my signature electronically with this cleaning record.</label><p data-error role="alert"></p><div style="display:flex;gap:12px"><button type="button" data-cancel>Cancel</button><button type="submit" style="background:#008577;color:white;border:0;padding:14px;border-radius:8px">Sign and save opt-out</button></div></form>`;
+  if(!document.getElementById('turnlySignatureStyles')){
+   const css=document.createElement('link');css.id='turnlySignatureStyles';css.rel='stylesheet';css.href='/video-consent.css?v=20261026-app';document.head.append(css);
+  }
+  const dialog=document.createElement('dialog');dialog.className='turnly-signature';
+  dialog.setAttribute('aria-labelledby','videoConsentTitle');
+  dialog.innerHTML=`<header class="signature-header"><div><span class="signature-brand">TURNLY • CUSTOMER CONSENT</span><h2 id="videoConsentTitle">Video recording preference</h2></div><button type="button" class="signature-close" data-cancel aria-label="Close signature form">×</button></header><form class="signature-form"><div class="signature-review"><p class="signature-instruction">Hand the device to the customer to review and sign.</p><p class="signature-terms">${esc(text)}</p><label class="signature-name">Customer or authorized adult’s full name<input name="customer_name" value="${esc(customerName)}" required minlength="2" maxlength="160" autocomplete="name" autocapitalize="words" placeholder="Customer’s full name"></label><p class="signature-helper">Confirm the name, or change it if an authorized adult is signing.</p></div><section class="signature-capture"><div class="signature-pad-heading"><strong>Customer signature</strong><button type="button" class="signature-secondary" data-expand>Expand signature</button></div><p class="signature-helper" data-rotate>Use your finger to sign. Turn your phone sideways for more room.</p><canvas width="900" height="300" aria-label="Draw customer signature"></canvas><div class="signature-pad-footer"><span>Sign above the line</span><button type="button" class="signature-link" data-clear>Clear signature</button></div></section><label class="signature-agreement"><input type="checkbox" name="agreed" required><span>I am the customer or an authorized adult. I decline both videos for this visit and agree to save my signature electronically with this cleaning record.</span></label><p class="signature-error" data-error role="alert"></p><footer class="signature-actions"><button type="button" class="signature-secondary" data-cancel-bottom>Back</button><button type="submit" class="signature-primary">Sign & save opt-out</button></footer><p class="signature-footnote">Saved with this assignment for the customer’s reference. Contractors must not sign on the customer’s behalf.</p></form>`;
   document.body.append(dialog);dialog.showModal();
-  const canvas=dialog.querySelector('canvas'),ctx=canvas.getContext('2d');let strokes=[],current=null,busy=false;
-  ctx.strokeStyle='#123a46';ctx.lineWidth=2.5;ctx.lineCap='round';
+  const canvas=dialog.querySelector('canvas'),ctx=canvas.getContext('2d');let strokes=[],current=null,busy=false,expanded=false,locked=false;
+  ctx.strokeStyle='#16233b';ctx.lineWidth=3;ctx.lineCap='round';ctx.lineJoin='round';
+  const redraw=()=>{ctx.clearRect(0,0,900,300);for(const stroke of strokes){ctx.beginPath();stroke.forEach((p,i)=>i?ctx.lineTo(p[0]*900,p[1]*300):ctx.moveTo(p[0]*900,p[1]*300));ctx.stroke();}};
   const point=e=>{const r=canvas.getBoundingClientRect();return [Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)),Math.max(0,Math.min(1,(e.clientY-r.top)/r.height))].map(n=>Math.round(n*10000)/10000);};
-  canvas.onpointerdown=e=>{if(busy)return;canvas.setPointerCapture(e.pointerId);current=[point(e)];strokes.push(current);};
-  canvas.onpointermove=e=>{if(!current||busy||current.length>=500)return;const p=point(e),last=current.at(-1);current.push(p);ctx.beginPath();ctx.moveTo(last[0]*600,last[1]*200);ctx.lineTo(p[0]*600,p[1]*200);ctx.stroke();};
+  canvas.onpointerdown=e=>{if(busy||strokes.length>=40)return;e.preventDefault();canvas.setPointerCapture(e.pointerId);current=[point(e)];strokes.push(current);};
+  canvas.onpointermove=e=>{if(!current||busy||current.length>=500)return;e.preventDefault();current.push(point(e));redraw();};
   canvas.onpointerup=canvas.onpointercancel=()=>{current=null;};
-  dialog.querySelector('[data-clear]').onclick=()=>{if(!busy){strokes=[];ctx.clearRect(0,0,600,200);}};
-  const close=value=>{dialog.close();dialog.remove();resolve(value);};
-  dialog.querySelector('[data-cancel]').onclick=()=>{if(!busy)close(null);};
-  dialog.oncancel=e=>{e.preventDefault();if(!busy)close(null);};
+  dialog.querySelector('[data-clear]').onclick=()=>{if(!busy){strokes=[];redraw();dialog.querySelector('[data-error]').textContent='';}};
+  const restoreScreen=async()=>{if(locked){screen.orientation?.unlock?.();locked=false;}if(document.fullscreenElement===dialog)await document.exitFullscreen().catch(()=>{});};
+  dialog.querySelector('[data-expand]').onclick=async()=>{
+   expanded=!expanded;dialog.classList.toggle('signature-expanded',expanded);dialog.querySelector('[data-expand]').textContent=expanded?'Done signing':'Expand signature';
+   if(expanded){try{await dialog.requestFullscreen?.();await screen.orientation?.lock?.('landscape');locked=true;}catch{dialog.querySelector('[data-rotate]').textContent='Turn your phone sideways for a wider signature pad. Your signature stays saved while you rotate.';}}
+   else await restoreScreen();
+  };
+  const close=async value=>{await restoreScreen();dialog.close();dialog.remove();resolve(value);};
+  dialog.querySelector('[data-cancel]').onclick=dialog.querySelector('[data-cancel-bottom]').onclick=()=>{if(!busy)void close(null);};
+  dialog.oncancel=e=>{e.preventDefault();if(!busy)void close(null);};
   dialog.querySelector('form').onsubmit=async e=>{
-   e.preventDefault();if(busy)return;busy=true;const form=e.target,button=form.querySelector('[type=submit]');button.disabled=true;
-   try{const result=await videoConsentRequest(client,id,'sign',{customer_name:form.elements.customer_name.value,agreed:form.elements.agreed.checked,signature:strokes});close(result.consent);}
-   catch(error){dialog.querySelector('[data-error]').textContent=error.message;busy=false;button.disabled=false;}
+   e.preventDefault();if(busy)return;
+   const clean=strokes.filter(s=>s.length>=2),points=clean.reduce((n,s)=>n+s.length,0),distance=clean.reduce((n,s)=>n+s.slice(1).reduce((d,p,i)=>d+Math.hypot(p[0]-s[i][0],p[1]-s[i][1]),0),0);
+   if(points<8||distance<.15){dialog.querySelector('[data-error]').textContent='Please draw your complete signature before saving.';return;}
+   busy=true;const form=e.target,button=form.querySelector('[type=submit]');button.disabled=true;button.textContent='Saving…';
+   try{const result=await videoConsentRequest(client,id,'sign',{customer_name:form.elements.customer_name.value,agreed:form.elements.agreed.checked,signature:clean});await close(result.consent);}
+   catch(error){dialog.querySelector('[data-error]').textContent=error.message;busy=false;button.disabled=false;button.textContent='Sign & save opt-out';}
   };
  });
 }

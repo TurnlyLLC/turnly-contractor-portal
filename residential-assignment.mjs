@@ -1,4 +1,4 @@
-export const isResidentialAssignment = row => row?.metadata?.source === 'residential_booking';
+export const isResidentialAssignment = row => Boolean(row?.metadata?.source === 'residential_booking' || row?.metadata?.scope_type === 'residential' || row?.metadata?.residential_booking_id);
 export function residentialCounts(row) {
   const m=row?.metadata||{};
   const match=String(row?.scope||'').match(/(\d+(?:\.\d+)?) bedrooms?,\s*(\d+(?:\.\d+)?) bathrooms?/i);
