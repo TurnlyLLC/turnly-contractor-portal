@@ -3,14 +3,14 @@ const {PGlite}=require('@electric-sql/pglite');
 const id=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 async function fixture(){const db=new PGlite();await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;create table profiles(id uuid primary key,role text,status text);insert into profiles values('${id(1)}','sales','active'),('${id(2)}','admin','active');create table crm_sales_commissions(order_id uuid primary key,sales_user_id uuid,amount_cents integer,status text);insert into crm_sales_commissions values('${id(3)}','${id(1)}',1000,'earned');`);await db.exec(fs.readFileSync('supabase/migrations/20261021123800_crm_required_sales_training.sql','utf8'));await db.exec(fs.readFileSync('supabase/migrations/20261027191425_sales_seller_onboarding.sql','utf8'));return db;}
 test('new introduction, review and current signature are all required; old completion does not bypass',async()=>{const db=await fixture();try{
- const ready=async()=>(await db.query('select crm_training_ready($1) r',[id(1)])).rows[0].r;
+ const ready=async()=>(await db.query('select crm_seller_training_ready($1) r',[id(1)])).rows[0].r;
  await db.exec(`insert into crm_training_progress(user_id,version,lesson,completed_at) values('${id(1)}','20261021-v1','introduction',now()),('${id(1)}','20261021-v1','portal',now());insert into crm_training_reviews values('${id(1)}','20261021-v1',now());`);
  assert.equal(await ready(),false);
- await assert.rejects(db.query('select crm_training_acknowledge($1)',[id(1)]),/Finish the introduction/);
+ await assert.rejects(db.query('select crm_seller_training_acknowledge($1)',[id(1)]),/Finish the introduction/);
  await db.exec(`insert into crm_training_progress(user_id,version,lesson,completed_at) values('${id(1)}','20261027-v2','introduction',now());`);
- await db.query('select crm_training_acknowledge($1)',[id(1)]);assert.equal(await ready(),false);
+ await db.query('select crm_seller_training_acknowledge($1)',[id(1)]);assert.equal(await ready(),false);
  await db.exec(`insert into crm_seller_agreements values('${id(1)}','20261027-v1','hash','snapshot','Test Seller','I agree',now());`);assert.equal(await ready(),true);
- await db.exec('set role authenticated');await assert.rejects(db.query('select * from crm_seller_agreements'),/permission denied/);await assert.rejects(db.query('select crm_training_ready($1)',[id(1)]),/permission denied/);
+ await db.exec('set role authenticated');await assert.rejects(db.query('select * from crm_seller_agreements'),/permission denied/);await assert.rejects(db.query('select crm_seller_training_ready($1)',[id(1)]),/permission denied/);
  await db.exec('reset role;set role service_role');await assert.rejects(db.query("update crm_seller_agreements set signer_name='Changed'"),/permission denied/);
  }finally{await db.close();}});
 test('commission approval is admin only, amount checked, and never sends or records money twice',async()=>{const db=await fixture();try{

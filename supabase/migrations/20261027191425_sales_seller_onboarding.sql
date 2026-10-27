@@ -42,13 +42,13 @@ end $$;
 revoke all on function public.crm_commission_payment_review(uuid,uuid,text,text,integer) from public,anon,authenticated;
 grant execute on function public.crm_commission_payment_review(uuid,uuid,text,text,integer) to service_role;
 
-create or replace function public.crm_training_ready(p_user uuid) returns boolean
+create or replace function public.crm_seller_training_ready(p_user uuid) returns boolean
 language sql stable security invoker set search_path=public as $$
  select exists(select 1 from crm_training_progress where user_id=p_user and version='20261027-v2' and lesson='introduction' and completed_at is not null)
  and exists(select 1 from crm_training_reviews where user_id=p_user and version='20261027-v2')
  and exists(select 1 from crm_seller_agreements where user_id=p_user and version='20261027-v1');
 $$;
-create or replace function public.crm_training_record(p_user uuid,p_lesson text,p_session uuid,p_position double precision,p_start boolean default false)
+create or replace function public.crm_seller_training_record(p_user uuid,p_lesson text,p_session uuid,p_position double precision,p_start boolean default false)
 returns jsonb language plpgsql security invoker set search_path=public as $$
 declare v crm_training_progress; duration double precision; elapsed double precision; delta double precision; tick timestamptz:=clock_timestamp();
 begin
@@ -83,7 +83,7 @@ begin
 end $$;
 
 
-create or replace function public.crm_training_acknowledge(p_user uuid) returns boolean
+create or replace function public.crm_seller_training_acknowledge(p_user uuid) returns boolean
 language plpgsql security invoker set search_path=public as $$
 begin
  perform pg_advisory_xact_lock(hashtextextended(p_user::text,812));
@@ -93,3 +93,6 @@ begin
  insert into crm_training_reviews(user_id,version) values(p_user,'20261027-v2') on conflict do nothing;
  return true;
 end $$;
+
+revoke all on function public.crm_seller_training_ready(uuid),public.crm_seller_training_record(uuid,text,uuid,double precision,boolean),public.crm_seller_training_acknowledge(uuid) from public,anon,authenticated;
+grant execute on function public.crm_seller_training_ready(uuid),public.crm_seller_training_record(uuid,text,uuid,double precision,boolean),public.crm_seller_training_acknowledge(uuid) to service_role;

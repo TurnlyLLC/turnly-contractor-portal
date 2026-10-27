@@ -8,12 +8,12 @@ module.exports=async(req,res)=>{
   if(i.action==='status')return S.json(res,200,await T.status(db,user));
   if(i.action==='progress'){
    if(!T.LESSONS.some(l=>l.id===i.lesson)||!uuid(i.session)||typeof i.position!=='number'||!Number.isFinite(i.position)||i.position<0||i.position>1000)throw S.fail('Invalid training progress.');
-   const p=S.checked(await db.rpc('crm_training_record',{p_user:user.id,p_lesson:i.lesson,p_session:i.session,p_position:i.position,p_start:i.start===true}));
+   const p=S.checked(await db.rpc('crm_seller_training_record',{p_user:user.id,p_lesson:i.lesson,p_session:i.session,p_position:i.position,p_start:i.start===true}));
    return S.json(res,200,{lesson:p.lesson,watched_seconds:p.watched_seconds,completed_at:p.completed_at});
   }
   if(i.action==='acknowledge'){
    if(i.reviewed!==true)throw S.fail('Confirm you reviewed the playbook.');
-   S.checked(await db.rpc('crm_training_acknowledge',{p_user:user.id}));
+   S.checked(await db.rpc('crm_seller_training_acknowledge',{p_user:user.id}));
    return S.json(res,200,await T.status(db,user));
   }
   throw S.fail('Unknown training action.');
