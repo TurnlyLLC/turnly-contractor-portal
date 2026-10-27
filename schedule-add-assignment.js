@@ -406,6 +406,7 @@ function payloadFromForm(options = {}) {
   const specialInstructions = value("scheduleAssignmentInstructions") || propertyAccessNotes(property);
   const metadata = {
     ...assignmentMetadata(state.editingRow),
+    ...(!state.editingId ? { scope_type: document.body.dataset.scheduleScope === "residential" ? "residential" : "commercial" } : {}),
     ...(unitNumber ? { unit_number: unitNumber, unit_name: unitNumber } : {})
   };
   if (!unitNumber) {

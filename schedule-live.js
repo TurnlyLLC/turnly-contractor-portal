@@ -1,7 +1,10 @@
 import { createAssignmentChecklistEditor } from "./assignment-checklist-editor.mjs?v=20261026-video";
 import { residentialChecklistItems } from "./residential-assignment.mjs?v=20261026-scopes";
-import { visibleScheduleAssignment } from "./schedule-visibility.mjs?v=20261012-cancelled";
+import { visibleScheduleAssignment } from "./schedule-visibility.mjs?v=20261027-calendar";
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+
+const scheduleScope = document.body?.dataset.scheduleScope === 'residential' ? 'residential' : 'commercial';
+const scheduleLabel = scheduleScope === 'residential' ? 'Residential' : 'Commercial';
 
 const env = window.__ENV || {};
 const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
@@ -54,6 +57,7 @@ function mountScheduleShell() {
           ${viewButton("month", "Month")}
         </div>
         <div class="toolbar-right">
+          ${scheduleScope === "residential" ? `<a class="secondary-action" href="admin-residential.html">Bookings & clients</a>` : ""}
           <button class="secondary-action" type="button" data-schedule-refresh><span>Refresh</span></button>
         </div>
       </div>
@@ -67,7 +71,7 @@ function mountScheduleShell() {
               <strong id="scheduleLiveRange"></strong>
               <button class="secondary-action schedule-clear-calendar" type="button" data-schedule-clear><span>Clear Filters</span></button>
             </div>
-            <p id="scheduleLiveMessage" class="status-message table-status-message" aria-live="polite">Loading all assignment jobs...</p>
+            <p id="scheduleLiveMessage" class="status-message table-status-message" aria-live="polite">Loading ${scheduleScope} assignment jobs...</p>
             <div id="scheduleLiveBody" class="schedule-dynamic-calendar"></div>
           </section>
         </div>
@@ -274,7 +278,7 @@ async function loadScheduleRows() {
     return;
   }
 
-  showMessage("Loading all assignment jobs...");
+  showMessage(`Loading ${scheduleScope} assignment jobs...`);
   const body = document.getElementById("scheduleLiveBody");
   if (body) body.innerHTML = `<div class="schedule-loading">Loading assignments...</div>`;
 
@@ -292,11 +296,11 @@ async function loadScheduleRows() {
   }
 
   state.rows = (data || [])
-    .filter((row) => visibleScheduleAssignment(row) && parseDate(row.start_window))
+    .filter((row) => visibleScheduleAssignment(row, scheduleScope) && parseDate(row.start_window))
     .sort((a, b) => dateValue(a.start_window) - dateValue(b.start_window));
   showMessage(state.rows.length
-    ? `${state.rows.length.toLocaleString()} assignment job${state.rows.length === 1 ? "" : "s"} synced from Supabase.`
-    : "Synced with Supabase. No assignment jobs are scheduled yet.");
+    ? `${state.rows.length.toLocaleString()} ${scheduleScope} assignment job${state.rows.length === 1 ? "" : "s"} synced from Supabase.`
+    : `Synced with Supabase. No ${scheduleScope} assignment jobs are scheduled yet.`);
   renderSchedule();
 }
 

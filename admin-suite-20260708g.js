@@ -1,7 +1,7 @@
 import { assignmentServiceScope, assignmentAwaitsApproval } from "./assignment-service-scope.mjs?v=20261026-approval";
 import { loadActiveCleaningContractors } from "./contractor-directory-model.mjs?v=20261012-active";
 import { isResidentialAssignment, configureResidentialForm, residentialRecurrence } from "./residential-assignment.mjs?v=20261026-sync";
-import {navSections, renderAdminNavigation} from "./admin-navigation.mjs?v=20261026-map";
+import {navSections, renderAdminNavigation} from "./admin-navigation.mjs?v=20261027-calendar";
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 import {
   adminPreviewPortalOptions,
@@ -602,8 +602,8 @@ const pages = {
     render: renderContracts
   },
   "schedule": {
-    title: "Schedule",
-    subtitle: "View and manage all scheduled cleanings",
+    title: document.body.dataset.scheduleScope === "residential" ? "Residential Schedule" : "Commercial Schedule",
+    subtitle: "View and manage scheduled " + (document.body.dataset.scheduleScope === "residential" ? "home" : "commercial") + " cleanings",
     render: renderSchedule
   },
   "coverage-center": {
@@ -16240,7 +16240,7 @@ function renderSidebar(activeKey) {
         <span class="brand-mark" aria-hidden="true"></span>
         <strong>Turnly</strong>
       </a>
-      ${renderAdminNavigation(activeKey,{icon,badge:renderNavNotificationBadge})}
+      ${renderAdminNavigation(activeKey === "schedule" && document.body.dataset.scheduleScope === "residential" ? "residential-schedule" : activeKey,{icon,badge:renderNavNotificationBadge})}
       <div class="suite-legal-links" aria-label="Turnly legal links">
         <a href="/privacy-policy.html" target="_blank" rel="noopener">Privacy Policy</a>
         <a href="/terms-and-conditions.html" target="_blank" rel="noopener">Terms</a>

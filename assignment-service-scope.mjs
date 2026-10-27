@@ -1,6 +1,7 @@
 // Classify by stored booking/checklist metadata, never by a customer's name.
 export function assignmentServiceScope(row) {
-  const metadata = row?.metadata || {};
+  let metadata = row?.metadata || {};
+  if (typeof metadata === 'string') { try { metadata = JSON.parse(metadata) || {}; } catch { metadata = {}; } }
   if (metadata.source === 'residential_booking' || metadata.scope_type === 'residential' || metadata.residential_booking_id) return 'residential';
   return 'commercial';
 }
