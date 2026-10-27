@@ -1,3 +1,4 @@
+import { propertyManagerNotesHtml } from "./property-manager-notes.mjs?v=20261027-notes";
 import { createAssignmentChecklistEditor } from "./assignment-checklist-editor.mjs?v=20261026-video";
 import { residentialChecklistItems } from "./residential-assignment.mjs?v=20261026-scopes";
 import { visibleScheduleAssignment } from "./schedule-visibility.mjs?v=20261027-calendar";
@@ -856,6 +857,7 @@ function scheduleAssignmentDetail(row) {
       <div class="schedule-assignment-actions">
         <button class="primary-action" type="button" data-schedule-assignment-edit="${escapeHtml(String(row.id || ""))}"><span>Edit Assignment</span></button>
       </div>
+      ${propertyManagerNotesHtml(row)}
       <div class="schedule-assignment-notes">
         <div><span>Scope of Work</span><p>${escapeHtml(notes.scope || "No scope entered.")}</p></div>
         <div><span>Supplies Notes</span><p>${escapeHtml(notes.supplies || "No supplies notes entered.")}</p></div>

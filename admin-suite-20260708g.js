@@ -1,3 +1,4 @@
+import { propertyManagerNotesHtml } from "./property-manager-notes.mjs?v=20261027-notes";
 import { assignmentServiceScope, assignmentAwaitsApproval } from "./assignment-service-scope.mjs?v=20261026-approval";
 import { loadActiveCleaningContractors } from "./contractor-directory-model.mjs?v=20261012-active";
 import { isResidentialAssignment, configureResidentialForm, residentialRecurrence } from "./residential-assignment.mjs?v=20261026-sync";
@@ -13384,6 +13385,7 @@ function updateAssignmentBulkFieldState() {
 
 function updateAssignmentModalMode() {
   const isEditing = Boolean(assignmentState.editingId);
+  if (!isEditing) document.getElementById('assignmentManagerNotes')?.remove();
   const title = document.getElementById("assignmentModalTitle");
   const form = document.getElementById("assignmentForm");
   const propertySelect = document.getElementById("propertySelect");
@@ -13422,6 +13424,8 @@ function updateAssignmentModalMode() {
 }
 
 function populateAssignmentFormForEdit(row) {
+  document.getElementById('assignmentManagerNotes')?.remove();
+  document.getElementById('assignmentForm')?.insertAdjacentHTML('afterbegin', `<div id="assignmentManagerNotes" style="grid-column:1/-1">${propertyManagerNotesHtml(row)}</div>`);
   const setValue = (id, value) => {
     const field = document.getElementById(id);
     if (field) field.value = value ?? "";
@@ -14399,6 +14403,7 @@ function renderAssignmentRow(row) {
           </div>
         `).join("")}
       </div>
+      ${propertyManagerNotesHtml(row, true)}
       ${assignmentNotesPreview(row)}
     </article>
   `;

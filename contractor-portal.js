@@ -1,3 +1,4 @@
+import { propertyManagerNotesHtml } from "./property-manager-notes.mjs?v=20261027-notes";
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 import { canReleaseJob } from "./contractor-release-policy.mjs";
 import {
@@ -1017,6 +1018,7 @@ function openJobCard(item, className = "cp-job-row") {
           : `<span>${esc(detail)}</span>`).join("")}
         ${contractorSurface === "pwa" ? `<span>${esc(item.address || "")}</span><strong class="cp-native-job-pay">${esc(money(item.pay_amount))}</strong>` : ""}
       </div>
+      ${propertyManagerNotesHtml(item, true)}
       ${actions ? `<div class="cp-open-job-actions">${actions}</div>` : ""}
     </article>
   `;
@@ -1614,6 +1616,7 @@ function filteredMyAssignments() {
 function renderSelectedJobDetail(item) {
   if (!item) return emptyState("Select a job to view details.");
   return `
+    ${propertyManagerNotesHtml(item)}
     <div class="cp-detail-list">
       <div><span>Property</span><strong>${esc(assignmentTitle(item))}</strong></div>
       <div><span>Address</span><strong>${esc(item.address || "Not set")}</strong></div>

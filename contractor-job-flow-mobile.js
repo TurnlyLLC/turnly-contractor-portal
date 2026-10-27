@@ -1,3 +1,4 @@
+import { propertyManagerNotesHtml } from "./property-manager-notes.mjs?v=20261027-notes";
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 import {videoConsentItem, videoConsentRequest, collectVideoConsent, consentRecordHtml} from './video-consent.mjs?v=20261026-signature-app';
 
@@ -1460,6 +1461,7 @@ function startDetailContent(tabKey) {
         ["Unit", unit || "No unit selected"],
         ["Address", resolvedAddress(assignment) || "Address not set"]
       ])}
+      ${propertyManagerNotesHtml(assignment)}
       ${detailNote("Access Notes", resolvedAccessNotes(assignment), "No access notes are listed.")}
     `;
   }
