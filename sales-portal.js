@@ -1,5 +1,5 @@
 import {startMessageBadge,paintMessageBadge,refreshMessageBadge} from './crm-message-badge.mjs?v=20261021-desktop';
-import {mountDemandMap} from "./demand-map.mjs?v=20261026";
+import {mountDemandMap} from "./demand-map.mjs?v=20261027-status-rings";
 import {mountMessages} from './crm-messages.mjs?v=20261021-alerts';
 import {mountTraining} from './crm-training.mjs?v=20261021-required';
 import {mountBudget} from './crm-budget.mjs?v=20261020';
