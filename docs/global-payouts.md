@@ -11,7 +11,7 @@ Drafts reserve completed, real cleaning assignments in the existing contractor p
 The implementation uses the Payout Intents private preview with `confirmation_method: manual`. Prepare retrieves a Stripe quote without sending; Send verifies the exact review hash, records the approver atomically, and confirms once with a stable idempotency key. An ambiguous confirmation is only reconciled, never automatically retried. Preparation retries expire locally after 23 hours. Posted means sent, not guaranteed bank receipt. Failures/returns remain reserved and need admin reconciliation; they do not authorize a replacement payment.
 
 Outstanding before activation:
-- Replace the restricted key disclosed in chat; safely add the replacement to Vercel Production as Sensitive.
+- Replacement key was securely saved to Vercel Production as Secret on October 27. Payout write permissions still need verification.
 - Stripe access: recipient configuration, financial account read, payout methods and outbound payments write; Payout Intents write and cross-border preview approval.
 - Verify exact preview response schemas against enabled account; test prepare, quote expiry, confirm timeout, failed/returned payouts and duplicates in Stripe sandbox.
 - Configure signed thin-event webhook reconciliation before enabling send; current status refresh is manual.
