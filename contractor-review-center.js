@@ -43,7 +43,7 @@ export function createContractorReview({supabase,getPeople,onSaved}) {
     }
     if(state.mobileError)queue.insertAdjacentHTML('afterbegin',`<p class="cr-error" role="alert">Onboarding requests could not load: ${esc(state.mobileError)} Refresh reviews to retry.</p>`);
   }
-  async function load(){state.loading=true;render();try{const data=await api({action:'list'});state.documents=data.documents.filter(d=>!d.storage_path?.includes('/onboarding/'));state.profiles=data.profiles;state.mobile=data.mobile||[];state.mobileError=data.mobile_error||'';state.deletionReviews=data.deletion_reviews||[];state.error='';}catch(e){state.error=e.message;}finally{state.loading=false;render();}}
+  async function load(){state.loading=true;render();try{const data=await api({action:'list'});state.documents=data.documents.filter(d=>!d.storage_path?.includes('/onboarding/'));state.profiles=data.profiles;state.mobile=data.mobile||[];state.mobileError=data.mobile_error||'';state.deletionReviews=data.deletion_reviews||[];state.error='';}catch(e){state.error=e.message;}finally{state.loading=false;render();document.dispatchEvent(new CustomEvent('contractor-reviews-loaded'));}}
   function requirementOptions(d){
     const items=(state.mobileFile?.items||[]).filter(i=>i.kind!=='academy'), words=String(d.document_type+' '+d.title+' '+d.file_name).toLowerCase();
     const linked=items.find(i=>i.portalDocumentId===d.id);
@@ -168,5 +168,5 @@ export function createContractorReview({supabase,getPeople,onSaved}) {
       try{const {url}=await api(button.dataset.crNativeFile?{action:'mobile_file',id:state.person.profileId,submission_id:button.dataset.crNativeFile}:{action:'document_file',id:button.dataset.crFile});if(win)win.location=url;else result('Allow pop-ups to open the uploaded document.',true);}catch(e){win?.close();result(e.message,true);}
     }
   }
-  return {markup,render,load,openPerson,bind(root){root.addEventListener('click',click);}};
+  return {markup,render,load,openPerson,summary(person){const m=state.mobile.find(p=>p.userId===person.profileId);return {available:!!m&&!state.error&&!state.mobileError,complete:!!m?.complete,done:m?.doneCount||0,total:m?.requiredCount||0,review:m?.needsReview||0,waived:!!profile(person)?.onboarding_override};},bind(root){root.addEventListener('click',click);}};
 }

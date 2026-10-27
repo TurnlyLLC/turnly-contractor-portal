@@ -1,7 +1,8 @@
+import {createContractorCRM} from './contractor-crm.mjs?v=20261027';
 import { token, title, normalizeLookup, metadataFor, uniqueList, listFrom, firstValue, accessFromRow, roleText, isSales, isPropertyManager, isContractor, isInactive, isApproved, activeStatus, teamFor, visibleStatus, normalizePerson, mergeDirectoryPeople } from "./contractor-directory-model.mjs?v=20261012-active";
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
-import { createContractorReview } from "./contractor-review-center.js?v=20261022-single-training";
+import { createContractorReview } from "./contractor-review-center.js?v=20261027-crm";
 
 const env = window.__ENV || {};
 const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
@@ -23,6 +24,8 @@ const state = {
 };
 
 const reviews = createContractorReview({ supabase, getPeople: () => state.people, onSaved: () => loadPeople(false) });
+
+const crm=createContractorCRM({client:supabase,getPeople:()=>state.people,reviews,fileUrl:contractorFileUrl,edit:openModal,reset:openPasswordModal,refresh:()=>loadPeople()});
 
 const sources = [
   { table: "profiles", select: "*" },
@@ -124,6 +127,7 @@ function propertyManagerAccessDetails(person = {}) {
 }
 
 function workspaceMarkup() {
+  if(!managerMode)return crm.markup();
   return `
     <section class="contractor-directory-workspace" data-contractor-directory-page>
       <section class="metric-strip seven">
@@ -242,12 +246,13 @@ function setMessage(text, error = false) {
 }
 
 async function loadSource(source) {
-  const result = await supabase.from(source.table).select(source.select).limit(1000);
-  if (result.error) {
-    console.warn(`[contractor-directory] ${source.table} load failed`, result.error);
-    return [];
+  const rows=[];
+  for(let offset=0;;offset+=500){
+    const result=await supabase.from(source.table).select(source.select).order('id').range(offset,offset+499);
+    if(result.error)throw new Error(`${source.table}: ${result.error.message}`);
+    rows.push(...(result.data||[]));if((result.data||[]).length<500)break;
   }
-  return (result.data || []).map((row) => normalizePerson(row, source.table)).filter(Boolean);
+  return rows.map(row=>normalizePerson(row,source.table)).filter(Boolean);
 }
 
 async function loadAccessOptions() {
@@ -287,6 +292,7 @@ async function loadPeople(refreshReviews = true) {
     state.people = mergeDirectoryPeople(rows).sort((a, b) => Number(b.status === "pending_approval") - Number(a.status === "pending_approval") || a.name.localeCompare(b.name));
     render();
     if (refreshReviews) await reviews.load();
+    if(!managerMode)await crm.load();
     setMessage(`${state.people.length} directory ${state.people.length === 1 ? "entry" : "entries"} synced from Supabase.`);
   } catch (error) {
     console.warn("[contractor-directory] load failed", error);
@@ -334,6 +340,7 @@ function renderMetrics() {
 }
 
 function renderRows() {
+  if(!managerMode){crm.render();return;}
   const rows = filteredPeople();
   const body = document.getElementById("contractorRows");
   const empty = document.getElementById("contractorEmpty");
@@ -444,7 +451,7 @@ function accessScopeMarkup(person = null, team = "contractor") {
       properties.push({ id: "", name, address: "", region: "", sourceLabel: "Saved" });
     }
   });
-  const regions = uniqueList([...state.accessRegions, ...allowedRegions]);
+  const regions = uniqueList(['Raleigh','Durham','Asheville','Greensboro',...state.accessRegions, ...allowedRegions]);
   const regionChecks = regions.length
     ? regions.map((region) => {
       const checked = allowedRegions.some((saved) => normalizeLookup(saved) === normalizeLookup(region));
@@ -461,7 +468,7 @@ function accessScopeMarkup(person = null, team = "contractor") {
     <div id="contractorAccessControls" class="contractor-access-scope wide" ${team === "contractor" ? "" : "hidden"}>
       <div>
         <h3>Contractor Job Access</h3>
-        <p>Choose the regions and properties this contractor can see on the job board. Leave both lists blank to allow every open job.</p>
+        <p>Choose the regions and properties this contractor can see on the job board. These are job-board access regions, including surrounding service areas. Leaving both lists blank removes these access restrictions; onboarding rules still apply.</p>
       </div>
       <div class="contractor-access-grid">
         <div class="contractor-access-list"><strong>Allowed Regions</strong>${regionChecks}</div>
@@ -482,7 +489,7 @@ function formMarkup(person = null) {
   return `<form id="contractorForm" class="lead-form contractor-form" data-source="${esc(person?.source || "")}" data-id="${esc(person?.id || "")}" data-profile-id="${esc(person?.profileId || "")}">
     <div class="form-grid">
       ${field("contractorName", "Name", "text", person?.name || "", "required")}
-      ${field("contractorEmail", "Email", "email", person?.email || "", isNew ? "required" : "")}
+      ${field("contractorEmail", "Email", "email", person?.email || "", isNew ? "required" : "readonly")}
       ${field("contractorPhone", "Phone", "tel", person?.phone || "")}
       ${selectField("contractorTeam", "Portal Role", roleOptions, team)}
       ${selectField("contractorStatus", "Status", [["active", "Active"], ["pending_approval", "Pending Approval"], ["inactive", "Inactive"], ["suspended", "Suspended"]], status)}
@@ -911,6 +918,7 @@ function start() {
   if (!root) return;
   bind(root);
   reviews.bind(root);
+  if(!managerMode)crm.bind(root);
   if (!supabase) {
     setMessage("Supabase config is missing. Add env.js values before using the directory.", true);
     return;
