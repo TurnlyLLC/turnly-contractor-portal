@@ -1,4 +1,4 @@
-import {createContractorCRM} from './contractor-crm.mjs?v=20261027';
+import {createContractorCRM} from './contractor-crm.mjs?v=20261027-payouts';
 import { token, title, normalizeLookup, metadataFor, uniqueList, listFrom, firstValue, accessFromRow, roleText, isSales, isPropertyManager, isContractor, isInactive, isApproved, activeStatus, teamFor, visibleStatus, normalizePerson, mergeDirectoryPeople } from "./contractor-directory-model.mjs?v=20261012-active";
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
