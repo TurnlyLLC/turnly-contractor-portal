@@ -13,7 +13,7 @@ test('a previously prepared call cannot connect after training becomes required'
 });
 test('calling fails closed before tokens, reservations or lead access when training is incomplete',async()=>{
  const db={rpc:async(name)=>{assert.equal(name,'crm_training_ready');return {data:false};}};
- await assert.rejects(V.prepare(db,{id:id(1)},{} ,{}),e=>e.status===403&&/both training videos/.test(e.message));
+ await assert.rejects(V.prepare(db,{id:id(1)},{} ,{}),e=>e.status===403&&/Complete sales onboarding/.test(e.message));
  await assert.rejects(T.requireComplete({rpc:async()=>({error:new Error('DB unavailable')})},{id:id(1)}));
  await T.requireComplete({rpc:async()=>({data:true})},{id:id(1)});
 });

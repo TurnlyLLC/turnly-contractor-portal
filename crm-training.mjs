@@ -5,8 +5,8 @@ export async function mountTraining(root,request){
  let data,disposed=false,queue=Promise.resolve();
  const run=fn=>{const next=queue.then(fn);queue=next.catch(()=>{});return next;};
  const message=text=>{const el=root.querySelector('[data-training-message]');if(el)el.textContent=text;};
- root.innerHTML='<h2>Required before your first call</h2><p>Watch both videos, then review the playbook below and confirm your acknowledgment. Progress is saved to your account. Watch at normal speed; skipping ahead does not earn completion.</p><div data-training-progress></div><p role="status" data-training-message>Loading your progress…</p><button type="button" class="sales-secondary-button" data-training-retry hidden style="display:none">Retry loading progress</button>';
- review.innerHTML='<h2>Confirm your playbook review</h2><p>Review the sales process, product facts, communication consent, and do-not-contact rules above.</p><label style="display:flex;gap:12px;align-items:flex-start"><input type="checkbox" data-training-reviewed disabled style="width:20px;height:20px;flex:none"> I have reviewed the Team playbook and understand the sales process, gift-card terms, communication consent, and do-not-contact requirements.</label><button type="button" class="sales-primary-button" data-training-ack disabled style="margin-top:16px">Confirm review and unlock calling</button><p role="status" data-review-message></p>';
+ root.innerHTML='<h2>Required before your first call</h2><p>Watch the introduction, then review the playbook below and confirm your acknowledgment. Progress is saved to your account. Watch at normal speed; skipping ahead does not earn completion.</p><div data-training-progress></div><p role="status" data-training-message>Loading your progress…</p><button type="button" class="sales-secondary-button" data-training-retry hidden style="display:none">Retry loading progress</button>';
+ review.innerHTML='<h2>Confirm your playbook review</h2><p>Review the sales process, product facts, communication consent, and do-not-contact rules above.</p><label style="display:flex;gap:12px;align-items:flex-start"><input type="checkbox" data-training-reviewed disabled style="width:20px;height:20px;flex:none"> I have reviewed the Team playbook and understand the sales process, gift-card terms, communication consent, and do-not-contact requirements.</label><button type="button" class="sales-primary-button" data-training-ack disabled style="margin-top:16px">Confirm playbook review</button><p role="status" data-review-message></p>';
  const check=review.querySelector('[data-training-reviewed]'),ack=review.querySelector('[data-training-ack]');
  function paint(){
   if(disposed||!root.isConnected)return;
@@ -14,8 +14,8 @@ export async function mountTraining(root,request){
   const watched=data.lessons.every(l=>l.completed_at);
   check.disabled=!watched||data.ready;check.checked=!!data.acknowledged_at||check.checked;
   ack.disabled=!watched||!check.checked||data.ready;
-  review.querySelector('[data-review-message]').textContent=data.ready?'Training complete. Calling is unlocked for your account.':watched?'Both videos are complete. Review the playbook and confirm above.':'Finish both videos before confirming your playbook review.';
-  message(data.ready?'Training complete — calling unlocked.':'Calling stays locked until both videos and your playbook review are complete.');
+  review.querySelector('[data-review-message]').textContent=data.ready?'Training complete. Sign your seller agreement below to finish onboarding.':watched?'The introduction is complete. Review the playbook and confirm above.':'Finish the introduction before confirming your playbook review.';
+  message(data.ready?'Training complete — continue to your seller agreement.':'Complete this training and your seller agreement before outreach.');
   for(const v of videos){const l=data.lessons.find(l=>l.id===v.dataset.trainingLesson);v.dataset.trainingComplete=String(!!l?.completed_at);v.dataset.trainingWatched=String(l?.watched_seconds||0);}
  }
  check.onchange=()=>{ack.disabled=!check.checked||!data?.lessons.every(l=>l.completed_at)||data.ready;};
