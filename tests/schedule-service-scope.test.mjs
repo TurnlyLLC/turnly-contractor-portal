@@ -6,3 +6,5 @@ test('each calendar isolates booking, test and manual residential assignments be
  assert.deepEqual(rows.filter(r=>visible(r,'commercial')).map(r=>r.id),['commercial']);
  assert.deepEqual(rows.filter(r=>visible(r,'residential')).map(r=>r.id),['booking','test','manual','json']);
 });
+
+test('visibility remains safe as an Array.filter callback',()=>{const rows=[{metadata:{scope_type:'residential'}},{metadata:{}}];assert.equal(rows.filter(visible).length,2);});
