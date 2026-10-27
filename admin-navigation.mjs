@@ -80,6 +80,7 @@ export const navSections = [
   {
     title: "Reports",
     links: [
+      { key: "global-payouts", label: "Team payments", href: "admin-payouts.html", icon: "wallet" },
       { key: "finance", label: "Finance", href: "finance.html", icon: "badge-dollar" },
       { key: "reports-sales", label: "Sales", href: "reports-sales.html", icon: "wallet" },
       { key: "invoices", label: "Invoices", href: "invoices.html", icon: "document" },
