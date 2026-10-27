@@ -44,7 +44,7 @@ export const navSections = [
   {
     title: "Operations",
     links: [
-      { key: "residential-bookings", label: "Residential", href: "admin-residential.html", icon: "calendar" },
+      { key: "residential-schedule", label: "Residential", href: "residential-schedule.html", icon: "calendar" },
       { key: "demand-map", label: "Cleaning demand map", href: "admin-demand-map.html", icon: "globe" },
       { key: "schedule", label: "Commercial", href: "schedule.html", icon: "calendar" },
       { key: "coverage-center", label: "Regions & Access", href: "coverage-center.html", icon: "shield" },
