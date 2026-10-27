@@ -1,7 +1,7 @@
 import { assignmentServiceScope } from './assignment-service-scope.mjs?v=20261027-calendar';
 // Keep canceled residential jobs out of every schedule view and its filters.
 export function visibleScheduleAssignment(row, scope = 'all') {
-  if (scope !== 'all' && assignmentServiceScope(row) !== scope) return false;
+  if (['residential', 'commercial'].includes(scope) && assignmentServiceScope(row) !== scope) return false;
   let metadata = row?.metadata || {};
   if (typeof metadata === 'string') {
     try { metadata = JSON.parse(metadata); } catch { metadata = {}; }

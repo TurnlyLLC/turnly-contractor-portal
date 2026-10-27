@@ -583,7 +583,7 @@ function shiftedAssignmentWindow(row, targetDate) {
 }
 
 function renderSchedule() {
-  state.rows = state.rows.filter(visibleScheduleAssignment);
+  state.rows = state.rows.filter(row => visibleScheduleAssignment(row, scheduleScope));
   updateControls();
   populateFilters();
   renderSummary();
