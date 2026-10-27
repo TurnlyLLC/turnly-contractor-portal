@@ -20,7 +20,7 @@ const state = {
   media: [],
   performanceRows: [],
   optionalErrors: [],
-  activeTab: "overview",
+  activeTab: ["overview","documents","availability","access","performance","jobs","schedule","pay"].includes(params.get("tab"))?params.get("tab"):"overview",
   editingProfile: false,
   editingDocumentId: "",
   message: "",
@@ -1204,14 +1204,15 @@ function personMatches(row) {
 
 async function fetchAll(table, select = "*", order = null) {
   if (!supabase) return [];
-  let query = supabase.from(table).select(select).limit(1000);
-  if (order) query = query.order(order, { ascending: false });
-  const { data, error } = await query;
-  if (error) {
-    state.optionalErrors.push(`${table}: ${error.message}`);
-    return [];
+  const rows=[];
+  for(let offset=0;;offset+=500){
+    let query=supabase.from(table).select(select).order(order||'id',{ascending:!order});
+    if(order&&order!=='id')query=query.order('id');
+    const {data,error}=await query.range(offset,offset+499);
+    if(error){state.optionalErrors.push(`${table}: ${error.message}`);return [];}
+    rows.push(...(data||[]));if((data||[]).length<500)break;
   }
-  return (data || []).map((row) => ({ ...row, __sourceTable: table }));
+  return rows.map(row=>({...row,__sourceTable:table}));
 }
 
 async function fetchProfile() {

@@ -60,8 +60,6 @@ async function requireAdmin(supabase, req) {
   const user = userResult?.user || null;
   if (userError || !user) return { error: "Admin session is invalid.", status: 401 };
 
-  const metadataRole = normalizeToken(user.app_metadata?.role || user.user_metadata?.role);
-  if (allowedAdminRoles.has(metadataRole)) return { user };
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
@@ -70,7 +68,7 @@ async function requireAdmin(supabase, req) {
     .maybeSingle();
 
   if (profileError) return { error: profileError.message, status: 500 };
-  if (!allowedAdminRoles.has(normalizeToken(profile?.role))) {
+  if (!allowedAdminRoles.has(normalizeToken(profile?.role)) || normalizeToken(profile?.status) !== "active") {
     return { error: "Only admins can reset portal user passwords.", status: 403 };
   }
 
