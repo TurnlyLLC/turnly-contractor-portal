@@ -351,7 +351,7 @@ const iconPaths = {
 };
 
 const env = window.__ENV || {};
-const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
+const supabase = /^https:\/\//.test(env.SUPABASE_URL||'') && env.SUPABASE_ANON_KEY && !['undefined','null'].includes(env.SUPABASE_ANON_KEY)
   ? createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {global:{fetch:crmFetch}})
   : null;
 
@@ -1129,6 +1129,7 @@ async function requireSalesAccess() {
   if (!supabase) {
     state.loading = false;
     state.message = "Supabase config is missing. Add env.js values before using the Sales Portal.";
+    state.loadFailed = true;
     state.messageTone = "error";
     render();
     return false;
