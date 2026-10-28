@@ -7,12 +7,13 @@ async function claim(db,req,input,transport){
   const profile=await onboarding.access(db,token);
   const {data:approval,error}=await db.from('profiles').select('contractor_approved,status').eq('id',profile.id).single();
   if(error)throw S.fail('Unable to verify job access. Please retry.',503);
-  const status=await training.withTraining(db,profile.id,await onboarding.remote(token,transport)('status'));
+  const status=await training.withTraining(db,profile.id,await require('../lib/contractor-background.cjs').attach(db,profile.id,await onboarding.remote(token,transport)('status')));
   const complete=Array.isArray(status.items)&&status.items.length>0&&status.complete!==false&&status.items.every(i=>!i.required||i.state==='done');
   const eligible=complete&&approval?.contractor_approved===true&&approval.status==='active';
   if(input.action==='eligibility')return {eligible,complete,reason:!complete?'Complete all required onboarding items before accepting jobs.':!eligible?'Your onboarding is awaiting Turnly approval.':''};
   if(!eligible)throw S.fail(!complete?'Complete all required onboarding items before accepting jobs.':'Your onboarding is awaiting Turnly approval.',403);
   if(!uuid(input.id))throw S.fail('Choose a job.');
+  await require('../lib/contractor-background.cjs').assertApproved(db,profile.id);
   const result=await db.rpc('claim_onboarded_contractor_job',{p_actor:profile.id,p_job:input.id});
   if(result.error)throw S.fail(result.error.code==='P0001'?result.error.message:'Unable to claim this job. Please retry.',409);
   return {claimed:true};

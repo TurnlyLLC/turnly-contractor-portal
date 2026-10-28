@@ -1,6 +1,7 @@
 const {createClient} = require('@supabase/supabase-js');
 const {uuid} = require('../lib/agent-referrals.cjs');
 const mobile = require('../lib/mobile-contractor-review.cjs');
+const background = require('../lib/contractor-background.cjs');
 const training = require('../lib/contractor-training.cjs');
 
 const fail = (message,status=400) => Object.assign(new Error(message),{status});
@@ -56,11 +57,13 @@ async function run(db,actor,input,token,transport) {
   const reason=String(input.reason||'').trim();
   if(reason.length>1000) throw fail('Keep the review note under 1,000 characters.');
   if(['override','remove_override'].includes(input.action)&&reason.length<5)throw fail('Enter a reason for this override decision.');
-  if(['mobile_requirement','mobile_account','mobile_file','mobile_review','approve','override','remove_override','approve_deletion','decline_deletion'].includes(input.action)){
+  if(['background_save','mobile_requirement','mobile_account','mobile_file','mobile_review','approve','override','remove_override','approve_deletion','decline_deletion'].includes(input.action)){
     const profile=checked(await db.from('profiles').select('id,role,status').eq('id',input.id).maybeSingle());
     if(profile?.role!=='contractor')throw fail('Contractor account not found.',404);
     const call=mobile.client(token,transport);
+    if(input.action==='background_save')return background.save(db,actor,input.id,input,call);
     if(input.action==='mobile_requirement'){
+      const tracked=await background.get(db,input.id);if(tracked?.item_id===input.item_id)throw fail('Use the background-check review controls for this tracked requirement.',409);
       if(['deleted','deletion_pending','disabled','suspended','inactive','deactivated','rejected'].includes(profile.status))throw fail('Requirements cannot be changed on this inactive account.',409);
       if(String(input.item_id).startsWith('academy-'))return training.requirement(db,actor,input.id,input);
       return mobile.requirement(call,input.id,input,async()=>{
@@ -68,8 +71,10 @@ async function run(db,actor,input,token,transport) {
         if(pause.error)throw fail('Unable to pause job access. The requirement was not changed.',503);
       });
     }
-    if(input.action==='mobile_account')return training.withTraining(db,input.id,await mobile.file(call,input.id));
+    if(input.action==='mobile_account')return training.withTraining(db,input.id,await background.attach(db,input.id,await mobile.file(call,input.id),true));
+    if(input.action==='mobile_review'){const file=await mobile.file(call,input.id);if(file.items.some(i=>background.isBackground(i)&&i.submission?.id===input.submission_id))throw fail('Use Background check → Review and approve to record this decision.',409);}
     if(input.action==='mobile_file'||input.action==='mobile_review')return await mobile.review(call,input.id,input);
+    if(['approve','override'].includes(input.action))await background.assertApproved(db,input.id);
     if(input.action==='approve'&&!(await training.withTraining(db,input.id,await mobile.file(call,input.id))).complete)throw fail('Review all required onboarding items first, or grant an established-employee override.',409);
     if(['override','remove_override'].includes(input.action)){
       if(reason.length<5)throw fail('Enter a reason for this override decision.');
@@ -102,6 +107,7 @@ async function run(db,actor,input,token,transport) {
         if(input.status==='approved'){
           const itemId=input.item_id||(input.auto_match?mobile.matchingRequirement(current.items,doc)?.id:null);
           if(input.item_id&&!current.items.some(i=>i.id===itemId))throw fail('Choose a current onboarding requirement.',409);
+          if(itemId&&current.items.some(i=>i.id===itemId&&background.isBackground(i)))throw fail('Use the background-check controls to approve screening. File approval alone does not approve a background check.',409);
           if(itemId)portalSync=()=>mobile.approvePortalUpload(call,owner.id,doc,itemId,reason);
         }else{
           const linked=current.items.filter(i=>i.portalDocumentId===doc.id);

@@ -6,7 +6,7 @@ const fs=require('node:fs');
 function fixture(items,approval={contractor_approved:true,status:'active'}) {
  const id=randomUUID(),calls=[];
  const profile={id,role:'contractor',status:'active'};
- const db={auth:{getUser:async()=>({data:{user:{id}}})},from(){return {select(){return this;},eq(){return this;},maybeSingle:async()=>({data:profile}),single:async()=>({data:approval})};},rpc:async(name,args)=>{if(name==='contractor_training_status')return {data:Array.from({length:12},(_,i)=>({profile_id:id,module_number:i+1,lessons_done:5,score:90,waived:false}))};calls.push({name,args});return {data:null};}};
+ const db={auth:{getUser:async()=>({data:{user:{id}}})},from(table){return {select(){return this;},eq(){return this;},maybeSingle:async()=>({data:table==='contractor_background_checks'?null:profile}),single:async()=>({data:approval})};},rpc:async(name,args)=>{if(name==='contractor_training_status')return {data:Array.from({length:12},(_,i)=>({profile_id:id,module_number:i+1,lessons_done:5,score:90,waived:false}))};calls.push({name,args});return {data:null};}};
  const remote=async()=>({ok:true,json:async()=>({items})});
  return {db,remote,calls,id};
 }
