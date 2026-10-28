@@ -3111,6 +3111,7 @@ function renderTaskDetail(row) {
 function renderModal() {
   if (!state.modal) return "";
   if(state.modal.type==='sendLink')return renderSendModal();
+  if(state.modal.type==='sendSuccess')return renderSendSuccessModal();
   if(state.modal.type==='removeLeads')return renderRemoveModal();
   if (state.modal.type.startsWith("team")) return renderTeamModal();
   if (state.modal.type === "assignment") return renderAssignmentModal();
@@ -4872,6 +4873,19 @@ function renderRemoveModal(){
  const p=state.reps.find(p=>p.id===state.modal.userId),rows=state.rows.filter(r=>r.sales_owner_id===p?.id);
  return renderModalShell('Remove assigned leads','Return leads to the shared pool',`<form data-remove-leads-form><div class="sales-modal-body"><h3>${esc(p?.full_name||'Team member')}</h3><p>Notes and pipeline stages stay with each lead. Their owner is cleared, so they can be assigned again.</p><label>Leads to remove<select name="scope">${stageDefs.map(st=>`<option value="${st.id}">${esc(st.label)} (${rows.filter(r=>stageFor(r)===st.id).length})</option>`).join('')}<option value="followups">All follow-up flow (${rows.filter(r=>['lost','follow_up'].includes(stageFor(r))).length})</option><option value="all">All assigned leads (${rows.length})</option></select></label></div>${modalFooter('Remove assignments')}</form>`,'',true);
 }
+function renderSendSuccessModal(){
+ const m=state.modal,email=m.channel==='email';
+ return renderModalShell(email?'Email sent successfully':'Text sent successfully','Gift-card link sent',`<div class="sales-modal-body" role="status"><div style="width:56px;height:56px;display:grid;place-items:center;border-radius:50%;background:#dcfce7;color:#166534;font-size:30px;margin-bottom:18px" aria-hidden="true">✓</div><p>Your gift-card checkout link was sent to:</p><p style="font-size:18px;font-weight:700;overflow-wrap:anywhere">${esc(m.recipient)}</p><p>The sending service accepted your message. Final delivery depends on the recipient’s provider.${email?' If it is missing, ask the recipient to check Spam or Promotions for “Your Turnly $100 gift-card link.”':''}</p></div>`,`<footer class="sales-modal-footer"><button type="button" class="sales-primary-button" data-close-modal autofocus>Done</button></footer>`,true);
+}
+async function submitCheckout(form){
+ const channel=state.modal.channel;
+ const r=await crmSalesRequest('send',{lead_id:form.elements.lead_id.value,consent:form.elements.consent.checked,channel,request_id:state.modal.requestId,recipient_override:form.elements.recipient_override?.value});
+ if(r.message.status!=='accepted')throw new Error(r.message.error||'This message is still processing. Do not send it again until its status is confirmed.');
+ // Show the receipt immediately; a slow or failed workspace reload must not hide a successful send.
+ state.modal={type:'sendSuccess',channel,recipient:r.message.recipient};render();
+ document.querySelector('[data-close-modal][autofocus]')?.focus();
+ void refreshData(false).catch(()=>{});
+}
 function bindSalesOperations(){
  Object.assign(pageConfig,{sales:{title:'Sales dashboard',subtitle:'Confirmed gift-card purchases, clients, and sales totals.'}});
  document.addEventListener('click',async event=>{
@@ -4889,10 +4903,10 @@ function bindSalesOperations(){
  document.addEventListener('change',event=>{if(event.target.matches('[data-send-recipient]')){state.modal.leadId=event.target.value;state.modal.requestId=crypto.randomUUID();render();}});
  document.addEventListener('input',event=>{if(event.target.name==='recipient_override'){state.modal.requestId=crypto.randomUUID();event.target.form.elements.consent.checked=false;}if(event.target.id==='crmRecipientSearch'){state.modal.recipientSearch=event.target.value;document.querySelector('[data-send-recipient]').innerHTML='<option value="">Choose a saved lead</option>'+recipientOptions(state.modal,state.modal.channel);}if(event.target.id==='crmBuyerSearch'){state.buyerSearch=event.target.value;state.buyerPage=1;render();const field=document.querySelector('#crmBuyerSearch');field?.focus();field?.setSelectionRange(field.value.length,field.value.length);}});
  document.addEventListener('submit',async event=>{
-  const f=event.target;if(!f.matches('[data-send-checkout],[data-remove-leads-form]'))return;event.preventDefault();const b=f.querySelector('[type=submit]');if(b.disabled)return;b.disabled=true;
+  const f=event.target;if(!f.matches('[data-send-checkout],[data-remove-leads-form]'))return;event.preventDefault();const b=f.querySelector('[type=submit]');if(b.disabled)return;b.disabled=true;const originalLabel=b.textContent;b.textContent=f.matches('[data-send-checkout]')?'Sending…':originalLabel;
   try{
-   if(f.matches('[data-send-checkout]')){const r=await crmSalesRequest('send',{lead_id:f.elements.lead_id.value,consent:f.elements.consent.checked,channel:state.modal.channel,request_id:state.modal.requestId,recipient_override:f.elements.recipient_override?.value});if(r.message.status!=='accepted')throw new Error(r.message.error||'This message is still processing. Do not send it again until its status is confirmed.');state.modal=null;await refreshData(false);setMessage('Message accepted by the sending service.','success');}
+   if(f.matches('[data-send-checkout]'))await submitCheckout(f);
    else{const r=await supabase.rpc('crm_remove_operator_leads_by_status',{p_operator:state.modal.userId,p_status:f.elements.scope.value});if(r.error)throw r.error;state.modal=null;await refreshData(false);setMessage(`${r.data} lead assignments removed. Notes were preserved.`,'success');}
-  }catch(e){setInlineFormMessage(f,e.message,'error');}finally{b.disabled=false;}
+  }catch(e){setInlineFormMessage(f,e.message,'error');}finally{b.disabled=false;b.textContent=originalLabel;}
  });
 }
