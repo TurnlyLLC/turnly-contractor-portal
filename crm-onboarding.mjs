@@ -1,4 +1,4 @@
-import {mountTraining} from './crm-training.mjs?v=20261028-stages';
+import {mountTraining} from './crm-training.mjs?v=20261028-single-confirm';
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export async function mountOnboarding(root,request){
  root.innerHTML=`<article class="sales-panel"><p class="crm-eyebrow">YOUR QUICK START</p><h2>Meet Turnly. Make your first conversation count.</h2><p>Watch the brief introduction and sign your seller agreement. Then complete the required Team playbook to unlock the CRM.</p><p data-onboarding-status role="status">Loading onboarding…</p></article><article class="sales-panel"><div id="crmTrainingGate"></div><video data-training-lesson="introduction" controls playsinline preload="metadata" style="width:100%;max-height:600px;background:#102c40;border-radius:16px;margin-top:16px" src="assets/training/sales-quick-start.mp4"></video><div id="crmTrainingReview" hidden></div></article><article class="sales-panel" data-agreement></article>`;
