@@ -7,12 +7,12 @@ test('a previously prepared call cannot connect after training becomes required'
  const old=Object.fromEntries(keys.map(k=>[k,process.env[k]]));keys.forEach(k=>process.env[k]=k==='TWILIO_VOICE_ENABLED'?'true':'test');
  let failed=false;
  try{
- const db={rpc:async(name)=>({data:name==='crm_seller_training_ready'?false:{user_id:id(1),lead_id:id(2),phone:'+19195550100'}}),from:table=>{assert.equal(table,'crm_voice_calls');return {update:values=>({eq:async()=>{failed=values.status==='failed';return {data:null};}})};}};
+ const db={rpc:async(name)=>({data:name==='crm_seller_training_ready_v3'?false:{user_id:id(1),lead_id:id(2),phone:'+19195550100'}}),from:table=>{assert.equal(table,'crm_voice_calls');return {update:values=>({eq:async()=>{failed=values.status==='failed';return {data:null};}})};}};
  const xml=await V.connect(db,{Intent:id(3),CallSid:'CA'+'1'.repeat(32)});assert.match(xml,/<Hangup/);assert.doesNotMatch(xml,/<Dial/);assert.ok(failed);
  }finally{keys.forEach(k=>old[k]===undefined?delete process.env[k]:process.env[k]=old[k]);}
 });
 test('calling fails closed before tokens, reservations or lead access when training is incomplete',async()=>{
- const db={rpc:async(name)=>{assert.equal(name,'crm_seller_training_ready');return {data:false};}};
+ const db={rpc:async(name)=>{assert.equal(name,'crm_seller_training_ready_v3');return {data:false};}};
  await assert.rejects(V.prepare(db,{id:id(1)},{} ,{}),e=>e.status===403&&/Complete sales onboarding/.test(e.message));
  await assert.rejects(T.requireComplete({rpc:async()=>({error:new Error('DB unavailable')})},{id:id(1)}));
  await T.requireComplete({rpc:async()=>({data:true})},{id:id(1)});
