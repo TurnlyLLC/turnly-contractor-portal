@@ -17,7 +17,7 @@ module.exports=async(req,res)=>{
   }
   if(i.action==='acknowledge'){
    if(i.reviewed!==true)throw S.fail('Confirm you reviewed the playbook.');
-   S.checked(await db.rpc('crm_seller_training_acknowledge_v3',{p_user:user.id}));
+   S.checked(await db.rpc('crm_seller_training_acknowledge_v4',{p_user:user.id}));
    return S.json(res,200,await T.status(db,user));
   }
   throw S.fail('Unknown training action.');
