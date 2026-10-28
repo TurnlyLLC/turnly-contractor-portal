@@ -5,7 +5,7 @@ test('launch date, weekdays, blackouts, pause and horizon all restrict booking',
  assert.equal(C.next(c,now),'2026-11-03');assert.ok(C.error(c,'2026-11-01','09:00','12:00',now));assert.ok(C.error(c,'2026-11-02','09:00','12:00',now));assert.ok(C.error(c,'2027-06-01','09:00','12:00',now));assert.equal(C.error(c,'2026-11-03','09:00','12:00',now),'');assert.equal(C.next({...c,paused:true},now),null);
 });
 test('custom notice supports short and long notice, respects the actual Eastern DST boundary',()=>{
- const c=C.normalize({notice_hours:2});assert.equal(C.error(c,'2026-10-28','14:00','15:00',now),'');assert.ok(C.error(c,'2026-10-28','13:59','15:00',now));assert.doesNotThrow(()=>P.schedule({service_date:'2026-10-28',arrival_start:'14:00',arrival_end:'15:00'},new Date(now),c));
+ const c=C.normalize({notice_hours:2}),late=Date.parse('2026-10-28T23:00:00-04:00');assert.equal(C.error(c,'2026-10-29','01:00','02:00',late),'');assert.ok(C.error(c,'2026-10-29','00:59','02:00',late));assert.doesNotThrow(()=>P.schedule({service_date:'2026-10-29',arrival_start:'01:00',arrival_end:'02:00'},new Date(late),c));assert.ok(C.error(c,'2026-10-28','18:00','19:00',now));
  const dst=Date.parse('2026-10-31T12:00:00-04:00');assert.equal(C.instant('2026-11-01','12:00')-dst,25*3600000);assert.ok(C.error({...c,notice_hours:26},'2026-11-01','12:00','15:00',dst));
 });
 test('slot-only and custom-window policies are enforced server-side',()=>{

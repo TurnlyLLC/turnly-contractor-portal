@@ -22,7 +22,7 @@
  function dateError(s,d,now=Date.now()){
   if(s.paused)return s.pause_message;
   if(!dateOK(d))return 'Choose a valid service date.';
-  if(d<day(now)||s.first_date&&d<s.first_date)return 'Choose a date on or after '+(s.first_date>day(now)?s.first_date:day(now))+'.';
+  if(d<=day(now)||s.first_date&&d<s.first_date)return 'Choose a date on or after '+(s.first_date>day(now)?s.first_date:add(day(now),1))+'.';
   if(d>add(day(now),s.horizon_days))return 'Choose a date within the next '+s.horizon_days+' days.';
   if(!s.weekdays.includes(new Date(d+'T12:00:00Z').getUTCDay())||s.blocked_dates.includes(d))return 'This date is not available. Please choose another day.';
   return '';
