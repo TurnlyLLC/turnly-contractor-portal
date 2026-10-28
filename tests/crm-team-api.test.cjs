@@ -22,15 +22,15 @@ test('reset closes access before changing password; deactivation preserves lead 
  const f=fixture();const r=await f.run({action:'reset',user_id:B});assert.equal(r.status,200);const gate=f.calls.findIndex(c=>c[0]==='crm_user_access'&&c[1]==='update'&&c[2].must_change_password);const change=f.calls.findIndex(c=>c[0]==='authUpdate');assert.ok(gate>=0&&gate<change);
  const d=fixture();assert.equal((await d.run({action:'deactivate',user_id:B})).status,200);assert.ok(d.calls.some(c=>c[0]==='crm_user_access'&&c[2]?.enabled===false));assert.ok(!d.calls.some(c=>String(c[0]).startsWith('sales_')));
 });
-test('password change rejects reuse and stale sessions; inputs are validated',async()=>{
- const f=fixture();assert.equal((await f.run({action:'change_password',password:'abcdefghijkl',current_password:'abcdefghijkl'})).status,400);
- const s=fixture('sales_team',{active:true,session_valid:false,must_change_password:true});assert.equal((await s.run({action:'change_password',password:'different-password',current_password:'abcdefghijkl'})).status,403);
+test('password setup rejects mismatched confirmation, normal sessions, and stale sessions',async()=>{
+ const f=fixture('sales_team',{active:true,session_valid:true,must_change_password:true});assert.equal((await f.run({action:'change_password',password:'abcdefghijkl',confirm_password:'different-password'})).status,400);assert.equal((await fixture().run({action:'change_password',password:'abcdefghijkl',confirm_password:'abcdefghijkl'})).status,403);
+ const s=fixture('sales_team',{active:true,session_valid:false,must_change_password:true});assert.equal((await s.run({action:'change_password',password:'different-password',confirm_password:'different-password'})).status,403);
  assert.throws(()=>validUsername('admin@example.com'));assert.throws(()=>validPassword('short'));assert.equal(validUsername('sam.jones'),'sam.jones');
 });
 
 test('successful first-login change clears the gate only after the password update and logs no password',async()=>{
  const f=fixture('sales_team',{active:true,session_valid:true,must_change_password:true});f.accounts[0].user_id=A;
- const result=await f.run({action:'change_password',password:'A-new-private-password',current_password:'temporary-password'});assert.equal(result.status,200);
+ const result=await f.run({action:'change_password',password:'A-new-private-password',confirm_password:'A-new-private-password'});assert.equal(result.status,200);
  const change=f.calls.findIndex(c=>c[0]==='authUpdate');const clear=f.calls.findIndex(c=>c[0]==='crm_user_access'&&c[1]==='update'&&c[2].must_change_password===false);assert.ok(change>=0&&clear>change);
  assert.ok(!JSON.stringify(f.calls.filter(c=>c[0]==='crm_access_audit')).includes('A-new-private-password'));
 });

@@ -46,13 +46,13 @@ function createHandler(makeClient=createClient){return async(req,res)=>{
   const access=checked(await scoped.rpc('crm_access_state'));
   if(!access?.active||!access.session_valid||!roles.includes(profile.role))throw fail('Your access has changed. Sign in again or contact your administrator.',403);
   if(b.action==='change_password'){
-   validPassword(b.password);if(b.password===b.current_password)throw fail('Choose a different password from your temporary password.');
-   const proof=await pub.auth.signInWithPassword({email:user.email,password:String(b.current_password||'')});if(proof.error)throw fail('Your current password is incorrect.',401);
+   if(!access.must_change_password)throw fail('This password setup session is no longer active. Contact your administrator for a reset.',403);
+   validPassword(b.password);if(b.password!==b.confirm_password)throw fail('The new passwords do not match.');
    const lockToken=randomUUID();const rows=checked(await db.rpc('crm_lock_user',{p_user:user.id,p_token:lockToken}));if(!rows?.length)throw fail('Another account update is in progress. Try again shortly.',409);
    locked={id:user.id,token:lockToken};const account=rows[0];
    if(!account.enabled||account.revision!==(checked(await db.from('crm_user_access').select('revision').eq('user_id',user.id).single())).revision)throw fail('Account access changed. Sign in again.',409);
    // Re-check current session after taking the lock; an admin may have reset it during reauthentication.
-   const fresh=checked(await scoped.rpc('crm_access_state'));if(!fresh?.active||!fresh.session_valid)throw fail('Sign in again with your latest temporary password.',403);
+   const fresh=checked(await scoped.rpc('crm_access_state'));if(!fresh?.active||!fresh.session_valid||!fresh.must_change_password)throw fail('Sign in again with your latest temporary password.',403);
    checked(await db.auth.admin.updateUserById(user.id,{password:b.password}));
    checked(await db.from('crm_user_access').update({must_change_password:false,valid_after:new Date().toISOString(),revision:randomUUID()}).eq('user_id',user.id).eq('lock_token',lockToken));
    await db.auth.admin.signOut(jwt,'global');await audit(user.id,user.id,'password_changed');return send(200,{ok:true});
