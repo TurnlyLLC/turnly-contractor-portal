@@ -11,3 +11,9 @@ PWA drafts currently resume across PWA sessions/devices; native app drafts are i
 ## Individual admin requirements
 
 Directory → Review center → All contractors → Review account exposes each native document with upload/submission, review, and completion states. The Required switch creates an audited native admin waiver for one contractor/item; it does not sign a document or automatically approve the portal account. A previous submitted-file reference is retained so its copy can still be opened. Restoring a waived requirement first pauses portal job access through the existing audited account-review RPC, then asks the native service for a new submission. The contractor must be reviewed and reapproved afterwards. No global template is changed. The native backend records the reviewing admin and time.
+
+## Applicant-paid background checks
+
+The existing native `background` requirement is the source of checklist completion. Admin Directory > contractor > Onboarding adds manual invitation/screening/review stages. Verified First sends the invitation and collects payment; Turnly staff review the provider report, record its reference and explicitly approve. No API integration or automatic invitations are implemented.
+
+Tracking and append-only review history are service-only. Each save uses an expected revision, pauses account approval before remote changes, and requires native checklist read-back before finalizing. Failed synchronization blocks claims and may be retried after two minutes. Background approval does not approve the whole account; remaining documents/training and separate account approval still apply. Existing untracked completions/waivers are preserved. Do not put report findings, SSNs, or payment details in the contractor-visible message.
