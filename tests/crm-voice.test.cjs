@@ -25,6 +25,7 @@ test('one-use dialing verifies identity, ownership, opt-outs and deactivation; c
  await db.exec(fs.readFileSync('supabase/migrations/20261020195812_crm_browser_voice.sql','utf8'));
  await db.exec(fs.readFileSync('supabase/migrations/20261020203454_crm_voice_session_type_fix.sql','utf8'));
  await db.exec(fs.readFileSync('supabase/migrations/20261028162223_crm_call_contacted.sql','utf8'));
+ await db.exec(fs.readFileSync('supabase/migrations/20261028173526_crm_contacted_call_attempts.sql','utf8'));
  const prepared=async()=>{const r=await db.query('select crm_prepare_voice_call($1,$2,$3,$4) id',[id(1),id(2),id(3),'+19195550100']);return r.rows[0].id;};
  const consume=async(intent,who=`client:sales_${id(1)}`)=> (await db.query('select crm_consume_voice_call($1,$2,$3) result',[intent,who,'CA'+'1'.repeat(32)])).rows[0].result;
  const intent=await prepared();assert.equal(await consume(intent,'client:other'),null);
@@ -35,7 +36,8 @@ test('one-use dialing verifies identity, ownership, opt-outs and deactivation; c
  await assert.rejects(prepared(),/Finish the current call/);
  const stage=async()=>(await db.query('select pipeline_stage from sales_leads')).rows[0].pipeline_stage;
  const callback=async(status,seq,seconds=0)=>db.query('select crm_voice_status($1,$2,$3,$4,$5)',['CA'+'1'.repeat(32),'CA'+'2'.repeat(32),status,seq,seconds]);
- await callback('ringing',0);assert.equal(await stage(),'new_leads');
+ await callback('initiated',0);assert.equal(await stage(),'new_leads');
+ await callback('ringing',1);assert.equal(await stage(),'contacted');
  await callback('in-progress',1);assert.equal(await stage(),'contacted');
  await db.exec("update sales_leads set pipeline_stage='follow_up'");
  await callback('in-progress',1);assert.equal(await stage(),'follow_up');
@@ -48,11 +50,15 @@ test('one-use dialing verifies identity, ownership, opt-outs and deactivation; c
   await db.query('update sales_leads set pipeline_stage=$1',[outcome]);
   await db.exec('update crm_voice_calls set sequence=-1');await callback('completed',3,10);assert.equal(await stage(),outcome);
  }
- for(const outcome of ['failed','busy','no-answer','canceled','completed']){
+ for(const outcome of ['failed','canceled']){
   await db.exec("update sales_leads set pipeline_stage='new_leads';update crm_voice_calls set sequence=-1");
   await callback(outcome,3,0);assert.equal(await stage(),'new_leads');
  }
- await db.exec('update sales_leads set do_not_contact=true;update crm_voice_calls set sequence=-1');
+ for(const outcome of ['ringing','in-progress','completed','busy','no-answer']){
+  await db.exec("update sales_leads set pipeline_stage='new_leads';update crm_voice_calls set sequence=-1");
+  await callback(outcome,3,0);assert.equal(await stage(),'contacted');
+ }
+ await db.exec("update sales_leads set pipeline_stage='new_leads',do_not_contact=true;update crm_voice_calls set sequence=-1");
  await callback('completed',3,10);assert.equal(await stage(),'new_leads');
  await db.exec('update sales_leads set do_not_contact=false;update crm_voice_calls set sequence=-1');
  await callback('completed',3,10);assert.equal(await stage(),'contacted');

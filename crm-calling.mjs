@@ -27,7 +27,7 @@ export function installCalling({request,onStatus=()=>{}}) {
    device=new window.Twilio.Device(data.token,{logLevel:1,closeProtection:true});
    device.on('error',()=>finish('Calling could not connect. Check your microphone permission and network, then try again.'));
    const connected=await device.connect({params:{Intent:data.intent}});if(attempt!==generation){connected.disconnect();return;}call=connected;controls(true);say('Dialing '+data.number+'…');
-   call.on('ringing',()=>say('Ringing…'));
+   call.on('ringing',()=>{say('Ringing…');setTimeout(()=>onStatus(),2000);});
    call.on('accept',()=>{say('Connected');setTimeout(()=>onStatus(),2000);started=Date.now();timer=setInterval(()=>{const s=Math.floor((Date.now()-started)/1000);el('[data-time]').textContent=`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;},1000);});
    call.on('disconnect',()=>finish('Call ended. The result will appear in recent calls.'));
    call.on('cancel',()=>finish('Call canceled.'));call.on('reject',()=>finish('Call declined.'));
