@@ -69,7 +69,8 @@ module.exports=async(req,res)=>{
    if(b.stripe_session)await S.reconcileSession(db,S.stripe(),b.stripe_session);
    b=await S.owned(db,input);const referral=S.checked(await db.from('ba_leads').select('ba_members(name)').eq('first_booking_id',b.id).maybeSingle());return S.json(res,200,{booking:{...S.summary(b),...(referral?.ba_members?.name?{agent_name:referral.ba_members.name}:{})}});
   }
-  const gift=input.gift?await G.card(db,input.gift):null;
+  // Review-only requests must not reserve gift credit before a bookable visit exists.
+  const gift=input.gift&&input.action!=='request'?await G.card(db,input.gift):null;
   if(gift&&gift.status!=='active')throw S.fail('This gift card is not available. Contact Turnly.',409);
   const direct=!gift&&!input.code;
   const a=gift?{name:'Turnly gift card',referral_code:''}:direct?{name:'Turnly Residential',referral_code:''}:await S.agent(db,input.code);

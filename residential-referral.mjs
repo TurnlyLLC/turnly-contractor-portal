@@ -5,7 +5,7 @@ import {setupAddress} from './residential-address.mjs?v=20261009-visit';
 const $=s=>document.querySelector(s),form=$('#bookingForm'),f=form.elements;
 const code=new URL(location.href).searchParams.get('ref')||'';
 const ba=new URL(location.href).searchParams.get('ba')||'';
-const gift=new URLSearchParams(location.hash.slice(1)).get('gift')||'';
+let gift=new URLSearchParams(location.hash.slice(1)).get('gift')||'';
 const labels=['YOUR HOME','YOUR DETAILS','YOUR CLEAN','YOUR QUOTE','YOUR TIME','YOUR VISIT','YOUR BOOKING'];
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=c=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:2}).format(c/100);
@@ -23,7 +23,34 @@ function humanDate(d){return new Date(d+'T12:00:00Z').toLocaleDateString('en-US'
 function humanTime(t){const [h,m]=t.split(':');return `${(+h%12)||12}:${m} ${+h>=12?'PM':'AM'}`;}
 function rows(items){return `<dl>${items.map(([k,v])=>`<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>`;}
 function requestOnly(){return outOfRange||quote?.review_required||!context?.payments_ready;}
+function syncGift(){
+ $('#bookingGiftCode').value=gift;$('#removeGift').hidden=!gift;
+ $('#consentText').textContent=context.consent;
+ $('#referralBadge').textContent=context.ambassador?`Referred by ${context.ambassador.name}`:gift?`Gift card · ${money(context.gift.available_cents)} available`:context.direct?'':`Referred by ${context.agent.name}`;
+ $('#referralBadge').hidden=!$('#referralBadge').textContent;
+}
+async function changeGift(remove=false){
+ if(busy)return;
+ const candidate=remove?'':$('#bookingGiftCode').value.replace(/[\s-]/g,'').toUpperCase();
+ if(!remove&&!/^[A-Z0-9]{24}$/.test(candidate)){$('#bookingGiftMessage').textContent='Enter the 24-character code from your gift card.';return;}
+ lock(true);$('#applyGift').disabled=$('#removeGift').disabled=true;
+ try{
+  const nextContext=await api('context',{gift:candidate});
+  if(candidate&&nextContext.gift.available_cents<=0)throw new Error('This card has no available credit. Its balance may be held for another booking.');
+  const nextQuote=(await api('quote',{...values(),gift:candidate})).quote;
+  gift=candidate;context=nextContext;quote=nextQuote;attempt=null;
+  const fragment=new URLSearchParams(location.hash.slice(1));if(gift)fragment.set('gift',gift);else fragment.delete('gift');
+  history.replaceState(history.state,'',location.pathname+location.search+(fragment.size?'#'+fragment:''));
+  syncGift();renderQuote();$('#bookingGiftMessage').textContent=gift?`${money(quote.gift_cents)} gift credit applied. ${money(quote.card_charge_cents)} due on your service date.`:'Gift card removed. Your quote has been updated.';
+ }catch(e){$('#bookingGiftMessage').textContent=e.message;}
+ finally{lock(false);$('#applyGift').disabled=$('#removeGift').disabled=false;$('#next').innerHTML='Choose my time <span>→</span>';}
+}
+$('#applyGift').onclick=()=>changeGift();$('#removeGift').onclick=()=>changeGift(true);
+$('#bookingGiftCode').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();changeGift();}};
 function renderQuote(){
+ $('.gift-entry').hidden=requestOnly();
+ if(requestOnly()){delete quote.gift_cents;delete quote.card_charge_cents;}
+
  $('#quoteReassurance').textContent=outOfRange?'Request only. No card or payment collected.':'◇ Card required to book. No service charge today.';
  $('#quoteCard').innerHTML=`<h3>${esc(quote.service_label)}${(quote.review_required||outOfRange)?' · estimate':''}</h3><div class="price">${money(quote.amount_cents)} <small>first visit</small></div><p class="fine">${(quote.review_required||outOfRange)?'Estimate only — subject to service availability and review':'Your first-visit cleaning price'}</p>${quote.gift_cents?`<p>Gift card credit: -${money(quote.gift_cents)}<br><strong>Charge on service date: ${money(quote.card_charge_cents)}</strong></p>`:''}${rows([['Space to clean',`${quote.sqft.toLocaleString()} sq ft`],['Rate',`${money(quote.rate_cents)} / sq ft`],['Minimum per visit',money(quote.minimum_cents)]])}${quote.maintenance_cents?`<div class="recurring-price"><strong>Then ${money(quote.maintenance_cents)} per maintenance visit</strong><br>${esc(quote.frequency_label)} · standard cleaning<br><span class="fine">Your first ${quote.service==='deep'?'deep':'standard'} clean is priced above. Maintenance visits are arranged separately; this booking reserves the first visit only.</span></div>`:''}${quote.review_required?'<div class="review-warning">Homes over 3,000 sq ft need a custom review. Send your preferred date and we’ll confirm the final quote before collecting a card or booking the clean.</div>':''}`;
 }
@@ -89,7 +116,7 @@ async function init(){
  $('#connectionError').hidden=true;$('#retry').disabled=true;
  try{
   const fragment=new URLSearchParams(location.hash.slice(1));if(fragment.has('booking')&&fragment.has('token')){receiptParams={id:fragment.get('booking'),token:fragment.get('token')};const r=await api('confirm',receiptParams);renderReceipt(r.booking);$('#referralBadge').textContent=r.booking.agent_name==='Turnly Residential'?'Booked with Turnly Residential':`Referred by ${r.booking.agent_name}`;return;}
-  context=await api('context');applyCalendar();$('#referralBadge').textContent=context.gift?`Gift card applied automatically · ${money(context.gift.available_cents)} available`:context.ambassador?`Referred by ${context.ambassador.name}`:context.direct?'':`Referred by ${context.agent.name}`;$('#referralBadge').hidden=!$('#referralBadge').textContent;$('#baConsent').hidden=!context.ambassador;f.ba_consent.required=!!context.ambassador;if(gift)fetch('/api/gift-cards',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'scan',code:gift})}).catch(()=>{});$('#consentText').textContent=context.consent;form.hidden=false;showStep(0);renderCalendar();
+  context=await api('context');applyCalendar();$('#referralBadge').textContent=context.gift?`Gift card applied automatically · ${money(context.gift.available_cents)} available`:context.ambassador?`Referred by ${context.ambassador.name}`:context.direct?'':`Referred by ${context.agent.name}`;$('#referralBadge').hidden=!$('#referralBadge').textContent;$('#baConsent').hidden=!context.ambassador;f.ba_consent.required=!!context.ambassador;if(gift)fetch('/api/gift-cards',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'scan',code:gift})}).catch(()=>{});$('#consentText').textContent=context.consent;syncGift();form.hidden=false;showStep(0);renderCalendar();
  }catch(e){$('#connectionError').hidden=false;$('#connectionMessage').textContent=e.name==='TimeoutError'?'The booking service took too long to respond. Please try again.':e.message;$('#referralBadge').textContent='Your fresh start with Turnly';}
  finally{$('#retry').disabled=false;}
 }

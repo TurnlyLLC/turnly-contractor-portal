@@ -21,12 +21,15 @@ test('24-character cryptographic card codes and safe input normalization',()=>{
 });
 test('gift ledger: idempotent issuance, partial redemption, double-spend prevention, cancellation, NC restriction and refund eligibility',async()=>{
  const db=await dbFixture();try{
+ await db.exec(fs.readFileSync(path.join(__dirname,'../docs/gift-card-search.sql'),'utf8'));
+ const admin=async()=> (await db.query("select gift_admin_search('cards','','',null,null,1,25,'newest') r")).rows[0].r;
  const order=randomUUID(),code='ABCDEFGHIJKLMNOPQRSTUVWX',other='1234567890ABCDEFGHIJKLMN';
  await db.query("insert into gift_orders(id,token_hash,request_hash,email,name,quantity,amount_cents,terms_version,stripe_session) values($1,'h','h','buyer@example.com','Buyer',2,20000,'2026-10-15.1','cs_test')",[order]);
  const issue=()=>db.query('select gift_issue($1,$2,$3,$4)',[order,'cs_test','pi_test',JSON.stringify([code,other])]);await issue();await issue();
  assert.equal((await db.query('select count(*)::int n from gift_cards')).rows[0].n,2);
  assert.equal((await db.query('select count(*)::int n from gift_events')).rows[0].n,2);
  const create=async(id,c,amount=6000,state='NC')=>db.query('select create_gift_booking($1,$2,$3,$4,$5,$6,$7)',[id,'hash','request',c,JSON.stringify({...S.validate(data),amount_cents:amount,state,gift_expected_cents:Math.min(amount,(await db.query('select balance_cents-reserved_cents n from gift_cards where code=$1',[c])).rows[0].n)}),'awaiting_card','Authorized']);
+ assert.equal((await admin()).summary.remaining,20000);
  const first=randomUUID();await create(first,code);await create(first,code);
  let card=(await db.query('select * from gift_cards where code=$1',[code])).rows[0];assert.equal(card.reserved_cents,6000);assert.equal(card.balance_cents,10000);
  const second=randomUUID();await create(second,code,9000);assert.equal((await db.query('select gift_applied_cents from referral_bookings where id=$1',[second])).rows[0].gift_applied_cents,4000);
@@ -37,9 +40,14 @@ test('gift ledger: idempotent issuance, partial redemption, double-spend prevent
  await assert.rejects(db.query('select gift_refund_lock($1,null,$2)',[card.id,'Address cannot be served']),/unused/);
  await db.query("update referral_bookings set status='cancelled' where id=$1",[second]);
  card=(await db.query('select * from gift_cards where code=$1',[code])).rows[0];assert.equal(card.balance_cents,4000);assert.equal(card.reserved_cents,0);
+ assert.equal((await admin()).summary.remaining,14000);assert.equal((await admin()).summary.available,14000);
  await assert.rejects(create(randomUUID(),other,6000,'SC'),/only in NC/);
  const final=randomUUID();await create(final,code,9000);await db.query("update referral_bookings set stripe_payment_method='pm',status='scheduled',payment_status='paid' where id=$1",[final]);
  card=(await db.query('select * from gift_cards where code=$1',[code])).rows[0];assert.equal(card.balance_cents,0);assert.equal(card.status,'spent');
+ assert.equal((await admin()).summary.remaining,10000);
+ const events=(await db.query('select kind,amount_cents from gift_events where card_id=$1',[card.id])).rows;
+ assert.equal(events.filter(e=>e.kind==='redeemed').reduce((n,e)=>n+e.amount_cents,0),10000);
+ assert.equal(events.filter(e=>e.kind==='fully_used').length,1);
  const unused=(await db.query('select * from gift_cards where code=$1',[other])).rows[0];await db.query('select gift_refund_lock($1,null,$2)',[unused.id,'Turnly cannot service the address']);
  await assert.rejects(create(randomUUID(),other),/unavailable/);await db.query('select gift_refund_finish($1,$2)',[unused.id,'re_test']);await db.query('select gift_refund_finish($1,$2)',[unused.id,'re_test']);
  assert.equal((await db.query("select count(*)::int n from gift_events where kind='refunded'")).rows[0].n,1);
@@ -100,4 +108,29 @@ test('gift checkout uses dashboard payment methods, exact totals and reusable se
  const input={action:'checkout',id,token,accepted:true,terms:'fixture',quantity:10,name:'Buyer',email:'buyer@example.test'};
  async function request(body){let result;const res={setHeader(){},end(s){result=JSON.parse(s)}};await context.module.exports({method:'POST',body},res);return{status:res.statusCode,...result}};
  assert.equal((await request(input)).url,session.url);assert.equal((await request(input)).url,session.url);assert.equal(creates,1);assert.equal(order.amount_cents,100000);assert.equal(order.status,'pending');assert.equal((await request({...input,quantity:2})).status,409);
+});
+
+test('paid Stripe fulfillment issues cards once, emails the PDF once and appears in admin totals',async()=>{
+ const sql=await dbFixture();try{
+ await sql.exec(fs.readFileSync(path.join(__dirname,'../docs/gift-card-search.sql'),'utf8'));
+ const id=randomUUID();await sql.query("insert into gift_orders(id,token_hash,request_hash,email,name,quantity,amount_cents,terms_version,stripe_session) values($1,'h','h','buyer@example.test','Fixture Buyer',2,20000,'v','cs_fixture')",[id]);
+ const db={from(table){assert.ok(['gift_orders','gift_cards','gift_events'].includes(table));let filters=[],patch,insert,sort;const q={select(){return q},eq(k,v){filters.push([k,v]);return q},order(k){sort=k;return q},update(v){patch=v;return q},insert(v){insert=Array.isArray(v)?v:[v];return q},maybeSingle:async()=>{const r=await run();return{...r,data:r.data?.[0]}},then(ok,bad){return run().then(ok,bad)}};async function run(){let params=[];const where=filters.map(([k,v])=>{params.push(v);return `${k}=$${params.length}`}).join(' and ');if(insert){for(const row of insert){const keys=Object.keys(row);await sql.query(`insert into ${table}(${keys}) values(${keys.map((k,i)=>'$'+(i+1))})`,keys.map(k=>typeof row[k]==='object'?JSON.stringify(row[k]):row[k]));}return{data:null};}if(patch){const set=Object.entries(patch).map(([k,v])=>{params.push(v);return`${k}=$${params.length}`}).join(',');await sql.query(`update ${table} set ${set} where ${where}`,params);return{data:null};}return{data:(await sql.query(`select * from ${table}${where?' where '+where:''}${sort?' order by '+sort:''}`,params)).rows};}return q;},async rpc(name,args){assert.equal(name,'gift_issue');await sql.query('select gift_issue($1,$2,$3,$4)',[args.p_order,args.p_session,args.p_intent,JSON.stringify(args.p_codes)]);return{data:null};}};
+ let emails=0;const ctx={module:{exports:{}},require:p=>require(p.startsWith('./')?'../lib/'+p.slice(2):p),__dirname:path.resolve(__dirname,'../lib'),Buffer,process:{env:{}},AbortSignal,fetch:async(url,opts)=>{assert.equal(url,'https://api.resend.com/emails');const body=JSON.parse(opts.body);assert.deepEqual(body.to,['buyer@example.test']);assert.equal(body.attachments.length,1);const pdf=await require('pdf-lib').PDFDocument.load(Buffer.from(body.attachments[0].content,'base64'));assert.equal(pdf.getPageCount(),2);emails++;return{ok:true,json:async()=>({id:'fixture_email'})};}};
+ ctx.providedPdf=G.pdf;vm.runInNewContext(fs.readFileSync('lib/gift-cards.cjs','utf8')+'\npdf=providedPdf;',ctx);
+ const st={checkout:{sessions:{retrieve:async()=>({id:'cs_fixture',client_reference_id:id,metadata:{purpose:'turnly_gift_cards',order_id:id},mode:'payment',currency:'usd',amount_total:20000,payment_status:'paid',payment_intent:'pi_fixture'})}},paymentIntents:{retrieve:async()=>({status:'succeeded',amount_received:20000,latest_charge:{amount_refunded:0,disputed:false}})}};
+ await ctx.module.exports.fulfill(db,st,'cs_fixture');await ctx.module.exports.fulfill(db,st,'cs_fixture');assert.equal(emails,1);
+ const order=(await sql.query('select * from gift_orders')).rows[0];assert.equal(order.status,'paid');assert.equal(order.email_status,'accepted');
+ const cards=(await sql.query('select * from gift_cards')).rows;assert.equal(cards.length,2);assert.notEqual(cards[0].code,cards[1].code);
+ const r=(await sql.query("select gift_admin_search('orders','','',null,null,1,25,'newest') r")).rows[0].r;assert.equal(r.total,1);assert.equal(r.summary.paid,20000);
+ assert.equal((await sql.query("select count(*)::int n from gift_events where kind='email_accepted'")).rows[0].n,2);
+ }finally{await sql.close();}
+});
+
+test('review-only request ignores gift credit and uses the ordinary request path',async()=>{
+ let selected;const db={rpc:async(name)=>{selected=name;return{error:{message:'fixture stops before saving'}}}};
+ const overrides={'../lib/residential-server.cjs':{...S,body:async r=>r.body,database:()=>db,rate:async()=>{},validate:()=>({...data,quote:{review_required:true}})},'../lib/gift-cards.cjs':{card:()=>{throw Error('Request must not inspect or reserve the card')}},'../lib/service-coverage.cjs':{verify:async()=>({approved:true})},'../lib/booking-calendar.cjs':{load:async()=>({settings:{}}),error:()=>null}};
+ const ctx={module:{exports:{}},console,require:p=>overrides[p]||require(p.startsWith('../')?p:p)};
+ vm.runInNewContext(fs.readFileSync('api/residential-booking.js','utf8'),ctx);
+ let response;await ctx.module.exports({method:'POST',body:{...data,action:'request',gift:'ABCDEFGHIJKLMNOPQRSTUVWX',id:randomUUID(),token:'a'.repeat(64)}},{setHeader(){},end(v){response=JSON.parse(v)}});
+ assert.equal(selected,'create_direct_booking',JSON.stringify(response));
 });
