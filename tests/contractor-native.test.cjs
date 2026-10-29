@@ -9,13 +9,15 @@ function portal({page='schedule',search='',surface='pwa'}={}) {
   const context=vm.createContext({URLSearchParams,Date,Map,Set,console,
     window:{__ENV:{},location:{search},localStorage:{getItem(){return 'dark';}}},
     document:{body,getElementById(){return markup;}},
-    currentContractorSurface:()=>surface,
+    currentContractorSurface:()=>surface, propertyManagerNotesHtml:()=>'',
     contractorRoute:(page)=>`contractor-${page}.html`,
   });
   const source=fs.readFileSync('contractor-portal.js','utf8')
     .replace(/import[\s\S]*?from\s+"[^"]+";\s*/g,'')
     .replace(/attachEvents\(\);\s*applyDashboardTheme\(\);\s*renderShell\(\);\s*void loadData\(\);\s*$/,'');
+  vm.runInContext(fs.readFileSync('contractor-release-policy.mjs','utf8').replace('export function','function'),context);
   vm.runInContext(source,context);
+  vm.runInContext("state.user={id:'test-contractor'};",context);
   return code=>vm.runInContext(code,context);
 }
 
@@ -53,4 +55,16 @@ test('native view toggles render selected day or a full week without writing job
   // Property options contain both titles; the schedule rows must contain only Wednesday.
   assert.equal(run(`(renderPwaSchedule().match(/cp-pwa-schedule-card-link/g)||[]).length`),1);
   assert.equal(run(`state.scheduleView='list';(renderPwaSchedule().match(/cp-pwa-schedule-card-link/g)||[]).length`),2);
+});
+
+
+test('job boards split residential and commercial, group selected areas and show zone empty states',()=>{
+ const run=portal({page:'job-board'});
+ run(`state.jobZones=[{id:'NC:Durham',city:'Durham',state:'NC'},{id:'NC:Raleigh',city:'Raleigh',state:'NC'}];state.selectedZones=['NC:Durham','NC:Raleigh'];state.openAssignments=[{id:'home',title:'Home clean',status:'open',contractor_service_zone:'NC:Durham',contractor_job_category:'residential'},{id:'work',title:'Office clean',status:'open',contractor_service_zone:'NC:Durham',contractor_job_category:'commercial'}];`);
+ assert.equal(run(`filteredOpenAssignments().map(j=>j.id).join(',')`),'home');
+ assert.match(run(`renderJobBoardList(filteredOpenAssignments())`),/Raleigh, NC/);
+ assert.match(run(`renderJobBoardList(filteredOpenAssignments())`),/Our team is working hard to bring more jobs to you/);
+ assert.doesNotMatch(run(`renderJobBoardList(filteredOpenAssignments())`),/Office clean/);
+ assert.equal(run(`state.filters.boardCategory='commercial';filteredOpenAssignments().map(j=>j.id).join(',')`),'work');
+ assert.match(run(`state.selectedZones=[];renderJobBoardList([])`),/Choose your service areas/);
 });

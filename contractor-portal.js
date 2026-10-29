@@ -87,6 +87,11 @@ const state = {
   user: null,
   profile: null,
   openAssignments: [],
+  jobZones: [],
+  selectedZones: [],
+  zonesEditable: false,
+  zonesSaving: false,
+  zonesError: "",
   myAssignments: [],
   videos: [],
   adminPreview: null,
@@ -130,6 +135,7 @@ const state = {
   filters: {
     search: "",
     jobType: "all",
+    boardCategory: "residential",
     payRange: "all",
     myStatus: new URLSearchParams(window.location.search).get("view") === "past" ? "completed" : "active",
     payoutSearch: "",
@@ -647,15 +653,6 @@ function assignmentAccessCandidates(item = {}) {
       meta.service_address
     ]
   };
-}
-
-function matchesContractorAccess(item = {}) {
-  const scope = contractorAccessScope();
-  if (!scope.regions.length && !scope.propertyIds.length && !scope.propertyNames.length) return true;
-  const candidates = assignmentAccessCandidates(item);
-  return accessCandidateMatches(scope.propertyIds, candidates.propertyIds)
-    || accessCandidateMatches(scope.propertyNames, candidates.propertyNames)
-    || accessCandidateMatches(scope.regions, candidates.regions);
 }
 
 function assignmentUnitLabel(item = {}) {
@@ -1675,6 +1672,10 @@ function renderJobSummary() {
   `;
 }
 
+function renderJobAreas() {
+ const summary=state.jobZones.filter(z=>state.selectedZones.includes(z.id)).map(z=>z.city).join(', ')||'Choose your service areas';
+ return `<details class="cp-zone-preferences" ${!state.selectedZones.length?'open':''}><summary><strong>My service areas</strong><span>${esc(summary)}</span></summary><p>Choose every area where you want to work. These preferences apply to both residential and commercial jobs, including the surrounding 25-mile service area.</p><form id="cpJobZonesForm"><fieldset ${!state.zonesEditable?'disabled':''}><legend>North Carolina</legend><div class="cp-zone-options">${state.jobZones.map(z=>`<label><input type="checkbox" name="zone" value="${esc(z.id)}" ${state.selectedZones.includes(z.id)?'checked':''}><span><strong>${esc(z.city)}</strong><small>City and surrounding service area</small></span></label>`).join('')}</div></fieldset><p role="status" aria-live="polite">${esc(state.zonesError)}</p>${state.zonesEditable?'<div class="cp-zone-actions"><button class="cp-action" type="submit">Save service areas</button><button class="cp-ghost-action" type="button" data-cancel-job-zones>Cancel</button></div>':'<p class="cp-muted">Service areas are read-only in admin preview.</p>'}</form></details>`;
+}
 function renderJobBoard() {
   const rows = filteredOpenAssignments();
   const preferred = rows.filter(isPreferredOffer);
@@ -1682,6 +1683,8 @@ function renderJobBoard() {
   return `
     <section class="cp-job-board-layout">
       ${panel("Jobs", `
+        ${renderJobAreas()}
+        <div class="cp-board-categories" role="group" aria-label="Job board category">${['residential','commercial'].map(category=>`<button type="button" class="cp-tab ${state.filters.boardCategory===category?'active':''}" aria-pressed="${state.filters.boardCategory===category}" data-board-category="${category}">${titleCase(category)}</button>`).join('')}</div>
         <div class="cp-filter-row">
           <label class="cp-search"><span>Search</span><input id="cpBoardSearch" type="search" value="${esc(state.filters.search)}" placeholder="Search jobs..." /></label>
           <select id="cpJobType" class="cp-select" aria-label="Job type">
@@ -1721,6 +1724,14 @@ function isPreferredOffer(item) {
 }
 
 function renderJobBoardList(rows) {
+ if(state.zonesError)return emptyState(state.zonesError);
+ if(!state.selectedZones.length)return emptyState('Choose your service areas above to see local jobs.');
+ return state.jobZones.filter(z=>state.selectedZones.includes(z.id)).map(z=>{
+  const local=rows.filter(j=>j.contractor_service_zone===z.id);
+  return `<section class="cp-zone-section"><h3>${esc(z.city)}, ${esc(z.state)}</h3><p class="cp-muted">${titleCase(state.filters.boardCategory)} · ${local.length} available</p>${local.length?renderBoardRows(local):emptyState('There are currently no available jobs in this area. Our team is working hard to bring more jobs to you.')}</section>`;
+ }).join('');
+}
+function renderBoardRows(rows) {
   if (!rows.length) return emptyState("No open assignments available right now.");
   const preferred = rows.filter(isPreferredOffer);
   const general = rows.filter((item) => !isPreferredOffer(item));
@@ -1744,6 +1755,7 @@ function filteredOpenAssignments() {
   const term = state.filters.search.trim().toLowerCase();
   return state.openAssignments.filter((item) => {
     if (!isClaimableBoardAssignment(item)) return false;
+    if(pageKey==="job-board"&&item.contractor_job_category!==state.filters.boardCategory)return false;
     const type = normalizeToken(item.assignment_type || item.recurrence_frequency || "one_time");
     if (state.filters.jobType !== "all" && type !== normalizeToken(state.filters.jobType)) return false;
     const pay = Number(item.pay_amount) || 0;
@@ -2388,25 +2400,27 @@ async function loadAvailability() {
   }
 }
 
+async function zoneApi(input) {
+ const {data}=await supabase.auth.getSession();
+ const response=await fetch('/api/contractor-job-zones',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${data?.session?.access_token||''}`},body:JSON.stringify({...input,...(state.adminPreview?{contractor_id:state.user.id}:{})}),signal:AbortSignal.timeout(30000)});
+ const result=await response.json();if(!response.ok)throw new Error(result.error||'Unable to load service areas.');return result;
+}
 async function loadOpenAssignments() {
-  const { data, error } = await supabase
-    .from("assignment_blocks")
-    .select("*")
-    .in("status", ["open", "preferred_pending"])
-    .is("claimed_by", null)
-    .order("start_window", { ascending: true });
-
-  if (error) {
-    state.message = `Unable to load open jobs: ${error.message}`;
-    state.messageError = true;
-    state.openAssignments = [];
-    return;
-  }
-
-  state.openAssignments = (data || [])
-    .filter(isClaimableBoardAssignment)
-    .filter(matchesContractorAccess)
-    .filter(matchesContractorPreviewProperty);
+ try {
+  const data=await zoneApi({action:'board'});
+  state.jobZones=data.zones;state.selectedZones=data.selected;state.zonesEditable=data.can_edit;state.zonesError='';
+  state.openAssignments=(data.jobs||[]).filter(isClaimableBoardAssignment).filter(matchesContractorPreviewProperty);
+ }catch(error){state.openAssignments=[];state.zonesError=error.message;state.message=error.message;state.messageError=true;}
+}
+async function saveJobZones(form) {
+ if(state.zonesSaving||!state.zonesEditable)return;
+ const selected=new FormData(form).getAll('zone');
+ const note=form.querySelector('[role="status"]');
+ if(!selected.length){note.textContent='Select at least one service area.';return;}
+ state.zonesSaving=true;for(const button of form.querySelectorAll('button'))button.disabled=true;
+ try{const data=await zoneApi({zones:selected});state.selectedZones=data.selected;await loadOpenAssignments();state.selectedBoardJobId='';state.message=state.zonesError||'Your service areas have been saved for residential and commercial jobs.';state.messageError=!!state.zonesError;renderShell();}
+ catch(e){note.textContent=e.message;}
+ finally{state.zonesSaving=false;for(const button of form.querySelectorAll('button'))button.disabled=false;}
 }
 
 async function loadMyAssignments() {
@@ -2902,6 +2916,9 @@ function attachEvents() {
       releaseButton.disabled = false;
       return;
     }
+    const categoryButton=event.target.closest('[data-board-category]');
+    if(categoryButton){state.filters.boardCategory=categoryButton.dataset.boardCategory;state.selectedBoardJobId='';renderShell();return;}
+    if(event.target.closest('[data-cancel-job-zones]')){renderShell();return;}
     const claimButton = event.target.closest("[data-claim-assignment-id]");
     if (claimButton) {
       claimButton.disabled = true;
@@ -2991,6 +3008,7 @@ function attachEvents() {
   });
 
   root?.addEventListener("submit", async (event) => {
+    if(event.target.matches('#cpJobZonesForm')){event.preventDefault();await saveJobZones(event.target);return;}
     if (event.target.matches("#cpAvailabilityForm")) {
       event.preventDefault();
       await saveAvailability(event.target);
