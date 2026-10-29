@@ -902,14 +902,14 @@ function availabilityPersistenceLabel() {
   return state.availabilityPersistence === "database" ? "Synced" : "Saved on this device";
 }
 
-function metric(label, value, subtext, icon) {
+function metric(label, value, subtext, icon, valueId = "") {
   const iconName = cpIconPaths[icon] ? icon : metricIcon(label);
   return `
     <article class="cp-metric">
       <span class="cp-metric-icon">${cpIcon(iconName)}</span>
       <div>
         <p>${esc(label)}</p>
-        <strong>${esc(value)}</strong>
+        <strong ${valueId ? `id="${esc(valueId)}"` : ""}>${esc(value)}</strong>
         <small class="cp-muted">${esc(subtext)}</small>
       </div>
     </article>
@@ -1101,9 +1101,9 @@ function contractorTopbar() {
         <kbd>K</kbd>
       </label>
       ${dashboardThemeToggle()}
-      <a class="cp-top-icon" href="${esc(contractorRoute("messages", contractorSurface))}" aria-label="${esc(unread)} unread messages">
+      <a class="cp-top-icon" data-message-alert href="${esc(contractorRoute("messages", contractorSurface))}" aria-label="${esc(unread)} unread messages">
         ${cpIcon("bell")}
-        <span ${unread ? "" : "hidden"}>${esc(unread > 99 ? "99+" : String(unread))}</span>
+        <span data-message-badge ${unread ? "" : "hidden"}>${esc(unread > 99 ? "99+" : String(unread))}</span>
       </a>
       <section class="cp-profile-wrap cp-toolbar-profile">
         ${profileAccountTrigger("cpToolbarProfileMenu")}
@@ -1142,7 +1142,7 @@ function mobileNav() {
       `).join("")}
       <button class="${moreIsActive ? "active" : ""}" type="button" aria-expanded="${moreOpen ? "true" : "false"}" aria-controls="cpMobileMorePanel" data-mobile-more-toggle>
         ${cpIcon("more")}<strong>More</strong>
-        ${cpUnreadMessageCount() ? cpNavBadge("messages") : ""}
+        ${cpNavBadge("messages")}
       </button>
     </nav>
   `;
@@ -1393,8 +1393,6 @@ function renderDesktopDashboard() {
   const week = currentWeekAssignments();
   const nextJob = dashboardNextAssignment();
   const boardRows = filteredOpenAssignments();
-  const preferred = boardRows.filter(isPreferredOffer);
-  const available = boardRows.filter((item) => !isPreferredOffer(item));
   return `
     <section class="cp-desktop-dashboard" aria-label="Contractor desktop dashboard">
       <section class="cp-desktop-hero">
@@ -1417,7 +1415,7 @@ function renderDesktopDashboard() {
         ${metric("Today's Jobs", String(today.length), "scheduled today", "T")}
         ${metric("Active Jobs", String(activeAssignments().length), "claimed or in progress", "A")}
         ${metric("This Week", String(week.length), "scheduled jobs", "W")}
-        ${metric("Open Jobs", String(boardRows.length), "available to claim", "J")}
+        ${metric("Open Jobs", state.boardLoading ? "…" : state.zonesError ? "—" : String(boardRows.length), "available to claim", "J", "cpDashboardBoardCount")}
         ${metric("Last 30 Days", money(totalPay(completedAssignments(30))), "completed earnings", "$")}
       </section>
 
@@ -1432,16 +1430,7 @@ function renderDesktopDashboard() {
             action: `<a class="cp-ghost-action" href="${esc(contractorRoute("messages", contractorSurface))}">${cpIcon("message-circle")} View Messages</a>`
           })}
         </div>
-        <div class="cp-stack">
-          ${panel("Preferred Jobs", renderHomeJobList(preferred, "open", "No preferred jobs right now.", 3), {
-            kicker: "Offered First",
-            action: `<a class="cp-ghost-action" href="${esc(contractorRoute("job-board", contractorSurface))}">${cpIcon("calendar")} Board</a>`
-          })}
-          ${panel("Job Board", renderHomeJobList(available, "open", "No available jobs right now.", 3), {
-            kicker: "Job Board",
-            action: `<a class="cp-ghost-action" href="${esc(contractorRoute("job-board", contractorSurface))}">${cpIcon("plus")} Claim Work</a>`
-          })}
-        </div>
+        <div class="cp-stack" id="cpDashboardBoardSummary">${dashboardBoardSummary()}</div>
       </section>
     </section>
   `;
@@ -2348,12 +2337,19 @@ async function loadData() {
   const previewApplied = await applyContractorAdminPreview(authUser);
 
   if (!previewApplied && bootstrap?.profile) state.profile = bootstrap.profile;
-  const tasks = [
-    previewApplied || bootstrap?.profile ? Promise.resolve() : loadProfile(),
-    loadMessageThreads()
-  ];
-  if (['dashboard','job-board'].includes(pageKey)) tasks.push(loadOpenAssignments());
-  if (['dashboard','job-board','my-jobs','schedule','payments','performance'].includes(pageKey)) tasks.push(loadMyAssignments());
+  const tasks = [previewApplied || bootstrap?.profile ? Promise.resolve() : loadProfile()];
+  // Message metadata must never hold up jobs, calendars, or document forms.
+  if (pageKey === 'messages') tasks.push(loadMessageThreads());
+  else state.messageLoad = loadMessageThreads().then(refreshMessageBadges).catch(() => {});
+  if (pageKey === 'job-board') tasks.push(loadOpenAssignments());
+  if (pageKey === 'dashboard' && contractorSurface === 'desktop') {
+    state.boardLoading = true;
+    state.boardLoad = loadOpenAssignments().finally(() => {
+      state.boardLoading = false;
+      refreshDashboardBoard();
+    });
+  }
+  if (['dashboard','my-jobs','schedule','payments','performance'].includes(pageKey)) tasks.push(loadMyAssignments());
   if (['schedule','resources'].includes(pageKey)) tasks.push(loadAvailability());
   if (pageKey === 'video-library') tasks.push(loadVideos());
   const results = await Promise.allSettled(tasks);
@@ -2654,8 +2650,38 @@ function cpCountLabel(count) {
 }
 
 function cpNavBadge(key) {
-  const count = key === "messages" ? cpUnreadMessageCount() : 0;
-  return count ? `<em class="cp-nav-badge">${esc(cpCountLabel(count))}</em>` : "";
+  if (key !== 'messages') return '';
+  const count = cpUnreadMessageCount();
+  return `<em class="cp-nav-badge" data-message-badge ${count ? '' : 'hidden'}>${esc(cpCountLabel(count))}</em>`;
+}
+
+function refreshMessageBadges() {
+  // Patch only badges; never replace a form or interrupt typing when messages arrive.
+  const count = cpUnreadMessageCount();
+  for (const badge of root?.querySelectorAll('[data-message-badge]') || []) {
+    badge.textContent = cpCountLabel(count);
+    badge.hidden = !count;
+  }
+  for (const link of root?.querySelectorAll('[data-message-alert]') || []) {
+    link.setAttribute('aria-label', `${count} unread messages`);
+  }
+}
+
+function dashboardBoardSummary() {
+  if (state.boardLoading) return panel('Job Board', '<p role="status">Loading available jobs…</p>');
+  if (state.zonesError) return panel('Job Board', emptyState(state.zonesError));
+  const rows = filteredOpenAssignments();
+  return panel('Preferred Jobs', renderHomeJobList(rows.filter(isPreferredOffer), 'open', 'No preferred jobs right now.', 3))
+    + panel('Job Board', renderHomeJobList(rows.filter(item => !isPreferredOffer(item)), 'open', 'No available jobs right now.', 3), {
+      action: `<a class="cp-ghost-action" href="${esc(contractorRoute('job-board', contractorSurface))}">Open Job Board</a>`
+    });
+}
+
+function refreshDashboardBoard() {
+  const summary = root?.querySelector('#cpDashboardBoardSummary');
+  if (summary) summary.innerHTML = dashboardBoardSummary();
+  const count = root?.querySelector('#cpDashboardBoardCount');
+  if (count) count.textContent = state.zonesError ? '—' : String(filteredOpenAssignments().length);
 }
 
 function formatMessageTime(value) {
