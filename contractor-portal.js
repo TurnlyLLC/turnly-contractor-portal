@@ -18,16 +18,16 @@ import {
   rowMatchesPreviewUser,
   verifyAdminPreviewSession,
   writeAdminPreviewContext
-} from "./admin-preview-context.js?v=20260831-live-preview-users";
+} from "./admin-preview-context.js?v=20261029-fast-load";
 import {
   contractorRoute,
   currentContractorSurface
 } from "./contractor-routing.js?v=20260831-contractor-dashboard-split";
 
 const env = window.__ENV || {};
-const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
+const supabase = window.turnlyContractorBootstrap?.client || (env.SUPABASE_URL && env.SUPABASE_ANON_KEY
   ? createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY)
-  : null;
+  : null);
 
 const root = document.getElementById("contractorPortalApp");
 const pageKey = document.body?.dataset?.contractorPage || "dashboard";
@@ -383,12 +383,13 @@ function contractorName() {
 
 async function applyContractorAdminPreview(authUser) {
   const existing = window.turnlyAdminPreviewContext;
+  if (!existing && window.turnlyContractorBootstrap?.previewChecked) return false;
   const session = existing?.preview?.portal === "contractor"
     ? existing
     : await verifyAdminPreviewSession(supabase, authUser);
   if (session?.preview?.portal !== "contractor") return false;
 
-  await loadAdminPreviewUserOptions(supabase);
+  if (!session.effectiveProfile) await loadAdminPreviewUserOptions(supabase);
   const previewProfile = session.effectiveProfile || await resolvePreviewProfile(supabase, session.preview, "contractor");
   const previewUser = session.effectiveUser || buildPreviewEffectiveUser(previewProfile, authUser, "contractor");
   if (!previewProfile || !previewUser) {
@@ -2336,8 +2337,8 @@ async function loadData() {
     return;
   }
 
-  const { data: userData } = await supabase.auth.getUser();
-  const authUser = userData?.user || null;
+  const bootstrap = window.turnlyContractorBootstrap;
+  const authUser = bootstrap?.user || (await supabase.auth.getUser()).data?.user || null;
   state.user = authUser;
   if (!authUser) {
     window.location.href = "index.html";
@@ -2346,14 +2347,17 @@ async function loadData() {
 
   const previewApplied = await applyContractorAdminPreview(authUser);
 
-  await Promise.all([
-    previewApplied ? Promise.resolve() : loadProfile(),
-    loadAvailability(),
-    loadOpenAssignments(),
-    loadMyAssignments(),
-    loadVideos(),
+  if (!previewApplied && bootstrap?.profile) state.profile = bootstrap.profile;
+  const tasks = [
+    previewApplied || bootstrap?.profile ? Promise.resolve() : loadProfile(),
     loadMessageThreads()
-  ]);
+  ];
+  if (['dashboard','job-board'].includes(pageKey)) tasks.push(loadOpenAssignments());
+  if (['dashboard','job-board','my-jobs','schedule','payments','performance'].includes(pageKey)) tasks.push(loadMyAssignments());
+  if (['schedule','resources'].includes(pageKey)) tasks.push(loadAvailability());
+  if (pageKey === 'video-library') tasks.push(loadVideos());
+  const results = await Promise.allSettled(tasks);
+  if (results.some(r => r.status === 'rejected')) { state.message = 'Some information could not load. Refresh to retry.'; state.messageError = true; }
   state.loading = false;
   renderShell();
 }
@@ -2495,8 +2499,10 @@ async function loadMessageThreads() {
   if (!state.messageThreads.some((thread) => thread.id === state.selectedThreadId)) {
     state.selectedThreadId = state.messageThreads[0]?.id || "";
   }
-  await loadMessageThreadMessages(state.selectedThreadId);
-  if (pageKey === "messages") await markCpMessageThreadRead(state.selectedThreadId);
+  if (pageKey === "messages") {
+    await loadMessageThreadMessages(state.selectedThreadId);
+    await markCpMessageThreadRead(state.selectedThreadId);
+  }
   state.messageStatus = `${state.messageThreads.length} conversation${state.messageThreads.length === 1 ? "" : "s"} loaded.`;
   state.messageStatusError = false;
 }

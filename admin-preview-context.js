@@ -356,15 +356,15 @@ export function isAdminRoleValue(value) {
   return ["admin", "administrator", "owner", "super_admin"].includes(normalizePreviewToken(value));
 }
 
-export async function verifyAdminPreviewSession(supabase, user) {
+export async function verifyAdminPreviewSession(supabase, user, verifiedProfile) {
   const preview = readAdminPreviewContext();
   if (!preview?.enabled || !supabase || !user?.id) return null;
 
-  const { data: profile } = await supabase
+  const profile = verifiedProfile === undefined ? (await supabase
     .from("profiles")
     .select("id,role,full_name,email,status")
     .eq("id", user.id)
-    .maybeSingle();
+    .maybeSingle()).data : verifiedProfile;
 
   const isAdmin = isAdminRoleValue(profile?.role) ||
     isAdminRoleValue(user.app_metadata?.role) ||
