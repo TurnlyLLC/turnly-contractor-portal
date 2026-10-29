@@ -5,7 +5,7 @@ import {
   resolvePreviewProfile,
   resolvePreviewProperty,
   verifyAdminPreviewSession
-} from "./admin-preview-context.js?v=20260831-live-preview-users";
+} from "./admin-preview-context.js?v=20261029-fast-load";
 import {
   contractorHomeForBrowser,
   contractorRoute,
@@ -205,8 +205,9 @@ async function renderPasswordChangeRequired(user) {
   });
 }
 
-async function loadContractorPortal() {
-  await import("./contractor-portal.js?v=20261029-shared-style");
+async function loadContractorPortal(user, profile) {
+  window.turnlyContractorBootstrap = {client:supabase,user,profile,previewChecked:true};
+  await import("./contractor-portal.js?v=20261029-fast-load");
   await import("./contractor-job-flow-mobile.js?v=20261027-notes");
 }
 
@@ -222,7 +223,7 @@ function redirectToMatchingContractorSurface() {
 async function getProfile(userId) {
   const { data, error } = await supabase
     .from("profiles")
-    .select("role, status, contractor_approved")
+    .select("id,full_name,email,role,status,contractor_approved,allowed_regions,allowed_property_ids,allowed_property_names")
     .eq("id", userId)
     .maybeSingle();
 
@@ -260,7 +261,8 @@ if (!supabase) {
   if (!user) {
     window.location.href = "contractor-login.html";
   } else {
-    const previewSession = await verifyAdminPreviewSession(supabase, user);
+    const profile = await getProfile(user.id);
+    const previewSession = await verifyAdminPreviewSession(supabase, user, profile);
     if (previewSession?.preview?.portal === "contractor") {
       await loadAdminPreviewUserOptions(supabase);
       const previewProfile = await resolvePreviewProfile(supabase, previewSession.preview, "contractor");
@@ -275,10 +277,9 @@ if (!supabase) {
           effectiveUser: previewUser,
           property: await resolvePreviewProperty(supabase, previewSession.preview)
         };
-        await loadContractorPortal();
+        await loadContractorPortal(user, profile);
       }
     } else {
-    const profile = await getProfile(user.id);
     const metadataRole = normalizeToken(user.user_metadata?.role);
     const role = metadataRole === "property_manager"
       ? "property_manager"
@@ -301,12 +302,12 @@ if (!supabase) {
         const {data} = await supabase.auth.getSession();
         const response = await fetch('/api/contractor-claim-job', {
           method:'POST', headers:{'Content-Type':'application/json',Authorization:`Bearer ${data?.session?.access_token || ''}`},
-          body:JSON.stringify({action:'eligibility'})
+          body:JSON.stringify({action:'eligibility'}), signal:AbortSignal.timeout(30000)
         });
         const eligibility = await response.json();
         if (!response.ok) throw new Error(eligibility.error || 'Unable to verify onboarding.');
         if (!eligibility.eligible) window.location.replace('contractor-onboarding.html');
-        else await loadContractorPortal();
+        else await loadContractorPortal(user, profile);
       } catch (error) {
         renderNotice('Onboarding verification needed', error.message + ' Refresh to retry, or open contractor-onboarding.html to review your requirements.');
       }

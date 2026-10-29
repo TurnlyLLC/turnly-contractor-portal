@@ -3,11 +3,11 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 
-function portal({page='schedule',search='',surface='pwa'}={}) {
+function portal({page='schedule',search='',surface='pwa',bootstrap=null}={}) {
   const markup={innerHTML:'',addEventListener(){}};
   const body={dataset:{contractorPage:page},classList:{toggle(){},contains(){return false;}}};
   const context=vm.createContext({URLSearchParams,Date,Map,Set,console,
-    window:{__ENV:{},location:{search},localStorage:{getItem(){return 'dark';}}},
+    window:{turnlyContractorBootstrap:bootstrap,__ENV:{},location:{search},localStorage:{getItem(){return 'dark';}}},
     document:{body,getElementById(){return markup;}},
     currentContractorSurface:()=>surface, propertyManagerNotesHtml:()=>'',
     contractorRoute:(page)=>`contractor-${page}.html`,
@@ -67,4 +67,16 @@ test('job boards split residential and commercial, group selected areas and show
  assert.doesNotMatch(run(`renderJobBoardList(filteredOpenAssignments())`),/Office clean/);
  assert.equal(run(`state.filters.boardCategory='commercial';filteredOpenAssignments().map(j=>j.id).join(',')`),'work');
  assert.match(run(`state.selectedZones=[];renderJobBoardList([])`),/Choose your service areas/);
+});
+
+
+test('dashboard reuses verified identity and skips unrelated video, availability and profile requests',async()=>{
+ const run=portal({page:'dashboard',bootstrap:{client:{},user:{id:'verified'},profile:{full_name:'Verified'},previewChecked:true}});
+ run(`var calls=[]; renderShell=()=>{}; loadMessageThreads=async()=>{calls.push('messages')};loadOpenAssignments=async()=>{calls.push('board')};loadMyAssignments=async()=>{calls.push('mine')};loadVideos=async()=>{throw Error('unneeded videos')};loadAvailability=async()=>{throw Error('unneeded availability')};loadProfile=async()=>{throw Error('duplicate profile')};`);
+ await run('loadData()');assert.equal(run('calls.sort().join(",")'),'board,messages,mine');assert.equal(run('state.user.id'),'verified');assert.equal(run('state.loading'),false);
+});
+test('documents do not load job boards or history and failed optional reads do not leave a spinner',async()=>{
+ const run=portal({page:'documents',bootstrap:{client:{},user:{id:'verified'},profile:{},previewChecked:true}});
+ run(`renderShell=()=>{};loadMessageThreads=async()=>{throw Error('offline')};loadOpenAssignments=async()=>{throw Error('unneeded board')};loadMyAssignments=async()=>{throw Error('unneeded jobs')};`);
+ await run('loadData()');assert.equal(run('state.loading'),false);assert.equal(run('state.messageError'),true);
 });
