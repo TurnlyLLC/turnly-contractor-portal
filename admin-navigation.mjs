@@ -82,6 +82,7 @@ export const navSections = [
     links: [
       { key: "global-payouts", label: "Team payments", href: "admin-payouts.html", icon: "wallet" },
       { key: "finance", label: "Finance", href: "finance.html", icon: "badge-dollar" },
+      { key: "gift-cards", label: "Gift Cards", href: "admin-gift-cards.html", icon: "wallet" },
       { key: "reports-sales", label: "Sales", href: "reports-sales.html", icon: "wallet" },
       { key: "invoices", label: "Invoices", href: "invoices.html", icon: "document" },
       { key: "contractor-feedback", label: "Contractor Feedback", href: "contractor-feedback.html", icon: "star" },
