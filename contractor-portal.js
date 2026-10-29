@@ -220,7 +220,7 @@ function writeDashboardTheme(theme) {
 
 function applyDashboardTheme() {
   if (!document.body) return;
-  document.body.dataset.dashboardTheme = contractorSurface === "pwa" ? "light" : readDashboardTheme();
+  document.body.dataset.dashboardTheme = "light";
 }
 
 function dashboardThemeIcon(theme) {
@@ -238,16 +238,7 @@ function dashboardThemeToggleContent(theme) {
   `;
 }
 
-function dashboardThemeToggle() {
-  if (contractorSurface === "pwa") return "";
-  const theme = readDashboardTheme();
-  const nextLabel = theme === "light" ? "dark" : "light";
-  return `
-    <button class="cp-theme-toggle" type="button" data-contractor-theme-toggle role="switch" aria-checked="${theme === "light" ? "true" : "false"}" aria-label="Switch to ${esc(nextLabel)} mode">
-      ${dashboardThemeToggleContent(theme)}
-    </button>
-  `;
-}
+function dashboardThemeToggle() { return ""; }
 
 function navIcon(key) {
   const icons = {

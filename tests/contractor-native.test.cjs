@@ -44,9 +44,9 @@ test('past jobs never mixes in active work, and search uses property or address'
   assert.match(run(`renderNativePastJobs()`),/Oak/);
   assert.doesNotMatch(run(`renderNativePastJobs()`),/data-start-assignment-id/);
 });
-test('native and desktop themes stay independent',()=>{
+test('native and desktop share the app theme',()=>{
   assert.equal(portal()(`applyDashboardTheme(); document.body.dataset.dashboardTheme`),'light');
-  assert.equal(portal({surface:'desktop'})(`applyDashboardTheme(); document.body.dataset.dashboardTheme`),'dark');
+  assert.equal(portal({surface:'desktop'})(`applyDashboardTheme(); document.body.dataset.dashboardTheme`),'light');
 });
 test('native view toggles render selected day or a full week without writing job data',()=>{
   const run=portal();
