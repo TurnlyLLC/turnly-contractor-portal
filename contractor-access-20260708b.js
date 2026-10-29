@@ -5,7 +5,7 @@ import {
   resolvePreviewProfile,
   resolvePreviewProperty,
   verifyAdminPreviewSession
-} from "./admin-preview-context.js?v=20261029-fast-load";
+} from "./admin-preview-context.js?v=20261029-jobs-priority";
 import {
   contractorHomeForBrowser,
   contractorRoute,
@@ -207,7 +207,7 @@ async function renderPasswordChangeRequired(user) {
 
 async function loadContractorPortal(user, profile) {
   window.turnlyContractorBootstrap = {client:supabase,user,profile,previewChecked:true};
-  await import("./contractor-portal.js?v=20261029-fast-load");
+  await import("./contractor-portal.js?v=20261029-jobs-priority");
   await import("./contractor-job-flow-mobile.js?v=20261027-notes");
 }
 

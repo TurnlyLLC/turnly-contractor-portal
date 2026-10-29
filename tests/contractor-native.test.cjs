@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 
 function portal({page='schedule',search='',surface='pwa',bootstrap=null}={}) {
-  const markup={innerHTML:'',addEventListener(){}};
+  const markup={innerHTML:'',addEventListener(){},querySelector(){return null;},querySelectorAll(){return [];}};
   const body={dataset:{contractorPage:page},classList:{toggle(){},contains(){return false;}}};
   const context=vm.createContext({URLSearchParams,Date,Map,Set,console,
     window:{turnlyContractorBootstrap:bootstrap,__ENV:{},location:{search},localStorage:{getItem(){return 'dark';}}},
@@ -73,10 +73,31 @@ test('job boards split residential and commercial, group selected areas and show
 test('dashboard reuses verified identity and skips unrelated video, availability and profile requests',async()=>{
  const run=portal({page:'dashboard',bootstrap:{client:{},user:{id:'verified'},profile:{full_name:'Verified'},previewChecked:true}});
  run(`var calls=[]; renderShell=()=>{}; loadMessageThreads=async()=>{calls.push('messages')};loadOpenAssignments=async()=>{calls.push('board')};loadMyAssignments=async()=>{calls.push('mine')};loadVideos=async()=>{throw Error('unneeded videos')};loadAvailability=async()=>{throw Error('unneeded availability')};loadProfile=async()=>{throw Error('duplicate profile')};`);
- await run('loadData()');assert.equal(run('calls.sort().join(",")'),'board,messages,mine');assert.equal(run('state.user.id'),'verified');assert.equal(run('state.loading'),false);
+ await run('loadData()');assert.equal(run('calls.sort().join(",")'),'messages,mine');assert.equal(run('state.user.id'),'verified');assert.equal(run('state.loading'),false);
 });
 test('documents do not load job boards or history and failed optional reads do not leave a spinner',async()=>{
  const run=portal({page:'documents',bootstrap:{client:{},user:{id:'verified'},profile:{},previewChecked:true}});
  run(`renderShell=()=>{};loadMessageThreads=async()=>{throw Error('offline')};loadOpenAssignments=async()=>{throw Error('unneeded board')};loadMyAssignments=async()=>{throw Error('unneeded jobs')};`);
- await run('loadData()');assert.equal(run('state.loading'),false);assert.equal(run('state.messageError'),true);
+ await run('loadData()');assert.equal(run('state.loading'),false);assert.equal(run('state.messageError'),false);
+});
+
+
+test('desktop schedule renders before slow board and messages; late reads never repaint forms',async()=>{
+ const run=portal({page:'dashboard',surface:'desktop',bootstrap:{client:{},user:{id:'verified'},profile:{},previewChecked:true}});
+ run(`var paints=0,finishBoard,finishMessages;renderShell=()=>{paints++};
+ loadMyAssignments=async()=>{state.myAssignments=[{id:'mine'}]};
+ loadOpenAssignments=()=>new Promise(resolve=>{finishBoard=resolve});
+ loadMessageThreads=()=>new Promise(resolve=>{finishMessages=resolve});`);
+ await run('loadData()');
+ assert.equal(run('state.loading'),false);assert.equal(run('state.myAssignments[0].id'),'mine');
+ assert.equal(run('state.boardLoading'),true);assert.match(run('dashboardBoardSummary()'),/Loading available jobs/);
+ assert.equal(run('paints'),1);
+ await run('finishBoard();state.boardLoad');await run('finishMessages();state.messageLoad');
+ assert.equal(run('state.boardLoading'),false);assert.equal(run('paints'),1);
+});
+
+test('job board loads independently of assigned job history and slow messages',async()=>{
+ const run=portal({page:'job-board',bootstrap:{client:{},user:{id:'verified'},profile:{},previewChecked:true}});
+ run(`renderShell=()=>{};loadMessageThreads=()=>new Promise(()=>{});loadMyAssignments=async()=>{throw Error('unneeded history')};loadOpenAssignments=async()=>{state.openAssignments=[{id:'available'}]};`);
+ await run('loadData()');assert.equal(run('state.loading'),false);assert.equal(run('state.openAssignments[0].id'),'available');assert.equal(run('state.messageError'),false);
 });
