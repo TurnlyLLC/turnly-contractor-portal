@@ -1,4 +1,4 @@
-import {createContractorCRM} from './contractor-crm.mjs?v=20261027-payouts';
+import {createContractorCRM} from './contractor-crm.mjs?v=20261029-locations';
 import { token, title, normalizeLookup, metadataFor, uniqueList, listFrom, firstValue, accessFromRow, roleText, isSales, isPropertyManager, isContractor, isInactive, isApproved, activeStatus, teamFor, visibleStatus, normalizePerson, mergeDirectoryPeople } from "./contractor-directory-model.mjs?v=20261012-active";
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
@@ -89,7 +89,7 @@ function accessSummary(person = {}) {
   if (person.team !== "contractor") return "-";
   const propertyCount = uniqueList([...person.allowedPropertyIds, ...person.allowedPropertyNames]).length;
   const regionCount = uniqueList(person.allowedRegions).length;
-  if (!propertyCount && !regionCount) return "All job-board jobs";
+  if (!propertyCount && !regionCount) return "Choose service areas";
   return [
     propertyCount ? `${propertyCount} ${propertyCount === 1 ? "property" : "properties"}` : "",
     regionCount ? `${regionCount} ${regionCount === 1 ? "region" : "regions"}` : ""
@@ -451,11 +451,11 @@ function accessScopeMarkup(person = null, team = "contractor") {
       properties.push({ id: "", name, address: "", region: "", sourceLabel: "Saved" });
     }
   });
-  const regions = uniqueList(['Raleigh','Durham','Asheville','Greensboro',...state.accessRegions, ...allowedRegions]);
+  const regions = uniqueList(['Raleigh','Durham','Asheville','Greensboro', ...allowedRegions.map(value => value.replace(/^NC:/i, ''))]);
   const regionChecks = regions.length
     ? regions.map((region) => {
-      const checked = allowedRegions.some((saved) => normalizeLookup(saved) === normalizeLookup(region));
-      return `<label class="contractor-access-check"><input type="checkbox" data-access-region-option value="${esc(region)}" ${checked ? "checked" : ""} /><span>${esc(region)}</span></label>`;
+      const checked = allowedRegions.some((saved) => normalizeLookup(saved.replace(/^NC:/i, '')) === normalizeLookup(region));
+      return `<label class="contractor-access-check"><input type="checkbox" data-access-region-option value="${esc(region)}" ${checked ? "checked" : ""} /><span><strong>${esc(region)}, NC</strong><small>City and surrounding 25-mile service area</small></span></label>`;
     }).join("")
     : `<span class="contractor-access-empty">No active contract regions found yet.</span>`;
   const propertyChecks = properties.length
@@ -468,11 +468,11 @@ function accessScopeMarkup(person = null, team = "contractor") {
     <div id="contractorAccessControls" class="contractor-access-scope wide" ${team === "contractor" ? "" : "hidden"}>
       <div>
         <h3>Contractor Job Access</h3>
-        <p>Choose the regions and properties this contractor can see on the job board. These are job-board access regions, including surrounding service areas. Leaving both lists blank removes these access restrictions; onboarding rules still apply.</p>
+        <p>Select all service areas where this contractor can see and accept residential and commercial jobs, then save. These choices sync to their job boards. If no area is selected, only a recognized saved home city can be used; blank does not grant access to every job. Onboarding approval is still required.</p>
       </div>
       <div class="contractor-access-grid">
-        <div class="contractor-access-list"><strong>Allowed Regions</strong>${regionChecks}</div>
-        <div class="contractor-access-list"><strong>Allowed Properties / Contracts</strong>${propertyChecks}</div>
+        <div class="contractor-access-list"><strong>Available job locations — North Carolina</strong>${regionChecks}</div>
+        <div class="contractor-access-list"><strong>Optional property restrictions</strong><small>Leave blank for all properties within the selected service areas. Selecting a property further limits access.</small>${propertyChecks}</div>
       </div>
     </div>
   `;
@@ -510,7 +510,7 @@ function formMarkup(person = null) {
         </div>
       ` : ""}
     </div>
-    <div class="lead-form-actions"><button class="secondary-action" type="button" data-modal-close><span>Cancel</span></button><button id="contractorSave" class="primary-action" type="submit"><span>Save to Supabase</span></button></div>
+    <div class="lead-form-actions"><button class="secondary-action" type="button" data-modal-close><span>Cancel</span></button><button id="contractorSave" class="primary-action" type="submit"><span>Save changes</span></button></div>
   </form>`;
 }
 
