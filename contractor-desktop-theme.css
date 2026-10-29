@@ -51,3 +51,4 @@ body.contractor-portal-body.contractor-desktop-body .cp-calendar-day { min-width
 body.contractor-portal-body.contractor-desktop-body .cp-calendar-event small { color:#ffffffb5; }
 body.contractor-portal-body.contractor-desktop-body .cp-desktop-next-card h2 { font-family:var(--native-serif); }
 body.contractor-portal-body.contractor-desktop-body .cp-search input::placeholder { color:#5b6474; }
+body.contractor-portal-body.contractor-desktop-body::before, body.contractor-portal-body.contractor-desktop-body::after { display:none; }
