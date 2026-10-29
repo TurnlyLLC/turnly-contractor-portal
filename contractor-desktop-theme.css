@@ -1,0 +1,53 @@
+/* Desktop layout, with the shared app colors and controls from contractor-native.css. */
+body.contractor-portal-body.contractor-desktop-body .cp-shell { display:grid; grid-template-columns:240px minmax(0,1fr); }
+body.contractor-portal-body.contractor-desktop-body .cp-sidebar { display:flex; background:#16233b; border:0; padding:28px 18px; gap:24px; }
+body.contractor-portal-body.contractor-desktop-body .cp-main { max-width:none; margin:0; padding:24px 32px 40px; }
+body.contractor-portal-body.contractor-desktop-body .cp-page-content { padding:0; }
+body.contractor-portal-body.contractor-desktop-body .cp-mobile-nav,
+body.contractor-portal-body.contractor-desktop-body .cp-mobile-more-panel { display:none; }
+body.contractor-portal-body.contractor-desktop-body .cp-brand > span:last-child { color:#fff; font:700 27px var(--native-serif); }
+body.contractor-portal-body.contractor-desktop-body .cp-nav-title { color:#ffffff99; letter-spacing:1.5px; font-size:10px; }
+body.contractor-portal-body.contractor-desktop-body .cp-nav-link { color:#ffffffd9; border:1px solid transparent; border-radius:12px; min-height:46px; box-shadow:none; }
+body.contractor-portal-body.contractor-desktop-body .cp-nav-link:hover { background:#ffffff0d; border-color:#ffffff22; }
+body.contractor-portal-body.contractor-desktop-body .cp-nav-link.active { background:#c9a24b; color:#16233b; border-color:#c9a24b; box-shadow:none; }
+body.contractor-portal-body.contractor-desktop-body .cp-nav-label { font-weight:500; }
+body.contractor-portal-body.contractor-desktop-body .cp-sidebar-trust strong { color:#ffffffb5; }
+body.contractor-portal-body.contractor-desktop-body .cp-sidebar-trust span { background:#c9a24b; }
+body.contractor-portal-body.contractor-desktop-body .cp-portal-toolbar { background:transparent; border:0; box-shadow:none; margin-bottom:24px; }
+body.contractor-portal-body.contractor-desktop-body :is(.cp-toolbar-search,.cp-top-icon,.cp-toolbar-profile .cp-profile,.admin-preview-trigger) { background:#fff; color:#16233b; border:1px solid var(--cp-line); box-shadow:none; border-radius:12px; }
+body.contractor-portal-body.contractor-desktop-body :is(.cp-toolbar-search input,.cp-toolbar-search kbd,.cp-profile strong) { color:#16233b; }
+body.contractor-portal-body.contractor-desktop-body .cp-profile-avatar { background:#c9a24b20; border-color:#c9a24b; color:#16233b; box-shadow:none; }
+body.contractor-portal-body.contractor-desktop-body .cp-top-icon span { background:#a8402f; color:#fff; }
+body.contractor-portal-body.contractor-desktop-body .cp-desktop-hero { background:#16233b; border:0; border-radius:18px; box-shadow:none; padding:32px; min-height:280px; }
+body.contractor-portal-body.contractor-desktop-body .cp-desktop-hero-copy h1 { color:#fff; font-family:var(--native-serif); font-size:clamp(32px,3vw,46px); text-shadow:none; }
+body.contractor-portal-body.contractor-desktop-body .cp-desktop-hero-copy p:not(.cp-panel-kicker) { color:#ffffffb5; font-size:16px; }
+body.contractor-portal-body.contractor-desktop-body .cp-desktop-hero .cp-panel-kicker { color:#c9a24b; }
+body.contractor-portal-body.contractor-desktop-body .cp-desktop-next-card { background:#fff; border:0; border-radius:14px; box-shadow:none; color:#16233b; }
+body.contractor-portal-body.contractor-desktop-body .cp-desktop-next-card :is(h2,strong) { color:#16233b; }
+body.contractor-portal-body.contractor-desktop-body :is(.cp-metric p,.cp-home-job-main small,.cp-home-job-meta span,.cp-dashboard-agenda-row small) { color:#5b6474; }
+body.contractor-portal-body.contractor-desktop-body .cp-dashboard-agenda-row { background:#fff; color:#16233b; border:1px solid var(--cp-line); border-radius:12px; box-shadow:none; }
+body.contractor-portal-body.contractor-desktop-body .cp-dashboard-agenda-row strong { color:#16233b; }
+body.contractor-portal-body.contractor-desktop-body .cp-desktop-hero .cp-ghost-action { color:#fff; border-color:#ffffff55; background:transparent; }
+body.contractor-portal-body.contractor-desktop-body .cp-calendar-day { background:#fff; border-color:var(--cp-line); color:#16233b; box-shadow:none; }
+body.contractor-portal-body.contractor-desktop-body .cp-calendar-day.today { border-color:#c9a24b; background:#c9a24b10; }
+body.contractor-portal-body.contractor-desktop-body .cp-calendar-event { background:#16233b; color:#fff; border:0; border-radius:8px; }
+body.contractor-portal-body.contractor-desktop-body .cp-calendar-day > strong { color:#16233b; }
+@media(max-width:1260px) {
+ body.contractor-portal-body.contractor-desktop-body .cp-shell { grid-template-columns:210px minmax(0,1fr); }
+ body.contractor-portal-body.contractor-desktop-body .cp-main { padding:20px; }
+}
+@media(max-width:920px) {
+ body.contractor-portal-body.contractor-desktop-body .cp-shell { display:block; }
+ body.contractor-portal-body.contractor-desktop-body .cp-sidebar { display:none; }
+ body.contractor-portal-body.contractor-desktop-body .cp-main { padding:20px 16px 100px; }
+ body.contractor-portal-body.contractor-desktop-body .cp-mobile-nav { display:grid; max-width:none; }
+ body.contractor-portal-body.contractor-desktop-body .cp-mobile-more-panel { display:block; max-width:none; }
+ body.contractor-portal-body.contractor-desktop-body .cp-desktop-hero { padding:24px; }
+}
+body.contractor-portal-body.contractor-desktop-body .cp-metric-icon { border-color:#c9a24b40; }
+body.contractor-portal-body.contractor-desktop-body .cp-next-card-details div { background:#f5f5f2; border-color:var(--cp-line); box-shadow:none; border-radius:10px; }
+body.contractor-portal-body.contractor-desktop-body .cp-calendar { grid-template-columns:repeat(7,minmax(0,1fr)); }
+body.contractor-portal-body.contractor-desktop-body .cp-calendar-day { min-width:0; padding:10px 7px; overflow-wrap:anywhere; }
+body.contractor-portal-body.contractor-desktop-body .cp-calendar-event small { color:#ffffffb5; }
+body.contractor-portal-body.contractor-desktop-body .cp-desktop-next-card h2 { font-family:var(--native-serif); }
+body.contractor-portal-body.contractor-desktop-body .cp-search input::placeholder { color:#5b6474; }
