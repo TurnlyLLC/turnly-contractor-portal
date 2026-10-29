@@ -17,3 +17,9 @@ Directory → Review center → All contractors → Review account exposes each 
 The existing native `background` requirement is the source of checklist completion. Admin Directory > contractor > Onboarding adds manual invitation/screening/review stages. Verified First sends the invitation and collects payment; Turnly staff review the provider report, record its reference and explicitly approve. No API integration or automatic invitations are implemented.
 
 Tracking and append-only review history are service-only. Each save uses an expected revision, pauses account approval before remote changes, and requires native checklist read-back before finalizing. Failed synchronization blocks claims and may be retried after two minutes. Background approval does not approve the whole account; remaining documents/training and separate account approval still apply. Existing untracked completions/waivers are preserved. Do not put report findings, SSNs, or payment details in the contractor-visible message.
+
+
+### Imported Indeed applicants
+Imported cleaner applications keep their original email and resume fingerprint. After hiring, the welcome email directs them to contractor-onboarding.html to confirm a personal login email. The PWA shows this step before documents. Supabase Auth handles email-change confirmation; the server-only confirm_imported_contractor_email RPC reads the verified Auth identity and updates the profile and linked application without changing the user ID or documents. Native Rork source is not changed; complete this web step before using the app.
+
+Admin resume attachment tool: applicant-resume-import.html. Requires an active admin session; matches files by SHA-256 against the import manifest and stores PDF/DOCX/TXT files privately. It never creates accounts, changes review status, or sends email. Historical import mail delivery is suppressed. Missing contact emails must be collected before hiring.
