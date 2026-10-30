@@ -13,7 +13,7 @@ module.exports=async(req,res)=>{
   const user=await C.access(db,req);
   if(i.action==='set_pay'){
    if(!user.admin)throw S.fail('Administrator access required.',403);
-   S.checked(await db.rpc('crm_set_pay_plan',{p_admin:user.id,...P.validatePlan(i)}));
+   S.checked(await db.rpc('crm_set_pay_plan_v2',{p_admin:user.id,...P.validatePlan(i)}));
   }else if(i.action!=='report')throw S.fail('Unknown activity action.');
   return S.json(res,200,await P.report(db,user,i));
  }catch(e){return S.json(res,e.status||400,{error:e.status?e.message:'Unable to load activity or save pay settings. Please retry.'});}
