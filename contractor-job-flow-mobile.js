@@ -868,32 +868,7 @@ async function submitAssignmentForQa(responses, completedAt) {
     return;
   }
 
-  console.warn("[contractor-job-flow] submit_assignment_for_qa fallback", error);
-  const metadata = activeAssignment.metadata && typeof activeAssignment.metadata === "object"
-    ? { ...activeAssignment.metadata }
-    : {};
-  metadata.qa_job_id = qaJobId;
-  metadata.qa_submitted_at = completedAt;
-
-  const fallbackResult = await supabase
-    .from("assignment_blocks")
-    .update({
-      status: "qa_pending",
-      visibility: "closed",
-      payment_status: "pending_qa",
-      pay_status: "pending_qa",
-      payout_status: "qa_review",
-      checklist_responses: responses,
-      checklist_completed_at: completedAt,
-      completed_at: completedAt,
-      completed_by: activeUser.id,
-      metadata
-    })
-    .eq("id", activeAssignment.id)
-    .eq("claimed_by", activeUser.id)
-    .eq("status", "in_progress");
-
-  if (fallbackResult.error) throw fallbackResult.error;
+  throw error;
 }
 
 function contractorFeedbackPayload(rating, feedback, completedAt) {
@@ -983,9 +958,9 @@ function ensureContractorFeedbackModal() {
     <div id="turnlyContractorFeedbackModal" class="tj-modal tc-feedback-modal" role="dialog" aria-modal="true" hidden>
       <div class="tc-feedback-panel">
         <button type="button" class="tc-feedback-close" data-tc-feedback-skip aria-label="Close feedback">&times;</button>
-        <span class="tc-feedback-kicker">Job Feedback</span>
-        <h2>How did this job go?</h2>
-        <p>Rate your experience on this assignment. Add any notes that would help Turnly improve future turns.</p>
+        <span class="tc-feedback-kicker">Job summary · Complete</span>
+        <h2>Cleaning complete</h2>
+        <p>Your checklist is saved and the customer can see this cleaning is complete. Quality review and payment approval are handled separately. You can leave optional feedback below.</p>
         <div class="tc-feedback-job">
           <strong id="tcFeedbackJobTitle">Completed assignment</strong>
           <small id="tcFeedbackJobMeta">Checklist submitted to QA</small>
@@ -999,7 +974,7 @@ function ensureContractorFeedbackModal() {
         </label>
         <p id="tcFeedbackMessage" class="tc-feedback-message" aria-live="polite"></p>
         <div class="tc-feedback-actions">
-          <button type="button" class="tc-feedback-skip" data-tc-feedback-skip>Skip</button>
+          <button type="button" class="tc-feedback-skip" data-tc-feedback-skip>Back to My Jobs</button>
           <button type="button" class="tc-feedback-submit" data-tc-feedback-submit>Submit Feedback</button>
         </div>
       </div>
@@ -2690,7 +2665,7 @@ function ensureStartModal() {
           </label>
           <div class="tj-location-row">
             <button type="button" class="secondary-btn" id="tjUseLocation">Use Current Location</button>
-            <p id="tjLocation" class="tj-location">Location is optional. You can start this job now.</p>
+            <p id="tjLocation" class="tj-location">Start job requires a fresh, precise location at the property.</p>
           </div>
           <p id="tjMessage" class="status-message" aria-live="polite"></p>
           <div class="tj-action-row">
@@ -2751,7 +2726,7 @@ async function captureLocation() {
     if (status) status.textContent = `Location captured (${Math.round(position.coords.accuracy)}m accuracy).`;
   } catch (error) {
     activePosition = null;
-    if (status) status.textContent = error?.message || "Location was not shared. You can still start this job.";
+    if (status) status.textContent = error?.message || "Location was not shared. Allow precise location before starting this job.";
   } finally {
     if (button) button.disabled = false;
   }
@@ -2790,9 +2765,10 @@ async function openStartModal(assignmentId) {
   document.getElementById("tjComments").textContent = String(getDetailCount(activeAssignment, ["comments", "notes_thread", "messages"]));
   document.getElementById("tjStartNotes").value = "";
   document.getElementById("tjMessage").textContent = "";
-  document.getElementById("tjLocation").textContent = "Location is optional. You can start this job now.";
+  document.getElementById("tjLocation").textContent = "Start job requires a fresh, precise location at the property.";
   setStartDetailPanel("property");
   modal.hidden = false;
+  updateTravelControls();
   showMaterials(activeAssignment);
   resolveSite(activeAssignment);
 }
@@ -2808,81 +2784,56 @@ function closeStartModal() {
   activeIssueDraft = "";
 }
 
+function updateTravelControls() {
+  const enRoute=activeAssignment?.status==='en_route';
+  document.getElementById('tjStart').textContent=enRoute?'Start job':'Head to job';
+  document.getElementById('tjUseLocation').hidden=!enRoute;
+  document.getElementById('tjUseLocation').textContent='Check my location';
+  document.getElementById('tjBadge').textContent=enRoute?'En route':'Accepted';
+  document.getElementById('tjLocation').textContent=enRoute?'At the property? Start job will verify that you are within 200 metres.':'Head to job opens directions and tells the customer you are en route.';
+}
+
+async function freshJobPosition() {
+  if(!navigator.geolocation)throw new Error('Location is unavailable on this device. Enable location services or contact Turnly.');
+  const position=await new Promise((resolve,reject)=>navigator.geolocation.getCurrentPosition(resolve,reject,{enableHighAccuracy:true,maximumAge:0,timeout:15000}));
+  return {latitude:position.coords.latitude,longitude:position.coords.longitude,accuracy:position.coords.accuracy,recorded_at:new Date(position.timestamp).toISOString()};
+}
+
 async function startJob() {
-  const button = document.getElementById("tjStart");
-  const message = document.getElementById("tjMessage");
-  if (!activeAssignment || !activeUser) {
-    if (message) message.textContent = "This job could not be loaded. Try opening it again.";
-    return;
-  }
-
-  if (button) button.disabled = true;
-  if (message) message.textContent = "Starting job...";
-
-  const now = new Date().toISOString();
-  const issueNotes = (document.getElementById("tjIssueNotes")?.value || activeIssueDraft || "").trim();
-  const userName = activeUser.user_metadata?.full_name || activeUser.email?.split("@")[0] || "Contractor";
-  const payload = {
-    status: "in_progress",
-    claimed_by: activeUser.id,
-    claimed_by_name: userName,
-    claimed_by_email: activeUser.email || null,
-    claimed_at: activeAssignment.claimed_at || now,
-    started_at: now,
-    started_by: activeUser.id,
-    start_notes: document.getElementById("tjStartNotes")?.value.trim() || null
-  };
-
-  const accessNotes = resolvedAccessNotes(activeAssignment);
-  if (issueNotes || accessNotes) {
-    const metadata = activeAssignment.metadata && typeof activeAssignment.metadata === "object"
-      ? { ...activeAssignment.metadata }
-      : {};
-    if (issueNotes) {
-      metadata.contractor_start_issues = issueNotes;
-      metadata.latest_contractor_issue = issueNotes;
-      metadata.issue_reported_at = now;
-      metadata.issue_reported_by = activeUser.id;
+  const button=document.getElementById('tjStart'),message=document.getElementById('tjMessage');
+  if(!activeAssignment||!activeUser||button?.disabled)return;
+  const action=activeAssignment.status==='en_route'?'start_job':'head_to_job';
+  // Create the maps window in the user gesture, then navigate only after the status saves.
+  const mapsWindow=action==='head_to_job'?window.open('about:blank','_blank'):null;
+  if(mapsWindow)mapsWindow.opener=null;
+  button.disabled=true;
+  message.textContent=action==='head_to_job'?'Updating your travel status…':'Checking your current location…';
+  try {
+    const position=action==='start_job'?await freshJobPosition():undefined;
+    const {data:session}=await supabase.auth.getSession();
+    if(!session?.session?.access_token)throw new Error('Please sign in again.');
+    const response=await fetch('/api/contractor-job-progress',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.session.access_token},body:JSON.stringify({
+      id:activeAssignment.id,action,position,notes:document.getElementById('tjStartNotes')?.value||'',issues:document.getElementById('tjIssueNotes')?.value||activeIssueDraft||''
+    })});
+    const result=await response.json();
+    if(!response.ok)throw new Error(result.error||'Unable to update this job. Please retry.');
+    if(!result.assignment?.id)throw new Error('The saved job could not be confirmed. Reopen the job to check its status.');
+    activeAssignment=result.assignment;
+    window.dispatchEvent(new CustomEvent('turnly:job-progress',{detail:{id:activeAssignment.id,status:activeAssignment.status}}));
+    if(action==='head_to_job'){
+      updateTravelControls();
+      if(result.maps_url){document.getElementById('tjDirections').href=result.maps_url;if(mapsWindow)mapsWindow.location.replace(result.maps_url);}
+      else mapsWindow?.close();
+      message.textContent='En route. '+(mapsWindow?'Directions opened.':'Use the Directions link to open your map.')+' When you arrive, choose Start job.';
+      return;
     }
-    if (accessNotes) metadata.access_notes = accessNotes;
-    payload.metadata = metadata;
-  }
-
-  if (activePosition) {
-    payload.start_latitude = activePosition.latitude;
-    payload.start_longitude = activePosition.longitude;
-    payload.start_location_accuracy = activePosition.accuracy;
-  }
-  if (activeSite) {
-    payload.site_latitude = activeSite.latitude;
-    payload.site_longitude = activeSite.longitude;
-  }
-
-  const miles = activePosition && activeSite ? distanceMiles(activePosition, activeSite) : null;
-  if (miles !== null) payload.start_distance_miles = Number(miles.toFixed(4));
-
-  const { data, error } = await supabase
-    .from("assignment_blocks")
-    .update(payload)
-    .eq("id", activeAssignment.id)
-    .or(`claimed_by.eq.${activeUser.id},assigned_to.eq.${activeUser.id}`)
-    .in("status", ["claimed", "scheduled", "open", "preferred_pending"])
-    .select("*")
-    .maybeSingle();
-
-  if (button) button.disabled = false;
-  if (error) {
-    if (message) message.textContent = "Error: " + error.message;
-    return;
-  }
-  if (!data) {
-    if (message) message.textContent = "This job could not be started from its current status or owner. Refresh My Jobs and try again.";
-    return;
-  }
-
-  closeStartModal();
-  showPageMessage("Job started. Complete the checklist to finish the job.");
-  await openChecklistModal(data);
+    closeStartModal();
+    showPageMessage('Cleaning started. Complete and submit the checklist to finish.');
+    await openChecklistModal(result.assignment);
+  } catch(error) {
+    mapsWindow?.close();
+    message.textContent=error?.code===1?'Location permission was denied. Allow precise location in your browser settings and try Start job again.':error?.code===3?'Location timed out. Move near a window or outside and try again.':error?.message||'Location could not be confirmed. Please try again.';
+  } finally {button.disabled=false;}
 }
 
 function ensureChecklistModal() {
@@ -3126,7 +3077,7 @@ async function completeJob() {
     return;
   }
 
-  if (message) message.textContent = "Submitting job to QA review...";
+  if (message) message.textContent = "Submitting checklist and completing job...";
   let submitError = null;
   try {
     await submitAssignmentForQa(responses, completedAt);
@@ -3140,7 +3091,10 @@ async function completeJob() {
     return;
   }
 
-  showPageMessage("Job submitted to QA for review.");
+  activeAssignment.status="qa_pending";
+  activeAssignment.completed_at=completedAt;
+  window.dispatchEvent(new CustomEvent("turnly:job-progress",{detail:{id:activeAssignment.id,status:"qa_pending"}}));
+  showPageMessage("Complete. Your checklist has been saved.");
   clearLocalChecklistDraft();
   try {
     await clearChecklistMediaDrafts();

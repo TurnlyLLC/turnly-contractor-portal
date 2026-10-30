@@ -22,7 +22,7 @@ begin
  end if;
  select * into j from assignment_blocks where id=p_id for update;
  if b.status not in ('requested','review_required','awaiting_card','scheduled','needs_reschedule') or
-  coalesce(j.status,'pending') in ('in_progress','qa_pending','completed','cancelled') then raise exception 'Visit no longer editable'; end if;
+  coalesce(j.status,'pending') in ('en_route','in_progress','qa_pending','completed','cancelled') then raise exception 'Visit no longer editable'; end if;
  if p_op<>'notes' and (b.payment_status not in ('not_collected','card_saved','action_required') or
   (b.status<>'needs_reschedule' and b.charge_at<=now())) then raise exception 'Payment is already due'; end if;
  if p_op='reschedule' then
