@@ -4,6 +4,7 @@ module.exports=async(req,res)=>{
  res.setHeader('Cache-Control','no-store');if(req.method!=='POST')return S.json(res,405,{error:'Use POST.'});
  try{
   const db=S.database(),user=await C.access(db,req),i=await S.body(req);
+  if(!user.admin){const a=await require('../lib/seller-agreement.cjs').current(db,user);if(a.mode!=='hourly')return S.json(res,200,{admin:false,hidden:true,rows:[],periods:[]});}
   const through=new Date(i.through);if(!Number.isFinite(through.getTime())||through.getTime()>Date.now())throw S.fail('Choose a completed review date.');
   if(['approve','record_paid'].includes(i.action)){
    if(!user.admin)throw S.fail('Administrator access required.',403);

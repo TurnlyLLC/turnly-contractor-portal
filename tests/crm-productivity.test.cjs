@@ -44,7 +44,7 @@ test('metrics exclude prepared calls, union concurrent work and calls, and split
  const plans=[{user_id:U,mode:'hourly',hourly_cents:2000,effective_at:iso(0)},{user_id:U,mode:'hourly',hourly_cents:4000,effective_at:iso(1800)}];
  const session=[{user_id:U,session_id:SID,started_at:iso(0),last_activity_at:iso(3600),last_seen_at:iso(3600),ended_at:iso(3600)}];
  const work=[{user_id:U,started_at:iso(0),ended_at:iso(3600)},{user_id:U,started_at:iso(0),ended_at:iso(3600)}];
- const calls=[{user_id:U,status:'prepared',created_at:iso(1)},...[[60,120],[180,240]].map(([a,b])=>({user_id:U,session_id:SID,created_at:iso(a),dialed_at:iso(a),answered_at:iso(a),ended_at:iso(b),duration_seconds:b-a,status:'completed',call_sid:'CA'}))];
+ const calls=[{user_id:U,status:'prepared',created_at:iso(1)},...[[60,120],[180,240]].map(([a,b])=>({user_id:U,session_id:SID,created_at:iso(a),dialed_at:iso(a),answered_at:iso(a),ended_at:iso(b),duration_seconds:b-a,status:'completed',answered_by:'human',call_sid:'CA'}))];
  const r=P.summarize({id:U},plans,session,work,calls,t,t+7200000,t+3600000);
  assert.equal(r.logged_seconds,3600);assert.equal(r.active_seconds,3600);assert.equal(r.hourly_cents,3000);assert.equal(r.calls,2);assert.equal(r.average_call_seconds,60);assert.equal(r.average_gap_seconds,60);
  const commission=P.summarize({id:U},[{user_id:U,mode:'commission',commission_bps:1000,effective_at:iso(0)}],session,work,calls,t,t+7200000,t+3600000);assert.equal(commission.hourly_cents,0);

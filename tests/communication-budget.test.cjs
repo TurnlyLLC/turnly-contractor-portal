@@ -55,3 +55,9 @@ test('call consumption requires a reservation, paused members cannot dial, and e
  await db.query('select communication_expire_call($1)',[call]);assert.equal((await db.query('select state from communication_usage where id=$1',[call])).rows[0].state,'reserved');
  await db.exec("update crm_voice_calls set parent_sid=null,status='prepared',created_at=now()-interval '4 minutes'");await db.query('select communication_expire_call($1)',[call]);assert.equal((await consume()).rows[0].r,null);
  }finally{await db.close();}});
+test('AMD extra cost is reserved and settled inside existing limits',async()=>{const db=await setup();try{
+ const sql=fs.readFileSync('supabase/migrations/20261030144909_sales_pay_type_agreements.sql','utf8');const start=sql.indexOf('-- Reserve/settle'),end=sql.indexOf('revoke all on function public.crm_current',start);await db.exec(sql.slice(start,end));
+ await db.exec('update communication_settings set daily_cents=110');await assert.rejects(reserve(db,'amd-a','call'),/budget reached/);
+ await db.exec('update communication_settings set daily_cents=120');assert.equal((await reserve(db,'amd-b','call')).rows[0].result.reserved_cents,111);
+ await db.query("select communication_settle('amd-b',2,'completed')");assert.equal(Number((await db.query("select charged_cents from communication_usage where id='amd-b'")).rows[0].charged_cents),11);
+ }finally{await db.close();}});

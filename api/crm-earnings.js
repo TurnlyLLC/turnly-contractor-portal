@@ -4,6 +4,7 @@ module.exports=async(req,res)=>{
  res.setHeader('Cache-Control','no-store');
  try{
   const db=S.database(),user=await C.access(db,req),i=await S.body(req);
+  if(!user.admin){const a=await require('../lib/seller-agreement.cjs').current(db,user);if(a.mode!=='commission')return S.json(res,200,{admin:false,hidden:true,rows:[],periods:[]});}
   if(['approve','record_paid'].includes(i.action)){
    if(!user.admin)throw S.fail('Administrator access required.',403);
    S.checked(await db.rpc('crm_commission_payment_review',{p_admin:user.id,p_order:i.order_id,p_action:i.action,p_reference:String(i.reference||'').trim(),p_expected:i.amount_cents}));

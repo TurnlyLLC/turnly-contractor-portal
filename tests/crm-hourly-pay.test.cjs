@@ -41,10 +41,11 @@ test('hourly review calculates union at historical rates, requires admin approva
 });
 test('hourly API scopes read requests to the signed-in rep and rejects all rep mutations',async()=>{
  const S=require('../lib/residential-server.cjs'),C=require('../lib/crm-sales.cjs'),handler=require('../api/crm-hourly-pay.js');
+ const A=require('../lib/seller-agreement.cjs'),oldCurrent=A.current;A.current=async()=>({mode:'hourly'});
  const old={database:S.database,body:S.body,access:C.access,all:C.all};let action='list',calls=0;
  S.body=async()=>({action,user_id:A,through:end,amount_cents:1000});C.access=async()=>({id:U,admin:false});
  S.database=()=>({rpc:async(name,args)=>{calls++;assert.equal(name,'crm_hourly_summary');assert.equal(args.p_user,U);return {data:[]};}});
  C.all=async(db,table,columns,filter)=>{const q={eq(k,v){assert.equal(k,'user_id');assert.equal(v,U);return q;}};filter(q);return [];};
  const invoke=async()=>{const res={setHeader(){},status(n){this.statusCode=n;return this;},json(){},end(){}};await handler({method:'POST'},res);return res.statusCode;};
- try{assert.equal(await invoke(),200);action='approve';assert.equal(await invoke(),403);action='record_paid';assert.equal(await invoke(),403);assert.equal(calls,1);}finally{S.database=old.database;S.body=old.body;C.access=old.access;C.all=old.all;}
+ try{assert.equal(await invoke(),200);action='approve';assert.equal(await invoke(),403);action='record_paid';assert.equal(await invoke(),403);assert.equal(calls,1);}finally{S.database=old.database;S.body=old.body;C.access=old.access;C.all=old.all;A.current=oldCurrent;}
 });
