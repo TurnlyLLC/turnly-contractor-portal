@@ -32,13 +32,13 @@ module.exports=async(req,res)=>{
     }));return S.json(res,200,{clients,total:r.count,page});
    }
    if(input.action==='admin_list'){
-    const page=Math.max(1,Math.floor(Number(input.page)||1));let q=db.from('referral_bookings').select('id,customer_id,name,email,phone,profile_address,property_address,city,state,zip,beds,baths,sqft,service,frequency,quote,amount_cents,gift_applied_cents,service_date,arrival_start,arrival_end,charge_at,status,payment_status,agent_name,referral_code,notes,visit_details,assignment_deleted_at,created_at,stripe_payment_intent,stripe_session,paid_at,completed_at',{count:'exact'}).order('created_at',{ascending:false});
+    const page=Math.max(1,Math.floor(Number(input.page)||1));let q=db.from('referral_bookings').select('id,customer_id,name,email,phone,profile_address,property_address,city,state,zip,beds,baths,sqft,service,frequency,quote,amount_cents,gift_applied_cents,service_date,arrival_start,arrival_end,charge_at,status,payment_status,agent_name,referral_code,notes,visit_details,recurring_plan_id,assignment_deleted_at,created_at,stripe_payment_intent,stripe_session,paid_at,completed_at',{count:'exact'}).order('created_at',{ascending:false});
     q=q.is('assignment_deleted_at',null).neq('status','cancelled');
     if(input.booking_id){if(!uuid(input.booking_id))throw S.fail('Choose a booking.');q=q.eq('id',input.booking_id);}
     if(input.status)q=q.eq('status',input.status);
     if(input.customer_id){if(!uuid(input.customer_id))throw S.fail('Choose a customer.');q=q.eq('customer_id',input.customer_id);}
     const r=await q.range((page-1)*25,page*25-1);S.checked(r);
-    const bookings=await Promise.all(r.data.map(async b=>{try{return {...b,job:await J.syncBooking(db,b,actor)};}catch{return {...b,job_error:'Job synchronization needs attention. Refresh to retry.'};}}));
+    const bookings=await Promise.all(r.data.map(async b=>{const plan=b.recurring_plan_id?S.checked(await db.from('customer_recurring_plans').select('id,status,review_reason,preferred_contractor_name').eq('id',b.recurring_plan_id).single()):null;try{return {...b,plan,job:await J.syncBooking(db,b,actor)};}catch{return {...b,plan,job_error:'Job synchronization needs attention. Refresh to retry.'};}}));
     return S.json(res,200,{bookings:bookings.filter(b=>!['cancelled','canceled','declined'].includes(b.job?.status)),total:r.count,page,payments_ready:S.ready()});
    }
    if(!uuid(input.id))throw S.fail('Choose a booking.');
