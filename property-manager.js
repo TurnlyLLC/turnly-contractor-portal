@@ -22,7 +22,6 @@ const TURN_REQUEST_SERVICE = "Unit Cleaning";
 const MOVE_IN_TIME_LABEL = "2:00 PM";
 const MOVE_IN_HOUR = 14;
 const URGENT_TURN_NOTICE_HOURS = 36;
-const PROPERTY_MANAGER_GUIDE_STORAGE_PREFIX = "turnlyPropertyManagerWelcomeGuide:v2";
 const PROPERTY_MANAGER_THEME_STORAGE_KEY = "turnlyPropertyManagerDashboardTheme";
 const PROPERTY_MANAGER_NOTIFICATION_CLEAR_PREFIX = "turnlyPropertyManagerNotificationsClearedAt:v1";
 
@@ -50,7 +49,6 @@ const state = {
   assignments: [],
   qaJobs: [],
   videos: [],
-  cleanReviews: [],
   dataMessage: "",
   dataError: false,
   threads: [],
@@ -80,19 +78,8 @@ const state = {
   assignmentDetailsOpen: false,
   requestPage: 1,
   requestPageSize: 10,
-  feedbackSaving: false,
-  feedbackMessage: "",
-  feedbackError: false,
-  qualityReviewOpen: false,
-  qualityReviewAssignmentId: "",
-  qualityReviewSaving: false,
-  qualityReviewMessage: "",
-  qualityReviewError: false,
-  qualityReviewSessionDismissedIds: new Set(),
   accountMenuOpen: false,
   adminPreviewMenuOpen: false,
-  guideOpen: false,
-  guideStep: 0,
   notificationClearedAt: 0,
   filters: {
     query: "",
@@ -201,94 +188,6 @@ const searchlessViews = new Set(["turn-requests", "schedule", "messages"]);
 const closedStatuses = new Set(["completed", "complete", "cancelled", "canceled", "declined", "deleted", "archived"]);
 const issueStatuses = new Set(["overdue", "qa_pending", "qa_rejected", "rejected", "needs_rework"]);
 const inProgressStatuses = new Set(["in_progress", "claimed", "started", "active", "qa_pending"]);
-const managerGuideSteps = {
-  overview: [
-    {
-      key: "overview-hero",
-      title: "Welcome to your property overview",
-      body: "This page gives you the fastest read on your property, the next turn, and the actions Turnly expects you to use most."
-    },
-    {
-      key: "overview-metrics",
-      title: "Scan the status cards",
-      body: "These cards summarize ready units, in-progress turns, upcoming work, and recently completed cleans for your assigned property."
-    },
-    {
-      key: "overview-next",
-      title: "Watch the next turn",
-      body: "The Next Turn card keeps the next scheduled unit front and center so you can open details without hunting through the schedule."
-    },
-    {
-      key: "overview-requests",
-      title: "Review turn requests",
-      body: "Use this section to track open requests and start a new unit cleaning request when another turn is ready to send to Turnly."
-    }
-  ],
-  "turn-requests": [
-    {
-      key: "request-new",
-      title: "Start a turn request",
-      body: "Use this area to submit a unit cleaning request with the unit and scheduled move-in date. Requests stay property-specific."
-    },
-    {
-      key: "request-filters",
-      title: "Filter and sort requests",
-      body: "Use the status buttons and sort controls to move between open, pending, completed, and other request groups."
-    },
-    {
-      key: "request-table",
-      title: "Read the request list",
-      body: "The table shows unit, bed and bath count, current status, scheduled window, and completed date when you are viewing completed work."
-    },
-    {
-      key: "request-details",
-      title: "Open details and leave feedback",
-      body: "Click View Details to open the full request window, see related media, and send feedback about that clean.",
-      emptyBody: "When requests appear here, click View Details to open the full request window, see related media, and send feedback about that clean."
-    }
-  ],
-  schedule: [
-    {
-      key: "date-controls",
-      title: "Move through the schedule",
-      body: "Use the arrows or date picker to jump to the day, week, or month you want to inspect."
-    },
-    {
-      key: "selector",
-      title: "Change your schedule view",
-      body: "Use Day, Week, and Month to change how assignments are displayed on the schedule."
-    },
-    {
-      key: "assignment",
-      title: "Open assignment details",
-      body: "Click an assignment card to view the full details, see before and after videos, and leave feedback for that specific clean.",
-      emptyBody: "When assignments appear on the schedule, click a card to view the full details, see before and after videos, and leave feedback for that specific clean."
-    }
-  ],
-  messages: [
-    {
-      key: "message-compose",
-      title: "Start a conversation",
-      body: "Use New Message to contact Turnly operations about property questions, schedule changes, service updates, or feedback."
-    },
-    {
-      key: "message-threads",
-      title: "Choose an open conversation",
-      body: "Open conversations stay in this left rail with recipients, last sent date, and a one-line preview so you can move between threads quickly."
-    },
-    {
-      key: "message-display",
-      title: "Read the full thread",
-      body: "The main message area shows the selected conversation and keeps the full exchange in one focused workspace."
-    },
-    {
-      key: "message-reply",
-      title: "Send a reply",
-      body: "Use the reply box to keep updates tied to the same thread so Turnly can track the whole conversation.",
-      emptyBody: "Once a conversation is selected, use the reply box to keep updates tied to the same thread so Turnly can track the whole conversation."
-    }
-  ]
-};
 const pendingStatuses = new Set(["pending", "pending_approval"]);
 const readyStatuses = new Set(["ready", "open", "scheduled", "not_started"]);
 
@@ -1592,7 +1491,6 @@ async function refreshManagerPortal() {
     state.dataError = true;
   } finally {
     state.refreshing = false;
-    maybeOpenQualityReviewPrompt();
     renderManagerPortal();
   }
 }
@@ -1610,7 +1508,6 @@ async function loadManagerData() {
   state.assignments = [];
   state.qaJobs = [];
   state.videos = [];
-  state.cleanReviews = [];
 
   if (!supabase || !propertyId) return;
 
@@ -1631,7 +1528,6 @@ async function loadManagerData() {
   }
 
   const [reviewResult, qaResult, videoResult] = await Promise.allSettled([
-    loadManagerCleanReviews(),
     loadManagerQaJobs(),
     loadManagerVideos()
   ]);
@@ -1800,32 +1696,6 @@ async function loadManagerQaJobs() {
   return blocked && !rows.length ? "QA review details are limited by current access rules." : "";
 }
 
-async function loadManagerCleanReviews() {
-  const assignmentIds = state.assignments.map((row) => row.id).filter(Boolean);
-  if (!assignmentIds.length) {
-    state.cleanReviews = [];
-    return "";
-  }
-  const rows = [];
-  let blocked = false;
-  for (const ids of chunk(assignmentIds, 80)) {
-    const { data, error } = await supabase
-      .from("property_manager_clean_feedback")
-      .select("id,assignment_id,portal_property_id,property_name,unit_number,feedback_type,rating,message,status,created_by,created_by_name,created_by_email,contractor_id,contractor_name,contractor_email,created_at,updated_at")
-      .in("assignment_id", ids)
-      .not("rating", "is", null)
-      .order("created_at", { ascending: false })
-      .limit(200);
-    if (error) {
-      blocked = true;
-    } else {
-      rows.push(...(data || []));
-    }
-  }
-  state.cleanReviews = dedupeRows(rows);
-  return blocked && !rows.length ? "Quality review history is limited by current access rules." : "";
-}
-
 function videoPropertyCandidates() {
   const propertyMeta = rowMeta(state.property);
   return uuidValues([
@@ -1928,7 +1798,6 @@ async function loadManagerVideos() {
 function renderManagerPortal(loading = false) {
   if (!managerMain) return;
   state.view = currentView();
-  maybeStartScheduleGuide();
   setActiveNav();
   const [title, subtitle] = viewLabels[state.view] || viewLabels.overview;
   const headingTitle = state.view === "overview" ? propertyTitle() : title;
@@ -1949,93 +1818,8 @@ function renderManagerPortal(loading = false) {
     ${renderAddUnitModal()}
     ${renderCurrentView()}
     ${renderAssignmentDetailsModal()}
-    ${renderQualityReviewPromptModal()}
-    ${renderManagerGuideOverlay()}
   `;
   if (state.requestOpen) updateTurnRequestTimingPrompts();
-}
-
-function currentGuideSteps() {
-  return managerGuideSteps[state.view] || [];
-}
-
-function guideStorageKey(view = state.view) {
-  return `${PROPERTY_MANAGER_GUIDE_STORAGE_PREFIX}:${state.user?.id || "browser"}:${view}`;
-}
-
-function hasSeenManagerGuide(view = state.view) {
-  try {
-    return window.localStorage?.getItem(guideStorageKey(view)) === "seen";
-  } catch {
-    return false;
-  }
-}
-
-function markManagerGuideSeen(view = state.view) {
-  try {
-    window.localStorage?.setItem(guideStorageKey(view), "seen");
-  } catch {
-    // localStorage can be unavailable in private or restricted browsing.
-  }
-}
-
-function maybeStartScheduleGuide() {
-  const steps = currentGuideSteps();
-  if (!steps.length || state.assignmentDetailsOpen || state.requestOpen || state.qualityReviewOpen || state.guideOpen || hasSeenManagerGuide()) return;
-  state.guideOpen = true;
-  state.guideStep = 0;
-}
-
-function currentScheduleGuideStep() {
-  const steps = currentGuideSteps();
-  return steps[Math.min(Math.max(state.guideStep, 0), steps.length - 1)] || steps[0] || null;
-}
-
-function scheduleGuideTargetClass(key, row = null) {
-  const step = currentScheduleGuideStep();
-  if (!state.guideOpen || !step || step.key !== key) return "";
-  if (key === "assignment") {
-    const target = scheduledRows()[0];
-    if (!target || String(target.id || "") !== String(row?.id || "")) return "";
-  }
-  return "pm-guide-target";
-}
-
-function renderManagerGuideOverlay() {
-  if (!state.guideOpen) return "";
-  const steps = currentGuideSteps();
-  if (!steps.length) return "";
-  const step = currentScheduleGuideStep();
-  if (!step) return "";
-  const isLast = state.guideStep >= steps.length - 1;
-  const hasAssignmentTarget = Boolean(scheduledRows()[0]);
-  const hasRequestTarget = Boolean(filteredRequests()[0]);
-  const body = (
-    (step.key === "assignment" && !hasAssignmentTarget) ||
-    (step.key === "request-details" && !hasRequestTarget) ||
-    (step.key === "message-reply" && !selectedManagerThread())
-  ) ? step.emptyBody : step.body;
-  const pageTitle = viewLabels[state.view]?.[0] || "Portal";
-  return `
-    <div class="pm-guide-layer" aria-live="polite">
-      <button class="pm-guide-backdrop" type="button" data-pm-guide-skip aria-label="Dismiss page guide"></button>
-      <section class="pm-guide-card pm-guide-card-${esc(step.key)}" role="dialog" aria-modal="false" aria-labelledby="pmGuideTitle">
-        <p class="pm-eyebrow">${esc(pageTitle)} Guide ${esc(state.guideStep + 1)} of ${esc(steps.length)}</p>
-        <h2 id="pmGuideTitle">${esc(step.title)}</h2>
-        <p>${esc(body)}</p>
-        <div class="pm-guide-actions">
-          <button class="pm-link-button" type="button" data-pm-guide-skip>Skip</button>
-          <button class="new-btn pm-compact-btn" type="button" data-pm-guide-next>${esc(isLast ? "Done" : "Next")}</button>
-        </div>
-      </section>
-    </div>
-  `;
-}
-
-function closeScheduleGuide(markSeen = true) {
-  if (markSeen) markManagerGuideSeen();
-  state.guideOpen = false;
-  state.guideStep = 0;
 }
 
 function renderManagerAdminPreviewSwitcher() {
@@ -2248,7 +2032,7 @@ function assignmentForVideo(video) {
 function renderOverviewHero(metrics, delta) {
   const next = upcomingAssignments(1)[0] || null;
   return `
-    <section class="panel-card pm-experience-hero pm-picture-hero ${propertyHeroClass()} ${scheduleGuideTargetClass("overview-hero")}">
+    <section class="panel-card pm-experience-hero pm-picture-hero ${propertyHeroClass()}">
       <div class="pm-picture-backdrop pm-picture-backdrop-image" aria-hidden="true"></div>
       <div class="pm-picture-hero-content">
         <div class="pm-experience-copy">
@@ -2293,7 +2077,7 @@ function renderOverviewHeroMedia(video, row = null) {
 
 function renderOverviewFocusPanel(metrics, next) {
   return `
-    <aside class="pm-overview-focus-card ${scheduleGuideTargetClass("overview-next")}" aria-label="Current property focus">
+    <aside class="pm-overview-focus-card" aria-label="Current property focus">
       <div class="pm-focus-next ${next ? "" : "is-empty"}">
         <div class="pm-focus-next-head">
           <span>Next Turn</span>
@@ -2351,7 +2135,7 @@ function renderOverviewJourney(metrics) {
     ["Accepted", activeAssignments().filter((row) => scheduleAcceptanceStatus(row).tone === "accepted").length, "Work confirmed"],
     ["In Progress", metrics.inProgress, "Cleaning active"],
     ["Completed", metrics.ready, "Last 30 days"],
-    ["Feedback", metrics.issues, "Needs attention"]
+    ["Needs attention", metrics.issues, "Service issues"]
   ];
   return `
     <section class="panel-card pm-experience-timeline" aria-label="Turn request progress">
@@ -2461,14 +2245,14 @@ function renderOverviewView() {
 
     <section class="pm-overview-body">
       <div class="pm-overview-main-stack">
-        <section class="pm-stat-grid pm-stat-grid-four ${scheduleGuideTargetClass("overview-metrics")}" aria-label="Property manager overview">
+        <section class="pm-stat-grid pm-stat-grid-four" aria-label="Property manager overview">
           ${statCard("Units Ready", integer(metrics.ready), "completed last 30 days", "green", "turn-requests")}
           ${statCard("In Progress", integer(metrics.inProgress), "currently active", "violet", "turn-requests")}
           ${statCard("Upcoming", integer(metrics.upcoming), "future scheduled turns", "blue", "schedule")}
           ${statCard("Completed This Week", integer(metrics.completedThisWeek), `${delta >= 0 ? "+" : ""}${delta}% vs last week`, "cyan", "schedule")}
         </section>
         ${panel("Turn Requests", renderOverviewRequests(), {
-          className: `pm-overview-requests ${scheduleGuideTargetClass("overview-requests")}`,
+          className: `pm-overview-requests`,
           action: renderNewTurnRequestButton()
         })}
       </div>
@@ -2511,7 +2295,7 @@ function renderTurnRequestsView() {
       ${statCard("Completed This Week", integer(metrics.completedThisWeek), "closed out", "green")}
     </section>
     <section class="pm-turn-request-workspace">
-      ${panel("Turn Requests", rows.length ? renderRequestTable(rows) : emptyBlock("No matching requests", "Try changing the status filter."), { className: `pm-table-panel ${scheduleGuideTargetClass("request-table")}` })}
+      ${panel("Turn Requests", rows.length ? renderRequestTable(rows) : emptyBlock("No matching requests", "Try changing the status filter."), { className: `pm-table-panel` })}
     </section>
   `;
 }
@@ -2519,7 +2303,7 @@ function renderTurnRequestsView() {
 function renderTurnRequestCallout() {
   const linked = hasLinkedProperty();
   return `
-    <section class="panel-card pm-action-banner ${linked ? "" : "is-disabled"} ${scheduleGuideTargetClass("request-new")}">
+    <section class="panel-card pm-action-banner ${linked ? "" : "is-disabled"}">
       <div>
         <p class="pm-eyebrow">${linked ? "Submit a Turn" : "Property Link Required"}</p>
         <h2>${linked ? "Request a unit turn" : "Turn requests unlock after your property is linked"}</h2>
@@ -2538,7 +2322,7 @@ function renderTurnRequestCallout() {
 function renderRequestToolbar(placeholder = "Search...", includeNew = false) {
   const sortDirection = state.filters.requestSortDirection === "desc" ? "desc" : "asc";
   return `
-    <section class="panel-card pm-toolbar pm-turn-toolbar ${scheduleGuideTargetClass("request-filters")}">
+    <section class="panel-card pm-toolbar pm-turn-toolbar">
       <div class="pm-status-segment" aria-label="Request status">
         ${["all", "pending", "open", "in_progress", "ready", "on_hold", "completed"].map((key) => `<button type="button" class="${state.filters.requestStatus === key ? "active" : ""}" data-pm-request-status="${esc(key)}">${esc(key === "all" ? "All" : titleCase(key))}</button>`).join("")}
       </div>
@@ -2600,7 +2384,6 @@ function renderRequestTable(rows, compactMode = false) {
   if (!compactMode && page !== state.requestPage) state.requestPage = page;
   const start = compactMode ? 0 : (page - 1) * pageSize;
   const visible = compactMode ? rows : rows.slice(start, start + pageSize);
-  const detailGuideTargetId = scheduleGuideTargetClass("request-details") ? visible[0]?.id || "" : "";
   return `
     <div class="pm-table-wrap">
       <table class="pm-table">
@@ -2626,7 +2409,7 @@ function renderRequestTable(rows, compactMode = false) {
               ${showCompletedDates ? `<td>${esc(formatDate(requestDateValue(row), "Not recorded"))}</td>` : ""}
               <td>${esc(formatWindow(row))}</td>
               ${showCompletedDates ? `<td>${esc(formatDate(completionDateValue(row), "Not recorded"))}</td>` : ""}
-              <td><button class="pm-row-action ${String(row.id || "") === String(detailGuideTargetId) ? "pm-guide-target" : ""}" type="button" data-manager-view-assignment="${esc(row.id || "")}">View Details</button></td>
+              <td><button class="pm-row-action" type="button" data-manager-view-assignment="${esc(row.id || "")}">View Details</button></td>
             </tr>
           `).join("")}
         </tbody>
@@ -2654,99 +2437,6 @@ function renderRequestPagination(totalRows, page, pageSize, totalPages, visibleC
 
 function selectedAssignment(rows = state.assignments) {
   return rows.find((row) => row.id === state.selectedAssignmentId) || rows[0] || state.assignments[0] || null;
-}
-
-function reviewAssignmentIds() {
-  return new Set((state.cleanReviews || [])
-    .filter((review) => Number(review.rating) >= 1)
-    .map((review) => String(review.assignment_id || ""))
-    .filter(Boolean));
-}
-
-function pendingQualityReviewAssignments() {
-  const reviewed = reviewAssignmentIds();
-  return recentCompletedAssignments(5)
-    .filter((row) => row?.id && !reviewed.has(String(row.id)))
-    .filter((row) => !state.qualityReviewSessionDismissedIds.has(String(row.id)))
-    .sort((a, b) => dateValue(completionDateValue(b), 0) - dateValue(completionDateValue(a), 0));
-}
-
-function maybeOpenQualityReviewPrompt() {
-  if (state.requestOpen || state.assignmentDetailsOpen || state.refreshing) return;
-  const pending = pendingQualityReviewAssignments();
-  if (state.qualityReviewOpen) {
-    const activeId = String(state.qualityReviewAssignmentId || "");
-    if (activeId && pending.some((row) => String(row.id || "") === activeId)) return;
-    state.qualityReviewOpen = false;
-    state.qualityReviewAssignmentId = "";
-  }
-  const next = pending[0];
-  if (!next) {
-    state.qualityReviewAssignmentId = "";
-    state.qualityReviewMessage = "";
-    state.qualityReviewError = false;
-    return;
-  }
-  state.qualityReviewAssignmentId = next.id;
-  state.qualityReviewOpen = true;
-  state.qualityReviewMessage = "";
-  state.qualityReviewError = false;
-}
-
-function selectedQualityReviewAssignment() {
-  const id = state.qualityReviewAssignmentId;
-  return state.assignments.find((row) => String(row.id || "") === String(id || "")) || pendingQualityReviewAssignments()[0] || null;
-}
-
-function renderStarRatingButtons(selectedRating = 0) {
-  return [1, 2, 3, 4, 5].map((rating) => `
-    <button class="pm-quality-star ${rating <= selectedRating ? "is-selected" : ""}" type="button" data-pm-quality-star="${rating}" aria-label="${rating} star${rating === 1 ? "" : "s"}">
-      ${rating <= selectedRating ? "★" : "☆"}
-    </button>
-  `).join("");
-}
-
-function renderQualityReviewPromptModal() {
-  if (!state.qualityReviewOpen) return "";
-  const row = selectedQualityReviewAssignment();
-  if (!row) return "";
-  const statusClass = state.qualityReviewMessage ? (state.qualityReviewError ? "error" : "success") : "";
-  const unit = assignmentUnit(row) || "Unit";
-  return `
-    <div class="pm-assignment-detail-modal pm-quality-review-modal" role="dialog" aria-modal="true" aria-labelledby="pmQualityReviewTitle">
-      <button class="pm-assignment-detail-backdrop" type="button" aria-label="Review later" data-pm-quality-review-later></button>
-      <section class="pm-assignment-detail-panel pm-quality-review-panel">
-        <header class="pm-assignment-detail-header">
-          <div>
-            <p class="pm-eyebrow">Completed Unit Review</p>
-            <h2 id="pmQualityReviewTitle">How did we do?</h2>
-          </div>
-          <button class="pm-modal-close" type="button" aria-label="Review later" data-pm-quality-review-later>${pmIcon("x")}</button>
-        </header>
-        <form id="managerQualityReviewForm" class="pm-quality-review-form" data-feedback-assignment-id="${esc(row.id)}">
-          <div class="pm-quality-review-unit">
-            <span>Unit Number</span>
-            <strong>${esc(unit)}</strong>
-            <small>${esc([assignmentTitle(row), formatDate(completionDateValue(row), "")].filter(Boolean).join(" - "))}</small>
-          </div>
-          <label class="pm-quality-rating-field">
-            <span>Star Rating</span>
-            <input type="hidden" name="rating" value="" required />
-            <div class="pm-quality-stars" role="group" aria-label="Choose a star rating">${renderStarRatingButtons(0)}</div>
-          </label>
-          <label>
-            <span>Optional Feedback Notes</span>
-            <textarea name="message" rows="4" placeholder="Anything our team should know about this completed unit?"></textarea>
-          </label>
-          <div class="pm-form-actions pm-quality-review-actions">
-            <button class="secondary-command-btn pm-compact-btn" type="button" data-pm-quality-review-later>Later</button>
-            <button class="new-btn pm-compact-btn" type="submit" ${state.qualityReviewSaving ? "disabled" : ""}>Submit Review</button>
-            <small class="${esc(statusClass)}">${esc(state.qualityReviewMessage)}</small>
-          </div>
-        </form>
-      </section>
-    </div>
-  `;
 }
 
 function renderAssignmentDetailsModal() {
@@ -2884,47 +2574,12 @@ function renderAssignmentDetailsCard(row, emptyTitle = "No request selected") {
         ${renderVideoSlot(before, "Before Video")}
         ${renderVideoSlot(after, "After Video")}
       </div>
-      ${renderCleanFeedbackForm(row)}
     </section>
   `;
 }
 
 function renderRequestDetails(row) {
   return renderAssignmentDetailsCard(row);
-}
-
-function renderCleanFeedbackForm(row) {
-  if (!row?.id) return "";
-  const statusClass = state.feedbackMessage ? (state.feedbackError ? "error" : "success") : "";
-  return `
-    <section class="pm-clean-feedback-panel">
-      <div>
-        <p class="pm-eyebrow">Clean Feedback / Complaints</p>
-        <h3>Tell Turnly what needs attention</h3>
-        <p>Use this for missed areas, quality issues, access problems, or anything that should be corrected on this clean.</p>
-      </div>
-      <form id="managerCleanFeedbackForm" class="manager-message-form pm-clean-feedback-form" data-feedback-assignment-id="${esc(row.id)}">
-        <label>
-          <span>Feedback Type</span>
-          <select name="feedback_type">
-            <option value="complaint">Complaint / Needs Attention</option>
-            <option value="quality_issue">Quality Issue</option>
-            <option value="access_issue">Access Issue</option>
-            <option value="compliment">Compliment</option>
-            <option value="general">General Feedback</option>
-          </select>
-        </label>
-        <label>
-          <span>Feedback</span>
-          <textarea name="body" rows="4" placeholder="Describe exactly what happened, where the issue is, and what you want Turnly to review..." required></textarea>
-        </label>
-        <div class="pm-form-actions">
-          <button class="new-btn pm-compact-btn" type="submit" ${state.feedbackSaving ? "disabled" : ""}>Send Feedback</button>
-          <small class="${esc(statusClass)}">${esc(state.feedbackMessage)}</small>
-        </div>
-      </form>
-    </section>
-  `;
 }
 
 function renderScheduleView() {
@@ -2938,7 +2593,7 @@ function renderScheduleView() {
         ${renderScheduleSnapshotControls()}
         <strong class="pm-week-range">${esc(scheduleRangeLabel())}</strong>
       </div>
-      <div class="pm-schedule-view-tabs ${scheduleGuideTargetClass("selector")}" role="group" aria-label="Schedule view">
+      <div class="pm-schedule-view-tabs" role="group" aria-label="Schedule view">
         ${["day", "week", "month"].map((view) => `<button type="button" class="${state.scheduleView === view ? "active" : ""}" data-pm-schedule-view="${esc(view)}">${esc(titleCase(view))}</button>`).join("")}
       </div>
       ${renderNewTurnRequestButton("Request Turn")}
@@ -3075,7 +2730,7 @@ function renderScheduleEvent(row) {
   const unit = assignmentUnit(row);
   const subtitle = [unit ? `Unit ${unit}` : "", row.service_type].filter(Boolean).join(" - ");
   return `
-    <article class="schedule-event-card pm-schedule-event-card ${esc(requestGroup(row))} ${scheduleGuideTargetClass("assignment", row)}" data-manager-view-assignment="${esc(row.id || "")}" role="button" tabindex="0" aria-label="View details for ${esc(title)}.">
+    <article class="schedule-event-card pm-schedule-event-card ${esc(requestGroup(row))}" data-manager-view-assignment="${esc(row.id || "")}" role="button" tabindex="0" aria-label="View details for ${esc(title)}.">
       <div class="schedule-event-time">${esc(scheduleEventTime(row))}</div>
       <strong>${esc(title)}</strong>
       <p>${esc(subtitle || row.title || "Assignment")}</p>
@@ -3136,7 +2791,7 @@ function renderScheduleSnapshot() {
 function renderScheduleSnapshotControls() {
   ensureScheduleState();
   return `
-    <div class="pm-schedule-controls ${scheduleGuideTargetClass("date-controls")}" aria-label="Schedule date controls">
+    <div class="pm-schedule-controls" aria-label="Schedule date controls">
       <button type="button" aria-label="Previous schedule window" data-pm-schedule-shift="-1"></button>
       <input type="date" value="${esc(state.selectedScheduleDate)}" aria-label="Select schedule date" data-pm-schedule-date />
       <button type="button" aria-label="Next schedule window" data-pm-schedule-shift="1"></button>
@@ -3179,17 +2834,17 @@ function renderMessagesView() {
   return `
     ${renderPageHero("messages")}
     <section class="panel-card pm-messages-workspace">
-      <aside class="pm-message-sidebar ${scheduleGuideTargetClass("message-threads")}" aria-label="Open conversations">
+      <aside class="pm-message-sidebar" aria-label="Open conversations">
         <div class="pm-message-sidebar-head">
           <div>
             <h2>Open Conversations</h2>
             <p>${esc(integer(state.threads.length))} active</p>
           </div>
-          <button class="new-btn pm-message-compose-icon ${scheduleGuideTargetClass("message-compose")}" type="button" data-manager-message-compose aria-label="New message">${pmIcon("plus")}</button>
+          <button class="new-btn pm-message-compose-icon" type="button" data-manager-message-compose aria-label="New message">${pmIcon("plus")}</button>
         </div>
         ${renderManagerThreadList()}
       </aside>
-      <section class="pm-message-display ${scheduleGuideTargetClass("message-display")}" aria-label="Message display">
+      <section class="pm-message-display" aria-label="Message display">
         ${state.requestOpen ? renderNewMessageForm() : renderManagerConversation()}
       </section>
     </section>
@@ -3565,7 +3220,7 @@ function renderManagerConversation() {
     <div class="manager-message-bubbles">
       ${state.messages.length ? state.messages.map(renderManagerBubble).join("") : `<div class="manager-message-empty">No replies yet.</div>`}
     </div>
-    <form id="managerReplyForm" class="manager-message-form compact ${scheduleGuideTargetClass("message-reply")}">
+    <form id="managerReplyForm" class="manager-message-form compact">
       <label>
         <span>Reply</span>
         <textarea name="body" rows="3" placeholder="Type your reply..." required></textarea>
@@ -3796,193 +3451,6 @@ async function submitPropertyManagerUnit(form) {
   state.addUnitMessage = "";
   state.addUnitError = false;
   setManagerMessageStatus(`${unitName(saved) || unitNameValue} was added to this property and selected for the turn request.`);
-  renderManagerPortal();
-}
-
-async function submitCleanFeedback(form) {
-  if (!supabase || state.feedbackSaving) return;
-  const assignmentId = form.dataset.feedbackAssignmentId || state.selectedAssignmentId || "";
-  const row = state.assignments.find((assignment) => String(assignment.id || "") === String(assignmentId)) || null;
-  const feedbackType = form.elements.feedback_type?.value || "complaint";
-  const body = form.elements.body?.value?.trim() || "";
-  if (!assignmentId || !row) {
-    state.feedbackMessage = "Select an assignment before sending feedback.";
-    state.feedbackError = true;
-    renderManagerPortal();
-    return;
-  }
-  if (!body) {
-    state.feedbackMessage = "Add the feedback details before sending.";
-    state.feedbackError = true;
-    renderManagerPortal();
-    return;
-  }
-
-  state.feedbackSaving = true;
-  state.feedbackMessage = "Sending feedback to Turnly...";
-  state.feedbackError = false;
-  renderManagerPortal();
-
-  const feedbackPayload = {
-    assignment_id: assignmentId,
-    portal_property_id: state.property?.id || row.portal_property_id || rowMeta(row).portal_property_id || null,
-    property_name: assignmentTitle(row) || propertyTitle(),
-    unit_number: assignmentUnit(row) || "",
-    feedback_type: feedbackType,
-    message: body
-  };
-
-  let result = await supabase.rpc("create_property_manager_clean_feedback", {
-    feedback_payload: feedbackPayload
-  });
-
-  if (result.error && /function|schema cache|create_property_manager_clean_feedback/i.test(result.error.message || "")) {
-    result = await supabase
-      .from("property_manager_clean_feedback")
-      .insert({
-        assignment_id: feedbackPayload.assignment_id,
-        portal_property_id: feedbackPayload.portal_property_id,
-        property_name: feedbackPayload.property_name,
-        unit_number: feedbackPayload.unit_number,
-        feedback_type: feedbackPayload.feedback_type,
-        message: feedbackPayload.message,
-        status: "open",
-        created_by: state.user?.id || null
-      })
-      .select("id")
-      .maybeSingle();
-  }
-
-  let sentThroughMessages = false;
-  if (result.error) {
-    const messageBody = [
-      `Feedback type: ${titleCase(feedbackType)}`,
-      `Property: ${feedbackPayload.property_name}`,
-      feedbackPayload.unit_number ? `Unit: ${feedbackPayload.unit_number}` : "",
-      `Assignment ID: ${feedbackPayload.assignment_id}`,
-      "",
-      feedbackPayload.message
-    ].filter((line) => line !== "").join("\n");
-
-    const fallback = await supabase.rpc("create_message_thread_v2", {
-      message_payload: {
-        recipient_ids: [],
-        subject: `Clean feedback - ${feedbackPayload.unit_number || feedbackPayload.property_name}`,
-        body: `[Clean Feedback / Complaints]\n\n${messageBody}`,
-        related_type: "assignment",
-        related_id: feedbackPayload.assignment_id,
-        related_title: `Clean feedback - ${feedbackPayload.unit_number || feedbackPayload.property_name}`
-      }
-    });
-
-    result = fallback;
-    sentThroughMessages = !fallback.error;
-  }
-
-  state.feedbackSaving = false;
-  if (result.error) {
-    state.feedbackMessage = `Unable to send feedback: ${result.error.message}`;
-    state.feedbackError = true;
-    renderManagerPortal();
-    return;
-  }
-
-  state.feedbackMessage = sentThroughMessages
-    ? "Feedback sent to Turnly as a message. Thank you."
-    : "Feedback sent to Turnly. Thank you.";
-  state.feedbackError = false;
-  if (sentThroughMessages) await loadManagerMessages();
-  renderManagerPortal();
-}
-
-async function submitQualityReview(form) {
-  if (!supabase || state.qualityReviewSaving) return;
-  const assignmentId = form.dataset.feedbackAssignmentId || state.qualityReviewAssignmentId || "";
-  const row = state.assignments.find((assignment) => String(assignment.id || "") === String(assignmentId)) || null;
-  const rating = Number(form.elements.rating?.value || 0);
-  const message = form.elements.message?.value?.trim() || "";
-  if (!assignmentId || !row) {
-    state.qualityReviewMessage = "Select a completed unit before sending the review.";
-    state.qualityReviewError = true;
-    renderManagerPortal();
-    return;
-  }
-  if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
-    state.qualityReviewMessage = "Choose a 1 to 5 star rating.";
-    state.qualityReviewError = true;
-    renderManagerPortal();
-    return;
-  }
-
-  state.qualityReviewSaving = true;
-  state.qualityReviewMessage = "Sending review...";
-  state.qualityReviewError = false;
-  renderManagerPortal();
-
-  const feedbackPayload = {
-    assignment_id: assignmentId,
-    portal_property_id: state.property?.id || row.portal_property_id || rowMeta(row).portal_property_id || null,
-    property_name: assignmentTitle(row) || propertyTitle(),
-    unit_number: assignmentUnit(row) || "",
-    rating,
-    message
-  };
-
-  let result = await supabase.rpc("create_property_manager_quality_review", {
-    feedback_payload: feedbackPayload
-  });
-
-  if (result.error && /function|schema cache|create_property_manager_quality_review/i.test(result.error.message || "")) {
-    result = await supabase
-      .from("property_manager_clean_feedback")
-      .insert({
-        assignment_id: feedbackPayload.assignment_id,
-        portal_property_id: feedbackPayload.portal_property_id,
-        property_name: feedbackPayload.property_name,
-        unit_number: feedbackPayload.unit_number,
-        feedback_type: "quality_review",
-        rating: feedbackPayload.rating,
-        message: feedbackPayload.message || null,
-        status: "new",
-        created_by: state.user?.id || null
-      })
-      .select("id")
-      .maybeSingle();
-  }
-
-  state.qualityReviewSaving = false;
-  if (result.error) {
-    state.qualityReviewMessage = `Unable to send review: ${result.error.message}`;
-    state.qualityReviewError = true;
-    renderManagerPortal();
-    return;
-  }
-
-  state.cleanReviews = dedupeRows([
-    {
-      id: result.data?.id || result.data || `local-${assignmentId}`,
-      assignment_id: assignmentId,
-      portal_property_id: feedbackPayload.portal_property_id,
-      property_name: feedbackPayload.property_name,
-      unit_number: feedbackPayload.unit_number,
-      feedback_type: "quality_review",
-      rating,
-      message,
-      status: "new",
-      created_by: state.user?.id || "",
-      created_by_name: getName(state.user, state.profile),
-      created_by_email: state.profile?.email || state.user?.email || "",
-      created_at: new Date().toISOString()
-    },
-    ...state.cleanReviews
-  ]);
-  state.qualityReviewSessionDismissedIds.delete(String(assignmentId));
-
-  const next = pendingQualityReviewAssignments()[0];
-  state.qualityReviewAssignmentId = next?.id || "";
-  state.qualityReviewOpen = Boolean(next);
-  state.qualityReviewMessage = next ? "" : "Review submitted. Thank you.";
-  state.qualityReviewError = false;
   renderManagerPortal();
 }
 
@@ -4350,23 +3818,6 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
-  if (event.target.closest("[data-pm-guide-skip]")) {
-    closeScheduleGuide(true);
-    renderManagerPortal();
-    return;
-  }
-
-  if (event.target.closest("[data-pm-guide-next]")) {
-    const steps = currentGuideSteps();
-    if (state.guideStep >= steps.length - 1) {
-      closeScheduleGuide(true);
-    } else {
-      state.guideStep += 1;
-    }
-    renderManagerPortal();
-    return;
-  }
-
   const accountWasOpen = state.accountMenuOpen;
   const accountWrap = event.target.closest(".pm-account-menu-wrap");
   if (!accountWrap && accountWasOpen) state.accountMenuOpen = false;
@@ -4384,34 +3835,6 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
-  const qualityStar = event.target.closest("[data-pm-quality-star]");
-  if (qualityStar) {
-    event.preventDefault();
-    const form = qualityStar.closest("#managerQualityReviewForm");
-    const rating = Number(qualityStar.dataset.pmQualityStar || 0);
-    if (form?.elements.rating) form.elements.rating.value = String(rating);
-    form?.querySelectorAll("[data-pm-quality-star]").forEach((button) => {
-      const buttonRating = Number(button.dataset.pmQualityStar || 0);
-      button.classList.toggle("is-selected", buttonRating <= rating);
-      button.textContent = buttonRating <= rating ? "★" : "☆";
-    });
-    state.qualityReviewMessage = "";
-    state.qualityReviewError = false;
-    return;
-  }
-
-  if (event.target.closest("[data-pm-quality-review-later]")) {
-    const row = selectedQualityReviewAssignment();
-    if (row?.id) state.qualityReviewSessionDismissedIds.add(String(row.id));
-    state.qualityReviewOpen = false;
-    state.qualityReviewAssignmentId = "";
-    state.qualityReviewMessage = "";
-    state.qualityReviewError = false;
-    maybeOpenQualityReviewPrompt();
-    renderManagerPortal();
-    return;
-  }
-
   if (event.target.closest("[data-pm-notifications]")) {
     writeNotificationClearedAt();
     window.location.hash = "messages";
@@ -4426,8 +3849,6 @@ document.addEventListener("click", async (event) => {
     event.preventDefault();
     const view = navLink.dataset.pmView || "overview";
     if (window.location.hash !== `#${view}`) window.location.hash = view;
-    state.guideOpen = false;
-    state.guideStep = 0;
     state.view = view;
     state.assignmentDetailsOpen = false;
     renderManagerPortal();
@@ -4447,8 +3868,6 @@ document.addEventListener("click", async (event) => {
     if (threadId) state.selectedThreadId = threadId;
     const view = viewButton.dataset.pmViewButton;
     window.location.hash = view;
-    state.guideOpen = false;
-    state.guideStep = 0;
     state.view = view;
     state.assignmentDetailsOpen = false;
     renderManagerPortal();
@@ -4632,11 +4051,8 @@ document.addEventListener("click", async (event) => {
 
   const assignmentDetailButton = event.target.closest("[data-manager-view-assignment]");
   if (assignmentDetailButton) {
-    if (state.guideOpen) closeScheduleGuide(true);
     state.selectedAssignmentId = assignmentDetailButton.dataset.managerViewAssignment || "";
     state.assignmentDetailsOpen = true;
-    state.feedbackMessage = "";
-    state.feedbackError = false;
     renderManagerPortal();
     return;
   }
@@ -4680,15 +4096,6 @@ document.addEventListener("input", (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && state.qualityReviewOpen) {
-    const row = selectedQualityReviewAssignment();
-    if (row?.id) state.qualityReviewSessionDismissedIds.add(String(row.id));
-    state.qualityReviewOpen = false;
-    state.qualityReviewAssignmentId = "";
-    renderManagerPortal();
-    return;
-  }
-
   if (event.key === "Escape" && state.assignmentDetailsOpen) {
     state.assignmentDetailsOpen = false;
     renderManagerPortal();
@@ -4708,8 +4115,6 @@ document.addEventListener("keydown", (event) => {
     event.preventDefault();
     state.selectedAssignmentId = assignmentCard.dataset.managerViewAssignment || "";
     state.assignmentDetailsOpen = true;
-    state.feedbackMessage = "";
-    state.feedbackError = false;
     renderManagerPortal();
   }
 });
@@ -4774,14 +4179,6 @@ document.addEventListener("submit", async (event) => {
   if (event.target.matches("#managerAddUnitForm")) {
     event.preventDefault();
     await submitPropertyManagerUnit(event.target);
-  }
-  if (event.target.matches("#managerCleanFeedbackForm")) {
-    event.preventDefault();
-    await submitCleanFeedback(event.target);
-  }
-  if (event.target.matches("#managerQualityReviewForm")) {
-    event.preventDefault();
-    await submitQualityReview(event.target);
   }
   if (event.target.matches("#managerReplyForm")) {
     event.preventDefault();
