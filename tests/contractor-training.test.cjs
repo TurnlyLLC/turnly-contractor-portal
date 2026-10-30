@@ -44,7 +44,7 @@ test('API blocks an approved contractor with unfinished training and fails close
  const {claim}=require('../api/contractor-claim-job.js'),id=randomUUID(),req={headers:{authorization:'Bearer test'}};
  let waived=false,offline=false,claimed=false;
  const rows=()=>Array.from({length:12},(_,i)=>({profile_id:id,module_number:i+1,lessons_done:0,score:0,waived}));
- const db={auth:{getUser:async()=>({data:{user:{id}}})},from:()=>({select(){return this},eq(){return this},maybeSingle:async()=>({data:{id,role:'contractor',status:'active'}}),single:async()=>({data:{contractor_approved:true,status:'active'}})}),rpc:async name=>name==='contractor_training_status'?{data:offline?null:rows(),error:offline?{}:null}:(claimed=true,{data:null})};
+ const db={auth:{getUser:async()=>({data:{user:{id}}})},from:table=>({select(){return this},eq(){return this},maybeSingle:async()=>({data:table==='contractor_background_checks'?{status:'approved',sync_state:'synced'}:{id,role:'contractor',status:'active'}}),single:async()=>({data:{contractor_approved:true,status:'active'}})}),rpc:async name=>name==='contractor_training_status'?{data:offline?null:rows(),error:offline?{}:null}:(claimed=true,{data:null})};
  const remote=async()=>({ok:true,json:async()=>({complete:true,items:[{required:true,state:'done'}]})});
  await assert.rejects(claim(db,req,{id:randomUUID()},remote),/Complete all required/);assert.equal(claimed,false);
  waived=true;await claim(db,req,{id:randomUUID()},remote);assert.equal(claimed,true);
