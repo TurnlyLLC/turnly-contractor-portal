@@ -1,9 +1,10 @@
+import {mountHourlyPay} from './crm-hourly-pay.mjs?v=20261030-review';
 import {startActivityClock} from './crm-activity-clock.mjs?v=20261030';
-import {mountProductivity} from './crm-productivity.mjs?v=20261030';
+import {mountProductivity} from './crm-productivity.mjs?v=20261030-review';
 let activityClock;
 import {mountTraining} from './crm-training.mjs?v=20261028-single-video';
 import {mountOnboarding} from './crm-onboarding.mjs?v=20261028-stages';
-import {mountEarnings} from './crm-earnings.mjs?v=20261030-pay';
+import {mountEarnings} from './crm-earnings.mjs?v=20261030-review';
 import {startMessageBadge,paintMessageBadge,refreshMessageBadge} from './crm-message-badge.mjs?v=20261021-desktop';
 import {mountDemandMap} from "./demand-map.mjs?v=20261027-status-rings";
 import {mountMessages} from './crm-messages.mjs?v=20261021-alerts';
@@ -1291,6 +1292,7 @@ function render() {
    const productivityRoot=document.createElement('div');productivityRoot.id='crmProductivity';document.querySelector('.sales-page-body')?.prepend(productivityRoot);
    void mountProductivity(productivityRoot,values=>onboardingRequest('productivity',values));
   }
+  const hourlyRoot=document.getElementById('crmHourlyPay');if(hourlyRoot)void mountHourlyPay(hourlyRoot,values=>onboardingRequest('hourly-pay',values));
   const earningsRoot=document.getElementById('crmEarnings');if(earningsRoot)void mountEarnings(earningsRoot,values=>onboardingRequest('earnings',values));
   const trainingRoot=document.getElementById('crmPlaybookTraining');if(trainingRoot)void mountTraining(trainingRoot,values=>onboardingRequest('training',values));
   const budgetRoot=document.getElementById('communicationBudget');
@@ -1436,7 +1438,7 @@ function renderLoading() {
 function renderPage() {
  if(state.page==='map')return isSalesAdmin()?'<div id="crmLeadMap"></div>':emptyState('Administrator access required','Open Overview for your results.');
  if(state.page==='onboarding')return '<div id="crmOnboarding"></div>';
- if(state.page==='earnings')return '<div id="crmEarnings"></div>';
+ if(state.page==='earnings')return '<div id="crmHourlyPay"></div><div id="crmEarnings"></div>';
  if(state.page==='messages')return '<div id="crmMessages"></div>';
  if(state.page==='communications')return isSalesAdmin()?'<div id="communicationBudget"></div>':emptyState('Administrator access required','Open Overview for your results.');
  if(state.page==='scripts')return renderScriptsPage();
