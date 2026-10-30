@@ -37,6 +37,7 @@ function createHandler(makeClient=createClient){return async(req,res)=>{
    const scoped=makeClient(url,process.env.SUPABASE_ANON_KEY,{...options,global:{headers:{Authorization:'Bearer '+session.access_token}}});
    const access=checked(await scoped.rpc('crm_access_state'));
    if(!access?.active||!access.session_valid){await db.auth.admin.signOut(session.access_token,'global');throw fail('This account does not have active CRM access. Contact your administrator.',403);}
+   if(!access.must_change_password)checked(await db.rpc('crm_track_activity',{p_user:user.id,p_session:require('../lib/crm-productivity.cjs').sessionId(session.access_token),p_action:'start',p_active:false,p_work:false}));
    return send(200,{session:{access_token:session.access_token,refresh_token:session.refresh_token},must_change_password:access.must_change_password});
   }
   const jwt=token(req);const auth=await db.auth.getUser(jwt);if(auth.error||!auth.data?.user)throw fail('Sign in to continue.',401);
