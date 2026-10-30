@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-admin-pwa-v20260831a";
+const CACHE_NAME = "turnly-admin-pwa-v20261030-photos";
 const APP_SHELL = [
   "/admin-pwa/",
   "/admin-pwa/index.html",
@@ -8,7 +8,8 @@ const APP_SHELL = [
   "/admin-pwa/people.html",
   "/admin-pwa/messages.html",
   "/admin-pwa/admin-pwa.css?v=20260831a",
-  "/admin-pwa/admin-pwa.js?v=20260831a",
+  "/admin-pwa/admin-pwa.js?v=20261030-photos",
+  "/admin-contractor-avatar.mjs?v=20261030",
   "/admin-pwa/manifest.webmanifest",
   "/env.js",
   "/favicon-32x32.png?v=20260624t",
@@ -39,7 +40,7 @@ self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return;
   const url = new URL(request.url);
-  if (url.origin !== location.origin || !url.pathname.startsWith("/admin-pwa/")) return;
+  if (url.origin !== location.origin || (!url.pathname.startsWith("/admin-pwa/") && url.pathname !== "/admin-contractor-avatar.mjs")) return;
 
   event.respondWith(
     fetch(request)

@@ -1,3 +1,4 @@
+import {contractorAvatar} from './admin-contractor-avatar.mjs?v=20261030';
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
 const env = window.__ENV || {};
@@ -619,7 +620,7 @@ function render() {
     <div class="contractor-file-hero">
       <div>
         <a class="secondary-action contractor-file-back" href="directory.html"><span>Back to Directory</span></a>
-        <h1>${esc(contractorName())}</h1>
+        <h1>${contractorAvatar({...state.profile,name:contractorName()},80)}${esc(contractorName())}</h1>
         <p>${esc([contractorEmail(), contractorPhone(), contractorCompany()].filter(Boolean).join(" - ") || "Contractor profile")}</p>
         <div class="contractor-file-badges">
           <span class="status-badge status-${esc(token(contractorStatus()))}">${esc(title(contractorStatus()))}</span>

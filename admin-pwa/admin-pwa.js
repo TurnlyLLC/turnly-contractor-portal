@@ -1,3 +1,4 @@
+import {contractorAvatar} from '../admin-contractor-avatar.mjs?v=20261030';
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
 const env = window.__ENV || {};
@@ -845,7 +846,7 @@ function personCard(row, role) {
     <article class="ap-list-item">
       <div class="ap-list-row">
         <div class="ap-assignment-main">
-          <strong>${esc(personName(row))}</strong>
+          ${role === "contractor" ? contractorAvatar(row) : ""}<strong>${esc(personName(row))}</strong>
           <small>${esc(row.email || "No email")}</small>
         </div>
         ${role === "contractor" ? statusBadge(approved ? "active" : "pending") : statusBadge(row.status || "active")}
