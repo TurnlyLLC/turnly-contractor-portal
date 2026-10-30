@@ -1,13 +1,17 @@
-#crmHourlyPay label,#crmEarnings label{display:flex;flex-direction:column;gap:8px;font-weight:600;max-width:440px}
-#crmHourlyPay input,#crmEarnings input,#crmEarnings select{min-height:44px;background:#fff;color:#163447;border:1px solid #bcced8;border-radius:9px;padding:10px 12px;font:inherit}
+:is(#crmHourlyPay,#crmBulkPay) label,#crmEarnings label{display:flex;flex-direction:column;gap:8px;font-weight:600;max-width:440px}
+:is(#crmHourlyPay,#crmBulkPay) input,#crmEarnings input,#crmEarnings select{min-height:44px;background:#fff;color:#163447;border:1px solid #bcced8;border-radius:9px;padding:10px 12px;font:inherit}
 .crm-pay-review-form,.crm-pay-actions{display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin:18px 0}
 .crm-pay-confirm{padding:22px;border:1px solid #b5d7d0;background:#f2faf7;border-radius:14px;margin-top:24px}
-#crmHourlyPay [data-feedback]{color:#086450;font-weight:600;margin-top:12px}
+:is(#crmHourlyPay,#crmBulkPay) [data-feedback]{color:#086450;font-weight:600;margin-top:12px}
 .crm-pay-paid{color:#087d65}
-#crmHourlyPay .sales-metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:18px}
-#crmHourlyPay .sales-table td,#crmEarnings .sales-table td{color:#163447!important;text-shadow:none}
-#crmHourlyPay .sales-table td strong,#crmEarnings .sales-table td strong{color:inherit!important;text-shadow:none}
-#crmHourlyPay .sales-table td small,#crmEarnings .sales-table td small{display:block;color:#526879!important;line-height:1.5}
-#crmHourlyPay .sales-table td .crm-pay-paid{color:#087d65!important}
-#crmHourlyPay .sales-primary-button,#crmEarnings .sales-primary-button{background:#087d70;color:#fff!important;border:1px solid #087d70}
-#crmHourlyPay .sales-secondary-button,#crmEarnings .sales-secondary-button{background:#fff;color:#163447!important;border:1px solid #bcced8}
+:is(#crmHourlyPay,#crmBulkPay) .sales-metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:18px}
+:is(#crmHourlyPay,#crmBulkPay) .sales-table td,#crmEarnings .sales-table td{color:#163447!important;text-shadow:none}
+:is(#crmHourlyPay,#crmBulkPay) .sales-table td strong,#crmEarnings .sales-table td strong{color:inherit!important;text-shadow:none}
+:is(#crmHourlyPay,#crmBulkPay) .sales-table td small,#crmEarnings .sales-table td small{display:block;color:#526879!important;line-height:1.5}
+:is(#crmHourlyPay,#crmBulkPay) .sales-table td .crm-pay-paid{color:#087d65!important}
+:is(#crmHourlyPay,#crmBulkPay) .sales-primary-button,#crmEarnings .sales-primary-button{background:#087d70;color:#fff!important;border:1px solid #087d70}
+:is(#crmHourlyPay,#crmBulkPay) .sales-secondary-button,#crmEarnings .sales-secondary-button{background:#fff;color:#163447!important;border:1px solid #bcced8}
+
+#crmBulkPay input[type=checkbox]{min-height:20px;width:20px;height:20px;accent-color:#087d70;cursor:pointer}
+.crm-bulk-kinds{display:flex;gap:24px;margin:18px 0}.crm-bulk-kinds label{flex-direction:row!important;align-items:center}
+#crmBulkPay button:disabled{opacity:.5;cursor:not-allowed}
