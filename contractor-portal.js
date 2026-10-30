@@ -285,6 +285,9 @@ function normalizeToken(value) {
 }
 
 function titleCase(value) {
+  if(value==="en_route"||value==="en-route")return "En route";
+  if(value==="in_progress"||value==="in-progress")return "Cleaning";
+  if(value==="qa_pending"||value==="qa-pending")return "Complete";
   return String(value || "")
     .replace(/[_-]+/g, " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -951,8 +954,8 @@ function assignmentActions(item, mode) {
   if (mode === "open") {
     actions.push(`<button type="button" class="cp-action" data-claim-assignment-id="${esc(item.id)}">Claim</button>`);
   }
-  if (mode === "mine" && ["open", "preferred-pending", "claimed", "scheduled"].includes(status)) {
-    actions.push(`<button type="button" class="cp-action" data-start-assignment-id="${esc(item.id)}">Start</button>`);
+  if (mode === "mine" && ["claimed", "scheduled", "en-route"].includes(status)) {
+    actions.push(`<button type="button" class="cp-action" data-start-assignment-id="${esc(item.id)}">${status === "en-route" ? "Start job" : "Head to job"}</button>`);
   }
   if (mode === "mine" && status === "in-progress") {
     actions.push(`<button type="button" class="cp-action" data-tj-open-checklist="${esc(item.id)}">Checklist</button>`);
@@ -1567,7 +1570,7 @@ function renderMyJobs() {
     <section class="cp-two-column">
       ${panel("Claimed Work", `
         <div class="cp-tabs">
-          ${["active", "claimed", "in_progress", "completed", "all"].map((status) => `<button class="cp-tab ${state.filters.myStatus === status ? "active" : ""}" type="button" data-my-status="${esc(status)}">${esc(titleCase(status))}</button>`).join("")}
+          ${["active", "claimed", "en_route", "in_progress", "completed", "all"].map((status) => `<button class="cp-tab ${state.filters.myStatus === status ? "active" : ""}" type="button" data-my-status="${esc(status)}">${esc(titleCase(status))}</button>`).join("")}
         </div>
         <div id="myAssignments" class="cp-job-list">${rows.length ? rows.map((item) => assignmentRow(item, "mine")).join("") : emptyState("No jobs match this view.")}</div>
       `)}
@@ -1583,8 +1586,8 @@ function filteredMyAssignments() {
   const term = state.filters.search.trim().toLowerCase();
   return state.myAssignments.filter((item) => {
     const status = normalizeToken(item.status);
-    if (state.filters.myStatus === "active" && ["completed", "cancelled", "declined"].includes(status)) return false;
-    if (!["active", "all"].includes(state.filters.myStatus) && normalizeToken(state.filters.myStatus) !== status) return false;
+    if (state.filters.myStatus === "active" && ["completed", "qa-pending", "cancelled", "declined"].includes(status)) return false;
+    if (!["active", "all"].includes(state.filters.myStatus) && normalizeToken(state.filters.myStatus) !== (status === "qa-pending" ? "completed" : status)) return false;
     if (!term) return true;
     return [item.title, item.property_name, item.address, item.service_type, assignmentUnitLabel(item), assignmentSquareFeetLabel(item), item.scope, item.special_instructions]
       .some((value) => String(value || "").toLowerCase().includes(term));
@@ -3069,6 +3072,10 @@ function attachEvents() {
 }
 
 attachEvents();
+window.addEventListener('turnly:job-progress', async () => {
+  if (!state.user || state.adminPreview) return;
+  try { await loadMyAssignments(); renderShell(); } catch { /* Keep the current view; reopening reloads it. */ }
+});
 applyDashboardTheme();
 renderShell();
 void loadData();

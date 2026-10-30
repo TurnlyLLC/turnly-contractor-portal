@@ -1,0 +1,25 @@
+const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
+const fail=(message,status=400)=>Object.assign(new Error(message),{status});
+const S={fail,checked:r=>{if(r.error)throw fail('Database error',503);return r.data;}};
+const onboard={module:{exports:{}},require:n=>n==='node:crypto'?require(n):{},Buffer};
+vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../lib/contractor-onboarding.cjs'),'utf8'),onboard);
+const context={module:{exports:{}},require:n=>n.endsWith('residential-server.cjs')?S:n.endsWith('agent-referrals.cjs')?{uuid:s=>/^[0-9a-f-]{36}$/.test(s)}:n.endsWith('contractor-onboarding.cjs')?onboard.module.exports:{key:s=>s,locate:async()=>({result:'not_found'})}};
+vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../api/contractor-job-progress.js'),'utf8'),context);
+const {progress}=context.module.exports;
+test('progress API authenticates ownership and trusts only server-sourced destination coordinates',async()=>{
+ const id='00000000-0000-0000-0000-000000000001',job={id,claimed_by:'worker',status:'claimed',site_latitude:35,site_longitude:-80,address:'123 Main St'},calls=[];
+ let profile={id:'worker',role:'contractor',status:'active'};
+ const db={auth:{getUser:async token=>token==='valid'?{data:{user:{id:'worker'}}}:{error:'bad'}},from(table){return {select(){return this},eq(){return this},maybeSingle:async()=>({data:table==='profiles'?profile:table==='assignment_blocks'?job:null})}},rpc:async(name,args)=>{calls.push(args);return {data:{...job,status:args.p_action==='head_to_job'?'en_route':'in_progress'}}}};
+ const req={headers:{authorization:'Bearer valid'}};
+ await assert.rejects(progress(db,{headers:{}},{id,action:'head_to_job'}),e=>e.status===401);
+ await assert.rejects(progress(db,{headers:{authorization:'Bearer invalid'}},{id,action:'head_to_job'}),e=>e.status===401);
+ job.claimed_by='other';await assert.rejects(progress(db,req,{id,action:'head_to_job'}),e=>e.status===403);job.claimed_by='worker';
+ assert.equal(calls.length,0);
+ const result=await progress(db,req,{id,action:'head_to_job',p_actor:'other',site_latitude:0,site_longitude:0});
+ assert.equal(calls[0].p_actor,'worker');assert.equal(calls[0].p_site_lat,35);assert.match(result.maps_url,/35%2C-80/);
+ await assert.rejects(progress(db,req,{id,action:'start_job'}),/Head to job/);
+ job.status='en_route';await assert.rejects(progress(db,req,{id,action:'start_job',position:{latitude:35,longitude:-80,accuracy:101,recorded_at:new Date().toISOString()}}),/precise location/);
+ await progress(db,req,{id,action:'start_job',position:{latitude:35,longitude:-80,accuracy:5,recorded_at:new Date().toISOString()}});assert.equal(calls.length,2);
+ job.site_latitude=null;job.site_longitude=null;
+ await assert.rejects(progress(db,req,{id,action:'start_job'}),/verified map location/);
+});

@@ -113,7 +113,7 @@ if (!supabase) {
       );
     } else {
       await import("./contractor-portal-20260708a.js");
-      await import("./contractor-job-flow-mobile.js?v=20261030-materials");
+      await import("./contractor-job-flow-mobile.js?v=20261030-travel");
     }
   }
 }
