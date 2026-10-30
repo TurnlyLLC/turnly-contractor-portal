@@ -1,3 +1,4 @@
+import { openProfilePhoto } from "./contractor-profile-photo.mjs?v=20261030-photo";
 import { propertyManagerNotesHtml } from "./property-manager-notes.mjs?v=20261027-notes";
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 import { canReleaseJob } from "./contractor-release-policy.mjs";
@@ -1039,15 +1040,21 @@ function topbar() {
 function profileAccountMenu(menuId = "cpProfileMenu") {
   return `
     <div id="${esc(menuId)}" class="cp-profile-menu" data-contractor-profile-menu ${state.profileMenuOpen ? "" : "hidden"}>
+      <button class="cp-profile-menu-action" type="button" data-contractor-photo ${state.adminPreview ? "disabled" : ""}>Profile picture</button>
       <button class="cp-profile-menu-action" type="button" data-contractor-logout>Sign Out</button>
     </div>
   `;
 }
 
+function profileAvatar() {
+  const url = state.profile?.avatar_url;
+  return url && /^https:\/\//.test(url) ? `<img src="${esc(url)}" alt="Your profile picture" style="width:100%;height:100%;object-fit:cover;border-radius:50%" />` : esc(initials());
+}
+
 function profileAccountTrigger(menuId = "cpProfileMenu") {
   return `
     <button class="cp-profile" type="button" data-contractor-profile-toggle aria-expanded="${state.profileMenuOpen ? "true" : "false"}" aria-controls="${esc(menuId)}">
-      <span class="cp-profile-avatar">${esc(initials())}</span>
+      <span class="cp-profile-avatar">${profileAvatar()}</span>
       <span>
         <strong>${esc(contractorName())}</strong>
         <small>Contractor</small>
@@ -1152,7 +1159,7 @@ function nativeHeader() {
   return `<header class="cp-native-header">
     <a class="cp-native-wordmark" href="${esc(contractorRoute("schedule", "pwa"))}" aria-label="Turnly Pro schedule"><strong>Turnly Pro</strong><span>CLEANERS</span></a>
     <span class="cp-native-tagline">CLEAN SPACES<br>BRIGHTER DAYS</span>
-    <section class="cp-profile-wrap"><button class="cp-native-account" type="button" data-contractor-profile-toggle aria-label="Your account" aria-expanded="${state.profileMenuOpen}" aria-controls="cpNativeAccount">${cpIcon("users")}</button>${profileAccountMenu("cpNativeAccount")}</section>
+    <section class="cp-profile-wrap"><button class="cp-native-account" type="button" data-contractor-profile-toggle aria-label="Your account" aria-expanded="${state.profileMenuOpen}" aria-controls="cpNativeAccount">${state.profile?.avatar_url ? profileAvatar() : cpIcon("users")}</button>${profileAccountMenu("cpNativeAccount")}</section>
   </header>`;
 }
 
@@ -2361,13 +2368,13 @@ async function loadData() {
 async function loadProfile() {
   let result = await supabase
     .from("profiles")
-    .select("full_name,email,role,status,allowed_regions,allowed_property_ids,allowed_property_names")
+    .select("full_name,email,role,status,avatar_url,avatar_path,allowed_regions,allowed_property_ids,allowed_property_names")
     .eq("id", state.user.id)
     .maybeSingle();
   if (result.error) {
     result = await supabase
       .from("profiles")
-      .select("full_name,email,role,status")
+      .select("full_name,email,role,status,avatar_url,avatar_path")
       .eq("id", state.user.id)
       .maybeSingle();
   }
@@ -2882,6 +2889,19 @@ function attachEvents() {
     if (logoutButton) {
       await supabase?.auth.signOut();
       window.location.href = contractorSurface === "pwa" ? "contractor-login.html" : "https://portal.turnlypros.com/";
+      return;
+    }
+
+    const photoButton = event.target.closest("[data-contractor-photo]");
+    if (photoButton) {
+      if (state.adminPreview || !state.user || !supabase) return;
+      state.profileMenuOpen = false;
+      renderShell();
+      openProfilePhoto({client:supabase,user:state.user,profile:state.profile,onSaved:photo=>{
+        state.profile={...state.profile,...photo};
+        if(window.turnlyContractorBootstrap)window.turnlyContractorBootstrap.profile=state.profile;
+        renderShell();
+      }});
       return;
     }
 
