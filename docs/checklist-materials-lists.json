@@ -1,0 +1,271 @@
+{
+  "standard": {
+    "version": 1,
+    "service": "standard",
+    "title": "Standard clean — packing list",
+    "groups": [
+      {
+        "title": "Equipment & reusable materials",
+        "items": [
+          {
+            "name": "Vacuum with floor, upholstery and crevice attachments",
+            "note": "Bring clean filters and an empty bag/bin; use the correct head for each surface."
+          },
+          {
+            "name": "Microfiber mop, clean pads and bucket",
+            "note": "Bring enough clean pads for the home and keep bathroom pads separate."
+          },
+          {
+            "name": "Broom and dustpan",
+            "note": "For loose debris and areas unsuitable for the vacuum."
+          },
+          {
+            "name": "Color-coded microfiber cloths and glass cloths",
+            "note": "Separate kitchen, bathroom and toilet cloths; pack clean replacements."
+          },
+          {
+            "name": "Non-scratch sponges, scrub pads and soft scrub brushes",
+            "note": "Use only on compatible finishes."
+          },
+          {
+            "name": "Dedicated toilet brush",
+            "note": "Keep separate from other cleaning tools."
+          },
+          {
+            "name": "Extendable duster",
+            "note": "For reachable fixtures, corners and surface dusting."
+          },
+          {
+            "name": "Cleaning caddy and labeled spray bottles",
+            "note": "Keep every product identified; bring manufacturer instructions/SDS access."
+          },
+          {
+            "name": "Charged phone with Turnly access and charger / power bank",
+            "note": "Needed for the checklist, notes, required walkthrough videos and any customer opt-out."
+          }
+        ]
+      },
+      {
+        "title": "Cleaning products",
+        "items": [
+          {
+            "name": "Surface-compatible all-purpose cleaner",
+            "note": "For washable counters and general surfaces."
+          },
+          {
+            "name": "Glass and mirror cleaner",
+            "note": "Use with a clean lint-free cloth."
+          },
+          {
+            "name": "pH-neutral floor cleaner",
+            "note": "Choose the product approved for the floor finish."
+          },
+          {
+            "name": "Bathroom / soap-scum cleaner",
+            "note": "Use a finish-compatible product for sinks, tubs and showers."
+          },
+          {
+            "name": "Toilet-bowl cleaner",
+            "note": "Use only as labeled; keep separate from other chemicals."
+          },
+          {
+            "name": "Mild dish detergent",
+            "note": "For compatible washable items and mild cleaning."
+          },
+          {
+            "name": "Surface-specific cleaner, if needed",
+            "note": "Bring stone-safe, wood-safe or stainless-steel products when those finishes are present."
+          },
+          {
+            "name": "EPA-registered kitchen / bathroom surface sanitizer",
+            "note": "The standard checklist includes sanitizing sinks and toilets. Use products labeled for those surfaces; clean first, observe label contact time and follow any food-contact rinse directions."
+          }
+        ]
+      },
+      {
+        "title": "Consumables & protection",
+        "items": [
+          {
+            "name": "Chemical-resistant gloves and label-required PPE",
+            "note": "Bring eye protection where the product label requires it."
+          },
+          {
+            "name": "Trash bags and replacement liners",
+            "note": "Match the sizes needed for the home."
+          },
+          {
+            "name": "Disposable towels and separate bags for used cloths",
+            "note": "Contain dirty materials separately from clean supplies."
+          },
+          {
+            "name": "Non-slip footwear and shoe covers where requested",
+            "note": "Use covers only where they do not create a slipping hazard."
+          }
+        ]
+      }
+    ],
+    "notes": [
+      "Pack enough product, cloths, pads and liners for the assigned home size and number of bathrooms. Check job-specific notes before traveling.",
+      "Follow product labels for dilution, PPE, ventilation, surface compatibility and any rinsing. Never mix cleaning chemicals.",
+      "Test unfamiliar products on an inconspicuous area. Respect homeowner product restrictions and document missing supplies in the checklist; contact Turnly if you cannot complete the assigned scope."
+    ]
+  },
+  "deep": {
+    "version": 1,
+    "service": "deep",
+    "title": "Deep clean — packing list",
+    "groups": [
+      {
+        "title": "Equipment & reusable materials",
+        "items": [
+          {
+            "name": "Vacuum with floor, upholstery and crevice attachments",
+            "note": "Bring clean filters and an empty bag/bin; use the correct head for each surface."
+          },
+          {
+            "name": "Microfiber mop, clean pads and bucket",
+            "note": "Bring enough clean pads for the home and keep bathroom pads separate."
+          },
+          {
+            "name": "Broom and dustpan",
+            "note": "For loose debris and areas unsuitable for the vacuum."
+          },
+          {
+            "name": "Color-coded microfiber cloths and glass cloths",
+            "note": "Separate kitchen, bathroom and toilet cloths; pack clean replacements."
+          },
+          {
+            "name": "Non-scratch sponges, scrub pads and soft scrub brushes",
+            "note": "Use only on compatible finishes."
+          },
+          {
+            "name": "Dedicated toilet brush",
+            "note": "Keep separate from other cleaning tools."
+          },
+          {
+            "name": "Extendable duster",
+            "note": "For reachable fixtures, corners and surface dusting."
+          },
+          {
+            "name": "Cleaning caddy and labeled spray bottles",
+            "note": "Keep every product identified; bring manufacturer instructions/SDS access."
+          },
+          {
+            "name": "Charged phone with Turnly access and charger / power bank",
+            "note": "Needed for the checklist, notes, required walkthrough videos and any customer opt-out."
+          }
+        ]
+      },
+      {
+        "title": "Cleaning products",
+        "items": [
+          {
+            "name": "Surface-compatible all-purpose cleaner",
+            "note": "For washable counters and general surfaces."
+          },
+          {
+            "name": "Glass and mirror cleaner",
+            "note": "Use with a clean lint-free cloth."
+          },
+          {
+            "name": "pH-neutral floor cleaner",
+            "note": "Choose the product approved for the floor finish."
+          },
+          {
+            "name": "Bathroom / soap-scum cleaner",
+            "note": "Use a finish-compatible product for sinks, tubs and showers."
+          },
+          {
+            "name": "Toilet-bowl cleaner",
+            "note": "Use only as labeled; keep separate from other chemicals."
+          },
+          {
+            "name": "Mild dish detergent",
+            "note": "For compatible washable items and mild cleaning."
+          },
+          {
+            "name": "Surface-specific cleaner, if needed",
+            "note": "Bring stone-safe, wood-safe or stainless-steel products when those finishes are present."
+          }
+        ]
+      },
+      {
+        "title": "Consumables & protection",
+        "items": [
+          {
+            "name": "Chemical-resistant gloves and label-required PPE",
+            "note": "Bring eye protection where the product label requires it."
+          },
+          {
+            "name": "Trash bags and replacement liners",
+            "note": "Match the sizes needed for the home."
+          },
+          {
+            "name": "Disposable towels and separate bags for used cloths",
+            "note": "Contain dirty materials separately from clean supplies."
+          },
+          {
+            "name": "Non-slip footwear and shoe covers where requested",
+            "note": "Use covers only where they do not create a slipping hazard."
+          }
+        ]
+      },
+      {
+        "title": "Additional deep-clean tools",
+        "items": [
+          {
+            "name": "Detail brushes and grout brush",
+            "note": "For edges, tracks and compatible grout."
+          },
+          {
+            "name": "Non-scratch plastic scraper",
+            "note": "For compatible surfaces only; no razor blades on delicate finishes."
+          },
+          {
+            "name": "Extra microfiber cloths, scrub pads and mop pads",
+            "note": "Allow for heavier buildup and more frequent changes."
+          },
+          {
+            "name": "Stable step stool and extension tools",
+            "note": "For safely reachable high areas within the assigned scope."
+          }
+        ]
+      },
+      {
+        "title": "Additional deep-clean chemicals",
+        "items": [
+          {
+            "name": "EPA-registered hard-surface sanitizer",
+            "note": "Required for deep cleans. Choose a product labeled for the intended surface and sanitizing use; clean first and keep the surface wet for the label contact time."
+          },
+          {
+            "name": "Food-contact surface sanitizer, where applicable",
+            "note": "Required when sanitizing food-contact surfaces. One product may cover both uses if its label permits; follow its food-contact directions and rinse requirements."
+          },
+          {
+            "name": "Surface-compatible degreaser",
+            "note": "For heavier kitchen grease; follow label dilution and rinse directions."
+          },
+          {
+            "name": "Limescale / mineral-deposit remover, where compatible",
+            "note": "Only for suitable fixtures and surfaces; do not use acidic products on natural stone or other acid-sensitive finishes."
+          },
+          {
+            "name": "Oven cleaner — only if interior oven cleaning is assigned",
+            "note": "Use only on an appliance/finish that permits it; check self-cleaning oven restrictions."
+          },
+          {
+            "name": "Specialty stain or grout cleaner — only if needed",
+            "note": "Use a compatible product within the checklist scope; do not combine it with other chemicals."
+          }
+        ]
+      }
+    ],
+    "notes": [
+      "Pack enough product, cloths, pads and liners for the assigned home size and number of bathrooms. Check job-specific notes before traveling.",
+      "Follow product labels for dilution, PPE, ventilation, surface compatibility and any rinsing. Never mix cleaning chemicals.",
+      "Test unfamiliar products on an inconspicuous area. Respect homeowner product restrictions and document missing supplies in the checklist; contact Turnly if you cannot complete the assigned scope.",
+      "Sanitizing and disinfecting are different claims. If the checklist specifically requires disinfection, bring an EPA-registered disinfectant labeled for that use and follow its full directions."
+    ]
+  }
+}
