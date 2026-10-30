@@ -23,7 +23,15 @@ async function loadAccount(){accountReady=false;try{
   accountReady=true;accountError='';render();
 }catch(e){accountError=e.message;session=null;sessionStorage.removeItem('turnly_academy_session');render();}}
 async function signOut(){try{await request('/auth/v1/logout',{method:'POST'})}catch{}session=null;accountReady=false;progress={};scores={};sessionStorage.removeItem('turnly_academy_session');render();}
-async function loadLessonVideo(){const player=document.getElementById('lesson-video'),status=document.getElementById('video-status');if(!player)return;try{const data=await request('/storage/v1/object/sign/turnly-academy/'+player.dataset.file,{method:'POST',body:JSON.stringify({expiresIn:3600})});if(!player.isConnected)return;player.src=SUPABASE_URL+'/storage/v1'+data.signedURL;player.hidden=false;status.textContent='';player.addEventListener('error',()=>{status.textContent='Playback could not load. Reload this lesson to refresh access.'},{once:true});}catch(e){if(status.isConnected)status.textContent='This video is not available yet, or your session needs to be renewed. The written lesson is below.';}}
+async function loadLessonVideo(){
+ const player=document.getElementById('lesson-video');if(!player)return;
+ globalThis.TurnlyTrainingVideo.mount(player,{status:document.getElementById('video-status'),retry:document.getElementById('video-retry'),source:async()=>{
+  const data=await request('/storage/v1/object/sign/turnly-academy/'+player.dataset.file,{method:'POST',body:JSON.stringify({expiresIn:3600})});
+  const path=data.signedURL||data.signedUrl;
+  if(!path)throw Error('Video access could not be renewed.');
+  return {url:path?.startsWith('https://')?path:SUPABASE_URL+'/storage/v1'+path,expiresAt:Date.now()+3600000};
+ }});
+}
 async function saveLessonCompletion(m,i){await request('/rest/v1/academy_learning_progress',{method:'POST',headers:{Prefer:'resolution=ignore-duplicates'},body:JSON.stringify({user_id:session.user.id,lesson_key:lessonKey(m,i)})});}
 async function savePracticeAttempt(m,score){await request('/rest/v1/academy_practice_attempts',{method:'POST',body:JSON.stringify({user_id:session.user.id,module_number:m.number,score})});}
 

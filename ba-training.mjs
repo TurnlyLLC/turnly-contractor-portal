@@ -1,3 +1,4 @@
+import './training-video.js?v=20261030-media';
 import {createClient} from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/+esm';
 import {shell,esc} from './ba-shell.mjs';
 import {bookingSlides,mountBookingSlides} from './ba-booking-slides.mjs';
@@ -12,16 +13,12 @@ async function api(action,values={}){
 }
 function notice(text){const el=document.querySelector('#baMessage');el.hidden=false;el.className='ba-note';el.textContent=text;}
 function player(media,lessonId,walkthrough=false){
- if(!media.video_path)return `<iframe class="ba-training-player" src="${esc(media.video_url)}?fullscreen=1" title="${esc(media.title)} video" allow="autoplay; fullscreen" allowfullscreen loading="lazy" referrerpolicy="no-referrer"></iframe>`;
+ if(!media.video_path)return `<p role="status">This lesson video is unavailable. Please contact Turnly support.</p>`;
  return `<div class="ba-video"><video class="ba-training-player ba-native-player" controls playsinline preload="metadata" data-lesson="${lessonId}" data-walkthrough="${walkthrough}" aria-label="${esc(media.title)} video" ${walkthrough?'poster="assets/ba-training/01-start.png"':lessonId==='onboarding'?'poster="assets/ba-training/portal/01-overview.png"':''}></video><p class="ba-media-status" role="status">Loading video…</p><button type="button" class="ba-secondary" data-retry-video hidden>Reload video</button></div>`;
 }
-async function loadPlayer(video){
- const box=video.closest('.ba-video'),status=box.querySelector('.ba-media-status'),retry=box.querySelector('button');
- status.textContent='Loading video…';retry.hidden=true;
- video.onloadedmetadata=()=>{status.textContent='Use the player controls for volume, playback speed and fullscreen.';};
- video.onerror=()=>{status.textContent='Video could not load. Reload it to refresh playback, or use the written lesson below.';retry.hidden=false;};
- retry.onclick=()=>loadPlayer(video);
- try{const r=await api('media',{lesson_id:video.dataset.lesson,walkthrough:video.dataset.walkthrough==='true'});if(video.isConnected)video.src=r.url;}catch(e){if(video.isConnected){status.textContent=e.message;retry.hidden=false;}}
+function loadPlayer(video){
+ const box=video.closest('.ba-video');
+ globalThis.TurnlyTrainingVideo.mount(video,{status:box.querySelector('.ba-media-status'),retry:box.querySelector('button'),source:()=>api('media',{lesson_id:video.dataset.lesson,walkthrough:video.dataset.walkthrough==='true'})});
 }
 function bookingGuide(){
  const w=state.course.walkthrough;

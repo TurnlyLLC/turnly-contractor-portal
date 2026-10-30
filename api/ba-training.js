@@ -12,7 +12,7 @@ module.exports=async(req,res)=>{
    const media=x.walkthrough===true&&lesson.id==='services'?walkthrough:lesson;
    if(!media.video_path)throw S.fail('This video is not available yet.',404);
    const signed=S.checked(await db.storage.from('turnly-academy').createSignedUrl(media.video_path,3600));
-   return S.json(res,200,{url:signed.signedUrl});
+   return S.json(res,200,{url:signed.signedUrl,expiresAt:Date.now()+3600000});
   }
   if(x.action==='course'){
    const progress=member?S.checked(await db.from('ba_training_progress').select('lesson_id,completed_at,score').eq('user_id',id).eq('course_version',course.version)):[];

@@ -1,3 +1,4 @@
+import './training-video.js?v=20261030-media';
 export async function mountTraining(root,request,{introOnly=false}={}){
  if(root.dataset.mounted)return;root.dataset.mounted='true';
  const videos=[...document.querySelectorAll('video[data-training-lesson]')];
@@ -28,6 +29,9 @@ export async function mountTraining(root,request,{introOnly=false}={}){
  for(const v of videos){
   const lesson=data.lessons.find(l=>l.id===v.dataset.trainingLesson);if(!lesson)continue;
   let session,starting=false;
+  const playback=document.createElement('div'),status=document.createElement('p'),retry=document.createElement('button');
+  status.setAttribute('role','status');retry.type='button';retry.className='sales-secondary-button';retry.textContent='Reload video';retry.hidden=true;
+  playback.append(status,retry);v.after(playback);globalThis.TurnlyTrainingVideo.mount(v,{status,retry});
   v.controls=true;
   const resume=()=>{if(!lesson.completed_at&&lesson.watched_seconds>0)v.currentTime=Math.min(lesson.watched_seconds,v.duration||lesson.seconds);};
   if(v.readyState)resume();else v.addEventListener('loadedmetadata',resume,{once:true});
