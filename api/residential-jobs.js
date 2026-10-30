@@ -5,6 +5,7 @@ module.exports=async(req,res)=>{
  if(!process.env.CRON_SECRET||!timingSafeEqual(Buffer.from(S.hash(req.headers.authorization||'')),Buffer.from(S.hash('Bearer '+process.env.CRON_SECRET))))return S.json(res,401,{error:'Unauthorized.'});
  try{const db=S.database(),jobs=await require('../lib/residential-jobs.cjs').syncBatch(db);let recurring;
   try{recurring=await require('../lib/customer-repeat-booking.cjs').renew(db);}catch{console.error('Recurring booking scheduling needs attention.');recurring={error:'Recurring booking scheduling needs attention; existing jobs were synchronized.'};}
-  return S.json(res,200,{...jobs,recurring});}
+  const feedback=await require('../lib/residential-feedback.cjs').sendPending(db);
+  return S.json(res,200,{...jobs,recurring,feedback});}
  catch{return S.json(res,503,{error:'Residential job synchronization needs attention.'});}
 };

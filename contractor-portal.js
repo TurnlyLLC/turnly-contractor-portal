@@ -1,3 +1,4 @@
+import {contractorTipsHtml} from './residential-tip-earnings.mjs?v=20261030';
 import { openProfilePhoto } from "./contractor-profile-photo.mjs?v=20261030-photo";
 import { propertyManagerNotesHtml } from "./property-manager-notes.mjs?v=20261027-notes";
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
@@ -2142,6 +2143,7 @@ function renderPayments() {
   return `
     ${contractorSurface === "pwa" ? renderNativeEarningsHero() : ""}
     ${renderPayMetrics({ accepted, owed, paid, completedYtd })}
+    ${panel("Customer tips · 100% yours",contractorTipsHtml(state.tips||[]))}
     <section class="cp-payments-layout">
       <div class="cp-stack">
         ${panel("Accepted Job Pay", renderPayJobList(accepted, "No accepted jobs with pay yet."))}
@@ -2362,6 +2364,7 @@ async function loadData() {
   if (['dashboard','my-jobs','schedule','payments','performance'].includes(pageKey)) tasks.push(loadMyAssignments());
   if (['schedule','resources'].includes(pageKey)) tasks.push(loadAvailability());
   if (pageKey === 'video-library') tasks.push(loadVideos());
+  if(pageKey === 'payments')tasks.push(loadTips());
   const results = await Promise.allSettled(tasks);
   if (results.some(r => r.status === 'rejected')) { state.message = 'Some information could not load. Refresh to retry.'; state.messageError = true; }
   state.loading = false;
@@ -3099,3 +3102,8 @@ window.addEventListener('turnly:job-progress', async () => {
 applyDashboardTheme();
 renderShell();
 void loadData();
+
+async function loadTips(){
+ const r=await supabase.from('residential_booking_tips').select('id,booking_id,amount_cents,net_cents,status,created_at,paid_at,paid_amount_cents,payment_reference').eq('contractor_id',state.user.id).order('created_at',{ascending:false}).limit(1000);
+ if(r.error)throw r.error;state.tips=r.data;
+}
