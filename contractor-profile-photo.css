@@ -1,0 +1,18 @@
+#contractorPhotoDialog{box-sizing:border-box;width:min(460px,calc(100% - 28px));max-height:calc(100dvh - 28px);overflow:auto;border:1px solid #16233b22;border-radius:22px;padding:24px;color:#16233b;background:#fff;box-shadow:0 20px 70px #08132744;font:15px/1.5 system-ui,sans-serif}
+#contractorPhotoDialog::backdrop{background:#0b172bcc}
+#contractorPhotoDialog *{box-sizing:border-box}
+.cp-photo-heading{display:flex;align-items:center;justify-content:space-between;gap:15px}
+.cp-photo-heading h2{font:700 26px/1.2 Georgia,serif;margin:0}
+#contractorPhotoDialog button{min-height:44px;border:1px solid #16233b33;background:#f5f5f2;border-radius:10px;color:#16233b;padding:10px 16px;cursor:pointer;font:600 14px system-ui}
+#contractorPhotoDialog button:focus-visible{outline:3px solid #c9a24b;outline-offset:3px}
+#contractorPhotoDialog button:disabled{opacity:.5;cursor:default}
+.cp-photo-preview{width:180px;height:180px;border-radius:50%;overflow:hidden;display:grid;place-items:center;margin:22px auto;background:#f5f5f2;border:3px solid #c9a24b;color:#5b6474}
+.cp-photo-preview img{width:100%;height:100%;object-fit:cover}
+.cp-photo-preview [hidden]{display:none}
+.cp-photo-choices,.cp-photo-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.cp-photo-choices button{flex:1}
+.cp-photo-help{font-size:12px;color:#5b6474}
+.cp-photo-actions{justify-content:flex-end;margin-top:20px}
+#contractorPhotoDialog [data-save]{background:#16233b;color:#fff}
+#contractorPhotoDialog [data-status]{min-height:24px;font-size:14px}
+#contractorPhotoDialog .cp-photo-error{color:#a8402f}

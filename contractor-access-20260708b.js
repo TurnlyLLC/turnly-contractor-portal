@@ -207,8 +207,8 @@ async function renderPasswordChangeRequired(user) {
 
 async function loadContractorPortal(user, profile) {
   window.turnlyContractorBootstrap = {client:supabase,user,profile,previewChecked:true};
-  await import("./contractor-portal.js?v=20261030-travel");
-  await import("./contractor-job-flow-mobile.js?v=20261030-travel");
+  await import("./contractor-portal.js?v=20261030-travel-photo");
+  await import("./contractor-job-flow-mobile.js?v=20261030-travel-photo");
 }
 
 function redirectToMatchingContractorSurface() {
@@ -223,7 +223,7 @@ function redirectToMatchingContractorSurface() {
 async function getProfile(userId) {
   const { data, error } = await supabase
     .from("profiles")
-    .select("id,full_name,email,role,status,contractor_approved,allowed_regions,allowed_property_ids,allowed_property_names")
+    .select("id,full_name,email,role,status,avatar_url,avatar_path,contractor_approved,allowed_regions,allowed_property_ids,allowed_property_names")
     .eq("id", userId)
     .maybeSingle();
 

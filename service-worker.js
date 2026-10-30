@@ -1,6 +1,8 @@
-const CACHE_NAME = "turnly-contractor-pwa-v20261030-travel";
+const CACHE_NAME = "turnly-contractor-pwa-v20261030-travel-photo";
 
 const PRECACHE_URLS = [
+  "/contractor-profile-photo.mjs",
+  "/contractor-profile-photo.css",
   "/",
   "/index.html",
   "/offline.html",
