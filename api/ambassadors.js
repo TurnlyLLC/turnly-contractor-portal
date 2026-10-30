@@ -11,7 +11,7 @@ module.exports=async(req,res)=>{
    const m=await A.referralMember(db,x.code);
    if(!m)throw S.fail('This referral link is unavailable. Contact Turnly.',404);
    if(x.action==='register'){const c=A.contact(x);S.checked(await db.rpc('register_ba_lead',{p_code:m.code,p_name:c.name,p_email:c.email,p_phone:c.phone,p_consent:'referral-consent-2026-10-19'}));}
-   return S.json(res,200,{name:m.name,booking_url:'https://portal.turnlypros.com/residential-referral.html?ba='+encodeURIComponent(m.code)});
+   return S.json(res,200,{name:m.name,booking_url:'https://client.turnlypros.com/residential-referral.html?ba='+encodeURIComponent(m.code)});
   }
   if(x.action==='login'){
    await S.rate(db,req,'ba-login');

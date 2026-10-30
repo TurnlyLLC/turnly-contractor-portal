@@ -1,8 +1,8 @@
 # Turnly gift card program
 
-Purchase: https://portal.turnlypros.com/gift-cards.html
+Purchase: https://client.turnlypros.com/gift-cards.html
 Admin: https://portal.turnlypros.com/admin-gift-cards.html
-Terms: https://portal.turnlypros.com/gift-card-terms.html
+Terms: https://client.turnlypros.com/gift-card-terms.html
 
 Uses existing Stripe, Supabase and Resend configuration; never add service keys to browser code. Required environment names: STRIPE_SECRET_KEY (existing STRIP_SECRET_KEY fallback supported), STRIPE_WEBHOOK_SECRET, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (existing aliases supported), RESEND_API_KEY, REFERRAL_FROM_EMAIL, CRON_SECRET, RESIDENTIAL_PAYMENTS_ENABLED=true. Checkout requires the existing live payments configuration.
 

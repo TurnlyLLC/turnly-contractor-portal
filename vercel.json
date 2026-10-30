@@ -27,7 +27,9 @@
     }
   ],
   "functions": {
-    "api/admin-map.js": {"maxDuration": 60},
+    "api/admin-map.js": {
+      "maxDuration": 60
+    },
     "api/residential-charge.js": {
       "maxDuration": 300
     },
@@ -82,6 +84,30 @@
       "has": [
         {
           "type": "host",
+          "value": "client.turnlypros.com"
+        }
+      ],
+      "dest": "/customer.html"
+    },
+    {
+      "src": "^/(?:customer|residential-referral|gift-cards|gift-card-terms|crm-unsubscribe)\\.html$",
+      "has": [
+        {
+          "type": "host",
+          "value": "portal.turnlypros.com"
+        }
+      ],
+      "headers": {
+        "Cache-Control": "no-store",
+        "Referrer-Policy": "no-referrer"
+      },
+      "dest": "/client-redirect.html"
+    },
+    {
+      "src": "^/(?:index\\.html)?$",
+      "has": [
+        {
+          "type": "host",
           "value": "ba.turnlypros.com"
         }
       ],
@@ -97,7 +123,7 @@
       ],
       "status": 307,
       "headers": {
-        "Location": "https://portal.turnlypros.com/residential-referral.html?ba=$1"
+        "Location": "https://client.turnlypros.com/residential-referral.html?ba=$1"
       }
     },
     {

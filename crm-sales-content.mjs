@@ -1,4 +1,4 @@
-export const GIFT_CARD_URL = 'https://portal.turnlypros.com/gift-cards.html';
+export const GIFT_CARD_URL = 'https://client.turnlypros.com/gift-cards.html';
 export const RESIDENTIAL_URL = 'https://res.turnlypros.com/';
 export const PRODUCT_FACTS = [
   '$100 per individual card. Multiple cards may be purchased; the current checkout accepts 1–25 cards per order.',

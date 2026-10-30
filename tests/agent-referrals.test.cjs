@@ -16,7 +16,7 @@ test('short links losslessly preserve every referral bit and reject malformed al
   assert.equal(referralCodeFromSlug('A'.repeat(21)+'B'),null,'noncanonical base64 must not alias another agent');
   const handler=require('../api/agent-link.js');let location;const res={setHeader(k,v){if(k==='Location')location=v},end(){}};
   handler({method:'GET',url:'/api/agent-link?slug='+referralUrl('TA-'+'A'.repeat(32)).split('/').at(-1)},res);
-  assert.equal(res.statusCode,302);assert.equal(location,'https://portal.turnlypros.com/residential-referral.html?ref=TA-'+'A'.repeat(32));
+  assert.equal(res.statusCode,302);assert.equal(location,'https://client.turnlypros.com/residential-referral.html?ref=TA-'+'A'.repeat(32));
 });
 
 test('CSV preserves quoted names, multiline notes and normalizes common headers',async()=>{
