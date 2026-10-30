@@ -40,7 +40,8 @@ async function bootstrapPortalAccount(){
  const {createClient}=await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/+esm');
  const client=createClient(SUPABASE_URL,SUPABASE_KEY);
  const result=await client.auth.getSession();
- session=result.data?.session||null;
+ // Keep a direct Academy login when no separate portal session exists.
+ session=result.data?.session||session;
  const requested=Number(new URLSearchParams(location.search).get('module'));
  if(requested>=1&&requested<=12){current=requested-1;page='course';}
  if(session)await loadAccount();

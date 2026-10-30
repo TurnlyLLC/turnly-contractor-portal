@@ -24,3 +24,10 @@ test('all BA lessons and walkthroughs use stored MP4s, never third-party iframe 
  assert.doesNotMatch(fs.readFileSync('ba-training.mjs','utf8'),/<iframe/);
  assert.match(fs.readFileSync('contractor-academy/index.html','utf8'),/training-video.js/);
 });
+test('Academy reload retains its own login without a portal session, and still validates it',async()=>{
+ const saved={access_token:'fixture-only',expires_at:9999999999};let validated=false;
+ const ctx={sessionStorage:{getItem:()=>JSON.stringify(saved)},portalClient:{auth:{getSession:async()=>({data:{session:null}})}},location:{search:''},URLSearchParams,render:()=>{},current:0,page:'home'};
+ const script=fs.readFileSync('contractor-academy/account.js','utf8').replace("import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/+esm')","Promise.resolve({createClient:()=>portalClient})");
+ vm.createContext(ctx);vm.runInContext(script,ctx);ctx.validated=()=>{validated=true;};vm.runInContext('loadAccount=async()=>validated();',ctx);await vm.runInContext('bootstrapPortalAccount()',ctx);
+ assert.equal(vm.runInContext('session.access_token',ctx),'fixture-only');assert.equal(validated,true);
+});
