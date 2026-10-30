@@ -12,10 +12,10 @@ module.exports=async(req,res)=>{
   const db=S.database(),obj=event.data.object;
   if(['checkout.session.completed','checkout.session.async_payment_succeeded'].includes(event.type)){if(!await G.fulfill(db,st,obj.id)&&!await require('../lib/customer-portal.cjs').completeCard(db,st,obj.id))await S.reconcileSession(db,st,obj.id);}
   else if(await G.purchaseEvent(db,st,obj)){}
-  else if(event.type.startsWith('payment_intent.'))await S.reconcilePayment(db,st,obj.id);
+  else if(event.type.startsWith('payment_intent.')){if(!await require('../lib/residential-feedback.cjs').reconcile(db,st,obj.id))await S.reconcilePayment(db,st,obj.id);}
   else if(['charge.refunded','charge.dispute.created','charge.dispute.closed'].includes(event.type)){
    let pi=obj.payment_intent;if(!pi&&obj.charge){const c=await st.charges.retrieve(typeof obj.charge==='string'?obj.charge:obj.charge.id);pi=c.payment_intent;}
-   if(pi)await S.reconcilePayment(db,st,typeof pi==='string'?pi:pi.id);
+   if(pi){const id=typeof pi==='string'?pi:pi.id;if(!await require('../lib/residential-feedback.cjs').reconcile(db,st,id))await S.reconcilePayment(db,st,id);}
   }
   return S.json(res,200,{received:true});
  }catch{return S.json(res,500,{error:'Event could not be saved. Retry required.'});}

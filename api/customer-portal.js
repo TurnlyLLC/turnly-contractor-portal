@@ -45,7 +45,10 @@ module.exports=async(req,res)=>{
    const activity=S.checked(await P.query(db,scope,'id,service_date,created_at,paid_at,completed_at,payment_status,status,amount_cents,gift_applied_cents').order('created_at',{ascending:false}).limit(30));
    const legacyPlans=a.uid?S.checked(await db.from('residential_plan_enrollments').select('id,frequency,price_cents,status,created_at').eq('user_id',a.uid).order('created_at',{ascending:false})):[];
    const plans=[...legacyPlans,...S.checked(await db.from('customer_recurring_plans').select('id,frequency,price_cents,status,created_at,review_reason').eq(a.uid?'user_id':'account_id',a.id).order('created_at',{ascending:false})).map(p=>({...p,portal_plan:true}))];
-   return S.json(res,200,{account:{name:a.name,email:a.email,kind:a.kind},bookings:await P.present(db,result.data),next:(await P.present(db,next))[0]||null,activity,plans,page,total:result.count});
+   const completed=S.checked(await P.query(db,scope,'id,service_date').eq('status','completed').order('completed_at',{ascending:false}).limit(20));
+   const waiting=completed.length?S.checked(await db.from('residential_feedback').select('booking_id').in('booking_id',completed.map(x=>x.id)).is('submitted_at',null)):[];
+   const feedback_due=completed.filter(b=>waiting.some(f=>f.booking_id===b.id));
+   return S.json(res,200,{account:{name:a.name,email:a.email,kind:a.kind},feedback_due,bookings:await P.present(db,result.data),next:(await P.present(db,next))[0]||null,activity,plans,page,total:result.count});
   }
   if(input.action==='profile'){
    const name=clean(input.name,160);if(!name)throw S.fail('Enter your name.');
@@ -62,6 +65,10 @@ module.exports=async(req,res)=>{
    return S.json(res,200,{messages:r.map(x=>({id:x.id,created_at:x.created_at,message:x.payload.lead_notes}))});
   }
   const b=await P.owned(db,scope,input.id);
+  if(['feedback_save','tip','tip_status','tip_auth'].includes(input.action)){
+   await S.rate(db,req,'customer-feedback');
+   return S.json(res,200,await require('../lib/residential-feedback.cjs').run(db,b,input));
+  }
   if(input.action==='quote'){
    await S.rate(db,req,'customer-quote');
    return S.json(res,200,{quote:await Repeat.quote(db,b,input),options:Object.fromEntries(['once','monthly','biweekly','weekly'].map(f=>[f,Repeat.price(b,{service:'standard',frequency:f,sqft:input.sqft})])),card_saved:!!b.stripe_payment_method});
@@ -92,6 +99,7 @@ module.exports=async(req,res)=>{
   }
   if(input.action==='detail'){
    const booking=(await P.present(db,[b],true))[0];
+   booking.aftercare=await require('../lib/residential-feedback.cjs').detail(db,b);
    booking.video_consent=S.checked(await db.from('assignment_video_consents').select('id,assignment_id,customer_name,signature,consent_text,consent_version,signed_at').eq('assignment_id',b.id).maybeSingle());
    return S.json(res,200,{booking});
   }
