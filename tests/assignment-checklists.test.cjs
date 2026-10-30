@@ -101,7 +101,7 @@ test('assignment checklist editing and independent whole checklist duplication',
     await page.evaluate(()=>window.checklistTest.open(window.db.assignment));
     await page.locator('#assignmentChecklistSelect').waitFor();
     assert.match(await page.locator('#assignmentChecklistEditor').innerText(),/Full Turnover/);
-    await page.locator('#assignmentChecklistEditor summary').click();
+    await page.locator('#assignmentChecklistEditor summary').filter({hasText:'View attached checklist'}).click();
     assert.match(await page.locator('#assignmentChecklistEditor').innerText(),/Original task/);
     assert.equal(await page.evaluate(()=>window.checklistTest.patch()),null);
     await page.locator('#assignmentChecklistSelect').selectOption('template-two');
@@ -162,7 +162,7 @@ test('assignment checklist editing and independent whole checklist duplication',
     await page.setViewportSize({width:1440,height:1100});
     await page.evaluate(()=>{
       window.db.assignment={id:'residential-one',title:'Home clean',status:'open',property_name:'Residential - Jane Doe',address:'1 Test Lane',service_type:'Deep clean',pay_amount:80,start_window:'2026-10-12T13:00:00Z',end_window:'2026-10-12T17:00:00Z',metadata:{source:'residential_booking',customer_name:'Jane Doe',beds:3,baths:2},property_checklist_items:[]};
-      window.db.templates.push({...window.db.templates[0],id:'residential-template',name:'3 Bed / 2 Bath'});
+      window.db.templates.push({...window.db.templates[0],id:'residential-template',name:'3 Bed / 2 Bath',scope_type:'residential',residential_service:'deep',residential_beds:3,residential_baths:2});
       window.checklistTest.open(window.db.assignment);
     });
     await page.locator('#assignmentChecklistSelect').waitFor();

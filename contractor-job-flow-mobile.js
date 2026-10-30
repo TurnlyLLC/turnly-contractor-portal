@@ -1,3 +1,4 @@
+import { showMaterials } from "./checklist-materials.mjs?v=20261030-materials";
 import { propertyManagerNotesHtml } from "./property-manager-notes.mjs?v=20261027-notes";
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 import {videoConsentItem, videoConsentRequest, collectVideoConsent, consentRecordHtml} from './video-consent.mjs?v=20261026-signature-app';
@@ -2673,7 +2674,8 @@ function ensureStartModal() {
           </div>
 
           <div class="tj-section">
-            <h3>Property</h3>
+            <h3>Before you begin</h3>
+            <button class="tj-row" type="button" id="tjMaterials"><strong>Materials &amp; chemicals</strong><span class="tj-row-arrow" aria-hidden="true">&rsaquo;</span></button>
             <button class="tj-row" type="button" data-tj-detail="issues" aria-expanded="false" aria-controls="tjIssuesPanel"><strong>Issues</strong><span class="tj-row-arrow" aria-hidden="true">&rsaquo;</span></button>
             <div id="tjIssuesPanel" class="tj-detail-panel" data-tj-panel="issues" hidden></div>
             <button class="tj-row" type="button" data-tj-detail="property" aria-expanded="false" aria-controls="tjPropertyPanel"><strong>Property details</strong><span class="tj-row-arrow" aria-hidden="true">&rsaquo;</span></button>
@@ -2706,6 +2708,7 @@ function ensureStartModal() {
   });
   document.getElementById("tjUseLocation")?.addEventListener("click", captureLocation);
   document.getElementById("tjStart")?.addEventListener("click", startJob);
+  document.getElementById("tjMaterials")?.addEventListener("click", () => showMaterials(activeAssignment));
   modal.addEventListener("click", (event) => {
     const detailButton = event.target.closest("[data-tj-detail]");
     if (detailButton && modal.contains(detailButton)) {
@@ -2790,6 +2793,7 @@ async function openStartModal(assignmentId) {
   document.getElementById("tjLocation").textContent = "Location is optional. You can start this job now.";
   setStartDetailPanel("property");
   modal.hidden = false;
+  showMaterials(activeAssignment);
   resolveSite(activeAssignment);
 }
 

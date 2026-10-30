@@ -26,7 +26,7 @@ import {
   normalizeAssignmentQrTrackerId
 } from "./assignment-qr-policy.js?v=20260929-qr-policy";
 
-import { createAssignmentChecklistEditor } from "./assignment-checklist-editor.mjs?v=20261026-sync";
+import { createAssignmentChecklistEditor } from "./assignment-checklist-editor.mjs?v=20261030-materials";
 
 const suiteEnv = window.__ENV || {};
 const suiteSupabase = suiteEnv.SUPABASE_URL && suiteEnv.SUPABASE_ANON_KEY

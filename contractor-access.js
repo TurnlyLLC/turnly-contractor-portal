@@ -184,7 +184,7 @@ async function renderPasswordChangeRequired(user) {
 
 async function loadContractorPortal() {
   await import("./contractor-portal.js?v=20260909-contractor-neon-dashboard");
-  await import("./contractor-job-flow-mobile.js?v=20261008-checklists");
+  await import("./contractor-job-flow-mobile.js?v=20261030-materials");
 }
 
 async function getProfile(userId) {

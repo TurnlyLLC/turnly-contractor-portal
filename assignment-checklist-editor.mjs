@@ -1,3 +1,4 @@
+import { materialsHtml } from "./checklist-materials.mjs?v=20261030-materials";
 import { isResidentialAssignment, residentialCounts, matchingResidentialChecklist } from "./residential-assignment.mjs?v=20261026-sync";
 import {consentRecordHtml} from './video-consent.mjs?v=20261026-video';
 const itemsOf = (row) => Array.isArray(row?.checklist_items) ? row.checklist_items : [];
@@ -79,6 +80,7 @@ export function createAssignmentChecklistEditor(client, flatten) {
         <p><strong>${esc(name)}</strong> · ${items.length} item${items.length === 1 ? '' : 's'}</p>
         <p>${esc(items.length ? source : 'Choose a saved checklist for this request.')}</p><p>Template edits sync to active requests. Unchanged task progress is retained; completed records remain unchanged.</p>
         ${preview(items, 'View attached checklist')}
+        <details><summary>Materials &amp; chemicals</summary>${materialsHtml(fresh.materials_list, fresh.supplies_notes)}</details>
         ${checklistLocked(fresh) ? '<p>This checklist is read-only because the assignment is completed, submitted for review, or cancelled.</p>' : `
         <label class="suite-field"><span>Change checklist</span><select id="assignmentChecklistSelect">
           <option value="">Keep current checklist</option>
@@ -92,6 +94,7 @@ export function createAssignmentChecklistEditor(client, flatten) {
         const next = selected ? flatten(selected) : [];
         document.getElementById('assignmentChecklistReplacement').innerHTML = selected
           ? `${preview(next, 'Preview replacement checklist', true)}
+             <details><summary>Materials included with this checklist</summary>${materialsHtml(selected.materials_list)}</details>
              ${!next.length ? '<p role="alert">This checklist has no tasks. Add tasks before assigning it.</p>' : ''}
              ${hasProgress(fresh) ? '<label class="checkbox-field"><input id="assignmentChecklistReset" type="checkbox" /> <span>Replace this checklist and reset its progress. Previous responses will be kept in assignment history. The contractor must reopen the job.</span></label>' : ''}`
           : '';
