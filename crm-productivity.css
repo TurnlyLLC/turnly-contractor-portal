@@ -1,0 +1,9 @@
+#crmProductivity label{display:flex;flex-direction:column;gap:6px;font-weight:600;color:#173d50}
+#crmProductivity input,#crmProductivity select{box-sizing:border-box;font:inherit;color:#173d50;background:#fff;border:1px solid #b9cbd5;border-radius:9px;padding:10px 12px;min-height:44px;max-width:100%}
+#crmProductivity [hidden]{display:none!important}
+#crmProductivity summary{cursor:pointer;font-weight:650;color:#087b73;padding:8px 0}
+#crmProductivity .sales-metric-grid{grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:18px;margin:20px 0}
+#crmProductivity h3{margin:6px 0 12px}
+#crmProductivity [data-feedback]:not(:empty){margin:16px 0;padding:12px;background:#e6f5ef;color:#146048;border-radius:8px}
+#crmProductivity [data-plan]{padding:16px;background:#f5f9fa;border-radius:12px}
+#crmProductivity [data-plan] [role=status]{color:#9b2437}

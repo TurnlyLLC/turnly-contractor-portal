@@ -1,6 +1,9 @@
+import {startActivityClock} from './crm-activity-clock.mjs?v=20261030';
+import {mountProductivity} from './crm-productivity.mjs?v=20261030';
+let activityClock;
 import {mountTraining} from './crm-training.mjs?v=20261028-single-video';
 import {mountOnboarding} from './crm-onboarding.mjs?v=20261028-stages';
-import {mountEarnings} from './crm-earnings.mjs?v=20261027-onboarding';
+import {mountEarnings} from './crm-earnings.mjs?v=20261030-pay';
 import {startMessageBadge,paintMessageBadge,refreshMessageBadge} from './crm-message-badge.mjs?v=20261021-desktop';
 import {mountDemandMap} from "./demand-map.mjs?v=20261027-status-rings";
 import {mountMessages} from './crm-messages.mjs?v=20261021-alerts';
@@ -61,7 +64,7 @@ const pageConfig = {
 
 Object.assign(pageConfig,{communications:{title:'Calling & texting',subtitle:'Budgets, usage and outreach controls.'},pipeline:{title:"Deal pipeline",subtitle:"Move opportunities forward, one meaningful conversation at a time."},contacts:{title:"Contacts",subtitle:"The people and properties behind every relationship."},quotes:{title:"Proposals",subtitle:"Prepare, review, and follow up on your quotes."},contracts:{title:"Closing",subtitle:"Track management review, contracts, and won business."},team:{title:"Team",subtitle:"Ownership, workload, and results across your sales team."}});
 pageConfig.onboarding={title:'Onboarding',subtitle:'A short introduction, your playbook, and your seller agreement.'};
-pageConfig.earnings={title:'Earnings',subtitle:'First-purchase commissions, approvals, and payment records.'};
+pageConfig.earnings={title:'Earnings',subtitle:'Your productivity, hourly earnings, commissions and payment records.'};
 pageConfig.messages={title:'Messages',subtitle:'Stay connected with Turnly admin and your sales team.'};
 pageConfig.map={title:'Realtor lead map',subtitle:'Explore outreach coverage and find your next market.'};
 const navItems = [
@@ -1175,6 +1178,7 @@ async function requireSalesAccess() {
   if(crmError||!crmAccess?.active||!crmAccess.session_valid){window.location.href='sales-login.html';return false;}
   if(crmAccess.must_change_password){window.location.href='crm-password.html';return false;}
   state.profile = effectiveProfile || { role };
+  if(!state.adminPreview&&!activityClock){activityClock=await startActivityClock(supabase,state.page);if(activityClock.closed)return false;}
   if(role!=='admin'&&!state.adminPreview){
    const {data:session}=await supabase.auth.getSession();
    const response=await crmFetch('/api/crm-onboarding',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.session.access_token},body:JSON.stringify({action:'status'})});
@@ -1283,6 +1287,10 @@ function render() {
   paintMessageBadge();
   const onboardingRequest=async(kind,values)=>{const {data}=await supabase.auth.getSession();if(!data?.session)throw Error('Sign in again.');const response=await fetch('/api/crm-'+kind,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+data.session.access_token},body:JSON.stringify(values)});const result=await response.json();if(!response.ok)throw Error(result.error||'Unable to save.');return result;};
   const onboardingRoot=document.getElementById('crmOnboarding');if(onboardingRoot)void mountOnboarding(onboardingRoot,onboardingRequest);
+  if(!state.loading&&!state.loadFailed&&['team','earnings'].includes(state.page)&&(state.page!=='team'||isSalesAdmin())){
+   const productivityRoot=document.createElement('div');productivityRoot.id='crmProductivity';document.querySelector('.sales-page-body')?.prepend(productivityRoot);
+   void mountProductivity(productivityRoot,values=>onboardingRequest('productivity',values));
+  }
   const earningsRoot=document.getElementById('crmEarnings');if(earningsRoot)void mountEarnings(earningsRoot,values=>onboardingRequest('earnings',values));
   const trainingRoot=document.getElementById('crmPlaybookTraining');if(trainingRoot)void mountTraining(trainingRoot,values=>onboardingRequest('training',values));
   const budgetRoot=document.getElementById('communicationBudget');
@@ -4270,7 +4278,8 @@ function bindEvents() {
 
     if (target.closest("[data-sales-logout]")) {
       await autosaveFocusLead({ includeNote: true });
-      await supabase?.auth.signOut();
+      try{await activityClock?.stop();}catch{}
+      await supabase?.auth.signOut({scope:'local'});
       window.location.href = "sales-login.html";
       return;
     }
