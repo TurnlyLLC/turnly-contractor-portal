@@ -1,3 +1,4 @@
+const Repeat=require('../lib/customer-repeat-booking.cjs'),Calendar=require('../lib/booking-calendar.cjs');
 const S=require('../lib/residential-server.cjs');
 const A=require('../lib/residential-accounts.cjs');
 const P=require('../lib/customer-portal.cjs');
@@ -26,6 +27,15 @@ module.exports=async(req,res)=>{
    A.setCookie(res,'',0);const first=res.getHeader('Set-Cookie');P.appCookie(res,'',0);res.setHeader('Set-Cookie',[first,res.getHeader('Set-Cookie')]);return S.json(res,200,{ok:true});
   }
   const a=await P.identity(db,req),scope=await P.scope(db,a);
+  if(input.action==='booking_homes'){
+   const rows=S.checked(await P.query(db,scope).order('created_at',{ascending:false}).limit(1000));
+   return S.json(res,200,{homes:await P.present(db,rows,'booking'),calendar:(await Calendar.load(db)).settings,consent:Repeat.CONSENT});
+  }
+  if(input.action==='plan_cancel'){
+   if(!require('../lib/agent-referrals.cjs').uuid(input.id))throw S.fail('Choose a plan.');
+   S.checked(await db.from('customer_recurring_plans').update({status:'cancelled'}).eq('id',input.id).eq(a.uid?'user_id':'account_id',a.id));
+   return S.json(res,200,{ok:true});
+  }
   if(input.action==='dashboard'){
    const page=Math.max(1,Math.min(10000,Math.floor(Number(input.page)||1))),filter=['upcoming','history','all'].includes(input.filter)?input.filter:'all';
    let q=P.query(db,scope,'*',{count:'exact'});
@@ -33,7 +43,8 @@ module.exports=async(req,res)=>{
    const result=await q.order('service_date',{ascending:filter==='upcoming'}).order('id').range((page-1)*20,page*20-1);S.checked(result);
    const next=S.checked(await P.query(db,scope).in('status',P.editable).order('service_date').limit(1));
    const activity=S.checked(await P.query(db,scope,'id,service_date,created_at,paid_at,completed_at,payment_status,status,amount_cents,gift_applied_cents').order('created_at',{ascending:false}).limit(30));
-   const plans=a.uid?S.checked(await db.from('residential_plan_enrollments').select('id,frequency,price_cents,status,created_at').eq('user_id',a.uid).order('created_at',{ascending:false})):[];
+   const legacyPlans=a.uid?S.checked(await db.from('residential_plan_enrollments').select('id,frequency,price_cents,status,created_at').eq('user_id',a.uid).order('created_at',{ascending:false})):[];
+   const plans=[...legacyPlans,...S.checked(await db.from('customer_recurring_plans').select('id,frequency,price_cents,status,created_at,review_reason').eq(a.uid?'user_id':'account_id',a.id).order('created_at',{ascending:false})).map(p=>({...p,portal_plan:true}))];
    return S.json(res,200,{account:{name:a.name,email:a.email,kind:a.kind},bookings:await P.present(db,result.data),next:(await P.present(db,next))[0]||null,activity,plans,page,total:result.count});
   }
   if(input.action==='profile'){
@@ -52,19 +63,29 @@ module.exports=async(req,res)=>{
   }
   const b=await P.owned(db,scope,input.id);
   if(input.action==='quote'){
-   let quote;try{quote=require('../lib/residential-pricing.cjs').quote({service:input.service,sqft:b.sqft,frequency:'once'});}catch(e){throw S.fail(e.message);}
-   return S.json(res,200,{quote,property_address:b.property_address,card_saved:!!b.stripe_payment_method});
+   await S.rate(db,req,'customer-quote');
+   return S.json(res,200,{quote:await Repeat.quote(db,b,input),options:Object.fromEntries(['once','monthly','biweekly','weekly'].map(f=>[f,Repeat.price(b,{service:'standard',frequency:f,sqft:input.sqft})])),card_saved:!!b.stripe_payment_method});
   }
   if(input.action==='book'){
-   await S.rate(db,req,'customer-book');if(input.consent!==true)throw S.fail('Accept the payment authorization before booking.');
+   await S.rate(db,req,'customer-book');
+   if(input.consent!==true||input.details_confirmed!==true)throw S.fail('Confirm your home details and payment authorization.');
    if(!require('../lib/agent-referrals.cjs').uuid(input.request_id))throw S.fail('Refresh the booking form and try again.');
+   const previous=S.checked(await P.query(db,scope,'id').eq('request_hash',S.hash(a.kind+':'+a.id+':'+input.request_id)).maybeSingle());
+   if(previous)return S.json(res,200,{id:previous.id});
    if(b.state!=='NC')throw S.fail('Online booking is available only in North Carolina.');
-   let quote,slot;try{quote=require('../lib/residential-pricing.cjs').quote({service:input.service,sqft:b.sqft,frequency:'once'});slot=require('../lib/residential-pricing.cjs').schedule(input);}catch(e){throw S.fail(e.message);}
+   const calendar=(await Calendar.load(db)).settings;
+   const quote=await Repeat.quote(db,b,input);let slot;
+   try{slot=require('../lib/residential-pricing.cjs').schedule(input,new Date(),calendar);}catch(e){throw S.fail(e.message);}
+   if(input.frequency&&input.frequency!=='once'&&input.service_date<=b.service_date)throw S.fail('Choose a recurring start date after your original cleaning.');
+   const visit_details=require('../lib/residential-visit.cjs').visitDetails(input);
+   const beds=Number(input.beds??b.beds),baths=Number(input.baths??b.baths);
+   if(!Number.isInteger(beds)||beds<0||beds>30||!Number.isFinite(baths)||baths<0.5||baths>30||!Number.isInteger(baths*2))throw S.fail('Check your bedroom and bathroom counts.');
+   if(quote.review_required)throw S.fail('This home needs a custom quote. Contact Turnly before booking.',409);
+   if(input.gift&&input.gift_expected_cents!==quote.gift_cents)throw S.fail('Gift balance changed. Refresh the price before booking.',409);
    if(!b.stripe_payment_method||!b.stripe_customer)throw S.fail('Save a payment card for your existing booking first.');
    const pm=await S.stripe().paymentMethods.retrieve(b.stripe_payment_method);if(pm.customer!==b.stripe_customer)throw S.fail('Update your payment card before rebooking.');
-   const result=await db.rpc('customer_portal_rebook',{p_anchor:b.id,p_email:a.uid?null:a.email,p_uid:a.uid,p_request:S.hash(a.kind+':'+a.id+':'+input.request_id),p_data:{...slot,quote,token_hash:S.hash(require('node:crypto').randomBytes(32)),notes:clean(input.notes,1500),consent_text:'I authorize Turnly to charge my saved card for this cleaning on the morning of the visit (6 AM Eastern, or at the start of an earlier arrival window).'}});
-   if(result.error)throw S.fail('We could not complete this booking. Please try again.',409);
-   if(!a.uid&&Array.isArray(a.booking_ids))S.checked(await db.rpc('link_customer_rebooking',{p_account:a.id,p_anchor:b.id,p_booking:result.data}));
+   const result=await db.rpc('customer_portal_book_v2',{p_anchor:b.id,p_email:a.uid?null:a.email,p_uid:a.uid,p_account:a.uid?null:a.id,p_request:S.hash(a.kind+':'+a.id+':'+input.request_id),p_data:{...slot,quote,visit_details,beds,baths,gift_code:input.gift?require('../lib/gift-cards.cjs').normalize(input.gift):null,gift_expected_cents:quote.gift_cents,token_hash:S.hash(require('node:crypto').randomBytes(32)),notes:clean(input.notes,1500),consent_text:Repeat.CONSENT}});
+   if(result.error)throw S.fail(result.error.code==='P0001'?result.error.message:'We could not complete this booking. Refresh the price and try again.',409);
    const created=await P.owned(db,scope.email?scope:{ids:[...scope.ids,result.data]},result.data);
    try{await require('../lib/residential-jobs.cjs').syncBooking(db,created);}catch{console.error('Customer portal booking assignment deferred to reconciliation.');}
    return S.json(res,200,{id:result.data});
