@@ -56,7 +56,7 @@ module.exports = async function handler(req, res) {
     return sendJson(res, 500, { error: `Unable to load Turnly accounting data: ${error.message}` });
   }
 
-  const groups = buildInvoiceGroups(accounting.assignments, accounting.properties, accounting.units, range);
+  const groups = await buildInvoiceGroups(accounting.assignments, accounting.properties, accounting.units, range);
   const results = [];
   let created = 0;
   let refreshed = 0;

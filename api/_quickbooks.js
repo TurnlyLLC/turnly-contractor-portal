@@ -1,4 +1,4 @@
-const { assignmentServiceScope } = require("../assignment-service-scope.mjs");
+
 const crypto = require("crypto");
 const { createClient } = require("@supabase/supabase-js");
 
@@ -499,7 +499,8 @@ function assignmentIsBillable(row = {}) {
   return !["cancelled", "canceled", "declined", "draft", "pending", "preferred_pending"].includes(assignmentStatus(row));
 }
 
-function buildInvoiceGroups(assignments = [], properties = [], units = [], range = weekRange()) {
+async function buildInvoiceGroups(assignments = [], properties = [], units = [], range = weekRange()) {
+  const { assignmentServiceScope } = await import("../assignment-service-scope.mjs");
   const groups = new Map();
   assignments
     .filter((row) => assignmentFallsInWeek(row, range))

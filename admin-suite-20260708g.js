@@ -10233,8 +10233,8 @@ function renderFinanceData() {
   const totals = financeState.totals || {};
   setText("financeUnsentInvoiceCount", Number(totals.unsentInvoiceCount || financeState.invoices.length || 0).toLocaleString());
   setText("financeUnsentInvoiceTotal", salesMoney(totals.unsentInvoiceAmount || 0));
-  setText("financeContractorPayTotal", salesMoney(totals.contractorPayOwed || 0));
-  setText("financeContractorPayCount", Number(totals.contractorPayCount || financeState.contractorPay.length || 0).toLocaleString());
+  setText("financeContractorPayTotal", financeState.error ? "Unavailable" : financeState.loading ? "Loading…" : salesMoney(totals.contractorPayOwed || 0));
+  setText("financeContractorPayCount", financeState.error || financeState.loading ? "—" : Number(totals.contractorPayCount || financeState.contractorPay.length || 0).toLocaleString());
   setText("financeMonthlyExpenses", salesMoney(totals.monthlyExpenses || 0));
   setText("financeYearlyExpenses", salesMoney(totals.yearlyExpenses || 0));
   setText("financeUpcomingExpenses", salesMoney(totals.upcomingExpenses || 0));
@@ -10440,6 +10440,7 @@ function financeUpcomingExpenseRows() {
 
 function financePaymentRows() {
   if (financeState.loading) return financeLoadingRows(5);
+  if (financeState.error) return '<tr><td colspan="5">Contractor balances could not be loaded. Refresh Finance to retry.</td></tr>';
   const rows = financeState.contractorPay || [];
   if (!rows.length) {
     return `
@@ -10448,7 +10449,17 @@ function financePaymentRows() {
       </tr>
     `;
   }
-  return rows.map((item) => {
+  const balances = new Map();
+  for (const item of rows) {
+    const key = item.contractorEmail?.toLowerCase() || item.contractorName;
+    const balance = balances.get(key) || { name: item.contractorName, cents: 0 };
+    balance.cents += Math.round(Number(item.amount) * 100);
+    balances.set(key, balance);
+  }
+  const summary = Array.from(balances.values(), balance =>
+    '<tr><th colspan="3" scope="row">'+esc(balance.name)+' · total owed</th><td><strong>'+esc(salesMoney(balance.cents / 100))+'</strong></td><td></td></tr>'
+  ).join('');
+  return summary + rows.map((item) => {
     const id = String(item.assignmentId || "");
     const busy = financeState.markingPayments.has(id);
     const assignment = [item.propertyName, item.unitNumber ? `Unit ${item.unitNumber}` : ""].filter(Boolean).join(" - ");

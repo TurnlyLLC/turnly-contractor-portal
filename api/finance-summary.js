@@ -1,4 +1,4 @@
-const { assignmentServiceScope } = require("../assignment-service-scope.mjs");
+
 const {isCompletedForPayout}=require("../lib/contractor-pay-eligibility.cjs");
 const {
   getSupabaseAdmin,
@@ -398,6 +398,7 @@ module.exports = async function handler(req, res) {
     return sendJson(res, 500, { error: `Unable to load contractor pay data: ${error.message}` });
   }
 
+  const { assignmentServiceScope } = await import("../assignment-service-scope.mjs");
   const residentialIds = new Set(accounting.assignments.filter(row => assignmentServiceScope(row) === "residential").map(row => row.id));
   const invoiceLinks = (invoiceResult.data || []).filter(link => !(link.source_assignment_ids || []).some(id => residentialIds.has(id)));
   const invoices = invoiceResult.error ? [] : summarizeInvoices(invoiceLinks);
