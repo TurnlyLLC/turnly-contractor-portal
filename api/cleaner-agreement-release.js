@@ -3,11 +3,12 @@ const S=require('../lib/residential-server.cjs');
 const {access}=require('./contractor-review.js');
 const origin='https://turnly-contractor-app-backend.rork.app';
 const original='e196be03e968109e2e021e5825c44870950994048eedfa055e5a9a7f03b010e3';
-const revised='fc9292288bcf35634934ce13baa686748681a0a8829aca0301b40f19f1b289b0';
+const previous='fc9292288bcf35634934ce13baa686748681a0a8829aca0301b40f19f1b289b0';
+const revised='69b8018059f0ccc5fd718e908891e2ba37f0275f330a890e0c2cc8dd7ebfbed1';
 const digest=bytes=>createHash('sha256').update(bytes).digest('hex');
 async function native(path,token,body){
  const headers={'X-Supabase-Auth':token};
- if(body)Object.assign(headers,{'Content-Type':'application/pdf','X-File-Name':'Turnly_Master_Contractor_Agreement_Performance_2026-11-02.pdf'});
+ if(body)Object.assign(headers,{'Content-Type':'application/pdf','X-File-Name':'Turnly_Master_Contractor_Agreement_Updated.pdf'});
  const response=await fetch(origin+'/onboarding/admin/'+path,{method:body?'POST':'GET',headers,body,redirect:'error',signal:AbortSignal.timeout(30000)});
  const data=await response.json();
  if(!response.ok||data.ok===false)throw S.fail(data.error||'Onboarding could not update the template.',response.status>=400?response.status:502);
@@ -25,7 +26,7 @@ async function inspect(token){
  if(!response.ok)throw S.fail('Unable to verify the current agreement.',502);
  const hash=digest(Buffer.from(await response.arrayBuffer()));
  return {title:item.title,version:item.version,pages:item.pageCount,path,hash,
-  state:hash===revised?'published':hash===original?'ready':'different'};
+  state:hash===revised?'published':[original,previous].includes(hash)?'ready':'different'};
 }
 module.exports=async(req,res)=>{
  try{
@@ -37,7 +38,7 @@ module.exports=async(req,res)=>{
   if(input?.action==='inspect'||current.state==='published')return S.json(res,200,current);
   if(input?.action!=='publish'||current.state!=='ready')throw S.fail('The active template differs from the reviewed original. Review it before publishing.',409);
   const file=Buffer.from(String(input.pdf||''),'base64');
-  if(digest(file)!==revised)throw S.fail('Select the verified November 2 performance agreement PDF.');
+  if(digest(file)!==revised)throw S.fail('Select the verified 46-page updated master agreement PDF.');
   await native(current.path+'document',token,file);
   const saved=await inspect(token);
   if(saved.state!=='published')throw S.fail('Template upload has not been verified. Check current version before retrying.',502);
