@@ -1,3 +1,4 @@
+import {ratingPanel} from './contractor-rating.mjs';
 import {contractorTipsHtml} from './residential-tip-earnings.mjs?v=20261030';
 import { openProfilePhoto } from "./contractor-profile-photo.mjs?v=20261030-photo";
 import { propertyManagerNotesHtml } from "./property-manager-notes.mjs?v=20261027-notes";
@@ -2245,9 +2246,10 @@ function renderPerformance() {
   const completionRate = Math.round((completed.length / total) * 100);
   const active = activeAssignments();
   return `
+    ${panel("Customer star rating",ratingPanel(state.contractorRating))}
     <section class="cp-performance-grid">
       ${metric("Task Completion", `${completionRate}%`, "assigned jobs completed", "C")}
-      ${metric("Quality Score", "94%", "latest QA trend", "Q")}
+
       ${metric("On-Time Rate", active.length ? "Tracking" : "100%", "based on schedules", "T")}
     </section>
     <section class="cp-dashboard-grid">
@@ -2363,6 +2365,10 @@ async function loadData() {
   }
   if (['dashboard','my-jobs','schedule','payments','performance'].includes(pageKey)) tasks.push(loadMyAssignments());
   if (['schedule','resources'].includes(pageKey)) tasks.push(loadAvailability());
+  if (pageKey === 'performance') tasks.push(supabase.rpc('contractor_rating_summary',{p_contractor:state.user.id}).then(result=>{
+    if(result.error) throw result.error;
+    state.contractorRating=result.data;
+  }));
   if (pageKey === 'video-library') tasks.push(loadVideos());
   if(pageKey === 'payments')tasks.push(loadTips());
   const results = await Promise.allSettled(tasks);

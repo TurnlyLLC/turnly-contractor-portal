@@ -1,0 +1,45 @@
+const {test}=require('node:test');
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const {PGlite}=require('@electric-sql/pglite');
+test('reviews are deduplicated, isolated and only gate new claims after human review',async()=>{
+ const db=new PGlite();
+ const contractor='11111111-1111-4111-8111-111111111111';
+ const admin='22222222-2222-4222-8222-222222222222';
+ const summary=async()=> (await db.query('select contractor_rating_summary($1) as r',[contractor])).rows[0].r;
+ try{
+  await db.exec(`create role anon;create role authenticated;create role service_role;create schema auth;
+   create function auth.uid() returns uuid language sql as $$select nullif(current_setting('app.uid',true),'')::uuid$$;
+   create function auth.role() returns text language sql as $$select current_setting('app.role',true)$$;
+   set app.role='service_role';
+   create table profiles(id uuid primary key,role text,status text);
+   create table referral_bookings(id uuid primary key,customer_id uuid,status text,completed_at timestamptz);
+   create table residential_feedback(booking_id uuid,contractor_id uuid,submitted_at timestamptz,created_at timestamptz,contractor_rating int,comments text);
+   create table assignment_blocks(id uuid primary key,status text,claimed_by uuid,assigned_to uuid,completed_at timestamptz,metadata jsonb);
+   create table residential_cleaner_ratings(booking_id uuid,cleaner_id uuid,cleaner_rating int,private_feedback text,created_at timestamptz,updated_at timestamptz);
+   create table property_manager_clean_feedback(assignment_id uuid,created_by uuid,contractor_id uuid,rating int,message text,created_at timestamptz,updated_at timestamptz);
+   insert into profiles values('${contractor}','contractor','active'),('${admin}','admin','active');`);
+  await db.exec(fs.readFileSync('supabase/migrations/20261102121905_contractor_performance_ratings.sql','utf8'));
+  assert.equal((await summary()).status,'unrated');
+  await db.exec(`insert into referral_bookings select md5(i::text)::uuid,md5(i::text)::uuid,'completed',now()+i*interval '1 day' from generate_series(1,10)i;
+   insert into residential_feedback select id,'${contractor}',now(),now(),5,'' from referral_bookings;
+   update residential_feedback set contractor_rating=1 where booking_id=md5('1')::uuid;`);
+  assert.equal((await summary()).status,'good');assert.equal((await summary()).average,4.6);
+  await db.exec("update residential_feedback set contractor_rating=1 where booking_id in (md5('2')::uuid,md5('3')::uuid)");
+  assert.equal((await summary()).status,'review');
+  await db.exec(`insert into contractor_rating_decisions(contractor_id,actor_id,decision,reason) values('${contractor}','${admin}','pause','Reviewed three separate complaints');
+   insert into assignment_blocks(id,status) values(md5('open')::uuid,'open');`);
+  assert.equal((await summary()).status,'paused');
+  await assert.rejects(db.exec(`update assignment_blocks set claimed_by='${contractor}' where status='open'`),/paused/);
+  await db.exec(`insert into contractor_rating_exclusions values('${contractor}',md5('1')::uuid,'Outside scope','${admin}','Outside scope',now())`);
+  assert.equal((await summary()).status,'building');
+  await db.exec(`update assignment_blocks set claimed_by='${contractor}' where status='open';
+   insert into assignment_blocks values(md5('commercial')::uuid,'completed','${contractor}',null,now(),'{}');
+   insert into property_manager_clean_feedback values(md5('commercial')::uuid,md5('pm')::uuid,'${contractor}',5,'',now(),now());`);
+  assert.equal((await summary()).count,10);
+  await db.exec("update referral_bookings set customer_id=md5('3')::uuid where id=md5('2')::uuid");
+  assert.equal((await summary()).count,9);
+  await db.exec(`set app.role='authenticated';set app.uid='${admin}';`);assert.equal((await summary()).count,9);
+  await db.exec("set app.uid='33333333-3333-4333-8333-333333333333'");assert.equal(await summary(),null);
+ }finally{await db.close();}
+});
