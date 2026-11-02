@@ -39,7 +39,7 @@ module.exports=async(req,res)=>{
   if(input.action==='list'){
    const role=input.role||'cleaner';if(!ROLES.includes(role))throw fail('Choose cleaner or brand ambassador applications.');
    const page=Math.max(1,Math.min(10000,parseInt(input.page)||1));
-   let q=db.from('recruiting_applications').select('id,role,name,email,phone,city,state,service_city,service_cities:answers->service_cities,status,created_at,version',{count:'exact'}).order('created_at',{ascending:false});
+   let q=db.from('recruiting_applications').select('id,role,name,email,phone,city,state,service_city,service_cities:answers->service_cities,status,created_at,version',{count:'exact'}).order('created_at',{ascending:false}).order('id');
    q=q.eq('role',role).is('deleted_at',null);
    if(input.status!=='hired')q=q.is('hired_at',null);
    else q=q.eq('status','hired');
@@ -53,7 +53,7 @@ module.exports=async(req,res)=>{
    return json(res,200,{rows:result.data,count:result.count,total:total.count,page,counts:Object.fromEntries(totals)});
   }
   if(!/^[0-9a-f-]{36}$/i.test(input.id||''))throw fail('Choose an application.');
-  if(input.action==='hire')return json(res,200,await require('../lib/applicant-hiring.cjs').hire(db,actor,input.id));
+  if(input.action==='hire')return json(res,200,await require('../lib/applicant-hiring.cjs').hire(db,actor,input.id,input.shortlistOnly===true));
   if(input.action==='delete'){const r=await db.rpc('delete_applicant',{p_id:input.id,p_actor:actor});if(r.error)throw fail('This application cannot be deleted while hiring or after hiring. Manage the account from Directory.',409);return json(res,200,{ok:true});}
   if(input.action==='onboarding'){
    const a=checked(await db.from('recruiting_applications').select('email,role').eq('id',input.id).single());if(a.role!=='brand_ambassador')throw fail('Choose an ambassador application.');

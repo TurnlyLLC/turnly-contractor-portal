@@ -13,7 +13,50 @@ function queue(){const ba=$('#role').value==='brand_ambassador';$('#queueTitle')
 async function api(action,data={}){const token=(await db?.auth.getSession())?.data?.session?.access_token;if(!token)throw Error('Sign in to the admin portal to review applications.');const r=await fetch('/api/applicants',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({action,...data}),signal:AbortSignal.timeout(30000)});const j=await r.json();if(!r.ok)throw Error(j.error||'Unable to load applications.');return j;}
 $('#status').innerHTML='<option value="">All statuses</option>'+Object.entries(stages).map(([v,t])=>`<option value="${v}">${t}</option>`).join('');
 if (new URL(location.href).searchParams.get('status') === 'shortlisted') $('#status').value = 'shortlisted';
-async function load(){if(busy)return;busy=true;$('#role').disabled=true;$('#message').textContent='Loading applications…';try{const r=await api('list',{page,role:$('#role').value,status:$('#status').value,city:$('#city').value,search:$('#search').value});$('#cleanerCount').textContent=r.counts?.cleaner??'—';$('#ambassadorCount').textContent=r.counts?.brand_ambassador??'—';queue();$('#total').textContent=(r.total??r.count)+' total applicants in this pool · '+r.count+' matching this view';$('#results').innerHTML=r.rows.length?`<table class="applicant-table"><thead><tr><th>Applicant</th><th>Position / area</th><th>Status</th><th>Applied</th><th></th></tr></thead><tbody>${r.rows.map(a=>`<tr><td><strong>${esc(a.name)}</strong><br><small>${esc(a.email)}</small></td><td>${a.role==='cleaner'?'Cleaning contractor':'Brand ambassador'}<br><small>${esc(zonesFor(a))} · ${esc(a.city)}, ${esc(a.state)}</small></td><td><span class="badge">${stages[a.status]}</span></td><td>${new Date(a.created_at).toLocaleDateString()}</td><td><button data-open="${a.id}">Review</button></td></tr>`).join('')}</tbody></table>`:'<div class="info">No applications match these filters.</div>';$('#previous').disabled=page===1;$('#next').disabled=page*30>=r.count;$('#page').textContent=`Page ${page} of ${Math.max(1,Math.ceil(r.count/30))}`;$('#message').textContent='';}catch(e){$('#message').textContent=e.message;$('#results').innerHTML='<p><a href="index.html">Admin sign in</a> · Use Search / refresh to retry.</p>';}finally{busy=false;$('#role').disabled=false;}}
+const params=new URL(location.href).searchParams;
+$('#city').value=params.get('city')||'';
+$('#search').value=params.get('search')||'';
+function filters(){return {role:$('#role').value,status:$('#status').value,city:$('#city').value,search:$('#search').value.trim()};}
+function syncFilters(){
+ const scope=filters();
+ history.replaceState(null,'','?'+new URLSearchParams(Object.entries(scope).filter(([,v])=>v)));
+ $('#bulkPanel').hidden=scope.role!=='cleaner'||scope.status!=='shortlisted';
+ $('#regions').replaceChildren(...Array.from($('#city').options,option=>{
+  const link=document.createElement('a');link.className='button secondary';link.textContent=option.text;
+  link.href='?'+new URLSearchParams({...scope,city:option.value});
+  if(scope.city===option.value){link.setAttribute('aria-current','page');link.style.fontWeight='bold';}
+  return link;
+ }));
+}
+$('#bulkHire').onclick=async()=>{
+ if(busy||$('#bulkHire').disabled)return;
+ const scope=filters(), progress=$('#bulkProgress'), errors=$('#bulkErrors');
+ if(scope.role!=='cleaner'||scope.status!=='shortlisted')return;
+ $('#bulkHire').disabled=true;errors.replaceChildren();
+ try{
+  const candidates=new Map();let expected;
+  for(let number=1;;number++){
+   const response=await api('list',{...scope,page:number});
+   expected??=response.count;
+   if(response.count!==expected)throw Error('Shortlist changed. Refresh and try again.');
+   for(const row of response.rows)candidates.set(row.id,row.name);
+   if(number*30>=expected)break;
+  }
+  if(candidates.size!==expected)throw Error('Shortlist changed. Refresh and try again.');
+  if(!expected){progress.textContent='No matching cleaners.';return;}
+  if(!confirm('Hire '+expected+' shortlisted cleaners in '+(scope.city||'ALL regions')+(scope.search?' matching '+scope.search:'')+' and send each a welcome email? Keep this page open until processing finishes.'))return;
+  let sent=0,failed=0;
+  for(const [id,name] of candidates){
+   progress.textContent='Processing '+(sent+failed+1)+' of '+expected+' - '+name;
+   try{await api('hire',{id,shortlistOnly:true});sent++;}
+   catch(error){failed++;const item=document.createElement('li');item.textContent=name+' - '+error.message;errors.append(item);}
+  }
+  progress.textContent=sent+' welcome emails confirmed. '+failed+' need review.';
+  page=1;await load();
+ }catch(error){progress.textContent=error.message;}
+ finally{$('#bulkHire').disabled=false;}
+};
+async function load(){syncFilters();if(busy)return;busy=true;$('#role').disabled=true;$('#message').textContent='Loading applications…';try{const r=await api('list',{page,role:$('#role').value,status:$('#status').value,city:$('#city').value,search:$('#search').value});$('#cleanerCount').textContent=r.counts?.cleaner??'—';$('#ambassadorCount').textContent=r.counts?.brand_ambassador??'—';queue();$('#total').textContent=(r.total??r.count)+' total applicants in this pool · '+r.count+' matching this view';$('#results').innerHTML=r.rows.length?`<table class="applicant-table"><thead><tr><th>Applicant</th><th>Position / area</th><th>Status</th><th>Applied</th><th></th></tr></thead><tbody>${r.rows.map(a=>`<tr><td><strong>${esc(a.name)}</strong><br><small>${esc(a.email)}</small></td><td>${a.role==='cleaner'?'Cleaning contractor':'Brand ambassador'}<br><small>${esc(zonesFor(a))} · ${esc(a.city)}, ${esc(a.state)}</small></td><td><span class="badge">${stages[a.status]}</span></td><td>${new Date(a.created_at).toLocaleDateString()}</td><td><button data-open="${a.id}">Review</button></td></tr>`).join('')}</tbody></table>`:'<div class="info">No applications match these filters.</div>';$('#previous').disabled=page===1;$('#next').disabled=page*30>=r.count;$('#page').textContent=`Page ${page} of ${Math.max(1,Math.ceil(r.count/30))}`;$('#message').textContent='';}catch(e){$('#message').textContent=e.message;$('#results').innerHTML='<p><a href="index.html">Admin sign in</a> · Use Search / refresh to retry.</p>';}finally{busy=false;$('#role').disabled=false;}}
 function answerSections(answers){
  const groups=[['Experience & availability',['experience','experience_details','services','availability','availability_details','sales_experience','ambassador_experience','languages']],['Work readiness',['service_cities','transport','supplies','insurance']],['Ambassador plan',['strategy','channels','channel_other','interest','profile_url']],['Acknowledgments',['age_18','commission_only','independent_ack','marketing_ack','compensation_acknowledged','training_ready','documents_ready','standards_ready','accurate','contact_consent']]];
  const used=new Set(groups.flatMap(g=>g[1]));groups.push(['Additional details',Object.keys(answers).filter(k=>!used.has(k)&&!['import_batch','import_resume_sha256','source_candidate_ids'].includes(k))]);
@@ -27,6 +70,6 @@ async function open(id){$('#detailBody').innerHTML='<p>Loading application…</p
 async function hireApplicant(a){if(!confirm('Hire '+a.name+' and email their account access? Existing accounts keep their password. Onboarding is still required.'))return;$('#hireApplicant').disabled=true;$('#hireResult').textContent='Setting up account and sending welcome email…';try{const r=await api('hire',{id:a.id});await open(a.id);await load();$('#hireResult').textContent='Hired. Welcome email sent'+(r.existing_account?' with their existing-account login instructions.':'.');}catch(e){await open(a.id);await load();$('#hireResult').textContent=e.message;}}
 async function deleteApplicant(a){if(!confirm('Delete '+a.name+' from the applicant pool? This does not delete a user account.'))return;try{await api('delete',{id:a.id});$('#detail').close();page=1;await load();}catch(e){$('#hireResult').textContent=e.message;}}
 async function save(e){e.preventDefault();$('#save').disabled=true;try{await api('review',{id:current.id,version:current.version,status:$('#reviewStatus').value,note:$('#note').value});await open(current.id);await load();}catch(e){$('#reviewError').textContent=e.message;$('#save').disabled=false;}}
-$('#results').onclick=e=>{const b=e.target.closest('[data-open]');if(b)open(b.dataset.open);};$('#close').onclick=()=>$('#detail').close();$('#filters').onsubmit=e=>{e.preventDefault();if(busy)return;page=1;history.replaceState(null,'','?role='+$('#role').value);load();};$('#role').onchange=()=>{if(!busy){page=1;history.replaceState(null,'','?role='+$('#role').value);load();}};$('#previous').onclick=()=>{if(!busy){page--;load();}};$('#next').onclick=()=>{if(!busy){page++;load();}};load();
+$('#results').onclick=e=>{const b=e.target.closest('[data-open]');if(b)open(b.dataset.open);};$('#close').onclick=()=>$('#detail').close();$('#filters').onsubmit=e=>{e.preventDefault();if(busy)return;page=1;history.replaceState(null,'','?role='+$('#role').value);load();};$('#city').onchange=$('#status').onchange=$('#role').onchange=()=>{if(!busy){page=1;history.replaceState(null,'','?role='+$('#role').value);load();}};$('#previous').onclick=()=>{if(!busy){page--;load();}};$('#next').onclick=()=>{if(!busy){page++;load();}};load();
 
 $('#emailPreview').onclick=async()=>{try{const r=await api('email_preview',{role:$('#role').value});$('#detailBody').innerHTML='<p class="eyebrow">AUTOMATIC APPLICATION EMAIL</p><h2>'+esc(r.subject)+'</h2><p class="small">Current plain-text template. The applicant name and reference are personalized when sent.</p><pre style="white-space:pre-wrap;font:inherit;line-height:1.7">'+esc(r.text)+'</pre>';if(!$('#detail').open)$('#detail').showModal();}catch(e){$('#message').textContent=e.message;}};
