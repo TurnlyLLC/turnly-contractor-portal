@@ -228,9 +228,10 @@ async function clearForcedPasswordFlag(changedAt) {
 }
 
 async function renderPasswordChangeRequired(user, role) {
-  const card = document.querySelector(".role-auth-card, .portal-signin-card");
+  const card = document.querySelector(".role-auth-card, .portal-signin-card, .native-login-form");
   if (!card) return false;
   injectForcedPasswordStyles();
+  const needsEmail = role === "contractor" && /@(?:[a-z0-9-]+\.)*(?:indeed|indeedemail)\.com$/i.test(user.email);
   const portalName = roleName(role);
   card.innerHTML = `
     <div class="forced-password-card">
@@ -240,6 +241,7 @@ async function renderPasswordChangeRequired(user, role) {
         <p>Your admin created a temporary password for this account. Create your own password before opening the ${escapeHtml(portalName)}.</p>
       </div>
       <form id="forcedPasswordForm" class="public-form">
+        ${needsEmail ? '<label>Personal email<input id="forcedPersonalEmail" type="email" autocomplete="email" required></label><p>Use an address you can confirm. Your name username will still work.</p>' : ""}
         <div class="public-form-grid">
           <label class="span-two">
             New Password
@@ -271,19 +273,22 @@ async function renderPasswordChangeRequired(user, role) {
     setFormLoading(form, true, "Saving Password...", "Save Password");
     setForcedPasswordMessage("Saving your new password...");
     try {
+      const personalEmail = document.getElementById("forcedPersonalEmail")?.value.trim().toLowerCase();
+      if (needsEmail && (!personalEmail || /@(?:[a-z0-9-]+\.)*(?:indeed|indeedemail)\.com$/i.test(personalEmail))) throw Error("Enter a personal email outside Indeed.");
       const changedAt = new Date().toISOString();
       const { error } = await supabase.auth.updateUser({
         password,
+        ...(needsEmail ? { email: personalEmail } : {}),
         data: {
           ...(user.user_metadata || {}),
           turnly_force_password_change: false,
           turnly_password_changed_at: changedAt
         }
-      });
+      }, needsEmail ? {emailRedirectTo: location.origin + "/contractor-onboarding.html"} : {});
       if (error) throw error;
       await clearForcedPasswordFlag(changedAt);
       await supabase.auth.refreshSession().catch(() => null);
-      window.location.href = portalForRole(role, pageHome);
+      window.location.href = needsEmail ? "contractor-onboarding.html" : portalForRole(role, pageHome);
     } catch (error) {
       setForcedPasswordMessage(error?.message || "Unable to save password.", true);
       setFormLoading(form, false, "Saving Password...", "Save Password");
@@ -463,10 +468,16 @@ loginForm?.addEventListener("submit", async (event) => {
   showMessage("Logging in...");
 
   const email = value("loginEmail").toLowerCase();
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password: document.getElementById("loginPassword")?.value || ""
-  });
+  const password = document.getElementById("loginPassword")?.value || "";
+  let data, error;
+  try {
+    if (pageRole === "contractor" && !email.includes("@")) {
+      const response = await fetch("/api/contractor-name-login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:email,password})});
+      const session = await response.json();
+      if (!response.ok) throw Error(session.error);
+      ({data,error}=await supabase.auth.setSession(session));
+    } else ({data,error}=await supabase.auth.signInWithPassword({email,password}));
+  } catch (failure) { error=failure; }
 
   if (error) {
     setFormLoading(loginForm, false, "Logging In...", "Log In");
