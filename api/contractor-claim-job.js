@@ -15,6 +15,10 @@ async function claim(db,req,input,transport){
   const status=training.merge(await require('../lib/contractor-background.cjs').attach(db,profile.id,file),training.items(trainingRows,profile.id));
   const complete=Array.isArray(status.items)&&status.items.length>0&&status.complete!==false&&status.items.every(i=>!i.required||i.state==='done');
   const eligible=complete&&approval?.contractor_approved===true&&approval.status==='active';
+  if(input.action==='eligibility'&&eligible){
+    const rating=S.checked(await db.rpc('contractor_rating_summary',{p_contractor:profile.id}));
+    if(rating?.status==='paused')return {eligible:false,complete,reason:'New claims are paused. Open Performance to review the reason and request another review.'};
+  }
   if(input.action==='eligibility')return {eligible,complete,reason:!complete?'Complete all required onboarding items before accepting jobs.':!eligible?'Your onboarding is awaiting Turnly approval.':''};
   if(!eligible)throw S.fail(!complete?'Complete all required onboarding items before accepting jobs.':'Your onboarding is awaiting Turnly approval.',403);
   if(!uuid(input.id))throw S.fail('Choose a job.');
