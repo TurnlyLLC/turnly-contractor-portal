@@ -1,0 +1,21 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Cleaner agreement | Turnly Admin</title>
+<style>body{font:16px/1.6 system-ui;color:#18334b;background:#f4f7f8}main{max-width:640px;margin:8vh auto;background:white;border-radius:18px;padding:32px}button{border:0;border-radius:8px;background:#087d74;color:white;padding:12px 18px;font-weight:700}button:disabled{opacity:.45}input{display:block;margin:12px 0}</style>
+<main><a href="directory.html">Contractor directory</a><p>Turnly Admin</p><h1>Cleaner agreement</h1><p>Publish the November 2 performance terms to the master agreement in contractor onboarding.</p><p id="status" role="status">Checking the current template…</p><label>Revised master agreement PDF<input id="file" type="file" accept="application/pdf" disabled></label><button id="publish" disabled>Publish revised agreement</button></main>
+<script src="env.js"></script><script type="module">
+import {createClient} from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+const client=createClient(window.__ENV.SUPABASE_URL,window.__ENV.SUPABASE_ANON_KEY);
+const status=document.querySelector('#status'),file=document.querySelector('#file'),publish=document.querySelector('#publish');
+async function call(action,pdf){
+ const {data}=await client.auth.getSession();
+ if(!data.session)throw Error('Sign in to the admin portal, then return here.');
+ const r=await fetch('/api/cleaner-agreement-release',{method:'POST',headers:{Authorization:'Bearer '+data.session.access_token,'Content-Type':'application/json'},body:JSON.stringify({action,pdf})});
+ const result=await r.json();if(!r.ok)throw Error(result.error);return result;
+}
+function show(r){
+ const labels={published:'Published and verified.',ready:'Current agreement verified. Choose the revised PDF to publish.',different:'The current template differs from the reviewed original. Publishing is blocked.'};
+ status.textContent=r.title+' · Version '+r.version+' · '+r.pages+' pages. '+labels[r.state];file.disabled=r.state!=='ready';publish.disabled=file.disabled||!file.files.length;
+}
+file.onchange=()=>{publish.disabled=!file.files.length;};
+publish.onclick=async()=>{publish.disabled=true;try{const bytes=new Uint8Array(await file.files[0].arrayBuffer());const pdf=btoa(Array.from(bytes,c=>String.fromCharCode(c)).join(''));show(await call('publish',pdf));}catch(e){status.textContent=e.message;}};
+try{show(await call('inspect'));}catch(e){status.textContent=e.message;}
+</script></html>
