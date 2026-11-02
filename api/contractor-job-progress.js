@@ -1,3 +1,4 @@
+const { paymentHoldMessage } = require("../residential-payment-hold.mjs");
 const S=require('../lib/residential-server.cjs');
 const {uuid}=require('../lib/agent-referrals.cjs');
 const {access}=require('../lib/contractor-onboarding.cjs');
@@ -18,6 +19,8 @@ async function progress(db,req,input,lookup){
  if(!uuid(input.id)||!['head_to_job','start_job'].includes(input.action))throw S.fail('Choose a job and a valid action.');
  const job=S.checked(await db.from('assignment_blocks').select('*').eq('id',input.id).maybeSingle());
  if(!job||(job.claimed_by||job.assigned_to)!==profile.id)throw S.fail('This job is not assigned to you.',403);
+ const hold = paymentHoldMessage(job);
+ if(hold)throw S.fail(hold,409);
  if(input.action==='head_to_job'&&!['claimed','scheduled','en_route'].includes(job.status))throw S.fail('Accept this job before heading to it.',409);
  if(input.action==='start_job'&&!['en_route','in_progress'].includes(job.status))throw S.fail('Choose Head to job before starting.',409);
  let site=null;

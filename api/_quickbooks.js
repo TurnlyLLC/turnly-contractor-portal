@@ -1,3 +1,4 @@
+const { assignmentServiceScope } = require("../assignment-service-scope.mjs");
 const crypto = require("crypto");
 const { createClient } = require("@supabase/supabase-js");
 
@@ -502,6 +503,7 @@ function buildInvoiceGroups(assignments = [], properties = [], units = [], range
   const groups = new Map();
   assignments
     .filter((row) => assignmentFallsInWeek(row, range))
+    .filter(row => assignmentServiceScope(row) !== "residential")
     .filter(assignmentIsBillable)
     .forEach((row) => {
       const property = propertyForAssignment(row, properties);

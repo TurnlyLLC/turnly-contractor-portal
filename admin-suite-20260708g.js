@@ -11113,7 +11113,7 @@ async function loadInvoiceReport() {
   ]);
   invoiceReportState.properties = properties || [];
   invoiceReportState.units = units || [];
-  invoiceReportState.rows = enrichAssignmentRowsWithContractAccess(assignmentsResult.rows, invoiceReportState.properties);
+  invoiceReportState.rows = enrichAssignmentRowsWithContractAccess(assignmentsResult.rows.filter(row => assignmentServiceScope(row) !== "residential"), invoiceReportState.properties);
   invoiceReportState.quickbooksInvoices = [];
   invoiceReportState.loading = false;
   renderInvoiceReportData();

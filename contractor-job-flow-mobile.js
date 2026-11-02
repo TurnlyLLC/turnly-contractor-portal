@@ -1,3 +1,4 @@
+import { paymentHoldMessage } from "./residential-payment-hold.mjs";
 import { showMaterials } from "./checklist-materials.mjs?v=20261030-materials";
 import { propertyManagerNotesHtml } from "./property-manager-notes.mjs?v=20261027-notes";
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
@@ -2737,6 +2738,8 @@ async function openStartModal(assignmentId) {
   if (!activeUser) throw new Error("Please sign in again before starting this job.");
 
   activeAssignment = await fetchAssignment(assignmentId);
+  const hold = activeAssignment && paymentHoldMessage(activeAssignment);
+  if (hold) { showPageMessage(hold); return; }
   if (!activeAssignment) throw new Error("This assignment could not be loaded.");
   activePosition = null;
   activeSite = null;
@@ -2994,6 +2997,8 @@ async function openChecklistModal(assignmentOrId) {
   if (!activeUser) return;
 
   activeAssignment = await fetchAssignment(typeof assignmentOrId === "string" ? assignmentOrId : assignmentOrId.id);
+  const hold = activeAssignment && paymentHoldMessage(activeAssignment);
+  if (hold) { showPageMessage(hold); return; }
   activeDirectoryDetails = await fetchDirectoryDetails(activeAssignment);
   activeQaJobId = assignmentQaJobId(activeAssignment);
   activeChecklistItems = await checklistItems(activeAssignment);

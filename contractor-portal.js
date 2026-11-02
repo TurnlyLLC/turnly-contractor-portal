@@ -1,3 +1,5 @@
+import { paymentHoldMessage } from "./residential-payment-hold.mjs";
+import { assignmentServiceScope } from "./assignment-service-scope.mjs";
 import {ratingPanel} from './contractor-rating.mjs';
 import {contractorTipsHtml} from './residential-tip-earnings.mjs?v=20261030';
 import { openProfilePhoto } from "./contractor-profile-photo.mjs?v=20261030-photo";
@@ -945,6 +947,8 @@ function mapLink(item) {
   return query ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}` : "";
 }
 
+
+
 function assignmentActions(item, mode) {
   const status = normalizeToken(item.status);
   const directions = mapLink(item);
@@ -957,10 +961,12 @@ function assignmentActions(item, mode) {
   if (mode === "open") {
     actions.push(`<button type="button" class="cp-action" data-claim-assignment-id="${esc(item.id)}">Claim</button>`);
   }
-  if (mode === "mine" && ["claimed", "scheduled", "en-route"].includes(status)) {
+  const hold = mode === "mine" && paymentHoldMessage(item);
+  if (hold && ["claimed", "scheduled", "en-route", "in-progress"].includes(status)) actions.push(`<strong role="status">${esc(hold)}</strong>`);
+  if (!hold && mode === "mine" && ["claimed", "scheduled", "en-route"].includes(status)) {
     actions.push(`<button type="button" class="cp-action" data-start-assignment-id="${esc(item.id)}">${status === "en-route" ? "Start job" : "Head to job"}</button>`);
   }
-  if (mode === "mine" && status === "in-progress") {
+  if (!hold && mode === "mine" && status === "in-progress") {
     actions.push(`<button type="button" class="cp-action" data-tj-open-checklist="${esc(item.id)}">Checklist</button>`);
   }
   if (directions) {
@@ -1822,7 +1828,7 @@ function renderPwaSchedule() {
   const selectedDay = days.find(day => isSameDay(day, state.scheduleDay)) || days[0];
   const dayRows = rows.filter(item => item.start_window && isSameDay(new Date(item.start_window), selectedDay));
   const properties = [...new Set(state.myAssignments.map(assignmentTitle))].sort();
-  const active = activeAssignments().find(item => normalizeToken(item.status) === "in-progress");
+  const active = activeAssignments().find(item => normalizeToken(item.status) === "in-progress" && !paymentHoldMessage(item));
   return `<section class="cp-native-schedule">
     <div class="cp-native-schedule-controls">
       <div class="cp-native-segment" role="group" aria-label="Schedule view">${["calendar", "list"].map(view => `<button type="button" data-native-schedule-view="${view}" aria-pressed="${state.scheduleView === view}" class="${state.scheduleView === view ? "active" : ""}">${cpIcon(view === "calendar" ? "calendar" : "clipboard")}${titleCase(view)}</button>`).join("")}</div>
@@ -3101,6 +3107,31 @@ function attachEvents() {
 }
 
 attachEvents();
+// Refresh only visible assigned residential cleans. A payment change updates the
+// open contractor screen without interrupting it on every polling interval.
+let refreshingPayments = false;
+async function refreshResidentialPayments() {
+  if (document.hidden || refreshingPayments || !state.user || state.adminPreview) return;
+  const jobs = state.myAssignments.filter(item => assignmentServiceScope(item) === "residential" &&
+    ["claimed", "scheduled", "en-route", "in-progress"].includes(normalizeToken(item.status)));
+  if (!jobs.length) return;
+  refreshingPayments = true;
+  try {
+    const {data, error} = await supabase.from("assignment_blocks").select("id,residential_payment_state").in("id", jobs.map(item => item.id));
+    if (error) return;
+    let changed = false;
+    for (const row of data || []) {
+      const job = state.myAssignments.find(item => item.id === row.id);
+      if (job && job.residential_payment_state !== row.residential_payment_state) {
+        job.residential_payment_state = row.residential_payment_state;
+        changed = true;
+      }
+    }
+    if (changed) renderShell();
+  } finally { refreshingPayments = false; }
+}
+window.setInterval(refreshResidentialPayments, 30000);
+document.addEventListener("visibilitychange", refreshResidentialPayments);
 window.addEventListener('turnly:job-progress', async () => {
   if (!state.user || state.adminPreview) return;
   try { await loadMyAssignments(); renderShell(); } catch { /* Keep the current view; reopening reloads it. */ }

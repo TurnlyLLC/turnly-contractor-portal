@@ -1,3 +1,4 @@
+import { paymentHoldMessage } from "./residential-payment-hold.mjs";
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
 const env = window.__ENV || {};
@@ -465,6 +466,8 @@ async function openStartModal(assignmentId) {
 
   activeUser = user;
   activeAssignment = await fetchAssignment(assignmentId);
+  const hold = activeAssignment && paymentHoldMessage(activeAssignment);
+  if (hold) { showMessage(hold); return; }
   activeSite = null;
   activePosition = null;
   activeDistance = null;
@@ -587,6 +590,8 @@ async function openChecklistModal(assignmentOrId) {
 
   activeUser = user;
   activeAssignment = typeof assignmentOrId === "string" ? await fetchAssignment(assignmentOrId) : assignmentOrId;
+  const hold = activeAssignment && paymentHoldMessage(activeAssignment);
+  if (hold) { showMessage(hold); return; }
   const checklistItems = await getChecklistItems(activeAssignment);
   const modal = ensureChecklistModal();
 
