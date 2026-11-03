@@ -17,3 +17,29 @@ $('#paymentForm').onsubmit=e=>{e.preventDefault();task(async()=>{const f=Object.
 $('#payments').onclick=e=>task(async()=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.sync){await api('sync',{id:b.dataset.sync});await load();return;}if(b.dataset.review){const p=data.payments.find(p=>p.id===b.dataset.review),r=data.recipients.find(r=>r.id===p.recipient_id),v=await api('prepare',{id:p.id});reviewing={id:p.id,token:v.review_token};$('#reviewError').textContent='';$('#reviewBody').innerHTML=`<h3>${esc(r?.name)}</h3><p>${esc(p.reference)} · ${money(p.amount_cents,p.currency)}</p><p>Stripe recipient: ${esc(p.recipient_account)}</p><h3>Stripe quote and destination</h3><pre>${esc(JSON.stringify(v.review,null,2))}</pre>`;$('#send').disabled=!data.send_enabled;$('#send').textContent=data.send_enabled?'Approve & send payment':'Sending pending Stripe activation';$('#reviewDialog').showModal();}});
 $('#send').onclick=()=>task(async()=>{if(!reviewing)return;if(!confirm('Approve and send this payment through Stripe? This transfers real money.'))return;await api('send',{id:reviewing.id,review_token:reviewing.token});$('#reviewDialog').close();reviewing=null;await load();});
 $('#closeReview').onclick=()=>{$('#reviewDialog').close();reviewing=null;};$('#refresh').onclick=()=>task(load);$('#search').oninput=render;$('#status').onchange=render;task(load);
+const sweepForm = $('#sweepSettings');
+async function loadSweepSettings() {
+  try {
+    const settings = await api('sweep_settings');
+    sweepForm.elements.reserve.value = (settings.reserve_cents / 100).toFixed(2);
+    sweepForm.elements.cadence.value = settings.cadence;
+    sweepForm.elements.weekday.value = settings.weekday;
+    sweepForm.querySelector('fieldset').disabled = false;
+    sweepForm.elements.cadence.onchange();
+  } catch (error) { $('#sweepStatus').textContent = error.message; }
+}
+sweepForm.elements.cadence.onchange = () => {
+  sweepForm.elements.weekday.disabled = sweepForm.elements.cadence.value !== 'weekly';
+};
+sweepForm.onsubmit = async event => {
+  event.preventDefault();
+  const fields = sweepForm.elements;
+  const settings = {reserve_cents: Math.round(Number(fields.reserve.value)*100), cadence: fields.cadence.value, weekday: Number(fields.weekday.value)};
+  sweepForm.querySelector('fieldset').disabled = true;
+  try {
+    await api('save_sweep_settings', settings);
+    $('#sweepStatus').textContent = 'Reserve and schedule saved.';
+  } catch (error) { $('#sweepStatus').textContent = error.message; }
+  finally { sweepForm.querySelector('fieldset').disabled = false; }
+};
+loadSweepSettings();
