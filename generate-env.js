@@ -18,5 +18,6 @@ if (process.env.TURNLY_EMAIL_SETUP_CHECK === '1') {
   });
 }
 if (process.env.VERCEL_ENV === 'preview' && process.env.VERCEL_GIT_COMMIT_REF === 'feat/relay-funding') {
-  require('./scripts/relay-sandbox-preflight.cjs');
+  // The preview can serve settings while the separate payout readiness check is pending.
+  require('node:child_process').spawnSync(process.execPath, ['scripts/relay-sandbox-preflight.cjs'], {stdio: 'inherit'});
 }
