@@ -10,3 +10,18 @@
 .experience-date{display:inline-block;margin:5px 0 8px;padding:2px 9px;border-radius:8px;background:#e6f2f3;color:#224c54;font-size:.9rem}
 .experience-job ul{margin:8px 0;padding-inline-start:22px}.experience-job li+li{margin-top:5px}
 .experience-application{margin:20px 0;border-top:1px solid #bfd0d6;padding:12px 0}.experience-application summary{cursor:pointer;font-weight:650}.experience-application p{white-space:pre-line}
+
+#detail[open]{display:flex;flex-direction:column;overflow:hidden;padding:0;max-height:90dvh;box-sizing:border-box}
+.review-toolbar{display:flex;align-items:center;gap:12px;flex:none;padding:12px clamp(12px,3vw,28px);border-bottom:1px solid #cdded9;background:#fff}
+#candidatePager:not([hidden]){display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+#candidatePosition{font-size:.86rem;color:#365565}
+#detail #close{position:static;float:none;margin-inline-start:auto;align-self:flex-start}
+#detailBody{min-height:0;overflow-y:auto;padding:12px clamp(14px,3vw,28px) 28px;overscroll-behavior:contain}
+#detail .candidate-tabs{border-bottom:1px solid #bfd0d6;gap:16px}
+#detail .candidate-tabs button{border:0;border-bottom:3px solid transparent;border-radius:0;background:transparent;color:#365565;text-decoration:none;padding:8px 2px}
+#detail .candidate-tabs button[aria-pressed="true"]{color:#123d50;border-bottom-color:#276873}
+.candidate-contact{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px;margin:14px 0 24px}
+#detail .candidate-contact a,#detail .resume-link{background:none;border:0;color:#155562;text-decoration:underline;padding:0;font:inherit;cursor:pointer}
+.hiring-controls{border-top:1px solid #cdded9;margin:24px 0;padding-top:8px}
+#detail .hiring-controls .form-actions{flex-wrap:wrap}
+@media(max-width:640px){#candidatePager button,#detail #close{font-size:.84rem;padding:7px 9px}#candidatePosition{flex-basis:100%}.review-toolbar{gap:6px}}
