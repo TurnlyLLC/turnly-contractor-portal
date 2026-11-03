@@ -2932,6 +2932,7 @@ function renderRequestForm() {
             <div><dt>Move-In Date</dt><dd>${esc(formatMoveInDate(state.requestConfirmation.moveInDateValue))}</dd></div>
             <div><dt>Property</dt><dd>${esc(propertyTitle())}</dd></div>
           </dl>
+          ${state.requestConfirmation.messageWarning ? `<p role="status">${esc(state.requestConfirmation.messageWarning)}</p>` : ""}
           <button class="new-btn pm-compact-btn" type="button" data-manager-request-close>Done</button>
         </article>
       </section>
@@ -3382,25 +3383,31 @@ async function createTurnRequest(form) {
     move_in_time: MOVE_IN_TIME_LABEL
   });
 
-  await createManagerMessageThread(form, {
+  let messageWarning = "";
+  if (!state.adminPreview) {
+    try {
+      await createManagerMessageThread(form, {
     subject: `${TURN_REQUEST_SERVICE} request - ${unit || propertyTitle()}`,
     topic: "Unit cleaning request",
     body,
     relatedType: "assignment",
     relatedId: assignmentId || state.property?.id || "",
     relatedTitle: `${TURN_REQUEST_SERVICE} request - ${unit || propertyTitle()}`
-  });
-
-  if (!state.error) {
+      });
+      if (state.error) messageWarning = "Your request is saved, but the separate message to operations could not be sent.";
+    } catch {
+      messageWarning = "Your request is saved, but the separate message to operations could not be sent.";
+    }
+  }
+  state.sending = false;
     state.selectedAssignmentId = assignmentId || state.selectedAssignmentId;
     state.requestOpen = false;
-    state.requestConfirmation = { unit, moveInDateValue, serviceDateValue };
+    state.requestConfirmation = { unit, moveInDateValue, serviceDateValue, messageWarning };
     resetTurnRequestDraft();
     state.dataMessage = "";
     state.dataError = false;
     await refreshManagerPortal();
     renderManagerPortal();
-  }
 }
 
 async function notifyAdminTurnRequestSms(payload = {}) {

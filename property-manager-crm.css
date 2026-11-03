@@ -12,3 +12,18 @@ body[data-portal-role="property-manager"][data-dashboard-theme="light"] .new-btn
 .pm-turn-question .pm-date-field{display:grid;gap:8px}
 .pm-turn-question .pm-date-field+.pm-date-field{margin-top:18px}
 .pm-unit-combobox [data-unit-match-count]:empty{display:none}
+/* Pair foreground and background on surfaces that sit over apartment photos. */
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] {
+  & .pm-overview-focus-card {background:#f5f9fc!important}
+  & .pm-focus-next :is(strong,small,span), & .pm-stat-card :is(em,small),
+  & .pm-sidebar-trust strong, & .pm-table td, & .pm-weekly-plan-list small,
+  & .pm-lock-panel :is(p,h2), & .command-header p {color:#354b60!important;text-shadow:none}
+  & :is(.pm-link-button,.pm-row-action,.pm-panel-footer a,.pm-weekly-plan-head strong,.pm-weekly-plan-list time,.pm-panel-head button){color:#00665d!important}
+  & .pm-status-badge {background:#e6f2f4!important;color:#244b59!important}
+  & [data-pm-request-status] {color:#40546a!important;background:#f1f5f8!important}
+  & [data-pm-request-status].active {background:#145f59!important;color:#fff!important}
+  & .pm-page-status, & .pm-lock-panel {background:#fff!important;color:#24394c!important}
+  & .pm-page-status.error {color:#952a25!important}
+}
+body[data-portal-role="property-manager"][data-dashboard-theme="dark"] .pm-lock-panel {background:#142536!important;color:#f1f6fb!important}
+body[data-portal-role="property-manager"][data-dashboard-theme="dark"] .pm-lock-panel :is(p,h2){color:#e1edf4!important}
