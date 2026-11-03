@@ -17,3 +17,6 @@ if (process.env.TURNLY_EMAIL_SETUP_CHECK === '1') {
     process.exitCode = 1;
   });
 }
+if (process.env.VERCEL_ENV === 'preview' && process.env.VERCEL_GIT_COMMIT_REF === 'feat/relay-funding') {
+  require('./scripts/relay-sandbox-preflight.cjs');
+}
