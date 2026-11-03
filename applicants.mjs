@@ -57,7 +57,49 @@ $('#bulkHire').onclick=async()=>{
  }catch(error){progress.textContent=error.message;}
  finally{$('#bulkHire').disabled=false;}
 };
-async function load(){syncFilters();if(busy)return;busy=true;$('#role').disabled=true;$('#message').textContent='Loading applications…';try{const r=await api('list',{page,role:$('#role').value,status:$('#status').value,city:$('#city').value,search:$('#search').value});$('#cleanerCount').textContent=r.counts?.cleaner??'—';$('#ambassadorCount').textContent=r.counts?.brand_ambassador??'—';queue();$('#total').textContent=(r.total??r.count)+' total applicants in this pool · '+r.count+' matching this view';$('#results').innerHTML=r.rows.length?`<table class="applicant-table"><thead><tr><th>Applicant</th><th>Position / area</th><th>Status</th><th>Applied</th><th></th></tr></thead><tbody>${r.rows.map(a=>`<tr><td><strong>${esc(a.name)}</strong><br><small>${esc(a.email)}</small></td><td>${a.role==='cleaner'?'Cleaning contractor':'Brand ambassador'}<br><small>${esc(zonesFor(a))} · ${esc(a.city)}, ${esc(a.state)}</small></td><td><span class="badge">${stages[a.status]}</span></td><td>${new Date(a.created_at).toLocaleDateString()}</td><td><button data-open="${a.id}">Review</button></td></tr>`).join('')}</tbody></table>`:'<div class="info">No applications match these filters.</div>';$('#previous').disabled=page===1;$('#next').disabled=page*30>=r.count;$('#page').textContent=`Page ${page} of ${Math.max(1,Math.ceil(r.count/30))}`;$('#message').textContent='';}catch(e){$('#message').textContent=e.message;$('#results').innerHTML='<p><a href="index.html">Admin sign in</a> · Use Search / refresh to retry.</p>';}finally{busy=false;$('#role').disabled=false;}}
+let listedPage, navigation;
+function updatePager() {
+  const position = (navigation.page - 1) * 30 + navigation.index + 1;
+  $('#candidatePosition').textContent = ' Candidate ' + position + ' of ' + navigation.count;
+  $('#earlierCandidate').disabled = navigation.loading || position <= 1;
+  $('#laterCandidate').disabled = navigation.loading || position >= navigation.count;
+}
+async function moveCandidate(step) {
+  const state = navigation;
+  if (!state || state.loading) return;
+  const note = $('#note'), stage = $('#reviewStatus');
+  if ((note?.value.trim() || (stage && stage.value !== current?.status)) &&
+      !confirm('Leave this candidate and discard unsaved review changes?')) return;
+  state.loading = true;
+  updatePager();
+  try {
+    let index = state.index + step;
+    if (index < 0 || index >= state.ids.length) {
+      const nextPage = state.page + step;
+      const result = await api('list', {...state.filters, page:nextPage});
+      if (navigation !== state) return;
+      if (!result.rows.length) throw new Error('The candidate list changed. Refresh the list to continue.');
+      state.page = nextPage;
+      state.count = result.count;
+      state.ids = result.rows.map(row => row.id);
+      index = step > 0 ? 0 : state.ids.length - 1;
+    }
+    state.index = index;
+    await open(state.ids[index]);
+    $('#detail').scrollTop = 0;
+  } catch (error) {
+    state.error = error.message;
+  } finally {
+    if (navigation === state) {
+      state.loading = false;
+      updatePager();
+      if (state.error) { $('#candidatePosition').textContent = state.error; delete state.error; }
+    }
+  }
+}
+$('#earlierCandidate').onclick = () => moveCandidate(-1);
+$('#laterCandidate').onclick = () => moveCandidate(1);
+async function load(){syncFilters();if(busy)return;busy=true;$('#role').disabled=true;$('#message').textContent='Loading applications…';try{const filters={role:$('#role').value,status:$('#status').value,city:$('#city').value,search:$('#search').value};const r=await api('list',{page,...filters});listedPage={filters,page,count:r.count,ids:r.rows.map(row=>row.id)};$('#cleanerCount').textContent=r.counts?.cleaner??'—';$('#ambassadorCount').textContent=r.counts?.brand_ambassador??'—';queue();$('#total').textContent=(r.total??r.count)+' total applicants in this pool · '+r.count+' matching this view';$('#results').innerHTML=r.rows.length?`<table class="applicant-table"><thead><tr><th>Applicant</th><th>Position / area</th><th>Status</th><th>Applied</th><th></th></tr></thead><tbody>${r.rows.map(a=>`<tr><td><strong>${esc(a.name)}</strong><br><small>${esc(a.email)}</small></td><td>${a.role==='cleaner'?'Cleaning contractor':'Brand ambassador'}<br><small>${esc(zonesFor(a))} · ${esc(a.city)}, ${esc(a.state)}</small></td><td><span class="badge">${stages[a.status]}</span></td><td>${new Date(a.created_at).toLocaleDateString()}</td><td><button data-open="${a.id}">Review</button></td></tr>`).join('')}</tbody></table>`:'<div class="info">No applications match these filters.</div>';$('#previous').disabled=page===1;$('#next').disabled=page*30>=r.count;$('#page').textContent=`Page ${page} of ${Math.max(1,Math.ceil(r.count/30))}`;$('#message').textContent='';}catch(e){$('#message').textContent=e.message;$('#results').innerHTML='<p><a href="index.html">Admin sign in</a> · Use Search / refresh to retry.</p>';}finally{busy=false;$('#role').disabled=false;}}
 function answerSections(answers){
  const groups=[['Application experience & availability',['experience','services','availability','availability_details','sales_experience','ambassador_experience','languages']],['Work readiness',['service_cities','transport','supplies','insurance']],['Ambassador plan',['strategy','channels','channel_other','interest','profile_url']],['Acknowledgments',['age_18','commission_only','independent_ack','marketing_ack','compensation_acknowledged','training_ready','documents_ready','standards_ready','accurate','contact_consent']]];
  const used=new Set(['experience_details',...groups.flatMap(g=>g[1])]);groups.push(['Additional details',Object.keys(answers).filter(k=>!used.has(k)&&!['import_batch','import_resume_sha256','source_candidate_ids'].includes(k))]);
@@ -71,6 +113,11 @@ async function open(id){$('#detailBody').innerHTML='<p>Loading application…</p
 async function hireApplicant(a){if(!confirm('Hire '+a.name+' and email their account access? Existing accounts keep their password. Onboarding is still required.'))return;$('#hireApplicant').disabled=true;$('#hireResult').textContent='Setting up account and sending welcome email…';try{const r=await api('hire',{id:a.id});await open(a.id);await load();$('#hireResult').textContent='Hired. Welcome email sent'+(r.existing_account?' with their existing-account login instructions.':'.');}catch(e){await open(a.id);await load();$('#hireResult').textContent=e.message;}}
 async function deleteApplicant(a){if(!confirm('Delete '+a.name+' from the applicant pool? This does not delete a user account.'))return;try{await api('delete',{id:a.id});$('#detail').close();page=1;await load();}catch(e){$('#hireResult').textContent=e.message;}}
 async function save(e){e.preventDefault();$('#save').disabled=true;try{await api('review',{id:current.id,version:current.version,status:$('#reviewStatus').value,note:$('#note').value});await open(current.id);await load();}catch(e){$('#reviewError').textContent=e.message;$('#save').disabled=false;}}
-$('#results').onclick=e=>{const b=e.target.closest('[data-open]');if(b)open(b.dataset.open);};$('#close').onclick=()=>$('#detail').close();$('#filters').onsubmit=e=>{e.preventDefault();if(busy)return;page=1;history.replaceState(null,'','?role='+$('#role').value);load();};$('#city').onchange=$('#status').onchange=$('#role').onchange=()=>{if(!busy){page=1;history.replaceState(null,'','?role='+$('#role').value);load();}};$('#previous').onclick=()=>{if(!busy){page--;load();}};$('#next').onclick=()=>{if(!busy){page++;load();}};load();
+$('#results').onclick=e=>{const b=e.target.closest('[data-open]');if(b && listedPage){
+  const state={...listedPage,index:listedPage.ids.indexOf(b.dataset.open),loading:true};
+  navigation=state;$('#candidatePager').hidden=false;updatePager();
+  open(b.dataset.open).finally(()=>{if(navigation===state){state.loading=false;updatePager();}});
+}};$('#close').onclick=()=>$('#detail').close();$('#filters').onsubmit=e=>{e.preventDefault();if(busy)return;page=1;history.replaceState(null,'','?role='+$('#role').value);load();};$('#city').onchange=$('#status').onchange=$('#role').onchange=()=>{if(!busy){page=1;history.replaceState(null,'','?role='+$('#role').value);load();}};$('#previous').onclick=()=>{if(!busy){page--;load();}};$('#next').onclick=()=>{if(!busy){page++;load();}};load();
 
+$('#detail').addEventListener('close',()=>{navigation=null;$('#candidatePager').hidden=true;});
 $('#emailPreview').onclick=async()=>{try{const r=await api('email_preview',{role:$('#role').value});$('#detailBody').innerHTML='<p class="eyebrow">AUTOMATIC APPLICATION EMAIL</p><h2>'+esc(r.subject)+'</h2><p class="small">Current plain-text template. The applicant name and reference are personalized when sent.</p><pre style="white-space:pre-wrap;font:inherit;line-height:1.7">'+esc(r.text)+'</pre>';if(!$('#detail').open)$('#detail').showModal();}catch(e){$('#message').textContent=e.message;}};
