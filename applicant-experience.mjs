@@ -46,26 +46,29 @@ export function addExperienceTab(body,a,api) {
   const content=document.createElement('div');
   content.className='resume-history';
   content.setAttribute('role','status');
-  experience.append(heading,label,content);
+  const history=document.createElement('section'),slot=document.createElement('div');
+  history.append(label,content);
+  review.insertBefore(slot,review.querySelector('.applicant-review-section') || review.querySelector('#reviewForm'));
+  experience.append(heading);
   if(a.answers?.experience_details){
     const title=document.createElement('h3'),answer=document.createElement('p');
     title.textContent='Experience reported on the application';
     answer.textContent=a.answers.experience_details;
     const details=document.createElement('details'),summary=document.createElement('summary');
     summary.textContent=title.textContent;details.className='experience-application';
-    details.append(summary,answer);experience.append(details);
+    details.append(summary,answer);history.append(details);
   }
   const nav=document.createElement('div');
   nav.className='candidate-tabs';
   const overview=document.createElement('button'),tab=document.createElement('button');
   overview.textContent='Overview';tab.textContent='Experience';
   const select=show=>{
+    (show?experience:slot).append(history);
     review.hidden=show;experience.hidden=!show;
     overview.setAttribute('aria-pressed',String(!show));tab.setAttribute('aria-pressed',String(show));
   };
   overview.onclick=()=>select(false);
-  tab.onclick=async()=>{
-    select(true);
+  const load=async()=>{
     if(!a.resume_path){content.textContent='No résumé attached.';return;}
     const key=a.id+'|'+a.resume_path;
     content.textContent='Reading résumé…';
@@ -80,5 +83,6 @@ export function addExperienceTab(body,a,api) {
       else content.textContent='This résumé has no readable text. Use Download resume in Overview to view the original.';
     } catch {cache.delete(key);content.textContent='Could not read this résumé. Select Experience to retry, or use Download resume in Overview.';}
   };
-  nav.append(overview,tab);body.replaceChildren(nav,review,experience);select(false);
+  tab.onclick=()=>{select(true);if(!cache.has(a.id+'|'+a.resume_path))load();};
+  nav.append(overview,tab);body.replaceChildren(nav,review,experience);select(false);load();
 }
