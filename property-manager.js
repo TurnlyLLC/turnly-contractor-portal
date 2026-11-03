@@ -1,3 +1,4 @@
+import { propertyManagerNotesHtml } from './property-manager-notes.mjs';
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 import {
   adminPreviewPortalOptions,
@@ -69,6 +70,7 @@ const state = {
   requestDraft: {
     unit: "",
     unit_id: "",
+    service_date: "",
     move_in_date: "",
     urgent_notice: "",
     move_in_before_2: "",
@@ -129,9 +131,9 @@ function pmIcon(name, className = "") {
 
 function readDashboardTheme() {
   try {
-    return window.localStorage?.getItem(PROPERTY_MANAGER_THEME_STORAGE_KEY) === "light" ? "light" : "dark";
+    return window.localStorage?.getItem(PROPERTY_MANAGER_THEME_STORAGE_KEY) === "dark" ? "dark" : "light";
   } catch {
-    return "dark";
+    return "light";
   }
 }
 
@@ -545,6 +547,7 @@ function blankTurnRequestDraft() {
   return {
     unit: "",
     unit_id: "",
+    service_date: "",
     move_in_date: "",
     urgent_notice: "",
     move_in_before_2: "",
@@ -562,6 +565,7 @@ function captureTurnRequestDraft(form = document.getElementById("managerTurnRequ
   state.requestDraft = {
     unit: form.elements.unit?.value || "",
     unit_id: form.elements.unit_id?.value || "",
+    service_date: form.elements.service_date?.value || "",
     move_in_date: form.elements.move_in_date?.value || "",
     urgent_notice: form.elements.urgent_notice?.value || "",
     move_in_before_2: form.elements.move_in_before_2?.value || "",
@@ -668,6 +672,10 @@ function redactManagerAssignment(row) {
   if (Object.keys(metadata).length) {
     const cleanedMetadata = { ...metadata };
     managerSensitiveMetadataFields.forEach((field) => delete cleanedMetadata[field]);
+    // Only expose notes explicitly saved with a property manager request.
+    if (metadata.source === "property_manager_turn_request") {
+      cleanedMetadata.property_manager_notes = metadata.property_manager_notes || "";
+    }
     redacted.metadata = cleanedMetadata;
   }
   return redacted;
@@ -1068,11 +1076,18 @@ function unitDropdownLabel(unit = {}) {
 function visibleTurnRequestUnits(draft = state.requestDraft || {}) {
   const term = normalizeUnitLookup(draft.unit || "");
   const key = normalizeUnitKey(draft.unit || "");
-  const rows = state.units.filter((unit) => {
-    if (!term && !key) return true;
-    return unitLookupValues(unit).some((value) => value.includes(term) || value.includes(key));
-  });
-  return rows.slice(0, 10);
+  const rank = (unit) => {
+    const name = normalizeUnitLookup(unitName(unit));
+    const number = normalizeUnitKey(name);
+    if (!term || name === term || (key && number === key)) return 0;
+    if (name.startsWith(term) || (key && number.startsWith(key))) return 1;
+    if (name.includes(term) || (key && number.includes(key))) return 2;
+    return 3;
+  };
+  return state.units.map(unit => ({unit, rank:rank(unit)}))
+    .filter(match => match.rank < 3)
+    .sort((a,b) => a.rank - b.rank || unitName(a.unit).localeCompare(unitName(b.unit), undefined, {numeric:true}))
+    .slice(0, 10).map(match => match.unit);
 }
 
 function selectedTurnRequestUnit(form = document.getElementById("managerTurnRequestForm")) {
@@ -2567,6 +2582,7 @@ function renderAssignmentDetailsCard(row, emptyTitle = "No request selected") {
           </div>
         `).join("")}
       </div>
+      ${propertyManagerNotesHtml(row)}
       <h3>Requested Services</h3>
       <div class="pm-chip-row">${compact([row.service_type, meta.checklist_name]).slice(0, 5).map((item) => `<span>${esc(item)}</span>`).join("") || "<span>Standard turn</span>"}</div>
       <h3>Before & After Videos</h3>
@@ -2909,9 +2925,10 @@ function renderRequestForm() {
           <div class="pm-turn-request-success-icon">${pmIcon("check")}</div>
           <p class="pm-eyebrow">Request Submitted</p>
           <h2 id="pmTurnRequestThanksTitle">Thank you for choosing Turnly.</h2>
-          <p>Our staff will complete this request before the scheduled move-in date. We will reach out if we have any questions.</p>
+          <p>We received your requested cleaning date and resident move-in details. We will reach out if we have any questions.</p>
           <dl>
             <div><dt>Unit</dt><dd>${esc(state.requestConfirmation.unit || "Not listed")}</dd></div>
+            <div><dt>Requested cleaning date</dt><dd>${esc(formatMoveInDate(state.requestConfirmation.serviceDateValue))}</dd></div>
             <div><dt>Move-In Date</dt><dd>${esc(formatMoveInDate(state.requestConfirmation.moveInDateValue))}</dd></div>
             <div><dt>Property</dt><dd>${esc(propertyTitle())}</dd></div>
           </dl>
@@ -2939,20 +2956,22 @@ function renderRequestForm() {
             <span data-manager-turn-progress>Question 1 of 4</span>
             <div><span data-manager-turn-progress-bar style="width: 25%;"></span></div>
           </div>
-          <label class="pm-turn-question is-active" data-manager-turn-step="unit">
+          <div class="pm-turn-question is-active" data-manager-turn-step="unit">
             <span class="pm-question-copy">
               <strong>What unit needs to be turned?</strong>
               <small>Search and choose from the units currently attached to this property.</small>
             </span>
             ${unitPicker}
-          </label>
-          <label class="pm-turn-question" data-manager-turn-step="date">
+          </div>
+          <div class="pm-turn-question" data-manager-turn-step="date"><label class="pm-date-field">
             <span class="pm-question-copy">
               <strong>When does the resident move in?</strong>
               <small>Choose the scheduled move-in date.</small>
             </span>
             <input name="move_in_date" type="date" min="${esc(dateInputValue(new Date()))}" value="${esc(draft.move_in_date || "")}" data-manager-move-in-date required />
-          </label>
+            </label><label class="pm-date-field"><strong>When would you like us to clean the unit?</strong><small>This will be the service date on your request.</small>
+            <input name="service_date" type="date" min="${esc(dateInputValue(new Date()))}" value="${esc(draft.service_date || "")}" required /></label>
+          </div>
           <fieldset class="pm-turn-question pm-urgent-question is-hidden" data-manager-turn-step="urgent" data-manager-urgent-question>
             <span class="pm-question-copy">
               <strong>The scheduled resident move-in is less than ${esc(URGENT_TURN_NOTICE_HOURS)} hours away. Is this an urgent request?</strong>
@@ -2975,7 +2994,7 @@ function renderRequestForm() {
           </fieldset>
           <label class="pm-turn-question" data-manager-turn-step="notes">
             <span class="pm-question-copy">
-              <strong>Add any notes you would like our staff to know about this move-in.</strong>
+              <strong>What should our team know about the clean or move-in?</strong>
               <small>Access details, lockbox notes, special areas, pets, supplies, or timing concerns all help.</small>
             </span>
             <textarea name="body" rows="4" placeholder="Anything Turnly should know before we arrive...">${esc(draft.body || "")}</textarea>
@@ -2997,8 +3016,9 @@ function renderTurnRequestUnitPicker(draft = {}) {
   const selectedUnit = selectedId ? state.units.find((unit) => String(unit.id || "") === String(selectedId)) : matchingUnit(draft.unit || "");
   return `
     <div class="pm-unit-combobox" data-manager-unit-combobox>
-      <input name="unit" type="search" value="${esc(draft.unit || "")}" placeholder="Start typing a unit..." autocomplete="off" required data-manager-unit-search />
+      <input name="unit" aria-label="Search property units" type="search" value="${esc(draft.unit || "")}" placeholder="Start typing a unit..." autocomplete="off" required data-manager-unit-search />
       <input name="unit_id" type="hidden" value="${esc(selectedUnit?.id || selectedId || "")}" data-manager-unit-id />
+      <small data-unit-match-count role="status"></small>
       <div class="pm-unit-dropdown" data-manager-unit-results>
         ${turnRequestUnitResultsHtml(draft)}
       </div>
@@ -3031,7 +3051,11 @@ function refreshTurnRequestUnitResults(form = document.getElementById("managerTu
   if (!form) return;
   const results = form.querySelector("[data-manager-unit-results]");
   if (!results) return;
-  results.innerHTML = turnRequestUnitResultsHtml(state.requestDraft || {});
+  const query = {unit:form.elements.unit.value, unit_id:form.elements.unit_id.value};
+  results.innerHTML = turnRequestUnitResultsHtml(query);
+  const count = results.querySelectorAll("button").length;
+  form.querySelector("[data-unit-match-count]").textContent = query.unit && !query.unit_id
+    ? count + (count === 1 ? " suggestion" : " suggestions") : "";
 }
 
 function renderAddUnitModal() {
@@ -3260,6 +3284,8 @@ async function createTurnRequest(form) {
   const urgentRequired = moveInIsWithinUrgentNotice(moveInDateValue);
   const urgentNotice = form.elements.urgent_notice?.value || "";
   const moveInBefore2 = form.elements.move_in_before_2?.value || "";
+  const serviceDateValue = form.elements.service_date.value;
+  if (!form.elements.service_date.checkValidity()) { setManagerMessageStatus("Choose a current or future cleaning date.", true); return; }
   const additionalNotes = form.elements.body?.value?.trim() || "";
   if (!moveInDate) {
     setManagerMessageStatus("Choose a scheduled move-in date.", true);
@@ -3284,9 +3310,10 @@ async function createTurnRequest(form) {
 
   const priority = urgentNotice === "Yes" ? "Urgent" : "Normal";
   const notes = [
+    `Resident move-in date: ${formatMoveInDate(moveInDateValue)}`,
+    additionalNotes ? `Property manager notes: ${additionalNotes}` : "",
     `Resident scheduled before 2 PM local time: ${moveInBefore2}`,
-    urgentRequired ? `Less than ${URGENT_TURN_NOTICE_HOURS} hours notice - urgent request: ${urgentNotice}` : "",
-    additionalNotes ? `Notes: ${additionalNotes}` : ""
+    urgentRequired ? `Less than ${URGENT_TURN_NOTICE_HOURS} hours notice - urgent request: ${urgentNotice}` : ""
   ].filter(Boolean).join("\n");
 
   state.sending = true;
@@ -3301,7 +3328,7 @@ async function createTurnRequest(form) {
       service,
       priority,
       moveInDateValue,
-      moveInDate,
+      serviceDateValue,
       notes
     });
     assignmentId = result.assignmentId || "";
@@ -3313,6 +3340,7 @@ async function createTurnRequest(form) {
         unit_id: unitRecord.id,
         service_type: service,
         priority,
+        service_date: serviceDateValue,
         move_in_date: moveInDateValue,
         move_in_time: MOVE_IN_TIME_LABEL,
         notes
@@ -3334,6 +3362,7 @@ async function createTurnRequest(form) {
     unit ? `Unit: ${unit}` : "",
     `Service: ${service}`,
     `Priority: ${priority}`,
+    `Requested cleaning date: ${formatMoveInDate(serviceDateValue)}`,
     `Scheduled move-in date: ${formatMoveInDate(moveInDateValue)}`,
     `Move-in time: ${MOVE_IN_TIME_LABEL}`,
     `Resident scheduled before 2 PM local time: ${moveInBefore2}`,
@@ -3365,7 +3394,7 @@ async function createTurnRequest(form) {
   if (!state.error) {
     state.selectedAssignmentId = assignmentId || state.selectedAssignmentId;
     state.requestOpen = false;
-    state.requestConfirmation = { unit, moveInDateValue };
+    state.requestConfirmation = { unit, moveInDateValue, serviceDateValue };
     resetTurnRequestDraft();
     state.dataMessage = "";
     state.dataError = false;
@@ -3454,9 +3483,9 @@ async function submitPropertyManagerUnit(form) {
   renderManagerPortal();
 }
 
-async function createAdminPreviewTurnRequest({ unit, service, priority, moveInDateValue, moveInDate, notes }) {
+async function createAdminPreviewTurnRequest({ unit, service, priority, moveInDateValue, serviceDateValue, notes }) {
   const unitRecord = unit ? matchingUnit({ unit_name: unit, unit_number: unit, id: state.requestDraft?.unit_id }) : null;
-  const start = moveInDate || scheduledMoveInDate(moveInDateValue);
+  const start = scheduledMoveInDate(serviceDateValue);
   const end = start ? new Date(start.getTime() + 2 * 60 * 60 * 1000) : null;
   const propertyId = state.profile?.property_manager_property_id || state.property?.id || null;
   const propertyName = propertyTitle();
@@ -3486,6 +3515,7 @@ async function createAdminPreviewTurnRequest({ unit, service, priority, moveInDa
     checklist_item_count: Array.isArray(unitRecord?.checklist_items) ? unitRecord.checklist_items.length : 0,
     move_in_date: moveInDateValue,
     move_in_time: MOVE_IN_TIME_LABEL,
+    service_date: serviceDateValue,
     property_manager_notes: notes || "",
     admin_only_editable: ["start_window", "end_window"]
   };
@@ -3709,6 +3739,7 @@ function turnRequestStepIndex(form) {
 function validateTurnRequestStep(form, step) {
   if (step === "unit" && !selectedTurnRequestUnit(form)?.id) return "Choose a unit from the list, or add the unit first.";
   if (step === "date" && !scheduledMoveInDate(form.elements.move_in_date?.value || "")) return "Choose the resident move-in date.";
+  if (step === "date" && !form.elements.service_date.checkValidity()) return "Choose a current or future cleaning date.";
   if (step === "urgent" && !form.elements.urgent_notice?.value) return `Tell us whether this less-than-${URGENT_TURN_NOTICE_HOURS}-hour turn is urgent.`;
   if (step === "before2" && !form.elements.move_in_before_2?.value) return "Tell us whether the resident is scheduled to move in before 2 PM local time.";
   return "";
@@ -4096,6 +4127,18 @@ document.addEventListener("input", (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
+  if (["ArrowDown","ArrowUp"].includes(event.key)) {
+    const picker = event.target.closest("[data-manager-unit-combobox]");
+    if (picker) {
+      const choices = [...picker.querySelectorAll("[data-manager-unit-select]")];
+      if (choices.length) {
+        event.preventDefault();
+        const index = choices.indexOf(event.target);
+        choices[Math.max(0,Math.min(choices.length - 1,index + (event.key === "ArrowDown" ? 1 : -1)))].focus();
+      }
+      return;
+    }
+  }
   if (event.key === "Escape" && state.assignmentDetailsOpen) {
     state.assignmentDetailsOpen = false;
     renderManagerPortal();

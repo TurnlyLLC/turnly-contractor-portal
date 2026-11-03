@@ -1,0 +1,14 @@
+/* CRM surfaces leave the property hero artwork and its overlay intact. */
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] {
+  --pm-text:#182b40; --pm-muted:#65768a; --pm-line:#e5eaf0;
+  color:#182b40;background-color:#f5f7fa;
+}
+body[data-portal-role="property-manager"][data-dashboard-theme="light"] :is(.command-sidebar,.command-header,.pm-turn-request-card,.panel-card:not(.pm-picture-hero):not(.pm-experience-hero)){
+  background-color:#fff!important;color:#182b40;border-color:#e5eaf0!important;box-shadow:0 2px 8px #17304b09;
+}
+body[data-portal-role="property-manager"][data-dashboard-theme="light"] .command-sidebar .nav-link{color:#52667b!important;box-shadow:none;border-radius:7px}
+body[data-portal-role="property-manager"][data-dashboard-theme="light"] .command-sidebar .nav-link.active{background:#e8f5f1!important;color:#076c63!important}
+body[data-portal-role="property-manager"][data-dashboard-theme="light"] .new-btn{background:#087f73!important;border-color:#087f73!important;color:white!important;box-shadow:none}
+.pm-turn-question .pm-date-field{display:grid;gap:8px}
+.pm-turn-question .pm-date-field+.pm-date-field{margin-top:18px}
+.pm-unit-combobox [data-unit-match-count]:empty{display:none}
