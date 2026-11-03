@@ -1,4 +1,4 @@
-import {addExperienceTab} from './applicant-experience.mjs';
+import {addExperienceTab} from './applicant-experience.mjs?v=2';
 const zonesFor=a=>(a.service_cities||a.answers?.service_cities||[a.service_city]).join(', ');
 import {renderStandaloneAdminSidebar,bindStandaloneAdminNavigation} from './admin-navigation.mjs?v=20261019-applicants';
 import {createClient} from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/+esm';

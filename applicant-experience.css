@@ -3,3 +3,10 @@
 #regions a:focus-visible,.candidate-tabs button:focus-visible{outline:3px solid #b24d00;outline-offset:3px}
 .candidate-tabs{display:flex;gap:8px;margin:12px 0 18px}.candidate-tabs button{padding:8px 16px;cursor:pointer}
 .resume-history{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6;color:#142f40}
+.resume-history{white-space:normal;display:grid;gap:14px}
+.experience-job{background:#fff;border:1px solid #bfd0d6;border-inline-start:4px solid #276873;border-radius:10px;padding:16px 18px}
+.experience-job h4{margin:0;color:#123b49;font-size:1.1rem;line-height:1.35}
+.experience-job p{margin:.4em 0}.experience-employer{font-weight:600;color:#365565}
+.experience-date{display:inline-block;margin:5px 0 8px;padding:2px 9px;border-radius:8px;background:#e6f2f3;color:#224c54;font-size:.9rem}
+.experience-job ul{margin:8px 0;padding-inline-start:22px}.experience-job li+li{margin-top:5px}
+.experience-application{margin:20px 0;border-top:1px solid #bfd0d6;padding:12px 0}.experience-application summary{cursor:pointer;font-weight:650}.experience-application p{white-space:pre-line}

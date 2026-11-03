@@ -1,3 +1,4 @@
+import {renderHistory} from './experience-layout.mjs';
 const workHeading = /^(?:(?:relevant|related|professional|employment|work|career|cleaning|previous)\s+)*(?:experience|history|employment|positions)(?:\s+history)?\s*:?$/i;
 const nextHeading = /^(?:education(?: and training)?|skills(?: and abilities)?|certifications(?: and licenses)?|licenses|languages|references|awards|additional information|projects)\s*:?$/i;
 export function extractHistory(lines) {
@@ -50,7 +51,9 @@ export function addExperienceTab(body,a,api) {
     const title=document.createElement('h3'),answer=document.createElement('p');
     title.textContent='Experience reported on the application';
     answer.textContent=a.answers.experience_details;
-    experience.append(title,answer);
+    const details=document.createElement('details'),summary=document.createElement('summary');
+    summary.textContent=title.textContent;details.className='experience-application';
+    details.append(summary,answer);experience.append(details);
   }
   const nav=document.createElement('div');
   nav.className='candidate-tabs';
@@ -73,7 +76,8 @@ export function addExperienceTab(body,a,api) {
       }
       const result=await cache.get(key);
       label.textContent=result.text?result.title:'Résumé experience';
-      content.textContent=result.text||'This résumé has no readable text. Use Download resume in Overview to view the original.';
+      if(result.text)content.replaceChildren(renderHistory(result));
+      else content.textContent='This résumé has no readable text. Use Download resume in Overview to view the original.';
     } catch {cache.delete(key);content.textContent='Could not read this résumé. Select Experience to retry, or use Download resume in Overview.';}
   };
   nav.append(overview,tab);body.replaceChildren(nav,review,experience);select(false);
