@@ -1,0 +1,5 @@
+#regions .button.secondary,.candidate-tabs button{background:#e6f2f6;color:#173747;border:2px solid #467082;border-radius:8px;font-weight:650}
+#regions .button.secondary[aria-current="page"],.candidate-tabs button[aria-pressed="true"]{background:#123d50;color:#fff;border-color:#123d50;text-decoration:underline;text-underline-offset:3px}
+#regions a:focus-visible,.candidate-tabs button:focus-visible{outline:3px solid #b24d00;outline-offset:3px}
+.candidate-tabs{display:flex;gap:8px;margin:12px 0 18px}.candidate-tabs button{padding:8px 16px;cursor:pointer}
+.resume-history{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6;color:#142f40}
