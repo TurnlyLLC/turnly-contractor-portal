@@ -14,7 +14,7 @@ body[data-portal-role="property-manager"][data-dashboard-theme="light"] .new-btn
 .pm-unit-combobox [data-unit-match-count]:empty{display:none}
 /* Pair foreground and background on surfaces that sit over apartment photos. */
 body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] {
-  & .pm-overview-focus-card {background:#f5f9fc!important}
+  & .pm-overview-focus-card, & .pm-picture-hero .pm-focus-next {background:#f5f9fc!important}
   & .pm-focus-next :is(strong,small,span), & .pm-stat-card :is(em,small),
   & .pm-sidebar-trust strong, & .pm-table td, & .pm-weekly-plan-list small,
   & .pm-lock-panel :is(p,h2), & .command-header p {color:#354b60!important;text-shadow:none}
