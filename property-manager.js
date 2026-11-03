@@ -1075,11 +1075,12 @@ function unitDropdownLabel(unit = {}) {
 
 function visibleTurnRequestUnits(draft = state.requestDraft || {}) {
   const term = normalizeUnitLookup(draft.unit || "");
-  const key = normalizeUnitKey(draft.unit || "");
+  if (!term) return [];
+  const key = normalizeUnitKey(term);
   const rank = (unit) => {
     const name = normalizeUnitLookup(unitName(unit));
     const number = normalizeUnitKey(name);
-    if (!term || name === term || (key && number === key)) return 0;
+    if (name === term || (key && number === key)) return 0;
     if (name.startsWith(term) || (key && number.startsWith(key))) return 1;
     if (name.includes(term) || (key && number.includes(key))) return 2;
     return 3;
@@ -1087,7 +1088,7 @@ function visibleTurnRequestUnits(draft = state.requestDraft || {}) {
   return state.units.map(unit => ({unit, rank:rank(unit)}))
     .filter(match => match.rank < 3)
     .sort((a,b) => a.rank - b.rank || unitName(a.unit).localeCompare(unitName(b.unit), undefined, {numeric:true}))
-    .slice(0, 10).map(match => match.unit);
+    .map(match => match.unit);
 }
 
 function selectedTurnRequestUnit(form = document.getElementById("managerTurnRequestForm")) {
@@ -1627,11 +1628,17 @@ async function loadRelatedPortalProperties() {
 
 async function loadPropertyUnits(propertyId) {
   const ids = uniqueValues([propertyId, ...managerPropertyIdValues()]);
-  const { rows, error } = await fetchRowsByColumn("property_units", "property_id", ids, {
-    order: "unit_name",
-    ascending: true,
-    limit: 1000
-  });
+  const rows = [];
+  let error = null;
+  for (const group of chunk(uuidValues(ids), 80)) {
+    for (let offset = 0; ; offset += 500) {
+      const page = await supabase.from("property_units").select("*").in("property_id", group)
+        .order("unit_name").order("id").range(offset, offset + 499);
+      if (page.error) { error = page.error; break; }
+      rows.push(...page.data);
+      if (page.data.length < 500) break;
+    }
+  }
   if (error && !rows.length && !missingColumnError(error)) return `Units unavailable: ${error.message}.`;
   state.units = dedupeRows(rows).sort((a, b) => String(a.unit_name || a.name || "").localeCompare(String(b.unit_name || b.name || "")));
   return "";
@@ -2258,14 +2265,14 @@ function renderOverviewView() {
   return `
     ${renderOverviewHero(metrics, delta)}
 
-    <section class="pm-overview-body">
-      <div class="pm-overview-main-stack">
-        <section class="pm-stat-grid pm-stat-grid-four" aria-label="Property manager overview">
+    <section class="pm-stat-grid pm-stat-grid-four" aria-label="Property manager overview">
           ${statCard("Units Ready", integer(metrics.ready), "completed last 30 days", "green", "turn-requests")}
           ${statCard("In Progress", integer(metrics.inProgress), "currently active", "violet", "turn-requests")}
           ${statCard("Upcoming", integer(metrics.upcoming), "future scheduled turns", "blue", "schedule")}
           ${statCard("Completed This Week", integer(metrics.completedThisWeek), `${delta >= 0 ? "+" : ""}${delta}% vs last week`, "cyan", "schedule")}
         </section>
+    <section class="pm-overview-body">
+      <div class="pm-overview-main-stack">
         ${panel("Turn Requests", renderOverviewRequests(), {
           className: `pm-overview-requests`,
           action: renderNewTurnRequestButton()
@@ -3020,7 +3027,7 @@ function renderTurnRequestUnitPicker(draft = {}) {
       <input name="unit" aria-label="Search property units" type="search" value="${esc(draft.unit || "")}" placeholder="Start typing a unit..." autocomplete="off" required data-manager-unit-search />
       <input name="unit_id" type="hidden" value="${esc(selectedUnit?.id || selectedId || "")}" data-manager-unit-id />
       <small data-unit-match-count role="status"></small>
-      <div class="pm-unit-dropdown" data-manager-unit-results>
+      <div class="pm-unit-dropdown" data-manager-unit-results ${String(draft.unit || "").trim() ? "" : "hidden"}>
         ${turnRequestUnitResultsHtml(draft)}
       </div>
       <button class="pm-unit-missing-link" type="button" data-manager-add-unit-open>Don't see the unit you're looking for?</button>
@@ -3029,6 +3036,7 @@ function renderTurnRequestUnitPicker(draft = {}) {
 }
 
 function turnRequestUnitResultsHtml(draft = {}) {
+  if (!String(draft.unit || "").trim()) return "";
   const units = visibleTurnRequestUnits(draft);
   const selectedId = draft.unit_id || "";
   const hasSearch = Boolean(String(draft.unit || "").trim());
@@ -3053,9 +3061,10 @@ function refreshTurnRequestUnitResults(form = document.getElementById("managerTu
   const results = form.querySelector("[data-manager-unit-results]");
   if (!results) return;
   const query = {unit:form.elements.unit.value, unit_id:form.elements.unit_id.value};
+  results.hidden = !query.unit.trim();
   results.innerHTML = turnRequestUnitResultsHtml(query);
   const count = results.querySelectorAll("button").length;
-  form.querySelector("[data-unit-match-count]").textContent = query.unit && !query.unit_id
+  form.querySelector("[data-unit-match-count]").textContent = query.unit.trim() && !query.unit_id
     ? count + (count === 1 ? " suggestion" : " suggestions") : "";
 }
 

@@ -27,3 +27,23 @@ body.admin-command-body[data-portal-role="property-manager"][data-dashboard-them
 }
 body[data-portal-role="property-manager"][data-dashboard-theme="dark"] .pm-lock-panel {background:#142536!important;color:#f1f6fb!important}
 body[data-portal-role="property-manager"][data-dashboard-theme="dark"] .pm-lock-panel :is(p,h2){color:#e1edf4!important}
+.pm-unit-dropdown[hidden]{display:none!important}
+body.admin-command-body[data-portal-role="property-manager"] {
+  & .pm-overview-body {gap:20px;align-items:start}
+  & .pm-overview-main-stack, & .pm-overview-aside-stack {min-width:0;gap:20px}
+  & .pm-stat-grid:has(+ .pm-overview-body) {gap:14px;margin:20px 0}
+  & .pm-overview-body .pm-panel, & .pm-stat-grid:has(+ .pm-overview-body) .pm-stat-card {border-radius:12px;padding:clamp(16px,1.3vw,23px);box-shadow:none}
+  & .pm-overview-body .pm-panel-head {align-items:center;gap:12px;margin-bottom:16px}
+  & .pm-overview-body .pm-panel-head h2 {font-size:1.12rem;line-height:1.35;letter-spacing:-.015em}
+  & .pm-overview-body .pm-panel-head .new-btn {color:white!important}
+  & .pm-overview-requests .pm-tabs {display:flex;flex-wrap:wrap;gap:5px;justify-content:flex-start;margin:0 0 12px;padding:4px 0 10px}
+  & .pm-overview-requests .pm-tabs button {padding:6px 12px;min-height:34px;line-height:1.3;border:0;border-radius:6px;box-shadow:none;font-size:.83rem;font-weight:600}
+  & .pm-overview-body .pm-table :is(th,td){padding:14px 10px;text-align:left;font-size:.85rem}
+  & .pm-overview-body .pm-completed-media-grid{grid-template-columns:1fr}
+  & .pm-overview-body .pm-completed-media-title strong{white-space:normal;overflow-wrap:anywhere}
+}
+body.admin-command-body[data-portal-role="property-manager"][data-dashboard-theme="light"] {
+  & .pm-overview-body .pm-panel, & .pm-stat-grid:has(+ .pm-overview-body) .pm-stat-card {background:#fff!important;border:1px solid #dce5eb!important}
+  & .pm-overview-body .pm-tabs button:not(.active){background:transparent!important;color:#41566b!important}
+  & .pm-overview-body .pm-weekly-plan-list button,& .pm-overview-body .pm-completed-media-card{background:#f7fafb!important;border-color:#dce5eb}
+}
