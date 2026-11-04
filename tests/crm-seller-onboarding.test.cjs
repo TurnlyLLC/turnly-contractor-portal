@@ -14,6 +14,7 @@ test('new introduction, review and current signature are all required; old compl
  await db.exec('reset role;set role service_role');await assert.rejects(db.query("update crm_seller_agreements set signer_name='Changed'"),/permission denied/);
  }finally{await db.close();}});
 test('commission approval is admin only, amount checked, and never sends or records money twice',async()=>{const db=await fixture();try{
+ await require("./helpers/sales-login.cjs")(id(1),"commission");
  const review=(actor,action,amount=1000,ref='')=>db.query('select crm_commission_payment_review($1,$2,$3,$4,$5)',[id(actor),id(3),action,ref,amount]);
  await assert.rejects(review(1,'approve'),/Administrator/);
  await assert.rejects(review(2,'record_paid',1000,'ACH-1'),/Approve/);

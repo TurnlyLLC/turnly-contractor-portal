@@ -1,6 +1,7 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs');const {PGlite}=require('@electric-sql/pglite');
 const U='00000000-0000-4000-8000-000000000001',A='00000000-0000-4000-8000-000000000002',SID='00000000-0000-4000-8000-000000000010';
 test('pay terms migration qualifies logged hours by dials and human outbound average while retaining old earnings and signature gates',async()=>{const db=new PGlite();try{
+ await require("./helpers/sales-login.cjs")(U,"hourly");
  await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create table auth.sessions(id uuid primary key,user_id uuid,created_at timestamptz default now());
  create function auth.uid() returns uuid language sql as $$select '${U}'::uuid$$;create function auth.jwt() returns jsonb language sql as $$select jsonb_build_object('session_id','${SID}')$$;
  create table profiles(id uuid primary key,full_name text,role text,status text);insert into profiles values('${U}','Rep','sales','active'),('${A}','Admin','admin','active');
@@ -26,6 +27,7 @@ test('pay terms migration qualifies logged hours by dials and human outbound ave
  await db.exec(`insert into crm_seller_agreements(user_id,version)values('${U}','20261027-v1')`);assert.equal((await db.query('select crm_seller_training_ready_v3($1) ok',[U])).rows[0].ok,false);
  const version=(await db.query('select crm_current_agreement_version($1) v',[U])).rows[0].v;await db.query('select crm_sign_pay_agreement($1,$2,$3,$4,$5)',[U,version,'hash','text','Rep']);assert.equal((await db.query('select crm_seller_training_ready_v3($1) ok',[U])).rows[0].ok,true);
  await db.query('select crm_set_pay_plan_v2($1,$2,$3,$4,$5,$6,$7,$8)',[A,U,'hourly',0,2500,25,20,'Paid after admin review.']);assert.equal((await db.query('select crm_seller_training_ready_v3($1) ok',[U])).rows[0].ok,false);await assert.rejects(db.query('select crm_sign_pay_agreement($1,$2,$3,$4,$5)',[U,version,'hash','text','Rep']),/terms changed/);
+ const approved=await db.query("select crm_hourly_payment_review($1,$2,'approve',$3,$4,3000) id",[A,U,'2025-01-01','2025-01-03']);assert.ok(approved.rows[0].id);const totals=(await db.query('select crm_hourly_summary($1,$2) r',[U,'2025-01-03'])).rows[0].r[0];assert.equal(Number(totals.approved_cents),3000);
  await db.exec('set role authenticated');await assert.rejects(db.query('select crm_hourly_windows($1,$2,$3)',[U,'2025-01-01','2025-01-03']),/permission denied/);
  }finally{await db.close();}});
 test('pay-specific contracts and metric labels do not mix compensation models',async()=>{
