@@ -1,5 +1,5 @@
 import {addExperienceTab} from './applicant-experience.mjs?v=3';
-import {downloadBatch,headersFromTemplate} from './verified-first-export.mjs?v=mass-invite';
+import {downloadBatch,headersFromTemplate} from './verified-first-export.mjs?v=mass-invite-phone';
 let exportRows=[], exportHeaders;
 const zonesFor=a=>(a.service_cities||a.answers?.service_cities||[a.service_city]).join(', ');
 import {renderStandaloneAdminSidebar,bindStandaloneAdminNavigation} from './admin-navigation.mjs?v=20261019-applicants';

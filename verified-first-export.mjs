@@ -1,10 +1,17 @@
 const massFileHeaders = ['*First Name', '*Last Name', '*Email Address', 'Phone', 'Cost Code 1', '*Job State'];
+function invitePhone(value) {
+  const phone = String(value ?? '').trim();
+  if (!/^[+\d\s().-]+$/.test(phone)) return '';
+  const digits = phone.replace(/\D/g, '').replace(/^1(?=\d{10}$)/, '');
+  if (digits.length !== 10) return '';
+  return digits.slice(0, 3) + '-' + digits.slice(3, 6) + '-' + digits.slice(6);
+}
 const fields = {
   'Full Name': a => a.name,
   'First Name': a => a.first_name || a.name.trim().split(/\s+/)[0],
   'Last Name': a => a.last_name || a.name.trim().split(/\s+/).slice(1).join(' '),
   'Email Address': a => a.email,
-  'Phone Number': a => a.phone,
+  'Phone Number': a => invitePhone(a.phone),
   'Street Address': a => a.street,
   City: a => a.city,
   State: a => a.state,
