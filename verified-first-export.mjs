@@ -1,3 +1,4 @@
+const massFileHeaders = ['*First Name', '*Last Name', '*Email Address', 'Phone', 'Cost Code 1', '*Job State'];
 const fields = {
   'Full Name': a => a.name,
   'First Name': a => a.first_name || a.name.trim().split(/\s+/)[0],
@@ -8,7 +9,9 @@ const fields = {
   City: a => a.city,
   State: a => a.state,
   'ZIP Code': a => a.zip,
-  'Work State': () => 'NC'
+  'Work State': () => 'NC',
+  'Job State': () => 'North Carolina',
+  'Cost Code 1': () => ''
 };
 const aliases = {firstname:'First Name',lastname:'Last Name',name:'Full Name',email:'Email Address',phone:'Phone Number',mobilephone:'Phone Number',cellphone:'Phone Number',address:'Street Address',address1:'Street Address',addressline1:'Street Address',zipcode:'ZIP Code',postalcode:'ZIP Code',zip:'ZIP Code',stateofemployment:'Work State'};
 const normalize = name => name.toLowerCase().replace(/[^a-z0-9]/g,'');
@@ -35,7 +38,7 @@ function quote(value){
   if(/^[=+@-]/.test(text) && !/^\+\d[\d ().-]*$/.test(text))text="'"+text;
   return '"'+text.replaceAll('"','""')+'"';
 }
-export function exportBatch(rows,headers=Object.keys(fields)){
+export function exportBatch(rows,headers=massFileHeaders){
   return [headers,...rows.map(a=>headers.map(h=>field(h)?.(a)??''))].map(row=>row.map(quote).join(',')).join('\r\n')+'\r\n';
 }
 export function downloadBatch(rows,headers){
