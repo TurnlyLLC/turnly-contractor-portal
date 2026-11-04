@@ -1,11 +1,11 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 let source=fs.readFileSync('sales-portal.js','utf8').replace(/\r/g,'').replace(/import[\s\S]*?from\s+["'][^"']+["'];/g,'');
-const cut=source.indexOf('bindEvents();\n\nif (await requireSalesAccess())');
+const cut=source.indexOf('\nbindEvents();');assert.ok(cut>0);
 source=source.slice(0,cut)+source.slice(source.indexOf('function renderCrmOverview()',cut));
 source=fs.readFileSync('crm-sales-content.mjs','utf8').replace(/export /g,'')+'\n'+source;
 function fixture(profile={role:'sales',status:'active'}){
- const db={rpc:async()=>({data:{active:true,session_valid:true,must_change_password:false}}),auth:{getUser:async()=>({data:{user:{id:'staff',user_metadata:{role:'admin'}}}})},from:()=>({select(){return this},eq(){return this},maybeSingle:async()=>({data:profile})})};
- const context={console,setTimeout,clearTimeout,URL,URLSearchParams,Date,Intl,Map,Set,Number,String,Math,JSON,window:{__ENV:{SUPABASE_URL:'test',SUPABASE_ANON_KEY:'test'},location:{},localStorage:{getItem:()=>null}},localStorage:{getItem:()=>null},document:{getElementById:()=>null,body:{dataset:{salesPage:'dashboard'}}},createClient:()=>db,verifyAdminPreviewSession:async()=>null};
+ const db={rpc:async()=>({data:{active:true,session_valid:true,must_change_password:false}}),auth:{getSession:async()=>({data:{session:{access_token:"fixture"}}}),getUser:async()=>({data:{user:{id:'staff',user_metadata:{role:'admin'}}}})},from:()=>({select(){return this},eq(){return this},maybeSingle:async()=>({data:profile})})};
+ const context={AbortSignal,fetch:async()=>({ok:true,json:async()=>({ready:true})}),startActivityClock:async()=>({closed:false}),console,setTimeout,clearTimeout,URL,URLSearchParams,Date,Intl,Map,Set,Number,String,Math,JSON,window:{__ENV:{SUPABASE_URL:'https://example.test',SUPABASE_ANON_KEY:'test'},location:{},localStorage:{getItem:()=>null}},localStorage:{getItem:()=>null},document:{getElementById:()=>null,body:{dataset:{salesPage:'dashboard'}}},createClient:()=>db,verifyAdminPreviewSession:async()=>null};
  vm.createContext(context);vm.runInContext(source+'\nglobalThis.T={state,requireSalesAccess,isSalesAdmin,renderCrmOverview,renderCrmPipeline,renderCrmContacts,renderCrmTeam,baseFilteredRows,loadSalesCollection,updateStage,assignmentPlan,renderAssignmentModal,payloadFromUpload,renderSidebar,renderLeadsPage,renderLeadFocusMode,renderScriptsPage,renderPlaybookPage,pagedProspects,knowledgeMatches,handleOutreachForm,renderContactCard,loadRows,refreshData,withCrmTimeout,renderLoadFailure};',context);return context;
 }
 test('CRM access requires a permitted saved staff profile, never editable user metadata',async()=>{

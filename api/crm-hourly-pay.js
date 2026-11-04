@@ -4,7 +4,7 @@ module.exports=async(req,res)=>{
  res.setHeader('Cache-Control','no-store');if(req.method!=='POST')return S.json(res,405,{error:'Use POST.'});
  try{
   const db=S.database(),user=await C.access(db,req),i=await S.body(req);
-  if(!user.admin){const a=await require('../lib/seller-agreement.cjs').current(db,user);if(a.mode!=='hourly')return S.json(res,200,{admin:false,hidden:true,rows:[],periods:[]});}
+  const historical=!user.admin&&(await require('../lib/seller-agreement.cjs').current(db,user)).mode!=='hourly';
   const through=new Date(i.through);if(!Number.isFinite(through.getTime())||through.getTime()>Date.now())throw S.fail('Choose a completed review date.');
   if(['approve','record_paid'].includes(i.action)){
    if(!user.admin)throw S.fail('Administrator access required.',403);
@@ -15,6 +15,6 @@ module.exports=async(req,res)=>{
    db.rpc('crm_hourly_summary',{p_user:user.admin?null:user.id,p_through:through.toISOString()}).then(S.checked),
    C.all(db,'crm_hourly_payments','*',q=>user.admin?q:q.eq('user_id',user.id))
   ]);
-  return S.json(res,200,{admin:user.admin,rows,periods,through:through.toISOString()});
+  return S.json(res,200,{admin:user.admin,historical,hidden:historical&&!periods.length&&!rows.some(r=>r.pending_cents>0||r.approved_cents>0||r.paid_cents>0),rows,periods,through:through.toISOString()});
  }catch(e){return S.json(res,e.status||400,{error:e.message||'Unable to review hourly pay.'});}
 };

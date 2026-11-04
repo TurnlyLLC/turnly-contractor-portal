@@ -4,9 +4,9 @@ export async function startActivityClock(client,page){
  const workPages=new Set(['leads','pipeline','tasks','scripts','messages','dashboard']);
  const clock=document.createElement('div');clock.hidden=true;clock.style.cssText='position:fixed;bottom:12px;right:20px;z-index:9998;background:#163447;color:white;padding:8px 14px;border-radius:12px;font-size:13px';document.body.append(clock);
  const note=document.createElement('div');note.setAttribute('role','status');note.style.cssText='position:fixed;bottom:12px;left:240px;z-index:9999;background:#fff4d6;color:#453511;border:1px solid #c9a24b;border-radius:10px;padding:10px 16px;max-width:70vw';note.hidden=true;document.body.append(note);
- async function request(action){const {data}=await client.auth.getSession();if(!data?.session)throw Object.assign(Error('Sign in again.'),{expired:true});const active=pending;pending=false;
+ async function request(action){const {data}=await client.auth.getSession();if(!data?.session)throw Object.assign(Error('Sign in again.'),{expired:true});const active=pending;pending=false;try{
   const r=await fetch('/api/crm-productivity',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+data.session.access_token},body:JSON.stringify({action,active,work:document.visibilityState==='visible'&&workPages.has(page)}),signal:AbortSignal.timeout(12000)});
-  const result=await r.json();if(!r.ok){if(active)pending=true;throw Object.assign(Error(result.error||'Time tracking is unavailable.'),{expired:r.status===401});}return result;}
+  const result=await r.json();if(!r.ok){if(active)pending=true;throw Object.assign(Error(result.error||'Time tracking is unavailable.'),{expired:r.status===401});}return result;}catch(error){if(active)pending=true;throw error;}}
  async function logout(){if(closed)return;closed=true;clearInterval(timer);clearInterval(watchdog);try{await request('logout');}catch{}await client.auth.signOut({scope:'local'});location.replace('sales-login.html?reason=inactive');}
  async function tick(action='heartbeat'){
   if(closed||busy)return;busy=true;

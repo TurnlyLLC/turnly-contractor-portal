@@ -9,5 +9,6 @@ test('clock sends presence without fabricating input, counts only work pages, lo
  events.keydown({isTrusted:false});now+=15000;callbacks.find(x=>x.ms===15000).f();await new Promise(r=>setImmediate(r));assert.equal(requests.at(-1).active,false);
  events.keydown({isTrusted:true});now+=15000;callbacks.find(x=>x.ms===15000).f();await new Promise(r=>setImmediate(r));assert.equal(requests.at(-1).active,true);
  callbacks.find(x=>x.ms===1000).f();assert.match(elements[0].textContent,/Current session: 0h 0m 30s/);
+ const original=ctx.fetch;ctx.fetch=async()=>{throw Error('offline')};events.keydown({isTrusted:true});await callbacks.find(x=>x.ms===15000).f();await new Promise(r=>setImmediate(r));ctx.fetch=original;await callbacks.find(x=>x.ms===15000).f();await new Promise(r=>setImmediate(r));assert.equal(requests.at(-1).active,true);
  now+=300001;callbacks.find(x=>x.ms===1000).f();await new Promise(r=>setImmediate(r));assert.equal(signouts,1);assert.match(redirect,/sales-login/);assert.equal(requests.at(-1).action,'logout');
 });

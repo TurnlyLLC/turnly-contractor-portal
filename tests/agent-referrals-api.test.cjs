@@ -33,7 +33,7 @@ function harness({role='admin',status='active',configured=true,consent=true,prov
     fetch:async(url,options)=>{calls.push({url,options});if(providerFailure)throw new Error('Network timeout');return {ok:true,json:async()=>url.includes('twilio')?{sid:'SMtest',status:'queued'}:{id:'email-test'}};}
   };
   vm.runInNewContext(fs.readFileSync(require.resolve('../api/agent-referrals.js'),'utf8'),sandbox);
-  return {agent,calls,deliveries,writes,async request(body,authenticated=true){let payload;const res={setHeader(){},end(v){payload=JSON.parse(v)}};await sandbox.module.exports({method:'POST',headers:authenticated?{authorization:'Bearer test'}:{},body},res);return {status:res.statusCode,payload};}};
+  return {agent,calls,deliveries,writes,async request(body,authenticated=true){let payload;const res={setHeader(){},end(v){payload=JSON.parse(v)}};await sandbox.module.exports({method:'POST',headers:authenticated?{authorization:'Bearer test.'+Buffer.from(JSON.stringify({session_id:randomUUID()})).toString('base64url')+'.test'}:{},body},res);return {status:res.statusCode,payload};}};
 }
 test('sending requires real profile access and rejects forged user metadata roles',async()=>{
   const h=harness({role:'contractor'});const r=await h.request({action:'send',id:h.agent.id,request_id:randomUUID()});assert.equal(r.status,403);assert.equal(h.calls.length,0);
