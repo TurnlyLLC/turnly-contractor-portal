@@ -61,9 +61,9 @@ function createHandler(makeClient=createClient){return async(req,res)=>{
   if(access.must_change_password)throw fail('Change your temporary password before continuing.',403);
   if(b.action==='list'){
    if(profile.role!=='admin')return send(200,{members:[{id:profile.id,full_name:profile.full_name,role:profile.role,status:profile.status,username:access.username}]});
-   const people=checked(await db.from('profiles').select('id,full_name,role,status').in('role',roles).order('full_name'));
+   const people=checked(await db.from('profiles').select('id,full_name,role,status,sales_member_deleted_at').in('role',roles).order('full_name'));
    const accounts=checked(await db.from('crm_user_access').select('user_id,username,must_change_password,enabled'));
-   return send(200,{members:people.map(p=>({...p,...accounts.find(a=>a.user_id===p.id)}))});
+   return send(200,{members:people.filter(p=>!p.sales_member_deleted_at).map(p=>({...p,...accounts.find(a=>a.user_id===p.id)}))});
   }
   if(profile.role!=='admin')throw fail('Only administrators can manage team accounts.',403);
   if(b.action==='create'){
@@ -77,8 +77,19 @@ function createHandler(makeClient=createClient){return async(req,res)=>{
    await audit(user.id,created.id,'created');return send(200,{ok:true,username:login,temporary_password:password});
   }
   if(!/^[0-9a-f-]{36}$/i.test(b.user_id||''))throw fail('Choose a team member.');
-  const target=checked(await db.from('profiles').select('id,full_name,role,status').eq('id',b.user_id).single());if(!roles.includes(target.role))throw fail('Choose a sales-team account.');
+  const target=checked(await db.from('profiles').select('id,full_name,role,status,sales_member_deleted_at').eq('id',b.user_id).single());if(!roles.includes(target.role))throw fail('Choose a sales-team account.');
   if(target.role==='admin'&&!(b.action==='edit'&&target.id===user.id))throw fail('Administrator accounts are protected. You can edit your own username here.');
+  if(target.sales_member_deleted_at){
+   if(b.action==='delete')return send(200,{ok:true});
+   throw fail('This sales account has been deleted.',409);
+  }
+  if(b.action==='delete'){
+   if(target.id===user.id || !['sales','sales_team'].includes(target.role))throw fail('Choose a sales member other than yourself.',403);
+   if(b.confirm_delete!=='DELETE')throw fail('Type DELETE to confirm permanent deletion.');
+   checked(await db.auth.admin.deleteUser(target.id,true));
+   await audit(user.id,target.id,'deleted');
+   return send(200,{ok:true});
+  }
   if(b.action==='edit'){
    const login=validUsername(username(b.username)),name=String(b.full_name||'').trim().slice(0,120);if(!name)throw fail('Enter the team member’s name.');
    const current=checked(await db.from('crm_user_access').select('user_id').eq('user_id',target.id).maybeSingle());
