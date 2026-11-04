@@ -4928,7 +4928,25 @@ function bindSalesOperations(){
   const f=event.target;if(!f.matches('[data-send-checkout],[data-remove-leads-form]'))return;event.preventDefault();const b=f.querySelector('[type=submit]');if(b.disabled)return;b.disabled=true;const originalLabel=b.textContent;b.textContent=f.matches('[data-send-checkout]')?'Sending…':originalLabel;
   try{
    if(f.matches('[data-send-checkout]'))await submitCheckout(f);
-   else{const r=await supabase.rpc('crm_remove_operator_leads_by_status',{p_operator:state.modal.userId,p_status:f.elements.scope.value});if(r.error)throw r.error;state.modal=null;await refreshData(false);setMessage(`${r.data} lead assignments removed. Notes were preserved.`,'success');}
+   else {
+    const operator=state.modal.userId, scope=f.elements.scope.value, startedAt=new Date().toISOString();
+    let removed=0;
+    f.elements.scope.disabled=true;
+    try {
+      for (;;) {
+        b.textContent=`Removing… ${removed} saved`;
+        const {data,error}=await supabase.rpc('crm_remove_operator_leads_batch',{p_operator:operator,p_status:scope,p_started_at:startedAt});
+        if(error)throw error;
+        removed+=data;
+        if(data<25)break;
+      }
+    } catch(error) {
+      throw Error(`${removed} removals confirmed. Retry to finish the remaining assignments. ${error.message}`);
+    } finally { f.elements.scope.disabled=false; }
+    state.modal=null;
+    await refreshData(false);
+    setMessage(`${removed} lead assignments removed. Notes were preserved.`,'success');
+   }
   }catch(e){setInlineFormMessage(f,e.message,'error');}finally{b.disabled=false;b.textContent=originalLabel;}
  });
 }
