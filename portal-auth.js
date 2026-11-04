@@ -472,7 +472,7 @@ loginForm?.addEventListener("submit", async (event) => {
   const password = document.getElementById("loginPassword")?.value || "";
   let data, error;
   try {
-    if (pageRole === "contractor" && !email.includes("@")) {
+    if ((pageRole === "contractor" || isUnifiedPortal) && !email.includes("@")) {
       const response = await fetch("/api/contractor-name-login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:email,password})});
       const session = await response.json();
       if (!response.ok) throw Error(session.error);

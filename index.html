@@ -93,13 +93,13 @@
 
         <form id="loginForm" class="portal-login-form auth-panel active" data-auth-panel="login">
           <label>
-            <span>Email</span>
+            <span>Username or email</span>
             <span class="portal-input-wrap">
               <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                 <path d="M4 6h16v12H4z" />
                 <path d="M4 7l8 6 8-6" />
               </svg>
-              <input type="email" id="loginEmail" autocomplete="email" placeholder="you@company.com" required />
+              <input type="text" id="loginEmail" autocomplete="username" autocapitalize="none" placeholder="Username or email" required />
             </span>
           </label>
 
@@ -162,7 +162,7 @@
   <script src="env.js"></script>
   <script src="auth-recovery-router.js?v=20260722e"></script>
   <script type="module" src="pwa-register.js?v=20260708a"></script>
-  <script type="module" src="portal-auth.js?v=20260909-portal-access-refresh"></script>
+  <script type="module" src="portal-auth.js?v=20261104-hire-login"></script>
   <script>
     document.querySelector("[data-password-toggle]")?.addEventListener("click", (event) => {
       const button = event.currentTarget;
