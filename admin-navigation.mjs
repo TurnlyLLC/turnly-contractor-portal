@@ -32,6 +32,7 @@ export const navSections = [
     links: [
       { key: "dashboard", label: "Dashboard", href: "dashboard.html", icon: "home" },
       { key: "command-center", label: "Command Center", href: "admin.html", icon: "layout-grid" },
+      { key: "business-atlas", label: "Business Atlas", href: "admin-atlas.html", icon: "grid" },
       { key: "messages", label: "Messages", href: "messages.html", icon: "message-square" }
     ]
   },
