@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-contractor-pwa-v20261030-repeat";
+const CACHE_NAME = "turnly-contractor-pwa-v20261104-hire-login";
 
 const PRECACHE_URLS = [
   "/contractor-profile-photo.mjs",
@@ -13,6 +13,7 @@ const PRECACHE_URLS = [
   "/legal.css",
   "/auth-recovery-router.js",
   "/portal-auth.js",
+  "/hire-login-email.mjs",
   "/reset-password.html",
   "/privacy-policy.html",
   "/terms-and-conditions.html",

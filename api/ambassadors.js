@@ -15,7 +15,13 @@ module.exports=async(req,res)=>{
   }
   if(x.action==='login'){
    await S.rate(db,req,'ba-login');
-   const em=email(x.email);if(!em||typeof x.password!=='string')throw S.fail('Enter your email and password.');
+   const input=String(x.email||'').trim();
+   let em=input.includes('@') ? email(input) : null;
+   if(!input.includes('@') && input.length<=250 && input){
+    const hired=S.checked(await db.from('recruiting_applications').select('hired_user_id').eq('login_alias',input.toLowerCase()).eq('role','brand_ambassador').eq('status','hired').is('deleted_at',null).maybeSingle());
+    em=hired?.hired_user_id && (await db.auth.admin.getUserById(hired.hired_user_id)).data?.user?.email;
+   }
+   if(!em||typeof x.password!=='string')throw S.fail('Username or password was not recognized.',401);
    // Separate auth client: signing in must never replace the service-role client session.
    const authClient=S.database(),r=await authClient.auth.signInWithPassword({email:em,password:x.password});
    if(r.error||!r.data?.session)throw S.fail('Email or password was not recognized.',401);
@@ -32,6 +38,9 @@ module.exports=async(req,res)=>{
   if(x.action==='password'){
    if(actor.admin)throw S.fail('Manage your admin password in your admin account.');
    if(typeof x.password!=='string'||x.password.length<12||x.password.length>128)throw S.fail('Use a password with at least 12 characters.');
+   if(typeof x.email!=='string'||!x.email.trim())throw S.fail('Enter your personal email.');
+   const synced=await db.rpc('finish_hire_login_email',{p_user:actor.id,p_email:x.email});
+   if(synced.error)throw S.fail('Confirm your personal email before finishing setup.',409);
    const r=await db.auth.admin.updateUserById(actor.id,{password:x.password});if(r.error)throw S.fail('Could not change your password. Try again.',503);
    const m=S.checked(await db.from('ba_members').update({must_change_password:false}).eq('user_id',actor.id).eq('session_id',actor.member.session_id).eq('enabled',true).select('user_id').maybeSingle());
    if(!m)throw S.fail('Your access changed. Please sign in again.',401);

@@ -211,7 +211,9 @@ function setForcedPasswordMessage(text, error = false) {
   el.classList.toggle("success", Boolean(text) && !error);
 }
 
-async function clearForcedPasswordFlag(changedAt) {
+import {verifyHireEmail} from "./hire-login-email.mjs";
+
+async function clearForcedPasswordFlag(changedAt, email, password) {
   const { data: sessionData } = await supabase.auth.getSession();
   const accessToken = sessionData?.session?.access_token || "";
   if (!accessToken) throw new Error("Your session expired. Log in again, then retry.");
@@ -221,7 +223,7 @@ async function clearForcedPasswordFlag(changedAt) {
       "Authorization": `Bearer ${accessToken}`,
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({ changedAt })
+    body: JSON.stringify({ changedAt, email, password })
   });
   const result = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(result.error || "Unable to finish password setup.");
@@ -231,7 +233,7 @@ async function renderPasswordChangeRequired(user, role) {
   const card = document.querySelector(".role-auth-card, .portal-signin-card, .native-login-form");
   if (!card) return false;
   injectForcedPasswordStyles();
-  const needsEmail = role === "contractor" && /@(?:[a-z0-9-]+\.)*(?:indeed|indeedemail)\.com$/i.test(user.email);
+  const needsEmail = role === "contractor" && (Boolean(user.app_metadata?.applicant_id) || /@(?:[a-z0-9-]+\.)*(?:indeed|indeedemail)\.com$/i.test(user.email));
   const portalName = roleName(role);
   card.innerHTML = `
     <div class="forced-password-card">
@@ -241,7 +243,7 @@ async function renderPasswordChangeRequired(user, role) {
         <p>Your admin created a temporary password for this account. Create your own password before opening the ${escapeHtml(portalName)}.</p>
       </div>
       <form id="forcedPasswordForm" class="public-form">
-        ${needsEmail ? '<label>Personal email<input id="forcedPersonalEmail" type="email" autocomplete="email" required></label><p>Use an address you can confirm. Your name username will still work.</p>' : ""}
+        ${needsEmail ? '<label>Personal email<input id="forcedPersonalEmail" type="email" autocomplete="email" required></label><p>Use an address you can confirm. You can sign in with your username or your confirmed email.</p>' : ""}
         <div class="public-form-grid">
           <label class="span-two">
             New Password
@@ -275,18 +277,17 @@ async function renderPasswordChangeRequired(user, role) {
     try {
       const personalEmail = document.getElementById("forcedPersonalEmail")?.value.trim().toLowerCase();
       if (needsEmail && (!personalEmail || /@(?:[a-z0-9-]+\.)*(?:indeed|indeedemail)\.com$/i.test(personalEmail))) throw Error("Enter a personal email outside Indeed.");
+      if (needsEmail) await verifyHireEmail(supabase, personalEmail, "/contractor-login.html");
       const changedAt = new Date().toISOString();
-      const { error } = await supabase.auth.updateUser({
-        password,
-        ...(needsEmail ? { email: personalEmail } : {}),
-        data: {
-          ...(user.user_metadata || {}),
-          turnly_force_password_change: false,
-          turnly_password_changed_at: changedAt
-        }
-      }, needsEmail ? {emailRedirectTo: location.origin + "/contractor-onboarding.html"} : {});
-      if (error) throw error;
-      await clearForcedPasswordFlag(changedAt);
+      const hired = Boolean(user.app_metadata?.applicant_id);
+      if (!hired) {
+        const {error} = await supabase.auth.updateUser({
+          password,
+          data: {...user.user_metadata, turnly_force_password_change:false, turnly_password_changed_at:changedAt}
+        });
+        if (error) throw error;
+      }
+      await clearForcedPasswordFlag(changedAt, personalEmail, hired ? password : undefined);
       await supabase.auth.refreshSession().catch(() => null);
       window.location.href = needsEmail ? "contractor-onboarding.html" : portalForRole(role, pageHome);
     } catch (error) {

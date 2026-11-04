@@ -64,6 +64,16 @@ module.exports = async function handler(req, res) {
     return sendJson(res, 404, { error: targetError?.message || "Auth account was not found." });
   }
 
+  if (targetUser.app_metadata?.applicant_id) {
+    if (!targetUser.app_metadata.turnly_force_password_change)
+      return sendJson(res, 409, {error:'Password setup is already complete. Sign in with your new password.'});
+    if (typeof req.body?.password !== 'string' || req.body.password.length < 8 || req.body.password.length > 128)
+      return sendJson(res, 400, {error:'Choose a password between 8 and 128 characters.'});
+    const email = req.body?.email;
+    if (typeof email !== 'string' || !email.trim()) return sendJson(res, 400, {error:'Enter your personal email to finish setup.'});
+    const synced = await supabase.rpc('finish_hire_login_email', {p_user:user.id,p_email:email});
+    if (synced.error) return sendJson(res, 409, {error:'Confirm your personal email before finishing setup.'});
+  }
   const now = new Date().toISOString();
   const appMetadata = {
     ...(targetUser.app_metadata || {}),
@@ -77,6 +87,7 @@ module.exports = async function handler(req, res) {
   };
 
   const { error: updateError } = await supabase.auth.admin.updateUserById(user.id, {
+    ...(targetUser.app_metadata?.applicant_id ? {password:req.body.password} : {}),
     app_metadata: appMetadata,
     user_metadata: userMetadata
   });

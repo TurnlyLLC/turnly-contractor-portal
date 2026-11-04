@@ -159,6 +159,7 @@ async function clearForcedPasswordFlag(user, changedAt) {
 }
 
 async function renderPasswordChangeRequired(user) {
+  if (user.app_metadata?.applicant_id) { window.location.replace("contractor-login.html"); return; }
   injectPasswordPromptStyles();
   const portalRoot = document.getElementById("contractorPortalApp");
   if (portalRoot) portalRoot.innerHTML = passwordPromptMarkup();
