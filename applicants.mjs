@@ -1,4 +1,6 @@
 import {addExperienceTab} from './applicant-experience.mjs?v=3';
+import {downloadBatch,headersFromTemplate} from './verified-first-export.mjs';
+let exportRows=[], exportHeaders;
 const zonesFor=a=>(a.service_cities||a.answers?.service_cities||[a.service_city]).join(', ');
 import {renderStandaloneAdminSidebar,bindStandaloneAdminNavigation} from './admin-navigation.mjs?v=20261019-applicants';
 import {createClient} from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/+esm';
@@ -29,30 +31,36 @@ function syncFilters(){
   return link;
  }));
 }
+$('#vfDownload').onclick=()=>downloadBatch(exportRows,exportHeaders);
 $('#bulkHire').onclick=async()=>{
  if(busy||$('#bulkHire').disabled)return;
  const scope=filters(), progress=$('#bulkProgress'), errors=$('#bulkErrors');
  if(scope.role!=='cleaner'||scope.status!=='shortlisted')return;
  $('#bulkHire').disabled=true;errors.replaceChildren();
  try{
+  const file=$('#vfTemplate').files[0];
+  const headers=file?headersFromTemplate(await file.text()):undefined;
   const candidates=new Map();let expected;
   for(let number=1;;number++){
    const response=await api('list',{...scope,page:number});
    expected??=response.count;
    if(response.count!==expected)throw Error('Shortlist changed. Refresh and try again.');
-   for(const row of response.rows)candidates.set(row.id,row.name);
+   for(const row of response.rows)candidates.set(row.id,row);
    if(number*30>=expected)break;
   }
   if(candidates.size!==expected)throw Error('Shortlist changed. Refresh and try again.');
   if(!expected){progress.textContent='No matching cleaners.';return;}
   if(!confirm('Hire '+expected+' shortlisted cleaners in '+(scope.city||'ALL regions')+(scope.search?' matching '+scope.search:'')+' and send each a welcome email? Keep this page open until processing finishes.'))return;
+  exportRows=[];exportHeaders=headers;$('#vfDownload').hidden=true;
   let sent=0,failed=0;
-  for(const [id,name] of candidates){
+  for(const [id,row] of candidates){
+   const name=row.name;
    progress.textContent='Processing '+(sent+failed+1)+' of '+expected+' - '+name;
-   try{await api('hire',{id,shortlistOnly:true});sent++;}
-   catch(error){failed++;const item=document.createElement('li');item.textContent=name+' - '+error.message;errors.append(item);}
+   try{await api('hire',{id,shortlistOnly:true});sent++;exportRows.push(row);}
+   catch(error){try{const {application}=await api('detail',{id});if(application.hired_at)exportRows.push(row);}catch{} failed++;const item=document.createElement('li');item.textContent=name+' - '+error.message;errors.append(item);}
   }
   progress.textContent=sent+' welcome emails confirmed. '+failed+' need review.';
+  if(exportRows.length){$('#vfDownload').hidden=false;downloadBatch(exportRows,headers);progress.textContent+=' CSV includes '+exportRows.length+' confirmed hires. Review blank fields and names before upload.';}
   page=1;await load();
  }catch(error){progress.textContent=error.message;}
  finally{$('#bulkHire').disabled=false;}

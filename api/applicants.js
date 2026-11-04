@@ -39,7 +39,7 @@ module.exports=async(req,res)=>{
   if(input.action==='list'){
    const role=input.role||'cleaner';if(!ROLES.includes(role))throw fail('Choose cleaner or brand ambassador applications.');
    const page=Math.max(1,Math.min(10000,parseInt(input.page)||1));
-   let q=db.from('recruiting_applications').select('id,role,name,email,phone,city,state,service_city,service_cities:answers->service_cities,status,created_at,version',{count:'exact'}).order('created_at',{ascending:false}).order('id');
+   let q=db.from('recruiting_applications').select('id,role,name,email,phone,city,state,service_city,service_cities:answers->service_cities,zip:answers->>zip,street:answers->>street_address,first_name:answers->>first_name,last_name:answers->>last_name,status,created_at,version',{count:'exact'}).order('created_at',{ascending:false}).order('id');
    q=q.eq('role',role).is('deleted_at',null);
    if(input.status!=='hired')q=q.is('hired_at',null);
    else q=q.eq('status','hired');
