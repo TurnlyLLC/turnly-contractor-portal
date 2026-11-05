@@ -26,7 +26,7 @@ export function bindAccessManager(root,api,refresh){
   if(!roles.length){result.textContent='Select at least one role. Use account status to suspend all access.';return;}
   if(roles.includes('admin')&&!p.roles.includes('admin')&&!confirm(`Grant full admin access to ${p.email}?`))return;
   const button=e.target.querySelector('button');button.disabled=true;
-  try{await api({action:'access_save',id:selected,roles});data=await api({action:'access_list'});render();dialog.querySelector('[data-access-result]').textContent='Access roles saved in Supabase.';await refresh();}
+  try{await api({action:'access_save',id:selected,roles});data=await api({action:'access_list'});render();dialog.querySelector('[data-access-result]').textContent='Access roles saved in Supabase.';await refresh(data);}
   catch(error){dialog.querySelector('[data-access-result]').textContent=error.message;}
   finally{if(button.isConnected)button.disabled=false;}
  });
