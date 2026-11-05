@@ -815,7 +815,7 @@ function backgroundCheckForm() {
     <form class="contractor-file-form contractor-file-nested-form" data-background-check-form>
       <div class="contractor-file-form-grid">
         <label><span>Background Check Status</span><select name="backgroundStatus">
-          ${["not_started", "pending", "approved", "passed", "failed", "expired"].map((option) => `<option value="${esc(option)}" ${token(option) === status ? "selected" : ""}>${esc(title(option))}</option>`).join("")}
+          ${["not_started", "pending", "completed", "approved", "passed", "failed", "expired"].map((option) => `<option value="${esc(option)}" ${token(option) === status ? "selected" : ""}>${esc(title(option))}</option>`).join("")}
         </select></label>
         <label><span>Completed Date</span><input name="completedDate" type="date" value="${esc(inputDate(backgroundCompleteDate()))}" /></label>
         <label class="contractor-file-field-full"><span>Notes</span><textarea name="notes" placeholder="Background check notes">${esc(backgroundNotes())}</textarea></label>
