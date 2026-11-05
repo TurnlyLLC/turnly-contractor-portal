@@ -7,15 +7,17 @@ module.exports=async(req,res)=>{
   const historical=!user.admin&&(await require('../lib/seller-agreement.cjs').current(db,user)).mode!=='commission';
   if(['approve','record_paid'].includes(i.action)){
    if(!user.admin)throw S.fail('Administrator access required.',403);
+   const order=S.checked(await db.from('gift_orders').select('sales_user_id').eq('id',i.order_id).single());
+   await require('../lib/crm-roster.cjs').requireMember(db,order.sales_user_id,i.archived===true);
    S.checked(await db.rpc('crm_commission_payment_review',{p_admin:user.id,p_order:i.order_id,p_action:i.action,p_reference:String(i.reference||'').trim(),p_expected:i.amount_cents}));
   }else if(i.action!=='list')throw S.fail('Unknown earnings action.');
   const scope=q=>user.admin?q:q.eq('sales_user_id',user.id);
   const [commissions,payments,orders,people]=await Promise.all([
    C.all(db,'crm_sales_commissions','*',scope,'order_id'),C.all(db,'crm_commission_payments','*',scope,'order_id'),
    C.all(db,'gift_orders','id,name,quantity,amount_cents,paid_at,sales_user_id',q=>scope(q).not('paid_at','is',null)),
-   user.admin?C.all(db,'profiles','id,full_name',q=>q.in('role',['admin','sales','sales_team'])):[]
+   user.admin?require('../lib/crm-roster.cjs').members(db,i.archived===true):[]
   ]);
-  const rows=commissions.map(c=>{const p=payments.find(p=>p.order_id===c.order_id),o=orders.find(o=>o.id===c.order_id);return {...c,customer:o?.name||'Customer',cards:o?.quantity||0,purchased_at:o?.paid_at,sale_cents:o?.amount_cents||0,representative:people.find(p=>p.id===c.sales_user_id)?.full_name||'You',payment:p||null,approval_current:!!p&&p.approved_cents===c.amount_cents&&c.status==='earned'};}).sort((a,b)=>String(b.purchased_at).localeCompare(String(a.purchased_at)));
+  const rows=commissions.filter(c=>!user.admin||people.some(p=>p.id===c.sales_user_id)).map(c=>{const p=payments.find(p=>p.order_id===c.order_id),o=orders.find(o=>o.id===c.order_id);return {...c,customer:o?.name||'Customer',cards:o?.quantity||0,purchased_at:o?.paid_at,sale_cents:o?.amount_cents||0,representative:people.find(p=>p.id===c.sales_user_id)?.full_name||'You',payment:p||null,approval_current:!!p&&p.approved_cents===c.amount_cents&&c.status==='earned'};}).sort((a,b)=>String(b.purchased_at).localeCompare(String(a.purchased_at)));
   return S.json(res,200,{admin:user.admin,historical,hidden:historical&&!rows.length,rows});
  }catch(e){return S.json(res,e.status||400,{error:e.message||'Unable to load earnings.'});}
 };

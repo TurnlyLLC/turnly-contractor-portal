@@ -10,7 +10,7 @@ export async function mountOnboardingSettings(root, request) {
    const line=document.createElement('label');line.style.cssText='display:flex;gap:12px;align-items:center;margin:16px 0';
    const select=document.createElement('select');select.name=key;
    if(scope.value!=='team')select.add(new Option('Use team setting','inherit'));
-   select.add(new Option('Required','true'));select.add(new Option('Optional','false'));
+   select.add(new Option('On — required','true'));select.add(new Option('Off — optional','false'));
    select.value=key in settings?String(settings[key]):scope.value==='team'?'true':'inherit';
    line.append(select,document.createTextNode(label));fields.append(line);
   }

@@ -63,9 +63,24 @@ function createHandler(makeClient=createClient){return async(req,res)=>{
    if(profile.role!=='admin')return send(200,{members:[{id:profile.id,full_name:profile.full_name,role:profile.role,status:profile.status,username:access.username}]});
    const people=checked(await db.from('profiles').select('id,full_name,role,status,sales_member_deleted_at').in('role',roles).order('full_name'));
    const accounts=checked(await db.from('crm_user_access').select('user_id,username,must_change_password,enabled'));
-   return send(200,{members:people.filter(p=>!p.sales_member_deleted_at).map(p=>({...p,...accounts.find(a=>a.user_id===p.id)}))});
+   return send(200,{members:people.filter(p=>Boolean(p.sales_member_deleted_at)===(b.archived===true)).map(p=>({...p,...accounts.find(a=>a.user_id===p.id)}))});
   }
   if(profile.role!=='admin')throw fail('Only administrators can manage team accounts.',403);
+  if(['profile','export_profile'].includes(b.action)){
+   const C=require('../lib/crm-sales.cjs');
+   const member=checked(await db.from('profiles').select('id,full_name,role,status,sales_member_deleted_at').eq('id',b.user_id).single());
+   if(!roles.includes(member.role))throw fail('Choose a sales member.');
+   const documents=await C.all(db,'crm_seller_agreements','*',q=>q.eq('user_id',member.id),'version');
+   const archive=checked(await db.from('crm_member_archives').select('*').eq('user_id',member.id).maybeSingle());
+   const result={member,documents,archive};
+   if(b.action==='export_profile'){
+    const tables=[['sales_activities','user_id'],['crm_voice_calls','user_id'],['crm_sales_messages','user_id'],['crm_pay_plans','user_id'],['crm_activity_sessions','user_id','session_id'],['crm_work_intervals','user_id'],['crm_hourly_payments','user_id'],['crm_flat_payments','user_id','plan_id'],['crm_sales_commissions','sales_user_id','order_id'],['crm_commission_payments','sales_user_id','order_id']];
+    result.records=Object.fromEntries(await Promise.all(tables.map(async([table,key,order='id'])=>[table,await C.all(db,table,'*',q=>q.eq(key,member.id),order)])));
+    result.records.orders=await C.all(db,'gift_orders','id,name,email,quantity,amount_cents,paid_at,status,refunded_cents,sales_user_id,sales_lead_id',q=>q.eq('sales_user_id',member.id));
+    result.records.current_leads=await C.all(db,'sales_leads','*',q=>q.eq('sales_owner_id',member.id));
+   }
+   return send(200,result);
+  }
   if(b.action==='create'){
    const name=String(b.full_name||'').trim().slice(0,120),login=validUsername(username(b.username));if(!name)throw fail('Enter the team member’s name.');
    const duplicate=checked(await db.from('crm_user_access').select('user_id').eq('username',login).maybeSingle());if(duplicate)throw fail('That username is already in use.',409);

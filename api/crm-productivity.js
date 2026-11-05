@@ -13,9 +13,12 @@ module.exports=async(req,res)=>{
   const user=await C.access(db,req);
   if(i.action==='set_pay'){
    if(!user.admin)throw S.fail('Administrator access required.',403);
+   await require('../lib/crm-roster.cjs').requireMember(db,i.user_id,false);
    S.checked(await db.rpc(i.mode==='flat'?'crm_set_flat_plan':'crm_set_pay_plan_v2',{p_admin:user.id,...P.validatePlan(i)}));
    }else if(['flat_approve','flat_record_paid'].includes(i.action)){
    if(!user.admin)throw S.fail('Administrator access required.',403);
+   const plan=S.checked(await db.from('crm_pay_plans').select('user_id').eq('id',i.plan_id).single());
+   await require('../lib/crm-roster.cjs').requireMember(db,plan.user_id,i.archived===true);
    const result=await db.rpc('crm_review_flat_pay',{p_admin:user.id,p_plan:i.plan_id,p_action:i.action.slice(5),p_expected:i.amount_cents,p_reference:String(i.reference||'')});
    if(result.error)throw S.fail(result.error.code==='P0001'?result.error.message:'Unable to review this batch. Refresh and try again.');
    return S.json(res,200,{ok:true});
