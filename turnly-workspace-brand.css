@@ -10,3 +10,4 @@ body.sales-portal-body .sales-sidebar{background:linear-gradient(165deg,#061a30,
 .ba-doc-header small{color:#9ce9f8}.ba-signup-body{background:#f4f8fc}.ba-doc-footer{background:#f4f8fc}
 @media(max-width:900px){.ba-workspace .ba-mobile-brand{background:#061a30;color:#fff;border-bottom:2px solid #34d4f4}.ba-workspace .ba-mobile-brand small{color:#a8cde2}.ba-mobile-nav [aria-current=page],.ba-mobile-more summary.active,.ba-mobile-more[open] summary{background:#e4f3fc;color:#086ca7}}
 @media(max-width:760px){.login-brand{font-size:19px}.login-brand-logo{width:48px;height:48px;flex-basis:48px}}
+.crm-edit-primary,.crm-stage-step.selected{background:#086ca7!important;border-color:#075786!important}.crm-followup-dates{background:#edf7fd;color:#10334f}
