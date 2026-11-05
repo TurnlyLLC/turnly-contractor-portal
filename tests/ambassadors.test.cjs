@@ -49,7 +49,7 @@ test('contact consent and stored access are required; metadata cannot grant acce
  assert.throws(()=>A.contact({name:'X',email:'x@example.com',phone:'9195550100'}));
  const db={auth:{getUser:async()=>({data:{user:{id:'id',user_metadata:{role:'admin'}}}})},from:t=>({select(){return this},eq(){return this},maybeSingle:async()=>({data:t==='profiles'?{role:'contractor',status:'active'}:null})})};
  await assert.rejects(A.access(db,{headers:{}}),e=>e.status===401);
- await assert.rejects(A.access(db,{headers:{authorization:'Bearer fake'}}),e=>e.status===401);
+ await assert.rejects(A.access(db,{headers:{authorization:'Bearer fake'}}),e=>e.status===403 && /access is not enabled/.test(e.message));
 });
 test('HTTP dashboard forces ambassador ownership and strips private profile fields',async()=>{
  const vm=require('node:vm'),S=require('../lib/residential-server.cjs');let selected;

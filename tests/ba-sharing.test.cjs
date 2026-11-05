@@ -21,7 +21,7 @@ test('social links preserve attribution and captions include disclosure',async()
  const html=sharingPanel(member,assets);
  assert.ok(caption(assets.url).includes(assets.url));assert.match(caption(assets.url),/referral commission/);
  const fb=html.match(/href="(https:\/\/www.facebook.com[^\"]+)"/)[1];
- assert.equal(new URL(fb).searchParams.get('u'),assets.url);
+ assert.equal(new URL(new URL(fb).searchParams.get('u')).searchParams.get('code'),member.code);
  assert.match(html,/Download QR code/);assert.match(html,/Download promo image/);
  assert.match(html,/Download clickable PDF/);
  assert.ok(html.includes(`href="${assets.url}"`));

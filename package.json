@@ -11,11 +11,11 @@
     "pdf-lib": "1.17.1",
     "qrcode": "1.5.4",
     "stripe": "23.0.0",
-    "twilio": "6.2.0"
+    "twilio": "6.2.0",
+    "pngjs": "7.0.0"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.3.14",
-    "jsqr": "1.4.0",
-    "pngjs": "7.0.0"
+    "jsqr": "1.4.0"
   }
 }

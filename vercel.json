@@ -76,6 +76,10 @@
     },
     "api/communication-budget.js": {
       "maxDuration": 300
+    },
+    "api/ba-share.js": {
+      "maxDuration": 30,
+      "includeFiles": "assets/ba-social-template.png"
     }
   },
   "routes": [

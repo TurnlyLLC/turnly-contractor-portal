@@ -1,4 +1,4 @@
-import {sharingPanel,preparePromo,shareAction} from './ba-sharing.mjs?v=20261105-branded';
+import {sharingPanel,preparePromo,shareAction} from './ba-sharing.mjs?v=20261105-social-drafts';
 import {shell} from './ba-shell.mjs';
 import {createClient} from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/+esm';
 const env=window.__ENV||{},client=createClient(env.SUPABASE_URL,env.SUPABASE_ANON_KEY),root=document.querySelector('#baApp');
