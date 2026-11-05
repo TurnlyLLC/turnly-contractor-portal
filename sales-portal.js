@@ -3,8 +3,9 @@ import {mountHourlyPay} from './crm-hourly-pay.mjs?v=20261030-paytypes';
 import {startActivityClock} from './crm-activity-clock.mjs?v=20261030-paytypes';
 import {mountProductivity} from './crm-productivity.mjs?v=20261030-paytypes';
 let activityClock;
-import {mountTraining} from './crm-training.mjs?v=20261030-media';
-import {mountOnboarding} from './crm-onboarding.mjs?v=20261030-media';
+import {mountOnboardingSettings} from './crm-onboarding-settings.mjs';
+import {mountTraining} from './crm-training.mjs?v=20261105-rules';
+import {mountOnboarding} from './crm-onboarding.mjs?v=20261105-rules';
 import {mountEarnings} from './crm-earnings.mjs?v=20261030-paytypes';
 import {startMessageBadge,paintMessageBadge,refreshMessageBadge} from './crm-message-badge.mjs?v=20261021-desktop';
 import {mountDemandMap} from "./demand-map.mjs?v=20261027-status-rings";
@@ -877,7 +878,7 @@ function roleLabel() {
 }
 
 function workspaceUnlocked(){return isSalesAdmin()||state.onboarding?.ready===true;}
-function visibleSalesTab(key){return workspaceUnlocked()||key==='onboarding'||(key==='guide'&&!!state.onboarding?.signature);}
+function visibleSalesTab(key){return workspaceUnlocked()||key==='onboarding'||(key==='guide'&&(!!state.onboarding?.signature||state.onboarding?.requirements?.agreement===false));}
 function isSalesAdmin() {
   return normalize(state.profile?.role) === "admin";
 }
@@ -1187,7 +1188,7 @@ async function requireSalesAccess() {
    if(!response.ok)throw Error('Unable to verify onboarding. Please retry.');
    state.onboarding=await response.json();
    if(!state.onboarding.ready){
-    const target=state.onboarding.signature?'guide':'onboarding';
+    const target=(state.onboarding.signature||state.onboarding.requirements?.agreement===false)?'guide':'onboarding';
     if(state.page!==target&&!(state.page==='onboarding'&&target==='guide')){window.location.replace(target==='guide'?'crm-guide.html':'crm-onboarding.html');return false;}
    }
   }
@@ -1288,7 +1289,7 @@ function render() {
   if(messagesRoot)void mountMessages(messagesRoot,async values=>{const result=await crmMessageRequest(values);if(['read','reply','create'].includes(values.action))void refreshMessageBadge();return result;});
   paintMessageBadge();
   const onboardingRequest=async(kind,values)=>{const {data}=await supabase.auth.getSession();if(!data?.session)throw Error('Sign in again.');const response=await fetch('/api/crm-'+kind,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+data.session.access_token},body:JSON.stringify(values)});const result=await response.json();if(!response.ok)throw Error(result.error||'Unable to save.');return result;};
-  const onboardingRoot=document.getElementById('crmOnboarding');if(onboardingRoot)void mountOnboarding(onboardingRoot,onboardingRequest);
+  const onboardingRoot=document.getElementById('crmOnboarding');if(onboardingRoot){if(isSalesAdmin())void mountOnboardingSettings(onboardingRoot,onboardingRequest);else void mountOnboarding(onboardingRoot,onboardingRequest);}
   if(!state.loading&&!state.loadFailed&&['team','earnings'].includes(state.page)&&(state.page!=='team'||isSalesAdmin())){
    const productivityRoot=document.createElement('div');productivityRoot.id='crmProductivity';
    if (state.page === 'team') document.getElementById('teamBreakdown')?.after(productivityRoot);
@@ -1446,7 +1447,7 @@ function renderPage() {
  if(state.page==='messages')return '<div id="crmMessages"></div>';
  if(state.page==='communications')return isSalesAdmin()?'<div id="communicationBudget"></div>':emptyState('Administrator access required','Open Overview for your results.');
  if(state.page==='scripts')return renderScriptsPage();
- if(state.page==='guide')return isSalesAdmin()||state.onboarding?.signature?renderPlaybookPage():emptyState('Sign your agreement first','Complete Onboarding to open the playbook.');
+ if(state.page==='guide')return isSalesAdmin()||state.onboarding?.signature||state.onboarding?.requirements?.agreement===false?renderPlaybookPage():emptyState('Sign your agreement first','Complete Onboarding to open the playbook.');
  if(state.page==='pipeline')return renderCrmPipeline();
  if(state.page==='sales')return isSalesAdmin()?renderSalesDashboard():emptyState('Administrator access required','Open Overview for your sales results.');
  if(state.page==='team')return isSalesAdmin()?renderCrmTeam():emptyState('Administrator access required','Open Overview for your own workspace.');

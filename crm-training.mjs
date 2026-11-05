@@ -11,15 +11,15 @@ export async function mountTraining(root,request,{introOnly=false}={}){
  const check=review.querySelector('[data-training-reviewed]'),ack=review.querySelector('[data-training-ack]');
  function paint(){
   if(disposed||!root.isConnected)return;
-  root.querySelector('[data-training-progress]').replaceChildren(...data.lessons.filter(l=>l.id===(introOnly?'introduction':'portal')).map(l=>{const p=document.createElement('p');p.textContent=`${l.completed_at?'✓ Complete':'In progress'} — ${l.title}: ${l.completed_at?100:Math.min(99,Math.floor((l.watched_seconds||0)/l.seconds*100))}%`;return p;}));
-  const watched=data.lessons.every(l=>l.completed_at);
+  root.querySelector('[data-training-progress]').replaceChildren(...data.lessons.filter(l=>l.id===(introOnly?'introduction':'portal')).map(l=>{const p=document.createElement('p');p.textContent=!l.required?'Optional — '+l.title:`${l.completed_at?'✓ Complete':'In progress'} — ${l.title}: ${l.completed_at?100:Math.min(99,Math.floor((l.watched_seconds||0)/l.seconds*100))}%`;return p;}));
+  const watched=data.lessons.every(l=>!l.required||l.completed_at);
   check.disabled=!watched||data.ready;check.checked=!!data.acknowledged_at||check.checked;
   ack.disabled=!watched||!check.checked||data.ready;
   review.querySelector('[data-review-message]').textContent=data.ready?'Training complete. Your CRM is unlocked.':'Finish the portal walkthrough, then confirm that you have read the playbook below.';
-  message(introOnly?'After the introduction, sign your agreement to open the playbook.':data.ready?'All training complete — CRM unlocked.':'The rest of the CRM stays locked until the required videos and final playbook confirmation are complete.');
+  if(data.requirements?.training===false){review.hidden=true;message('Training is optional for your account.');return;}if(!introOnly&&data.requirements?.playbook===false)review.hidden=true;message(introOnly?'After the introduction, sign your agreement to open the playbook.':data.ready?'All training complete — CRM unlocked.':'The rest of the CRM stays locked until the required videos and final playbook confirmation are complete.');
   for(const v of videos){const l=data.lessons.find(l=>l.id===v.dataset.trainingLesson);v.dataset.trainingComplete=String(!!l?.completed_at);v.dataset.trainingWatched=String(l?.watched_seconds||0);}
  }
- check.onchange=()=>{ack.disabled=!check.checked||!data?.lessons.every(l=>l.completed_at)||data.ready;};
+ check.onchange=()=>{ack.disabled=!check.checked||!data?.lessons.every(l=>!l.required||l.completed_at)||data.ready;};
  ack.textContent='Finish playbook and open CRM';
  ack.onclick=async()=>{ack.disabled=true;try{data=await request({action:'acknowledge',reviewed:check.checked});paint();if(data.ready)location.assign('sales.html');}catch(e){review.querySelector('[data-review-message]').textContent=e.message;paint();}};
  videos.forEach(v=>{v.pause();v.controls=false;});
@@ -27,7 +27,7 @@ export async function mountTraining(root,request,{introOnly=false}={}){
  catch(e){message(e.message);const retry=root.querySelector('[data-training-retry]');retry.hidden=false;retry.style.display="";retry.onclick=()=>{delete root.dataset.mounted;void mountTraining(root,request,{introOnly});};return;}
  const timers=[];
  for(const v of videos){
-  const lesson=data.lessons.find(l=>l.id===v.dataset.trainingLesson);if(!lesson)continue;
+  const lesson=data.lessons.find(l=>l.id===v.dataset.trainingLesson);if(!lesson)continue;if(!lesson.required){v.controls=true;continue;}
   let session,starting=false;
   const playback=document.createElement('div'),status=document.createElement('p'),retry=document.createElement('button');
   status.setAttribute('role','status');retry.type='button';retry.className='sales-secondary-button';retry.textContent='Reload video';retry.hidden=true;

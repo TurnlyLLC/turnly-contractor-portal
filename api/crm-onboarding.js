@@ -4,15 +4,29 @@ module.exports=async(req,res)=>{
  res.setHeader('Cache-Control','no-store');
  try{
   const db=S.database(),user=await C.access(db,req),i=await S.body(req);
+  if(['rules','save_rules'].includes(i.action)){
+   if(!user.admin)throw S.fail('Admin access required.',403);
+   if(i.action==='save_rules'){
+    const scope=String(i.scope||'team');
+    if(scope!=='team')throw S.fail('Settings apply to the whole sales team.');
+    const keys=['training','introduction','agreement','portal','playbook'];
+    if(!i.requirements||Array.isArray(i.requirements)||typeof i.requirements!=='object'||Object.entries(i.requirements).some(([k,v])=>!keys.includes(k)||typeof v!=='boolean'))throw S.fail('Invalid onboarding settings.');
+    S.checked(await db.from('crm_onboarding_rules').upsert({scope,requirements:i.requirements,updated_by:user.id,updated_at:new Date().toISOString()},{onConflict:'scope'}));
+   }
+   const rules=S.checked(await db.from('crm_onboarding_rules').select('scope,requirements'));
+   const members=S.checked(await db.from('profiles').select('id,full_name').in('role',['sales','sales_team']).order('full_name'));
+   return S.json(res,200,{rules});
+  }
+  const requirements=S.checked(await db.rpc('crm_onboarding_requirements',{p_user:user.id}));
   const agreement=await A.current(db,user);
   if(i.action==='sign'){
    const name=String(i.name||'').trim();
    if(i.consent!==true||name.length<3||name.length>160||i.version!==agreement.version||i.hash!==agreement.hash)throw S.fail('Read the current agreement, enter your full legal name, and confirm electronic signature consent.');
    const training=await T.status(db,user);
-   if(!training.lessons.find(l=>l.id==='introduction')?.completed_at)throw S.fail('Finish the introduction before signing.',403);
+   if(requirements.training&&requirements.introduction&&!training.lessons.find(l=>l.id==='introduction')?.completed_at)throw S.fail('Finish the introduction before signing.',403);
    S.checked(await db.rpc('crm_sign_pay_agreement',{p_user:user.id,p_version:agreement.version,p_hash:agreement.hash,p_text:agreement.text,p_name:name}));
   }else if(i.action!=='status')throw S.fail('Unknown onboarding action.');
   const signature=S.checked(await db.from('crm_seller_agreements').select('*').eq('user_id',user.id).eq('version',agreement.version).maybeSingle());
-  return S.json(res,200,{pay_mode:agreement.mode,agreement:{version:agreement.version,hash:agreement.hash,text:agreement.text},signature,ready:await T.ready(db,user),name:user.full_name||''});
+  return S.json(res,200,{requirements,pay_mode:agreement.mode,agreement:{version:agreement.version,hash:agreement.hash,text:agreement.text},signature,ready:await T.ready(db,user),name:user.full_name||''});
  }catch(e){return S.json(res,e.status||503,{error:e.status?e.message:'Unable to save or load onboarding. Please try again.'});}
 };

@@ -1,0 +1,2 @@
+create or replace function public.crm_onboarding_requirements(p_user uuid) returns jsonb language sql stable security invoker set search_path='' as $$ select '{"training":true,"introduction":true,"agreement":true,"portal":true,"playbook":true}'::jsonb ||coalesce((select requirements from public.crm_onboarding_rules where scope='team'),'{}'::jsonb); $$;
+alter table public.crm_onboarding_rules add constraint crm_onboarding_team_only check(scope='team');
