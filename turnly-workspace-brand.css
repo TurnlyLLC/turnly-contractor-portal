@@ -1,0 +1,12 @@
+/* Turnly's original logo, navy foundation, electric blue and cyan accents. */
+:root{--turnly-navy:#061a30;--turnly-blue:#086ca7;--turnly-cyan:#34d4f4;--sales-green:#086ca7;--sales-green-strong:#075786;--sales-cyan:#149aca;--ba-navy:#061a30;--ba-gold:#34d4f4;--ba-canvas:#f4f8fc}
+.login-story{background:radial-gradient(ellipse at top right,#0a5b89 0,transparent 60%),linear-gradient(145deg,#061a30,#0b304c);border-bottom:3px solid #34d4f4}
+.login-brand-logo{width:60px;height:60px;flex:0 0 60px;object-fit:contain;border-radius:12px}
+.login-story .eyebrow,.preview-head{color:#8de5f7}.login-story .intro{color:#cadce9}.login-story small{color:#a8c3d8}.login-preview{border-color:#3e718f;background:#ffffff08}.preview-cols div:last-child i{background:#34d4f420}
+.login-form-side button{background:#086ca7}.login-form-side button:hover{background:#075786}.login-help a{color:#086ca7}.login-form-side input:focus{outline-color:#149aca}
+body.sales-portal-body .sales-sidebar{background:linear-gradient(165deg,#061a30,#0b304c)!important;border-right-color:#123e5b}
+.sales-brand{align-items:center}.sales-brand-logo,.sales-brand>img{width:48px;height:48px;flex:0 0 48px;object-fit:contain;border-radius:10px}.sales-brand>span:last-child{min-width:0}.sales-sidebar .sales-brand strong{color:#fff!important;white-space:normal!important;font-size:17px!important;line-height:1.25}.sales-sidebar .sales-brand small{color:#a8cde2;white-space:normal!important;line-height:1.6;letter-spacing:1px}
+.sales-sidebar .sales-side-kicker{color:#90afc6}.sales-sidebar .sales-nav-link{color:#c8dbea!important}.sales-sidebar .sales-nav-link:hover{background:#ffffff12!important;color:#fff!important}.sales-sidebar .sales-nav-link.active{background:#123f5c!important;color:#80e7fa!important;box-shadow:inset 3px 0 #34d4f4!important}.sales-sidebar-footer{border-top-color:#ffffff26}.sales-sidebar-footer,.sales-sidebar-footer a,.sales-sidebar .crm-workspace-note{color:#a8c3d8}
+.ba-doc-header small{color:#9ce9f8}.ba-signup-body{background:#f4f8fc}.ba-doc-footer{background:#f4f8fc}
+@media(max-width:900px){.ba-workspace .ba-mobile-brand{background:#061a30;color:#fff;border-bottom:2px solid #34d4f4}.ba-workspace .ba-mobile-brand small{color:#a8cde2}.ba-mobile-nav [aria-current=page],.ba-mobile-more summary.active,.ba-mobile-more[open] summary{background:#e4f3fc;color:#086ca7}}
+@media(max-width:760px){.login-brand{font-size:19px}.login-brand-logo{width:48px;height:48px;flex-basis:48px}}

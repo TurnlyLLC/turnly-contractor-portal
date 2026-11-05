@@ -9,7 +9,7 @@
   .ba-workspace .sales-main { width: 100%; min-width: 0; margin: 0 !important; padding: 0 !important; }
   .ba-workspace .ba-mobile-brand { display: flex; align-items: center; gap: 9px; padding: calc(12px + env(safe-area-inset-top)) 18px 10px; background: #fff; color: #142c40; font-size: 19px; font-weight: 800; }
   .ba-mobile-brand img { border-radius: 8px; object-fit: contain; }
-  .ba-mobile-brand small { margin-left: 4px; font-size: 12px; font-weight: 600; color: #54716d; }
+  .ba-mobile-brand small { margin-left: 4px; font-size: 12px; font-weight: 600; color: #54718a; }
   body.sales-portal-body .ba-workspace .sales-topbar { position: static !important; padding: 12px 18px 16px !important; gap: 14px; min-height: 0; background: #fff; box-shadow: none; border-bottom: 1px solid #e2ece9; }
   .ba-workspace .sales-title { width: 100%; min-width: 0; }
   .ba-workspace .sales-title h1 { font-size: 26px; line-height: 1.2; margin: 0 0 5px; }
@@ -59,7 +59,7 @@
   .ba-mobile-nav > a, .ba-mobile-more summary { display: flex; min-height: 58px; align-items: center; justify-content: center; flex-direction: column; gap: 4px; border-radius: 12px; font-size: 11px; font-weight: 650; text-decoration: none; color: #596e79; cursor: pointer; list-style: none; }
   .ba-mobile-nav > a > span:first-child, .ba-mobile-more summary > span:first-child { font-size: 22px; line-height: 24px; }
   .ba-mobile-more summary::-webkit-details-marker { display: none; }
-  .ba-mobile-nav [aria-current=page], .ba-mobile-more summary.active, .ba-mobile-more[open] summary { background: #e4f4ef; color: #007f75; }
+  .ba-mobile-nav [aria-current=page], .ba-mobile-more summary.active, .ba-mobile-more[open] summary { background: #e4f3fc; color: #086ca7; }
   .ba-mobile-menu { position: absolute; right: 12px; left: 12px; bottom: calc(100% + 10px); padding: 16px; border: 1px solid #dce8e4; border-radius: 20px; background: #fff; box-shadow: 0 8px 40px #16344730; max-height: 65dvh; overflow-y: auto; }
   .ba-mobile-menu strong { display: block; padding: 6px 12px 12px; }
   .ba-mobile-menu a { display: flex; gap: 14px; padding: 14px 12px; min-height: 48px; border-radius: 10px; text-decoration: none; }
@@ -69,6 +69,6 @@
   .ba-workspace .ba-table tbody tr { display: block; padding: 12px; margin-top: 12px; border: 1px solid #e1eae7; border-radius: 14px; }
   .ba-workspace .ba-table td { display: flex; align-items: start; justify-content: space-between; gap: 12px; padding: 8px 0; border: 0; font-size: 13px; overflow-wrap: anywhere; }
   .ba-workspace .ba-table td::before { content: attr(data-label); flex: 0 0 85px; color: #687c87; font-size: 12px; }
-  .ba-workspace .ba-table td:first-child { font-weight: 700; color: #173f38; }
+  .ba-workspace .ba-table td:first-child { font-weight: 700; color: #173f58; }
 }
 

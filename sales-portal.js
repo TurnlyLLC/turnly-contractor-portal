@@ -1317,7 +1317,7 @@ function renderSidebar() {
   return `
     <aside class="sales-sidebar">
       <a class="sales-brand" href="sales.html" aria-label="Turnly sales dashboard">
-        <span class="sales-brand-mark">T</span>
+        <img class="sales-brand-logo" src="assets/turnly-website-logo.png" alt="Turnly" width="48" height="48">
         <span>
           <strong>Turnly Residential</strong>
           <small>RESIDENTIAL WORKSPACE</small>
