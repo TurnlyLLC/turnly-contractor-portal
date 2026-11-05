@@ -84,6 +84,10 @@
   },
   "routes": [
     {
+      "src": "^/apply(?:\\.html)?/?$",
+      "dest": "/api/apply-redirect"
+    },
+    {
       "src": "^/(?:index\\.html)?$",
       "has": [
         {
