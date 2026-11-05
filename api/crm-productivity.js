@@ -13,7 +13,12 @@ module.exports=async(req,res)=>{
   const user=await C.access(db,req);
   if(i.action==='set_pay'){
    if(!user.admin)throw S.fail('Administrator access required.',403);
-   S.checked(await db.rpc('crm_set_pay_plan_v2',{p_admin:user.id,...P.validatePlan(i)}));
+   S.checked(await db.rpc(i.mode==='flat'?'crm_set_flat_plan':'crm_set_pay_plan_v2',{p_admin:user.id,...P.validatePlan(i)}));
+   }else if(['flat_approve','flat_record_paid'].includes(i.action)){
+   if(!user.admin)throw S.fail('Administrator access required.',403);
+   const result=await db.rpc('crm_review_flat_pay',{p_admin:user.id,p_plan:i.plan_id,p_action:i.action.slice(5),p_expected:i.amount_cents,p_reference:String(i.reference||'')});
+   if(result.error)throw S.fail(result.error.code==='P0001'?result.error.message:'Unable to review this batch. Refresh and try again.');
+   return S.json(res,200,{ok:true});
   }else if(i.action!=='report')throw S.fail('Unknown activity action.');
   return S.json(res,200,await P.report(db,user,i));
  }catch(e){return S.json(res,e.status||400,{error:e.status?e.message:'Unable to load activity or save pay settings. Please retry.'});}

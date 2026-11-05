@@ -15,6 +15,7 @@ module.exports=async(req,res)=>{
    db.rpc('crm_hourly_summary',{p_user:user.admin?null:user.id,p_through:through.toISOString()}).then(S.checked),
    C.all(db,'crm_hourly_payments','*',q=>user.admin?q:q.eq('user_id',user.id))
   ]);
+  if(!user.admin){for(const row of rows)for(const key of Object.keys(row))if(key.endsWith('_seconds'))delete row[key];for(const period of periods)delete period.hours_seconds;}
   return S.json(res,200,{admin:user.admin,historical,hidden:historical&&!periods.length&&!rows.some(r=>r.pending_cents>0||r.approved_cents>0||r.paid_cents>0),rows,periods,through:through.toISOString()});
  }catch(e){return S.json(res,e.status||400,{error:e.message||'Unable to review hourly pay.'});}
 };

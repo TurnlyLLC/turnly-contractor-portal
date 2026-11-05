@@ -20,7 +20,7 @@ module.exports=async(req,res)=>{
   const stats=C.summarize(orders,commissions);const own=C.summarize(orders.filter(o=>o.sales_user_id===user.id),commissions.filter(c=>c.sales_user_id===user.id));
   let prospects=db.from('sales_leads').select('id',{count:'exact',head:true}).eq('business_segment','residential').eq('prospect_type','realtor');if(!user.admin)prospects=prospects.eq('sales_owner_id',user.id);const count=await prospects;S.checked(count);
   const conversion={prospects:count.count||0,buyers:new Set(orders.filter(o=>o.buyer_kind==='realtor'&&o.sales_lead_id).map(o=>o.sales_lead_id)).size};
-  const hourly=!user.admin&&(await require("../lib/seller-agreement.cjs").current(db,user)).mode==="hourly";if(hourly){for(const item of [stats,own]){delete item.commission_cents;delete item.unrated;}}
+  const hourly=!user.admin&&(await require("../lib/seller-agreement.cjs").current(db,user)).mode!=="commission";if(hourly){for(const item of [stats,own]){delete item.commission_cents;delete item.unrated;}}
   const memberStats=user.admin?[...new Set(orders.map(o=>o.sales_user_id).filter(Boolean))].map(id=>({user_id:id,...C.summarize(orders.filter(o=>o.sales_user_id===id),commissions.filter(c=>c.sales_user_id===id))})):[];
   return S.json(res,200,{link,stats,own,conversion,memberStats,notifications:S.checked(notificationResult),settings:hourly?null:S.checked(settings),sending:C.capabilities()});
  }catch(e){return S.json(res,e.status||400,{error:e.message||'Unable to load sales data.'});}

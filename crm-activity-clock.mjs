@@ -10,7 +10,7 @@ export async function startActivityClock(client,page){
  async function logout(){if(closed)return;closed=true;clearInterval(timer);clearInterval(watchdog);try{await request('logout');}catch{}await client.auth.signOut({scope:'local'});location.replace('sales-login.html?reason=inactive');}
  async function tick(action='heartbeat'){
   if(closed||busy)return;busy=true;
-  try{const r=await request(action);lastActivity=Date.now()-(new Date(r.server_now)-new Date(r.last_activity_at));inCall=r.in_call;startedAt=Date.parse(r.started_at);clock.hidden=r.pay_mode!=='hourly';
+  try{const r=await request(action);lastActivity=Date.now()-(new Date(r.server_now)-new Date(r.last_activity_at));inCall=r.in_call;startedAt=Date.parse(r.started_at);clock.hidden=true;
    const left=Math.ceil((300000-(Date.now()-lastActivity))/1000);note.hidden=inCall||left>60;note.textContent=`You will be signed out in ${Math.max(0,left)} seconds without activity. Continue working to stay signed in.`;
   }catch(e){if(e.expired){await logout();}else{note.hidden=false;note.textContent='Connection interrupted. Active work time may not be recorded until reconnected.';if(Date.now()-lastActivity>=300000&&!inCall)await logout();}}finally{busy=false;}
  }

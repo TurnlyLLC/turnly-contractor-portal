@@ -1,12 +1,12 @@
 import {mountBulkPay} from './crm-pay-bulk.mjs?v=20261030-bulk';
-import {mountHourlyPay} from './crm-hourly-pay.mjs?v=20261030-paytypes';
-import {startActivityClock} from './crm-activity-clock.mjs?v=20261030-paytypes';
-import {mountProductivity} from './crm-productivity.mjs?v=20261030-paytypes';
+import {mountHourlyPay} from './crm-hourly-pay.mjs?v=20261105-flat';
+import {startActivityClock} from './crm-activity-clock.mjs?v=20261105-flat';
+import {mountProductivity} from './crm-productivity.mjs?v=20261105-flat';
 let activityClock;
 import {mountOnboardingSettings} from './crm-onboarding-settings.mjs';
 import {mountTraining} from './crm-training.mjs?v=20261105-rules';
-import {mountOnboarding} from './crm-onboarding.mjs?v=20261105-rules';
-import {mountEarnings} from './crm-earnings.mjs?v=20261030-paytypes';
+import {mountOnboarding} from './crm-onboarding.mjs?v=20261105-flat';
+import {mountEarnings} from './crm-earnings.mjs?v=20261105-flat';
 import {startMessageBadge,paintMessageBadge,refreshMessageBadge} from './crm-message-badge.mjs?v=20261021-desktop';
 import {mountDemandMap} from "./demand-map.mjs?v=20261027-status-rings";
 import {mountMessages} from './crm-messages.mjs?v=20261021-alerts';
@@ -4873,7 +4873,7 @@ function salesMoney(c){return money((c||0)/100);}
 function renderReferralPanel(){
  const c=state.salesContext||{},own=c.own||{};
  if(!c.link)return `<article class="sales-panel"><h2>Complete your quick start</h2><p>Watch the introduction, review the essentials, and sign your seller agreement to unlock calls and your purchase link.</p><a class="sales-primary-button" href="crm-onboarding.html">Open onboarding</a></article>`;
- return `<article class="sales-panel crm-referral-panel"><div><p class="crm-eyebrow">YOUR PERSONAL CHECKOUT</p><h2>Your link. Your credited sales.</h2><p>Share this checkout with prospects. ${state.onboarding?.pay_mode==='hourly'?'Share your assigned link so eligible purchases are attributed to your work.':'Your agreed commission applies to each buyer’s first completed purchase. Repeat purchases earn no commission.'}</p></div><label>Your gift-card checkout link<input id="crmReferralLink" readonly value="${esc(c.link?.url||'')}" aria-label="Your referral link"></label><div class="sales-row-actions"><button class="sales-primary-button" data-copy-referral>Copy link</button><button class="sales-secondary-button" data-send-link="" data-channel="email">Email a contact</button><button class="sales-secondary-button" data-send-link="" data-channel="sms">Text a contact</button></div><p>${number(own.purchases||0)} credited purchases · ${salesMoney(own.gross_cents)} gross sales${state.onboarding?.pay_mode==='hourly'?'':' · '+salesMoney(own.commission_cents)+' earned commissions'} · <a href="crm-earnings.html">View payment status</a>${state.onboarding?.pay_mode==='hourly'?'':!c.settings?.commission_mode?' · Commission rate not set':own.unrated?' · '+number(own.unrated)+' earlier orders need a rate':''}</p><p class="crm-muted">Email: ${c.sending?.email?'connected':'setup required'} · Text: ${c.sending?.sms?'connected':'setup required'}</p></article>`;
+ return `<article class="sales-panel crm-referral-panel"><div><p class="crm-eyebrow">YOUR PERSONAL CHECKOUT</p><h2>Your link. Your credited sales.</h2><p>Share this checkout with prospects. ${state.onboarding?.pay_mode&&state.onboarding.pay_mode!=='commission'?'Share your assigned link so eligible purchases are attributed to your work.':'Your agreed commission applies to each buyer’s first completed purchase. Repeat purchases earn no commission.'}</p></div><label>Your gift-card checkout link<input id="crmReferralLink" readonly value="${esc(c.link?.url||'')}" aria-label="Your referral link"></label><div class="sales-row-actions"><button class="sales-primary-button" data-copy-referral>Copy link</button><button class="sales-secondary-button" data-send-link="" data-channel="email">Email a contact</button><button class="sales-secondary-button" data-send-link="" data-channel="sms">Text a contact</button></div><p>${number(own.purchases||0)} credited purchases · ${salesMoney(own.gross_cents)} gross sales${state.onboarding?.pay_mode&&state.onboarding.pay_mode!=='commission'?'':' · '+salesMoney(own.commission_cents)+' earned commissions'} · <a href="crm-earnings.html">View payment status</a>${state.onboarding?.pay_mode&&state.onboarding.pay_mode!=='commission'?'':!c.settings?.commission_mode?' · Commission rate not set':own.unrated?' · '+number(own.unrated)+' earlier orders need a rate':''}</p><p class="crm-muted">Email: ${c.sending?.email?'connected':'setup required'} · Text: ${c.sending?.sms?'connected':'setup required'}</p></article>`;
 }
 function renderCrmNotifications(){
  const notices=state.salesContext?.notifications||[];
