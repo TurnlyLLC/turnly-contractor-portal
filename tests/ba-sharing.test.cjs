@@ -23,5 +23,21 @@ test('social links preserve attribution and captions include disclosure',async()
  const fb=html.match(/href="(https:\/\/www.facebook.com[^\"]+)"/)[1];
  assert.equal(new URL(fb).searchParams.get('u'),assets.url);
  assert.match(html,/Download QR code/);assert.match(html,/Download promo image/);
+ assert.match(html,/Download clickable PDF/);
+ assert.ok(html.includes(`href="${assets.url}"`));
  assert.ok(!sharingPanel({referrals_ready:false},assets).includes('data:image'));
+});
+test('downloaded PDF CTA links to the same ambassador booking URL as the QR',async()=>{
+ const {createPromoPdf,CTA,SIZE}=await import('../ba-promo-layout.mjs'),PDFLib=require('pdf-lib');
+ for(const code of ['BA-1234567890ABCDEF','BA-FEDCBA0987654321']){
+  const assets=await sharingAssets({referrals_ready:true,code});
+  const png=Buffer.from(assets.qr.split(',')[1],'base64');
+  const bytes=await createPromoPdf(png,assets.url,PDFLib),doc=await PDFLib.PDFDocument.load(bytes);
+  const annotations=doc.getPages()[0].node.lookup(PDFLib.PDFName.of('Annots'),PDFLib.PDFArray);
+  const annotation=annotations.lookup(0,PDFLib.PDFDict),action=annotation.lookup(PDFLib.PDFName.of('A'),PDFLib.PDFDict);
+  assert.equal(action.lookup(PDFLib.PDFName.of('URI')).decodeText(),assets.url);
+  const rect=annotation.lookup(PDFLib.PDFName.of('Rect'),PDFLib.PDFArray);
+  assert.deepEqual(rect.asArray().map(n=>n.asNumber()),[CTA.x,SIZE-CTA.y-CTA.height,CTA.x+CTA.width,SIZE-CTA.y]);
+ }
+ await assert.rejects(createPromoPdf(new Uint8Array(),'https://example.com',PDFLib));
 });

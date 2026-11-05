@@ -2,3 +2,5 @@
 .sales-brand strong{white-space:normal!important;line-height:1.25}.sales-brand>span:last-child{min-width:0}.sales-brand small{white-space:normal!important}
 
 .ba-share-grid{display:grid;grid-template-columns:260px minmax(0,1fr);gap:28px}.ba-qr{display:block;width:240px;max-width:100%;height:auto;background:white}.ba-share-grid textarea{box-sizing:border-box;width:100%;padding:12px;border:1px solid #cfdae3;border-radius:8px;font:inherit;line-height:1.5;resize:vertical}.ba-share-grid h3{margin-top:24px}.ba-share-grid input{min-width:0;width:100%}@media(max-width:800px){.ba-share-grid{grid-template-columns:minmax(0,1fr)}}
+
+.ba-promo-preview{display:block;width:100%;max-width:520px;height:auto;border-radius:16px;margin:16px 0;box-shadow:0 8px 24px #052b4c18}.ba-promo-preview[hidden]{display:none}
