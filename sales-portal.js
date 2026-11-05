@@ -1,4 +1,5 @@
 import {FULL_SCRIPTS} from './crm-full-scripts.mjs';
+import {startOnboardingUnlock} from './crm-onboarding-unlock.mjs';
 import {mountMemberProfile} from './crm-member-profile.mjs?v=20261105-individual';
 import {mountBulkPay} from './crm-pay-bulk.mjs?v=20261030-bulk';
 import {mountHourlyPay} from './crm-hourly-pay.mjs?v=20261105-flat';
@@ -1188,7 +1189,9 @@ async function requireSalesAccess() {
    const {data:session}=await supabase.auth.getSession();
    const response=await crmFetch('/api/crm-onboarding',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.session.access_token},body:JSON.stringify({action:'status'})});
    if(!response.ok)throw Error('Unable to verify onboarding. Please retry.');
+   const previouslyBlocked=state.onboarding?.ready===false;
    state.onboarding=await response.json();
+   if(state.onboarding.ready&&(state.page==='onboarding'||(previouslyBlocked&&state.page==='guide'))){window.location.replace('sales-leads.html');return false;}
    if(!state.onboarding.ready){
     const target=(state.onboarding.signature||state.onboarding.requirements?.agreement===false)?'guide':'onboarding';
     if(state.page!==target&&!(state.page==='onboarding'&&target==='guide')){window.location.replace(target==='guide'?'crm-guide.html':'crm-onboarding.html');return false;}
@@ -4685,6 +4688,7 @@ async function crmMessageRequest(values){
  const result=await response.json();if(!response.ok)throw Error(result.error||'Unable to load messages.');return result;
 }
 if (await requireSalesAccess()) {
+ startOnboardingUnlock({blocked:()=>!isSalesAdmin()&&!state.adminPreview&&state.onboarding?.ready===false,refresh:requireSalesAccess});
  startMessageBadge(crmMessageRequest);
  installCalling({onStatus:()=>{if(!state.modal)void refreshData(false).catch(()=>{});},request:async values=>{
   const {data}=await supabase.auth.getSession();
