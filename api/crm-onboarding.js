@@ -8,14 +8,18 @@ module.exports=async(req,res)=>{
    if(!user.admin)throw S.fail('Admin access required.',403);
    if(i.action==='save_rules'){
     const scope=String(i.scope||'team');
-    if(scope!=='team')throw S.fail('Settings apply to the whole sales team.');
+    if(scope!=='team'){
+     if(!/^[0-9a-f-]{36}$/.test(scope))throw S.fail('Choose a sales member.');
+     const member=S.checked(await db.from('profiles').select('id,role,sales_member_deleted_at').eq('id',scope).maybeSingle());
+     if(!member||!['sales','sales_team'].includes(member.role)||member.sales_member_deleted_at)throw S.fail('Choose a current sales member.');
+    }
     const keys=['training','introduction','agreement','portal','playbook'];
     if(!i.requirements||Array.isArray(i.requirements)||typeof i.requirements!=='object'||Object.entries(i.requirements).some(([k,v])=>!keys.includes(k)||typeof v!=='boolean'))throw S.fail('Invalid onboarding settings.');
     S.checked(await db.from('crm_onboarding_rules').upsert({scope,requirements:i.requirements,updated_by:user.id,updated_at:new Date().toISOString()},{onConflict:'scope'}));
    }
    const rules=S.checked(await db.from('crm_onboarding_rules').select('scope,requirements'));
-   const members=S.checked(await db.from('profiles').select('id,full_name').in('role',['sales','sales_team']).order('full_name'));
-   return S.json(res,200,{rules});
+   const members=S.checked(await db.from('profiles').select('id,full_name').in('role',['sales','sales_team']).is('sales_member_deleted_at',null).order('full_name'));
+   return S.json(res,200,{rules,members});
   }
   const requirements=S.checked(await db.rpc('crm_onboarding_requirements',{p_user:user.id}));
   const agreement=await A.current(db,user);
