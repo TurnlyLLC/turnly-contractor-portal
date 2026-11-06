@@ -39,8 +39,9 @@ module.exports=async(req,res)=>{
   if(input.action==='list'){
    const role=input.role||'cleaner';if(!ROLES.includes(role))throw fail('Choose cleaner or brand ambassador applications.');
    const page=Math.max(1,Math.min(10000,parseInt(input.page)||1));
-   let q=db.from('recruiting_applications').select('id,role,name,email,phone,city,state,service_city,service_cities:answers->service_cities,zip:answers->>zip,street:answers->>street_address,first_name:answers->>first_name,last_name:answers->>last_name,status,created_at,version',{count:'exact'}).order('created_at',{ascending:false}).order('id');
+   let q=db.from('recruiting_applications').select('id,role,name,email,phone,city,state,service_city,service_cities:answers->service_cities,zip:answers->>zip,street:answers->>street_address,first_name:answers->>first_name,last_name:answers->>last_name,status,created_at,version,archived_at',{count:'exact'}).order('created_at',{ascending:false}).order('id');
    q=q.eq('role',role).is('deleted_at',null);
+   q=input.pool==='archived'?q.not('archived_at','is',null):q.is('archived_at',null);
    if(input.status!=='hired')q=q.is('hired_at',null);
    else q=q.eq('status','hired');
    if(STATUSES.includes(input.status))q=q.eq('status',input.status);
@@ -48,11 +49,14 @@ module.exports=async(req,res)=>{
    const search=String(input.search||'').replace(/[^a-zA-Z0-9@. +_-]/g,'').slice(0,100);
    if(search)q=q.or(`name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`);
    const result=await q.range((page-1)*30,page*30-1);checked(result);
-   const totals=await Promise.all(ROLES.map(async r=>{const result=await db.from('recruiting_applications').select('id',{count:'exact',head:true}).eq('role',r).is('deleted_at',null).is('hired_at',null).is('reviewed_by',null);checked(result);return [r,result.count];}));
-   const total=await db.from('recruiting_applications').select('id',{count:'exact',head:true}).eq('role',role).is('deleted_at',null).is('hired_at',null);checked(total);
+   const totals=await Promise.all(ROLES.map(async r=>{const result=await db.from('recruiting_applications').select('id',{count:'exact',head:true}).eq('role',r).is('deleted_at',null).is('hired_at',null).is('reviewed_by',null).is('archived_at',null);checked(result);return [r,result.count];}));
+   let totalQuery=db.from('recruiting_applications').select('id',{count:'exact',head:true}).eq('role',role).is('deleted_at',null).is('hired_at',null);
+   totalQuery=input.pool==='archived'?totalQuery.not('archived_at','is',null):totalQuery.is('archived_at',null);
+   const total=await totalQuery;checked(total);
    return json(res,200,{rows:result.data,count:result.count,total:total.count,page,counts:Object.fromEntries(totals)});
   }
   if(!/^[0-9a-f-]{36}$/i.test(input.id||''))throw fail('Choose an application.');
+  if(input.action==='archive'||input.action==='restore'){if(!Number.isInteger(input.version))throw fail('Refresh this application first.');const r=await db.rpc('archive_recruit',{p_id:input.id,p_actor:actor,p_archive:input.action==='archive',p_version:input.version});if(r.error)throw fail(r.error.message,409);return json(res,200,{ok:true});}
   if(input.action==='hire')return json(res,200,await require('../lib/applicant-hiring.cjs').hire(db,actor,input.id,input.shortlistOnly===true));
   if(input.action==='delete'){const r=await db.rpc('delete_applicant',{p_id:input.id,p_actor:actor});if(r.error)throw fail('This application cannot be deleted while hiring or after hiring. Manage the account from Directory.',409);return json(res,200,{ok:true});}
   if(input.action==='onboarding'){
@@ -66,7 +70,7 @@ module.exports=async(req,res)=>{
   if(input.action==='detail')return json(res,200,{welcome:checked(await db.from('recruiting_hires').select('sent_at,last_error').eq('application_id',input.id).maybeSingle()),application:checked(await db.from('recruiting_applications').select('*').eq('id',input.id).is('deleted_at',null).single()),events:checked(await db.from('recruiting_application_events').select('status,note,created_at').eq('application_id',input.id).order('created_at',{ascending:false}))});
   if(input.action==='review'){
    const change=review(input);
-   const result=checked(await db.from('recruiting_applications').update({status:change.status,review_note:change.note,reviewed_by:actor,version:input.version+1,updated_at:new Date().toISOString()}).eq('id',input.id).eq('version',input.version).is('deleted_at',null).is('hired_at',null).select('id'));
+   const result=checked(await db.from('recruiting_applications').update({status:change.status,review_note:change.note,reviewed_by:actor,version:input.version+1,updated_at:new Date().toISOString()}).eq('id',input.id).eq('version',input.version).is('archived_at',null).is('deleted_at',null).is('hired_at',null).select('id'));
    if(!result.length)throw fail('Another admin updated this application. Reload it before saving.',409);
    return json(res,200,{ok:true});
   }
