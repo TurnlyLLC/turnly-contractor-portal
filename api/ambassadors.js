@@ -47,20 +47,27 @@ module.exports=async(req,res)=>{
    return S.json(res,200,{ok:true});
   }
   if(x.action==='dashboard'){
-   const rawMembers=actor.admin?S.checked(await db.from('ba_members').select('user_id,name,email,code,enabled,onboarding_completed_at,created_at').order('name')):[actor.member];
+   const rawMembers=[];
+   if(actor.admin){
+    for(let offset=0;;offset+=500){
+     const rows=S.checked(await db.from('ba_members').select('user_id,name,email,code,enabled,onboarding_completed_at,created_at').order('name').order('user_id').range(offset,offset+499));
+     rawMembers.push(...rows);if(rows.length<500)break;
+    }
+   }else rawMembers.push(actor.member);
    const members=await A.referralReadiness(db,rawMembers);
-   const id=actor.admin?(x.member_id||members[0]?.user_id):actor.id;
+   const id=actor.admin?(x.member_id||null):actor.id;
    const member=members.find(m=>m.user_id===id)||null;
+   if(actor.admin&&id&&!member)throw S.fail('Ambassador not found.',404);
    let leads=[],earnings=[];
-   if(member){
+   if(member||actor.admin){
     // Page through all rows instead of silently truncating at the REST row limit.
-    for(let offset=0;;offset+=500){const rows=S.checked(await db.from('ba_leads').select('id,name,stage,booked_at,completed_at,service_date,review_required,created_at').eq('member_id',id).order('created_at',{ascending:false}).range(offset,offset+499));leads.push(...rows);if(rows.length<500)break;}
+    for(let offset=0;;offset+=500){let query=db.from('ba_leads').select('id,member_id,name,stage,booked_at,completed_at,service_date,review_required,created_at');if(id)query=query.eq('member_id',id);const rows=S.checked(await query.order('created_at',{ascending:false}).order('id').range(offset,offset+499));leads.push(...rows);if(rows.length<500)break;}
     for(let i=0;i<leads.length;i+=100){const rows=S.checked(await db.from('ba_earnings').select('id,lead_id,milestone,amount_cents,earned_at,paid_at,payment_reference').in('lead_id',leads.slice(i,i+100).map(l=>l.id)));earnings.push(...rows);}
    }
    // No customer email, phone, address, billing details or later bookings leave this endpoint.
    if(!actor.admin)leads=leads.map(l=>({...l,name:l.name.split(/\s+/).map((part,i)=>i===0?part:part[0]+'.').join(' ')}));
    const safeMember=m=>m?(({user_id,name,email,enabled,onboarding_completed_at,training,agreement_current,referrals_ready})=>({user_id,name,email,enabled,onboarding_completed_at,training,agreement_current,referrals_ready,...(referrals_ready?{code:m.code}:{})}))(m):null;
-   return S.json(res,200,{admin:actor.admin,onboarding_required:!actor.admin&&!actor.member.onboarding_completed_at,members:members.map(safeMember),member:safeMember(member),sharing:await require('../lib/ba-sharing.cjs').sharingAssets(member),leads,earnings});
+   return S.json(res,200,{admin:actor.admin,scope:actor.admin&&!id?'team':'ambassador',onboarding_required:!actor.admin&&!actor.member.onboarding_completed_at,members:members.map(safeMember),member:safeMember(member),sharing:await require('../lib/ba-sharing.cjs').sharingAssets(member),leads,earnings});
   }
   if(!actor.admin)throw S.fail('Admin access required.',403);
   if(x.action==='create'){
