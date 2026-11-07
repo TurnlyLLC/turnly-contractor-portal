@@ -67,7 +67,7 @@ test('one-use dialing verifies identity, ownership, opt-outs and deactivation; c
  }finally{await db.close();}
 });
 test('human detection uses signed outbound callbacks and the assigned one-use call intent',async()=>{
- const C=require('../lib/crm-sales.cjs'),T=require('../lib/crm-training.cjs');const previous={lead:C.leadFor,training:T.requireComplete};const env={...process.env};
+ const C=require('../lib/crm-sales.cjs'),T=require('../lib/crm-training.cjs');const H=require('../lib/crm-call-hours.cjs');const previous={lead:C.leadFor,training:T.requireComplete,hours:H.status};H.status=()=>({allowed:true});const env={...process.env};
  Object.assign(process.env,{TWILIO_VOICE_ENABLED:'true',TWILIO_ACCOUNT_SID:'ACtest',TWILIO_AUTH_TOKEN:'secret',TWILIO_API_KEY_SID:'SKtest',TWILIO_API_KEY_SECRET:'secret',TWILIO_TWIML_APP_SID:'APtest',TWILIO_VOICE_NUMBER:'+19195550100'});
  C.leadFor=async()=>({contact_phone:'+19195550101'});T.requireComplete=async()=>{};let writes=[];
  const db={rpc:async()=>({data:{user_id:id(1),lead_id:id(2),phone:'+19195550101'}}),from:table=>({update(v){writes.push(v);return this;},eq(){return this;},select(){if(table==='communication_usage')return this;return Promise.resolve({data:[{id:id(3)}]});},async single(){return {data:{max_seconds:60}};},then(resolve){resolve({data:[]});}})};
@@ -75,5 +75,5 @@ test('human detection uses signed outbound callbacks and the assigned one-use ca
  const p={AccountSid:'ACtest',CallSid:'CA'+'b'.repeat(32),AnsweredBy:'human'},url=V.hook('amd')+'&intent='+id(3),sig=twilio.getExpectedTwilioSignature('secret',url,p);
  assert.equal(V.verify({query:{intent:id(3)},headers:{'x-twilio-signature':sig}},p,'amd'),true);assert.equal(V.verify({query:{intent:id(4)},headers:{'x-twilio-signature':sig}},p,'amd'),false);
  await V.amd(db,p,id(3));assert.equal(writes[1].answered_by,'human');await assert.rejects(V.amd(db,{...p,AnsweredBy:'fake'},id(3)));
- }finally{C.leadFor=previous.lead;T.requireComplete=previous.training;for(const k of Object.keys(process.env))if(!(k in env))delete process.env[k];Object.assign(process.env,env);}
+ }finally{H.status=previous.hours;C.leadFor=previous.lead;T.requireComplete=previous.training;for(const k of Object.keys(process.env))if(!(k in env))delete process.env[k];Object.assign(process.env,env);}
 });

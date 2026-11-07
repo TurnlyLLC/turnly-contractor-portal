@@ -13,8 +13,8 @@ import {mountEarnings} from './crm-earnings.mjs?v=20261105-flat';
 import {startMessageBadge,paintMessageBadge,refreshMessageBadge} from './crm-message-badge.mjs?v=20261021-desktop';
 import {mountDemandMap} from "./demand-map.mjs?v=20261027-status-rings";
 import {mountMessages} from './crm-messages.mjs?v=20261021-alerts';
-import {mountBudget} from './crm-budget.mjs?v=20261020';
-import { installCalling } from './crm-calling.mjs?v=20261028-call-attempts';
+import {mountBudget} from './crm-budget.mjs?v=20261106-call-hours';
+import { installCalling } from './crm-calling.mjs?v=20261106-call-hours';
 import {GIFT_CARD_URL,RESIDENTIAL_URL,PRODUCT_FACTS,PLAYBOOK,SALES_SCRIPTS,SALES_OBJECTIONS} from './crm-sales-content.mjs?v=20261021-training';
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/+esm";
 import {
