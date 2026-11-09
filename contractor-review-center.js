@@ -4,7 +4,7 @@ const label=value=>String(value||'uploaded').replace(/_/g,' ').replace(/^./,c=>c
 const pendingDoc=d=>!['approved','rejected','expired','archived'].includes(d.status);
 
 export function createContractorReview({supabase,getPeople,onSaved}) {
-  const state={documents:[],profiles:[],mobile:[],mobileError:'',deletionReviews:[],tab:'signups',error:'',loading:true,person:null,busy:false,requirementDrafts:new Map()};
+  const state={documents:[],profiles:[],mobile:[],mobileError:'',academy:[],trainingError:'',deletionReviews:[],tab:'signups',error:'',loading:true,person:null,busy:false,requirementDrafts:new Map()};
   let dialog,previousFocus;
   async function api(input){
     const session=await supabase.auth.getSession();
@@ -41,9 +41,10 @@ export function createContractorReview({supabase,getPeople,onSaved}) {
       const rows=state.tab==='all'?people():state.tab==='signups'?signupQueue():people().filter(p=>profile(p).onboarding_override);
       queue.innerHTML=rows.length?rows.map(p=>`<article class="cr-queue-row"><div><strong>${esc(p.name)}</strong><small>${esc(p.email)} · ${state.tab==='all'?esc(label(p.status)):state.tab==='signups'?`${documents(p).filter(d=>d.status==='approved').length} documents approved`:esc(profile(p).onboarding_override_reason)}</small></div><button class="secondary-action" data-cr-person="${esc(p.key)}">Review account</button></article>`).join(''):`<div class="cr-empty">${state.tab==='signups'?'No signups are waiting for approval.':'No established-staff overrides have been granted.'}</div>`;
     }
+    if(state.trainingError)queue.insertAdjacentHTML('afterbegin',`<p class="cr-error" role="alert">Academy progress could not load: ${esc(state.trainingError)}</p>`);
     if(state.mobileError)queue.insertAdjacentHTML('afterbegin',`<p class="cr-error" role="alert">Onboarding requests could not load: ${esc(state.mobileError)} Refresh reviews to retry.</p>`);
   }
-  async function load(){state.loading=true;render();try{const data=await api({action:'list'});state.documents=data.documents.filter(d=>!d.storage_path?.includes('/onboarding/'));state.profiles=data.profiles;state.mobile=data.mobile||[];state.mobileError=data.mobile_error||'';state.deletionReviews=data.deletion_reviews||[];state.error='';}catch(e){state.error=e.message;}finally{state.loading=false;render();document.dispatchEvent(new CustomEvent('contractor-reviews-loaded'));}}
+  async function load(){state.loading=true;render();try{const data=await api({action:'list'});state.documents=data.documents.filter(d=>!d.storage_path?.includes('/onboarding/'));state.profiles=data.profiles;state.mobile=data.mobile||[];state.academy=data.academy||[];state.trainingError=data.training_error||'';state.mobileError=data.mobile_error||'';state.deletionReviews=data.deletion_reviews||[];state.error='';}catch(e){state.error=e.message;}finally{state.loading=false;render();document.dispatchEvent(new CustomEvent('contractor-reviews-loaded'));}}
   function requirementOptions(d){
     const items=(state.mobileFile?.items||[]).filter(i=>i.kind!=='academy'), words=String(d.document_type+' '+d.title+' '+d.file_name).toLowerCase();
     const linked=items.find(i=>i.portalDocumentId===d.id);
@@ -171,5 +172,5 @@ export function createContractorReview({supabase,getPeople,onSaved}) {
       try{const {url}=await api(button.dataset.crNativeFile?{action:'mobile_file',id:state.person.profileId,submission_id:button.dataset.crNativeFile}:{action:'document_file',id:button.dataset.crFile});if(win)win.location=url;else result('Allow pop-ups to open the uploaded document.',true);}catch(e){win?.close();result(e.message,true);}
     }
   }
-  return {markup,render,load,openPerson,summary(person){const m=state.mobile.find(p=>p.userId===person.profileId);return {available:!!m&&!state.error&&!state.mobileError,complete:!!m?.complete,done:m?.doneCount||0,total:m?.requiredCount||0,review:m?.needsReview||0,waived:!!profile(person)?.onboarding_override};},bind(root){root.addEventListener('click',click);}};
+  return {markup,render,load,openPerson,async trainingProgress(person){const result=await api({action:'training_progress',id:person.profileId});state.academy=state.academy.filter(p=>p.profile_id!==person.profileId).concat(result);document.dispatchEvent(new CustomEvent('contractor-reviews-loaded'));return result;},summary(person){const m=state.mobile.find(p=>p.userId===person.profileId);return {onboarding:state.error?{available:false}:m?.onboarding||{available:false},training:state.error?{available:false,error:state.error}:state.academy.find(p=>p.profile_id===person.profileId)||{available:false,error:state.trainingError},available:!!m&&!state.error&&!state.mobileError&&!state.trainingError,complete:!!m?.complete,done:m?.doneCount||0,total:m?.requiredCount||0,review:m?.needsReview||0,waived:!!profile(person)?.onboarding_override};},bind(root){root.addEventListener('click',click);}};
 }

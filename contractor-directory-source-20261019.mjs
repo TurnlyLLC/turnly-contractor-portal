@@ -1,8 +1,8 @@
-import {createContractorCRM} from './contractor-crm.mjs?v=20261105-filters';
+import {createContractorCRM} from './contractor-crm.mjs?v=20261109-progress';
 import { token, title, normalizeLookup, metadataFor, uniqueList, listFrom, firstValue, accessFromRow, roleText, isSales, isPropertyManager, isContractor, isInactive, isApproved, activeStatus, teamFor, visibleStatus, normalizePerson, mergeDirectoryPeople } from "./contractor-directory-model.mjs?v=20261012-active";
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
-import { createContractorReview } from "./contractor-review-center.js?v=20261028-background";
+import { createContractorReview } from "./contractor-review-center.js?v=20261109-progress";
 
 const env = window.__ENV || {};
 const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY

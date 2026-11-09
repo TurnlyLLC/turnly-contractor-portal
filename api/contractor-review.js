@@ -3,6 +3,7 @@ const {uuid} = require('../lib/agent-referrals.cjs');
 const mobile = require('../lib/mobile-contractor-review.cjs');
 const background = require('../lib/contractor-background.cjs');
 const training = require('../lib/contractor-training.cjs');
+const directoryProgress = require('../lib/contractor-directory-progress.cjs');
 
 const fail = (message,status=400) => Object.assign(new Error(message),{status});
 function checked(result) {
@@ -42,9 +43,15 @@ async function run(db,actor,input,token,transport) {
     let remote=[],mobile_error='';
     try{remote=(await mobile.client(token,transport)('contractors',{profiles:contractors.map(p=>({id:p.id,full_name:p.full_name,email:p.email,status:p.status}))})).contractors||[];}
     catch(error){mobile_error=error.message;}
-    try {const progress=await training.rows(db);remote=remote.map(p=>{const items=training.items(progress,p.userId);return {...p,complete:p.complete&&items.every(i=>i.state==='done'),doneCount:(p.doneCount||0)+items.filter(i=>i.state==='done').length,requiredCount:(p.requiredCount||0)+items.length};});}catch(error){mobile_error=error.message;remote=[];}
+    let academy=[],training_error='';
+    try {const progress=await training.rows(db);academy=contractors.map(p=>directoryProgress.academy(progress,p.id));}catch(error){training_error=error.message;}
+    remote=directoryProgress.combine(contractors,remote,academy);
     const deletion_reviews=await allRows(db,'contractor_deletion_reviews','*','profile_id');
-    return {documents,profiles:contractors,mobile:remote,mobile_error,deletion_reviews};
+    return {documents,profiles:contractors,mobile:remote,mobile_error,deletion_reviews,academy,training_error};
+  }
+  if(input.action==='training_progress'){
+    if(!uuid(input.id))throw fail('Choose a contractor.');
+    return directoryProgress.academy(await training.rows(db,input.id),input.id);
   }
   if(input.action==='document_file'){
     if(!uuid(input.id)) throw fail('Choose a document.');
