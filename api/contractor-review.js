@@ -4,6 +4,7 @@ const mobile = require('../lib/mobile-contractor-review.cjs');
 const background = require('../lib/contractor-background.cjs');
 const training = require('../lib/contractor-training.cjs');
 const directoryProgress = require('../lib/contractor-directory-progress.cjs');
+const correctionEmail = require('../lib/contractor-correction-email.cjs');
 
 const fail = (message,status=400) => Object.assign(new Error(message),{status});
 function checked(result) {
@@ -61,6 +62,7 @@ async function run(db,actor,input,token,transport) {
     return {url:checked(result).signedUrl};
   }
   if(!uuid(input.id)) throw fail('Choose a contractor or document.');
+  if(input.action==='correction_email')return {ok:true,email:await correctionEmail.notify(db,actor,input,token,transport)};
   const reason=String(input.reason||'').trim();
   if(reason.length>1000) throw fail('Keep the review note under 1,000 characters.');
   if(['override','remove_override'].includes(input.action)&&reason.length<5)throw fail('Enter a reason for this override decision.');
@@ -80,7 +82,11 @@ async function run(db,actor,input,token,transport) {
     }
     if(input.action==='mobile_account')return training.withTraining(db,input.id,await background.attach(db,input.id,await mobile.file(call,input.id),true));
     if(input.action==='mobile_review'){const file=await mobile.file(call,input.id);if(file.items.some(i=>background.isBackground(i)&&i.submission?.id===input.submission_id))throw fail('Use Background check → Review and approve to record this decision.',409);}
-    if(input.action==='mobile_file'||input.action==='mobile_review')return await mobile.review(call,input.id,input);
+    if(input.action==='mobile_file'||input.action==='mobile_review'){
+      const result=await mobile.review(call,input.id,input);
+      if(input.action==='mobile_review'&&input.status==='rejected')result.email=await correctionEmail.notify(db,actor,{source:'mobile',id:input.id,submission_id:input.submission_id},token,transport);
+      return result;
+    }
     if(['approve','override'].includes(input.action))await background.assertApproved(db,input.id);
     if(input.action==='approve'&&!(await training.withTraining(db,input.id,await mobile.file(call,input.id))).complete)throw fail('Review all required onboarding items first, or grant an established-employee override.',409);
     if(['override','remove_override'].includes(input.action)){
@@ -135,7 +141,9 @@ async function run(db,actor,input,token,transport) {
     throw fail('The review could not be saved. Refresh and try again.',503);
   }
   if(portalSync)await portalSync();
-  return result.data;
+  const output=result.data;
+  if(input.action==='review_document'&&input.status==='rejected')return {...output,email:await correctionEmail.notify(db,actor,{source:'portal',id:input.id},token,transport)};
+  return output;
 }
 async function deletion(db,actor,input,call){
   const rows=(await call('contractors',{profiles:[]})).contractors||[];
