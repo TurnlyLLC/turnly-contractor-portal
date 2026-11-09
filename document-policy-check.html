@@ -1,0 +1,5 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Turnly document approval settings</title><script src="env.js"></script></head><body><h1>Document approval settings</h1><p>Inspecting the shared onboarding requirements.</p><pre id="result">Loading…</pre><script type="module">
+import {createClient} from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/+esm';
+const client=createClient(window.__ENV.SUPABASE_URL,window.__ENV.SUPABASE_ANON_KEY);
+try{const {data:{session}}=await client.auth.getSession();if(!session)throw Error('Sign in to the admin portal first.');const r=await fetch('/api/contractor-review',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.access_token},body:JSON.stringify({action:'document_policy_inspect'})});const data=await r.json();document.getElementById('result').textContent=JSON.stringify(data,null,2);}catch(e){document.getElementById('result').textContent=e.message;}
+</script></body></html>
