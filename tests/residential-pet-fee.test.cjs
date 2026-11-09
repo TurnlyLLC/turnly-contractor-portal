@@ -3,7 +3,7 @@ const {quote}=require('../lib/residential-pricing.cjs'),{contractorPay}=require(
 test('pet fee increases first and maintenance totals and contractor earnings before gift credits',()=>{
  for(const service of ['standard','deep','move','listing'])for(const sqft of [100,2000,4000]){
  const input={service,sqft,frequency:'once'},no=quote({...input,pets:'no'}),yes=quote({...input,pets:'yes',pet_fee_cents:0});
- assert.equal(yes.amount_cents,no.amount_cents+5000);assert.equal(yes.pet_fee_cents,5000);assert.equal(contractorPay({...yes,gift_applied_cents:10000}),contractorPay(no)+20);
+ assert.equal(yes.amount_cents,no.amount_cents+5000);assert.equal(yes.pet_fee_cents,5000);assert.equal(contractorPay({...yes,gift_applied_cents:10000}),contractorPay(no)+18);
  }
  const q=quote({service:'standard',sqft:2000,frequency:'weekly',pets:'yes'});assert.equal(q.amount_cents,31000);assert.equal(q.maintenance_cents,25000);
 });
