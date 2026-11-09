@@ -1,3 +1,4 @@
+import {installAccountSwitcher} from './linked-account-switch.mjs?v=20261109';
 import { propertyManagerNotesHtml } from "./property-manager-notes.mjs?v=20261027-notes";
 import { assignmentServiceScope, assignmentAwaitsApproval } from "./assignment-service-scope.mjs?v=20261026-approval";
 import { loadActiveCleaningContractors } from "./contractor-directory-model.mjs?v=20261012-active";
@@ -33,6 +34,7 @@ const suiteSupabase = suiteEnv.SUPABASE_URL && suiteEnv.SUPABASE_ANON_KEY
   ? createClient(suiteEnv.SUPABASE_URL, suiteEnv.SUPABASE_ANON_KEY)
   : null;
 const residentFeedbackWidget = createResidentFeedbackWidget({ client: suiteSupabase, panel, esc });
+void installAccountSwitcher(suiteSupabase).catch(() => {});
 
 if (typeof window !== "undefined") {
   window.turnlyAdminSuiteHandlesAssignmentForm = true;

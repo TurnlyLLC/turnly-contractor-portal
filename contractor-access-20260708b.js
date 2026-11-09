@@ -1,3 +1,4 @@
+import {installAccountSwitcher} from './linked-account-switch.mjs?v=20261109';
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 import {
   buildPreviewEffectiveUser,
@@ -25,6 +26,7 @@ const roleDashboards = {
   sales_team: "sales.html",
   property_manager: "property-manager.html"
 };
+void installAccountSwitcher(supabase).catch(() => {});
 
 function normalizeRole(role) {
   return String(role || "contractor")

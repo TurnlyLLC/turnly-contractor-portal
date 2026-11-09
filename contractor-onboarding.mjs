@@ -1,6 +1,8 @@
+import {installAccountSwitcher} from './linked-account-switch.mjs?v=20261109';
 import {createClient} from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/+esm';
 import {esc,visible,initialFields,SaveQueue} from './contractor-onboarding-model.mjs';
 const env=window.__ENV||{},client=createClient(env.SUPABASE_URL,env.SUPABASE_ANON_KEY),root=document.querySelector('#onboarding');
+void installAccountSwitcher(client).catch(() => {});
 let state,editor=null,busy=false;
 async function api(action,data={}){const {data:{session}}=await client.auth.getSession();if(!session){location.replace('contractor-login.html');throw Error('Sign in to continue.');}const r=await fetch('/api/contractor-onboarding',{method:'POST',headers:{Authorization:'Bearer '+session.access_token,'Content-Type':'application/json'},body:JSON.stringify({action,...data}),signal:AbortSignal.timeout(55000)});const x=await r.json();if(!r.ok)throw Error(x.error||'Please try again.');return x;}
 function error(e){let el=document.querySelector('#onError');if(!el){el=document.createElement('p');el.id='onError';el.className='on-error';el.role='alert';root.prepend(el);}el.textContent=e.message;el.scrollIntoView({block:'nearest'});}

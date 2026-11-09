@@ -2,7 +2,7 @@ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 export function progressButton(person,kind,data){
  const training=kind==='training',label=training?'Turnly Academy':'Onboarding',known=data?.available===true,done=Number(data?.done)||0,total=Number(data?.total)||0;
  const percent=known&&total>0?Math.min(100,Math.floor(done/total*100)):null;
- const caption=known?(training?(data.waived?'Requirement waived':data.complete?'Training complete':'Training in progress'):done+' / '+total+' complete'):'Status unavailable';
+ const caption=known?(training?(data.complete?'Training complete':data.waived?'Requirement waived':'Training in progress'):done+' / '+total+' complete'):'Status unavailable';
  return '<button type="button" class="cc-progress-button" data-cc-progress="'+esc(person.key)+'" data-progress-kind="'+kind+'" aria-label="'+esc(label+' for '+person.name+': '+(percent===null?'unavailable':percent+'% complete')+'. View details')+'"><span class="cc-progress-circle '+(training?'cc-progress-filled':'cc-progress-ring')+(percent===null?' is-unknown':'')+'" style="--progress:'+ (percent??0)+'" aria-hidden="true">'+(training?'':'<svg viewBox="0 0 64 64"><circle class="cc-ring-track" cx="32" cy="32" r="27"/><circle class="cc-ring-value" cx="32" cy="32" r="27" pathLength="100" stroke-dasharray="'+(percent??0)+' 100"/></svg>')+'<strong>'+(percent===null?'—':percent+'%')+'</strong></span><span class="cc-progress-copy"><b>'+label+'</b><small>'+caption+'</small>'+(training&&known?'<small>'+data.lessons+' / '+data.lessonsTotal+' lessons · '+data.quizzes+' / '+data.quizzesTotal+' quizzes</small>':'')+'<span>View details ↗</span></span></button>';
 }
 export function academyDetails(t){
