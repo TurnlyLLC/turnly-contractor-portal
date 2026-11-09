@@ -36,9 +36,9 @@ async function allRows(db,table,select,order) {
 }
 async function run(db,actor,input,token,transport) {
   if(input.action==='document_policy_inspect'){
-    const data=await mobile.client(token,transport)('items');
-    return {items:(data.items||[]).map(item=>Object.fromEntries(Object.entries(item).filter(([key])=>['id','title','kind','required','active'].includes(key)||/review|approv/i.test(key)))),fields:Object.keys(data.items?.[0]||{})};
+    return require('../lib/contractor-document-policy.cjs').inspect(token,transport);
   }
+  if(input.action==='document_policy_apply')return require('../lib/contractor-document-policy.cjs').apply(token,transport);
   if(input.action==='list'){
     const [documents,profiles]=await Promise.all([
       allRows(db,'contractor_documents','*','id'),
