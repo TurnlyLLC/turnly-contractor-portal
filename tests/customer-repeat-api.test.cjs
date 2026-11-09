@@ -9,7 +9,7 @@ test('customer booking enforces calendar, reviewed details, server price and gif
  try{
  assert.equal((await call({id:randomUUID()})).statusCode,404);assert.equal((await call({details_confirmed:false})).statusCode,400);assert.equal((await call({pet_details:''})).statusCode,400);
  blocked=true;assert.equal((await call({})).statusCode,400);blocked=false;assert.equal((await call({arrival_start:'10:00',arrival_end:'11:00'})).statusCode,400);assert.equal(calls.length,0);
- assert.equal((await call({amount_cents:1,quote:{amount_cents:1}})).statusCode,200);assert.equal(calls[0].p_data.quote.amount_cents,15000);assert.equal(calls[0].p_data.visit_details.pet_details,'Dog at daycare');assert.equal(calls[0].p_account,account.id);
+ assert.equal((await call({amount_cents:1,quote:{amount_cents:1}})).statusCode,200);assert.equal(calls[0].p_data.quote.amount_cents,20000);assert.equal(calls[0].p_data.quote.pet_fee_cents,5000);assert.equal(calls[0].p_data.visit_details.pet_details,'Dog at daycare');assert.equal(calls[0].p_account,account.id);
  assert.equal((await call({gift:'code',gift_expected_cents:9999})).statusCode,409);assert.equal(calls.length,1);
  previous={id:'already-created'};const count=giftReads;assert.equal((await call({gift:'code',gift_expected_cents:10000})).data.id,'already-created');assert.equal(giftReads,count);
  }finally{Object.assign(S,{database:old.database,rate:old.rate,stripe:old.stripe});Object.assign(P,{identity:old.identity,scope:old.scope,owned:old.owned,query:old.query});C.load=old.load;J.syncBooking=old.sync;G.card=old.card;}
