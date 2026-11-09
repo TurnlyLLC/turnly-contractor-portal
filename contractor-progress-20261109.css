@@ -1,6 +1,8 @@
 .contractor-crm .cc-progress-button{display:flex;align-items:center;gap:12px;width:100%;min-width:170px;max-width:240px;padding:8px;border:1px solid transparent;border-radius:12px;background:transparent;color:#12354e;text-align:left;line-height:1.3}
 .contractor-crm .cc-progress-button:hover{background:#f1f7fb;border-color:#d9e7ef}
 .contractor-crm .cc-progress-button:focus-visible{outline:3px solid #12b8b0;outline-offset:2px}
+.contractor-crm td:has(.cc-person){min-width:210px}
+.contractor-crm .cc-person{white-space:nowrap}
 .contractor-crm .cc-progress-button .cc-progress-graphic{display:block;width:48px;height:48px;flex:0 0 48px;overflow:visible}
 .contractor-crm .cc-progress-button .cc-progress-copy{display:flex;flex-direction:column;align-items:flex-start;gap:3px;min-width:0}
 .contractor-crm .cc-progress-button .cc-progress-copy b{font-size:12px;line-height:1.35;font-weight:650}
