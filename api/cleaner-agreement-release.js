@@ -3,8 +3,8 @@ const S=require('../lib/residential-server.cjs');
 const {access}=require('./contractor-review.js');
 const origin='https://turnly-contractor-app-backend.rork.app';
 const original='e196be03e968109e2e021e5825c44870950994048eedfa055e5a9a7f03b010e3';
-const previous='fc9292288bcf35634934ce13baa686748681a0a8829aca0301b40f19f1b289b0';
-const revised='69b8018059f0ccc5fd718e908891e2ba37f0275f330a890e0c2cc8dd7ebfbed1';
+const previous='69b8018059f0ccc5fd718e908891e2ba37f0275f330a890e0c2cc8dd7ebfbed1';
+const revised='69eeb083f73219860d3bfb34130e51a61fef0f75e5d9cb55b036c338ed8f4b0e';
 const digest=bytes=>createHash('sha256').update(bytes).digest('hex');
 async function native(path,token,body){
  const headers={'X-Supabase-Auth':token};
@@ -45,3 +45,4 @@ module.exports=async(req,res)=>{
   return S.json(res,200,saved);
  }catch(error){return S.json(res,error.status||503,{error:error.status?error.message:'Unable to verify the cleaner agreement release.'});}
 };
+module.exports.inspect=inspect;
