@@ -1,6 +1,6 @@
 import {feedbackHtml,bindFeedback} from './customer-feedback.mjs?v=20261030-tips';
 import {customerChecklistHtml} from './customer-checklist.mjs?v=20261030-rooms';
-import {openBooking,buyGift} from './customer-booking.mjs?v=20261030-repeat';
+import {openBooking,buyGift} from './customer-booking.mjs?v=20261109-pets';
 import {jobStage,jobStatusLabel} from './job-stage.mjs?v=20261030-travel';
 import {consentRecordHtml} from './video-consent.mjs?v=20261026-video';
 const $=s=>document.querySelector(s),form=$('#authForm');

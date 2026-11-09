@@ -71,7 +71,7 @@ module.exports=async(req,res)=>{
   }
   if(input.action==='quote'){
    await S.rate(db,req,'customer-quote');
-   return S.json(res,200,{quote:await Repeat.quote(db,b,input),options:Object.fromEntries(['once','monthly','biweekly','weekly'].map(f=>[f,Repeat.price(b,{service:'standard',frequency:f,sqft:input.sqft})])),card_saved:!!b.stripe_payment_method});
+   return S.json(res,200,{quote:await Repeat.quote(db,b,input),options:Object.fromEntries(['once','monthly','biweekly','weekly'].map(f=>[f,Repeat.price(b,{service:'standard',frequency:f,sqft:input.sqft,pets:input.pets})])),card_saved:!!b.stripe_payment_method});
   }
   if(input.action==='book'){
    await S.rate(db,req,'customer-book');

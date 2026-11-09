@@ -84,7 +84,7 @@ module.exports=async(req,res)=>{
   }
   if(input.action==='context')return S.json(res,200,{scopes:Scope.policies,calendar:(await Calendar.load(db)).settings,agent:{name:a.name,code:a.referral_code},ambassador,direct,payments_ready:S.ready(),property_lookup:!!process.env.RENTCAST_API_KEY,gift:gift?{balance_cents:gift.balance_cents,available_cents:gift.balance_cents-gift.reserved_cents}:null,consent:gift?CONSENT+' I authorize application of my gift card to this visit; only the remaining amount will be charged to my saved card.':CONSENT});
   if(input.action==='property'){await S.rate(db,req,'property');return S.json(res,200,await require('../lib/residential-property.cjs').lookup(input));}
-  if(input.action==='quote'){await S.rate(db,req,'quote');const q=quote(input);if(gift&&String(input.state).toUpperCase()==='NC'){q.gift_cents=Math.min(q.amount_cents,gift.balance_cents-gift.reserved_cents);q.card_charge_cents=q.amount_cents-q.gift_cents;}return S.json(res,200,{quote:q});}
+  if(input.action==='quote'){await S.rate(db,req,'quote');require('../lib/residential-visit.cjs').visitDetails({...input,access_method:'resident'});const q=quote(input);if(gift&&String(input.state).toUpperCase()==='NC'){q.gift_cents=Math.min(q.amount_cents,gift.balance_cents-gift.reserved_cents);q.card_charge_cents=q.amount_cents-q.gift_cents;}return S.json(res,200,{quote:q});}
   if(!['checkout','request'].includes(input.action))throw S.fail('Unknown booking action.');
   await S.rate(db,req,'book');if(input.website)throw S.fail('Unable to submit this request.');
   if(!uuid(input.id)||!/^[-a-zA-Z0-9_]{40,100}$/.test(String(input.token||'')))throw S.fail('Refresh this page and try again.');
@@ -92,7 +92,7 @@ module.exports=async(req,res)=>{
   const coverage=await require('../lib/service-coverage.cjs').verify(input);
   const calendar=(await Calendar.load(db)).settings;
   const calendarError=Calendar.error(calendar,input.service_date,input.arrival_start,input.arrival_end);if(calendarError)throw S.fail(calendarError,409);
-  const data=S.validate(coverage.approved?input:{...input,pets:'no',parking:'none',access_method:'resident'},calendar),checkout=input.action==='checkout';
+  const data=S.validate(coverage.approved?input:{...input,access_method:'resident'},calendar),checkout=input.action==='checkout';
   data.visit_details.scope_acceptance=scopeAcceptance;
   if(!coverage.approved)return S.json(res,200,await require('../lib/out-of-area.cjs').save(db,input,data,coverage));
   if(direct&&data.state!=='NC')throw S.fail('Online booking is available only in North Carolina.');
