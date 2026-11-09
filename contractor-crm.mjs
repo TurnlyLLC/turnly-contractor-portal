@@ -1,4 +1,4 @@
-import {progressButton,academyDetails} from './contractor-progress.mjs?v=20261109';
+import {progressButton,academyDetails} from './contractor-progress.mjs?v=20261109-layout2';
 import {bindAccessManager} from './contractor-access-manager.mjs?v=20261105-table';
 import {adminRatingPanel} from './contractor-rating.mjs';
 import {adminTipsHtml} from './residential-tip-earnings.mjs?v=20261030';

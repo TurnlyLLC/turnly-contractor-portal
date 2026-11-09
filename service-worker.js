@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-contractor-pwa-v20261109-linked-account";
+const CACHE_NAME = "turnly-contractor-pwa-v20261109-document-progress";
 
 const PRECACHE_URLS = [
   "/linked-account-switch.mjs",
@@ -125,7 +125,9 @@ function isStaticAsset(request) {
 
 function isAdminRuntimeAsset(request) {
   const pathname = new URL(request.url).pathname;
-  return pathname === "/feedback-groups.mjs"
+  return pathname.startsWith("/contractor-progress")
+    || pathname.startsWith("/contractor-crm")
+    || pathname === "/feedback-groups.mjs"
     || pathname === "/feedback-groups.css"
     || pathname === "/contractor-directory-model.mjs"
     || pathname === "/residential-assignment.mjs"

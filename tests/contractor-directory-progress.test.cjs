@@ -15,5 +15,5 @@ test('Invalid or missing checklist counts are unknown, never fabricated zero or 
 });
 test('Progress controls expose accessible labels, escape names and distinguish unknown data',async()=>{
  const {progressButton,academyDetails}=await import('../contractor-progress.mjs');const p={key:'abc',name:'<Name>'};
- assert.match(progressButton(p,'onboarding',{available:true,done:2,total:8}),/25% complete/);assert.match(progressButton(p,'onboarding',{available:true,done:2,total:8}),/cc-progress-ring/);assert.doesNotMatch(progressButton(p,'training',{}),/0%/);assert.match(progressButton(p,'training',{}),/&lt;Name&gt;/);assert.match(academyDetails(academy(rows('a'),'a')),/89%.*Needs 90%/);
+ assert.match(progressButton(p,'onboarding',{available:true,done:2,total:8}),/25% complete/);assert.match(progressButton(p,'onboarding',{available:true,done:2,total:8}),/fill="none" stroke="#e0eaf0"/);assert.doesNotMatch(progressButton(p,'training',{}),/0%/);assert.match(progressButton(p,'training',{}),/&lt;Name&gt;/);assert.match(academyDetails(academy(rows('a'),'a')),/89%.*Needs 90%/);
 });
