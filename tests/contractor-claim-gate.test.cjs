@@ -16,15 +16,15 @@ test('claims fail closed for every unfinished required state despite approved pr
   await assert.rejects(claim(f.db,{headers:{authorization:'Bearer test'}},{id:randomUUID()},f.remote),/Complete all required/);
   assert.equal(f.calls.length,0);
  }
- const f=fixture([{required:true,state:'done'}]);
+ const f=fixture([{kind:'background',required:true,state:'done'}]);
  await assert.rejects(claim(f.db,{headers:{authorization:'Bearer test'}},{id:randomUUID()},async()=>{throw Error('offline');}));
  assert.equal(f.calls.length,0);
 });
 test('done or admin-waived requirements allow claims, optional items do not block',async()=>{
- const f=fixture([{required:true,state:'done',submission:{source:'admin'}},{required:false,state:'todo'}]);
+ const f=fixture([{kind:'background',required:true,state:'done',submission:{source:'admin'}},{required:false,state:'todo'}]);
  await claim(f.db,{headers:{authorization:'Bearer test'}},{id:randomUUID(),p_actor:randomUUID()},f.remote);
  assert.equal(f.calls[0].args.p_actor,f.id);
- const pending=fixture([{required:true,state:'done'}],{contractor_approved:false,status:'pending'});
+ const pending=fixture([{kind:'background',required:true,state:'done'}],{contractor_approved:false,status:'pending'});
  const status=await claim(pending.db,{headers:{authorization:'Bearer test'}},{action:'eligibility'},pending.remote);
  assert.equal(status.eligible,true);assert.equal(pending.calls[0].name,'contractor_rating_summary');
 });

@@ -2,7 +2,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),{randomUU
 const {PGlite}=require('@electric-sql/pglite'),fs=require('node:fs'),training=require('../lib/contractor-training.cjs');
 test('training uses all lessons and passing quiz, while waivers retain real progress',()=>{
  const id=randomUUID(),rows=Array.from({length:12},(_,i)=>({profile_id:id,module_number:i+1,lessons_done:5,score:90,waived:false}));
- assert.equal(training.items(rows,id).length,1);assert.equal(training.items(rows,id)[0].title,'Contractor training');assert.equal(training.merge({items:[{required:true,state:'done'}]},training.items(rows,id)).requiredCount,2);assert.equal(training.merge({items:[{required:true,state:'done'}]},training.items(rows,id)).complete,true);
+ assert.equal(training.items(rows,id).length,1);assert.equal(training.items(rows,id)[0].title,'Contractor training');assert.equal(training.merge({items:[{kind:'background',required:true,state:'done'}]},training.items(rows,id)).requiredCount,2);assert.equal(training.merge({items:[{kind:'background',required:true,state:'done'}]},training.items(rows,id)).complete,true);
  rows[0].lessons_done=4;assert.equal(training.merge({items:[]},training.items(rows,id)).complete,false);
  rows.forEach(r=>r.waived=true);assert.equal(training.merge({items:[]},training.items(rows,id)).complete,true);
  rows.forEach(r=>r.waived=false);rows[1].score=80;assert.equal(training.merge({items:[]},training.items(rows,id)).complete,false);
@@ -45,7 +45,7 @@ test('API blocks an approved contractor with unfinished training and fails close
  let waived=false,offline=false,claimed=false;
  const rows=()=>Array.from({length:12},(_,i)=>({profile_id:id,module_number:i+1,lessons_done:0,score:0,waived}));
  const db={auth:{getUser:async()=>({data:{user:{id}}})},from:table=>({select(){return this},eq(){return this},maybeSingle:async()=>({data:table==='contractor_background_checks'?{status:'approved',sync_state:'synced'}:{id,role:'contractor',status:'active'}}),single:async()=>({data:{contractor_approved:true,status:'active'}})}),rpc:async name=>name==='contractor_training_status'?{data:offline?null:rows(),error:offline?{}:null}:name==='auto_approve_completed_contractor'?{data:{approved:true}}:(claimed=true,{data:null})};
- const remote=async()=>({ok:true,json:async()=>({complete:true,items:[{required:true,state:'done'}]})});
+ const remote=async()=>({ok:true,json:async()=>({complete:true,items:[{kind:'background',required:true,state:'done'}]})});
  await assert.rejects(claim(db,req,{id:randomUUID()},remote),/Complete all required/);assert.equal(claimed,false);
  waived=true;await claim(db,req,{id:randomUUID()},remote);assert.equal(claimed,true);
  offline=true;await assert.rejects(claim(db,req,{action:'eligibility'},remote),/unavailable/);

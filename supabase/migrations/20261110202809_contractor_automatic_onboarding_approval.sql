@@ -1,9 +1,20 @@
 -- The server verifies the current remote document checklist before this call.
 -- Training and account/background restrictions are checked again under a row lock.
-create or replace function public.auto_approve_completed_contractor(p_profile uuid)
+create or replace function public.auto_approve_completed_contractor(p_profile uuid,p_checklist jsonb)
 returns jsonb language plpgsql security invoker set search_path='' as $$
 declare p public.profiles; changed boolean:=false;
 begin
+ -- An absent tracking row is not evidence of screening completion. Require
+ -- the server's fresh native checklist, including its background requirement.
+ -- Only service_role can supply this attestation; clients cannot call this RPC.
+ if p_checklist->>'complete' is distinct from 'true' or jsonb_typeof(p_checklist->'items') is distinct from 'array' then
+   return jsonb_build_object('approved',false,'changed',false);
+ end if;
+ if not exists(select 1 from jsonb_array_elements(p_checklist->'items') i where i->>'background'='true')
+   or not exists(select 1 from jsonb_array_elements(p_checklist->'items') i where i->>'required'='true')
+   or exists(select 1 from jsonb_array_elements(p_checklist->'items') i where i->>'required'='true' and i->>'state' is distinct from 'done') then
+   return jsonb_build_object('approved',false,'changed',false);
+ end if;
  select * into p from public.profiles where id=p_profile for update;
  if not found or p.role::text<>'contractor' or p.status not in ('active','pending')
    or coalesce(p.approval_status,'pending') not in ('pending','approved') then
@@ -27,6 +38,6 @@ begin
  return jsonb_build_object('approved',true,'changed',changed);
 end;
 $$;
-revoke all on function public.auto_approve_completed_contractor(uuid) from public,anon,authenticated;
-grant execute on function public.auto_approve_completed_contractor(uuid) to service_role;
+revoke all on function public.auto_approve_completed_contractor(uuid,jsonb) from public,anon,authenticated;
+grant execute on function public.auto_approve_completed_contractor(uuid,jsonb) to service_role;
 notify pgrst,'reload schema';

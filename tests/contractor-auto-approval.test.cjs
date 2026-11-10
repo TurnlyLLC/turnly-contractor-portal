@@ -9,7 +9,7 @@ test('only authoritative complete checklists activate accounts',async()=>{
  assert.equal(complete({complete:true,items:[{required:true,state:'done'},{required:false,state:'todo'}]}),true);
 });
 test('automatic approval is server-only, idempotent and preserves blocked accounts and screening',async()=>{
- const db=new PGlite(),id=randomUUID();
+ const db=new PGlite(),id=randomUUID(),checklist={complete:true,items:[{required:true,state:'done',background:true}]};
  try{
  await db.exec(`create role anon;create role authenticated;create role service_role;
  create table profiles(id uuid primary key,role text,status text,approval_status text,contractor_approved boolean,contractor_approved_at timestamptz,contractor_approved_by uuid);
@@ -22,8 +22,8 @@ test('automatic approval is server-only, idempotent and preserves blocked accoun
  await db.exec(fs.readFileSync('supabase/migrations/20261110202809_contractor_automatic_onboarding_approval.sql','utf8'));
  await db.query("insert into profiles values($1,'contractor','pending','pending',false,null,null)",[id]);
  await db.query('insert into contractors(profile_id) values($1)',[id]);
- await db.exec('set role authenticated');await assert.rejects(db.query('select auto_approve_completed_contractor($1)',[id]),/permission denied/);await db.exec('reset role');
- const approve=async()=> (await db.query('select auto_approve_completed_contractor($1) as result',[id])).rows[0].result;
+ await db.exec('set role authenticated');await assert.rejects(db.query('select auto_approve_completed_contractor($1,$2)',[id,checklist]),/permission denied/);await db.exec('reset role');
+ const approve=async()=> (await db.query('select auto_approve_completed_contractor($1,$2) as result',[id,checklist])).rows[0].result;
  assert.equal((await approve()).approved,false);
  await db.query('insert into progress select $1,false,5,90 from generate_series(1,12)',[id]);
  for(const status of ['suspended','inactive','disabled','rejected','deletion_pending','deleted']){
@@ -34,7 +34,7 @@ test('automatic approval is server-only, idempotent and preserves blocked accoun
  await db.query("insert into contractor_background_checks values($1,'awaiting_review','synced')",[id]);assert.equal((await approve()).approved,false);
  await db.exec("update contractor_background_checks set status='approved',sync_state='pending'");assert.equal((await approve()).approved,false);
  await db.exec("update contractor_background_checks set sync_state='synced'");
- assert.deepEqual(await approve(),{approved:true,changed:true});assert.deepEqual(await approve(),{approved:true,changed:false});
+ checklist.items[0].state='todo';assert.equal((await approve()).approved,false);checklist.items[0].state='done';checklist.items[0].background=false;assert.equal((await approve()).approved,false);checklist.items[0].background=true;assert.deepEqual(await approve(),{approved:true,changed:true});assert.deepEqual(await approve(),{approved:true,changed:false});
  assert.equal((await db.query('select count(*)::int n from admin_audit_log')).rows[0].n,1);
  assert.equal((await db.query('select contractor_approved from contractors')).rows[0].contractor_approved,true);
  }finally{await db.close();}
