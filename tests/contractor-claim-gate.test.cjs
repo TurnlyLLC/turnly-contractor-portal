@@ -6,7 +6,7 @@ const fs=require('node:fs');
 function fixture(items,approval={contractor_approved:true,status:'active'}) {
  const id=randomUUID(),calls=[];
  const profile={id,role:'contractor',status:'active'};
- const db={auth:{getUser:async()=>({data:{user:{id}}})},from(table){return {select(){return this;},eq(){return this;},maybeSingle:async()=>({data:table==='contractor_background_checks'?null:profile}),single:async()=>({data:approval})};},rpc:async(name,args)=>{if(name==='contractor_training_status')return {data:Array.from({length:12},(_,i)=>({profile_id:id,module_number:i+1,lessons_done:5,score:90,waived:false}))};calls.push({name,args});return {data:null};}};
+ const db={auth:{getUser:async()=>({data:{user:{id}}})},from(table){return {select(){return this;},eq(){return this;},maybeSingle:async()=>({data:table==='contractor_background_checks'?null:profile}),single:async()=>({data:approval})};},rpc:async(name,args)=>{if(name==='contractor_training_status')return {data:Array.from({length:12},(_,i)=>({profile_id:id,module_number:i+1,lessons_done:5,score:90,waived:false}))};if(name==='auto_approve_completed_contractor')return {data:{approved:true,changed:!approval.contractor_approved}};calls.push({name,args});return {data:null};}};
  const remote=async()=>({ok:true,json:async()=>({items})});
  return {db,remote,calls,id};
 }
@@ -26,7 +26,7 @@ test('done or admin-waived requirements allow claims, optional items do not bloc
  assert.equal(f.calls[0].args.p_actor,f.id);
  const pending=fixture([{required:true,state:'done'}],{contractor_approved:false,status:'pending'});
  const status=await claim(pending.db,{headers:{authorization:'Bearer test'}},{action:'eligibility'},pending.remote);
- assert.equal(status.eligible,false);assert.equal(pending.calls.length,0);
+ assert.equal(status.eligible,true);assert.equal(pending.calls[0].name,'contractor_rating_summary');
 });
 test('SQL closes old claim paths and serializes successful claims',async()=>{
  const db=new PGlite(),owner=randomUUID(),other=randomUUID(),job=randomUUID();
