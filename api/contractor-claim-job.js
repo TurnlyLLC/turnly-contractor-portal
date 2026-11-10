@@ -5,16 +5,14 @@ const {uuid}=require('../lib/agent-referrals.cjs');
 async function claim(db,req,input,transport){
   const token=String(req.headers.authorization||'').match(/^Bearer (.+)$/i)?.[1];
   const profile=await onboarding.access(db,token);
-  const [approvalResult,trainingRows,file] = await Promise.all([
-    db.from('profiles').select('contractor_approved,status').eq('id',profile.id).single(),
+  const [trainingRows,file] = await Promise.all([
     training.rows(db,profile.id),
     onboarding.remote(token,transport)('status')
   ]);
-  const {data:approval,error}=approvalResult;
-  if(error)throw S.fail('Unable to verify job access. Please retry.',503);
   const status=training.merge(await require('../lib/contractor-background.cjs').attach(db,profile.id,file),training.items(trainingRows,profile.id));
-  const complete=Array.isArray(status.items)&&status.items.length>0&&status.complete!==false&&status.items.every(i=>!i.required||i.state==='done');
-  const eligible=complete&&approval?.contractor_approved===true&&approval.status==='active';
+  const complete=require('../lib/contractor-auto-approval.cjs').complete(status);
+  const activation=complete?await require('../lib/contractor-auto-approval.cjs').reconcile(db,profile.id,status):null;
+  const eligible=complete&&activation?.approved===true;
   if(input.action==='eligibility'&&eligible){
     const rating=S.checked(await db.rpc('contractor_rating_summary',{p_contractor:profile.id}));
     if(rating?.status==='paused')return {eligible:false,complete,reason:'New claims are paused. Open Performance to review the reason and request another review.'};

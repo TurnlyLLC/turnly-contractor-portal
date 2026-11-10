@@ -32,8 +32,12 @@ async function loadLessonVideo(){
   return {url:path?.startsWith('https://')?path:SUPABASE_URL+'/storage/v1'+path,expiresAt:Date.now()+3600000};
  }});
 }
-async function saveLessonCompletion(m,i){await request('/rest/v1/academy_learning_progress',{method:'POST',headers:{Prefer:'resolution=ignore-duplicates'},body:JSON.stringify({user_id:session.user.id,lesson_key:lessonKey(m,i)})});}
-async function savePracticeAttempt(m,score){await request('/rest/v1/academy_practice_attempts',{method:'POST',body:JSON.stringify({user_id:session.user.id,module_number:m.number,score})});}
+async function syncJobAccess(){
+ if(!session?.access_token||Object.values(progress).filter(Boolean).length<59||Object.values(scores).filter(s=>s.best>=90).length<11)return;
+ try{await fetch('/api/contractor-onboarding',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.access_token},body:JSON.stringify({action:'status'}),signal:AbortSignal.timeout(55000)});}catch{/* Saved progress is safe; onboarding/job visits retry activation. */}
+}
+async function saveLessonCompletion(m,i){await request('/rest/v1/academy_learning_progress',{method:'POST',headers:{Prefer:'resolution=ignore-duplicates'},body:JSON.stringify({user_id:session.user.id,lesson_key:lessonKey(m,i)})});void syncJobAccess();}
+async function savePracticeAttempt(m,score){await request('/rest/v1/academy_practice_attempts',{method:'POST',body:JSON.stringify({user_id:session.user.id,module_number:m.number,score})});void syncJobAccess();}
 
 async function bootstrapPortalAccount(){
  try{

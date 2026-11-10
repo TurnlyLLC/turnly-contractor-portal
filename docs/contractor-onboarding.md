@@ -1,6 +1,6 @@
 # Contractor PWA onboarding
 
-The PWA uses the native Rork onboarding service for the published checklist, validation, signed PDFs, uploads, review status and Supabase document mirrors. It never approves contractors or substitutes a separate checklist. The API authenticates the Supabase user and persisted contractor role before forwarding that user's token to the fixed native origin.
+The PWA uses the native Rork onboarding service for the published checklist, validation, signed PDFs, uploads, review status and Supabase document mirrors. It retains the shared checklist and automatically approves eligible accounts only after server verification of all required items and Academy training. The API authenticates the Supabase user and persisted contractor role before forwarding that user's token to the fixed native origin.
 
 Unsubmitted PWA drafts live in `contractor_onboarding_drafts`. Only the service role can access this table/function. AES-256-GCM encrypts drafts and authenticates the contractor ID plus item ID. A revision comparison rejects conflicting edits from other tabs. No form values are stored in browser storage or service-worker caches. Drafts are removed after successful signing; submitted documents remain in the native service.
 
@@ -10,16 +10,22 @@ PWA drafts currently resume across PWA sessions/devices; native app drafts are i
 
 ## Individual admin requirements
 
-Directory → Review center → All contractors → Review account exposes each native document with upload/submission, review, and completion states. The Required switch creates an audited native admin waiver for one contractor/item; it does not sign a document or automatically approve the portal account. A previous submitted-file reference is retained so its copy can still be opened. Restoring a waived requirement first pauses portal job access through the existing audited account-review RPC, then asks the native service for a new submission. The contractor must be reviewed and reapproved afterwards. No global template is changed. The native backend records the reviewing admin and time.
+Directory → Review center → All contractors → Review account exposes each native document with upload/submission, review, and completion states. The Required switch creates an audited native admin waiver for one contractor/item; it does not sign a document or automatically approve the portal account. A previous submitted-file reference is retained so its copy can still be opened. Restoring a waived requirement first pauses portal job access through the existing audited account-review RPC, then asks the native service for a new submission. Once restored requirements and training are complete, account approval is automatic. No global template is changed. The native backend records the reviewing admin and time.
 
 ## Applicant-paid background checks
 
 The existing native `background` requirement is the source of checklist completion. Admin Directory > contractor > Onboarding adds manual invitation/screening/review stages. Verified First sends the invitation and collects payment; Turnly staff review the provider report, record its reference and explicitly approve. No API integration or automatic invitations are implemented.
 
-Tracking and append-only review history are service-only. Each save uses an expected revision, pauses account approval before remote changes, and requires native checklist read-back before finalizing. Failed synchronization blocks claims and may be retried after two minutes. Background approval does not approve the whole account; remaining documents/training and separate account approval still apply. Existing untracked completions/waivers are preserved. Do not put report findings, SSNs, or payment details in the contractor-visible message.
+Tracking and append-only review history are service-only. Each save uses an expected revision, pauses account approval before remote changes, and requires native checklist read-back before finalizing. Failed synchronization blocks claims and may be retried after two minutes. Background approval does not approve the whole account; remaining documents/training still apply; once all are complete, account approval is automatic. Existing untracked completions/waivers are preserved. Do not put report findings, SSNs, or payment details in the contractor-visible message.
 
 
 ### Imported Indeed applicants
 Imported cleaner applications keep their original email and resume fingerprint. After hiring, the welcome email directs them to contractor-onboarding.html to confirm a personal login email. The PWA shows this step before documents. Supabase Auth handles email-change confirmation; the server-only confirm_imported_contractor_email RPC reads the verified Auth identity and updates the profile and linked application without changing the user ID or documents. Native Rork source is not changed; complete this web step before using the app.
 
 Admin resume attachment tool: applicant-resume-import.html. Requires an active admin session; matches files by SHA-256 against the import manifest and stores PDF/DOCX/TXT files privately. It never creates accounts, changes review status, or sends email. Historical import mail delivery is suppressed. Missing contact emails must be collected before hiring.
+
+## Automatic account activation
+
+The status and claim-eligibility APIs fetch fresh native onboarding status, merge Academy progress and background review, and call a service-only transactional approval function. It rechecks training, account status and background approval, updates profiles plus linked contractor records, and audits each actual activation once. Suspended, deleted, rejected and other inactive accounts remain blocked. Performance restrictions and geographic claim checks remain in force.
+
+Academy completion requests a status refresh; the next portal visit retries if this fails. Admin directory refresh also reconciles completed native-app accounts using fresh item-level evidence. Native clients can POST {"action":"status"} to /api/contractor-onboarding with their existing Bearer token after completion to activate immediately; this repository does not modify the installed native client.

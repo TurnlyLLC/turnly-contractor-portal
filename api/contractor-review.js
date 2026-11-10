@@ -34,7 +34,7 @@ async function allRows(db,table,select,order) {
     if(page.length<500) return rows;
   }
 }
-async function run(db,actor,input,token,transport) {
+async function dispatch(db,actor,input,token,transport) {
   if(input.action==='document_policy_inspect'){
     return require('../lib/contractor-document-policy.cjs').inspect(token,transport);
   }
@@ -51,8 +51,17 @@ async function run(db,actor,input,token,transport) {
     let academy=[],training_error='';
     try {const progress=await training.rows(db);academy=contractors.map(p=>directoryProgress.academy(progress,p.id));}catch(error){training_error=error.message;}
     remote=directoryProgress.combine(contractors,remote,academy);
+    // Reconcile native-app completions against fresh item-level evidence too.
+    const auto_approval={approved:0,errors:0};
+    const ready=contractors.filter(p=>!p.contractor_approved&&['active','pending'].includes(p.status)&&remote.some(r=>r.userId===p.id&&r.complete));
+    for(const p of ready){
+      try{
+        const status=await require('../lib/contractor-auto-approval.cjs').verified(db,p.id,await mobile.file(mobile.client(token,transport),p.id));
+        if(status.account_approved){p.contractor_approved=true;p.status='active';auto_approval.approved++;}
+      }catch{auto_approval.errors++;}
+    }
     const deletion_reviews=await allRows(db,'contractor_deletion_reviews','*','profile_id');
-    return {documents,profiles:contractors,mobile:remote,mobile_error,deletion_reviews,academy,training_error};
+    return {documents,profiles:contractors,mobile:remote,mobile_error,deletion_reviews,academy,training_error,auto_approval};
   }
   if(input.action==='training_progress'){
     if(!uuid(input.id))throw fail('Choose a contractor.');
@@ -84,7 +93,7 @@ async function run(db,actor,input,token,transport) {
         if(pause.error)throw fail('Unable to pause job access. The requirement was not changed.',503);
       });
     }
-    if(input.action==='mobile_account')return training.withTraining(db,input.id,await background.attach(db,input.id,await mobile.file(call,input.id),true));
+    if(input.action==='mobile_account')return require('../lib/contractor-auto-approval.cjs').verified(db,input.id,await mobile.file(call,input.id));
     if(input.action==='mobile_review'){const file=await mobile.file(call,input.id);if(file.items.some(i=>background.isBackground(i)&&i.submission?.id===input.submission_id))throw fail('Use Background check → Review and approve to record this decision.',409);}
     if(input.action==='mobile_file'||input.action==='mobile_review'){
       const result=await mobile.review(call,input.id,input);
@@ -175,6 +184,14 @@ async function deletion(db,actor,input,call){
     if(result.error)throw fail('Job access is paused, but account deletion did not finish. Retry approval.',503);
   }
   return review('complete');
+}
+async function run(db,actor,input,token,transport){
+ const result=await dispatch(db,actor,input,token,transport);
+ if(['background_save','mobile_requirement','mobile_review'].includes(input.action)){
+   try{const status=await require('../lib/contractor-auto-approval.cjs').verified(db,input.id,await mobile.file(mobile.client(token,transport),input.id));result.account_approved=status.account_approved;}
+   catch{result.activation_retry=true;}
+ }
+ return result;
 }
 async function handler(req,res) {
   if(req.method!=='POST'){res.setHeader('Allow','POST');return json(res,405,{error:'Use POST.'});}

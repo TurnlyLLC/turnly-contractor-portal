@@ -298,8 +298,6 @@ if (!supabase) {
       await renderPasswordChangeRequired(user);
     } else if (["deleted", "deletion_pending", "disabled", "suspended", "inactive", "deactivated", "rejected"].includes(normalizeStatus(profile.status))) {
       renderNotice("Account unavailable", "Please contact Turnly about your contractor account.");
-    } else if (!isActiveProfile(profile)) {
-      window.location.replace("contractor-onboarding.html");
     } else {
       try {
         const {data} = await supabase.auth.getSession();
@@ -310,7 +308,7 @@ if (!supabase) {
         const eligibility = await response.json();
         if (!response.ok) throw new Error(eligibility.error || 'Unable to verify onboarding.');
         if (!eligibility.eligible) window.location.replace('contractor-onboarding.html');
-        else await loadContractorPortal(user, profile);
+        else await loadContractorPortal(user, {...profile,contractor_approved:true,status:'active'});
       } catch (error) {
         renderNotice('Onboarding verification needed', error.message + ' Refresh to retry, or open contractor-onboarding.html to review your requirements.');
       }
