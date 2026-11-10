@@ -9,6 +9,7 @@ test('file background approval completes tracked checklist before reporting docu
  const input={action:'review_document',id,status:'approved',auto_match:true,updated_at:doc.updated_at,background_version:0,background_reference:'V1234567',background_confirm:true};
  await assert.rejects(run(db,actor,{...input,background_confirm:false},'token',transport),/confirm/);assert.equal(events.length,0);
  await assert.rejects(run(db,actor,{...input,updated_at:'2020-01-01'},'token',transport),/changed/);assert.equal(events.length,0);
+ doc.expiration_date='2020-01-01';await assert.rejects(run(db,actor,input,'token',transport),/unexpired/);assert.equal(events.length,0);delete doc.expiration_date;
  await run(db,actor,input,'token',transport);
  assert.deepEqual(events,['begin_contractor_background_review','mark','finish_contractor_background_review','review_contractor_document']);
  assert.equal(item.state,'done');events.length=0;failSync=true;
