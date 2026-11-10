@@ -1548,6 +1548,7 @@ async function syncDocumentApproval(row) {
   }
   const response = await fetch('/api/contractor-review', {method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${sessionData?.session?.access_token || ''}`},body:JSON.stringify({action:'review_document',id:row.id,status:'approved',updated_at:latest.data.updated_at,reason:row.notes||'',auto_match:true,...review})});
   const result=await response.json();if(!response.ok)throw new Error(result.error||'File saved, but onboarding approval needs a retry.');
+  if (review.background_confirm) { await loadBackgroundReview(); state.profile = await fetchProfile(); }
   return {...latest.data,status:'approved'};
 }
 
