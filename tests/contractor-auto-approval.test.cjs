@@ -34,7 +34,7 @@ test('automatic approval is server-only, idempotent and preserves blocked accoun
  await db.query("insert into contractor_background_checks values($1,'awaiting_review','synced')",[id]);assert.equal((await approve()).approved,false);
  await db.exec("update contractor_background_checks set status='approved',sync_state='pending'");assert.equal((await approve()).approved,false);
  await db.exec("update contractor_background_checks set sync_state='synced'");
- checklist.items[0].state='todo';assert.equal((await approve()).approved,false);checklist.items[0].state='done';checklist.items[0].background=false;assert.equal((await approve()).approved,false);checklist.items[0].background=true;assert.deepEqual(await approve(),{approved:true,changed:true});assert.deepEqual(await approve(),{approved:true,changed:false});
+ checklist.items[0].required=false;assert.equal((await approve()).approved,false);checklist.items[0].required=true;checklist.items[0].state='todo';assert.equal((await approve()).approved,false);checklist.items[0].state='done';checklist.items[0].background=false;assert.equal((await approve()).approved,false);checklist.items[0].background=true;assert.deepEqual(await approve(),{approved:true,changed:true});assert.deepEqual(await approve(),{approved:true,changed:false});
  assert.equal((await db.query('select count(*)::int n from admin_audit_log')).rows[0].n,1);
  assert.equal((await db.query('select contractor_approved from contractors')).rows[0].contractor_approved,true);
  }finally{await db.close();}

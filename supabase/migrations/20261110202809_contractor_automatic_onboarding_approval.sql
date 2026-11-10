@@ -11,6 +11,7 @@ begin
    return jsonb_build_object('approved',false,'changed',false);
  end if;
  if not exists(select 1 from jsonb_array_elements(p_checklist->'items') i where i->>'background'='true')
+   or exists(select 1 from jsonb_array_elements(p_checklist->'items') i where i->>'background'='true' and (i->>'required' is distinct from 'true' or i->>'state' is distinct from 'done'))
    or not exists(select 1 from jsonb_array_elements(p_checklist->'items') i where i->>'required'='true')
    or exists(select 1 from jsonb_array_elements(p_checklist->'items') i where i->>'required'='true' and i->>'state' is distinct from 'done') then
    return jsonb_build_object('approved',false,'changed',false);
