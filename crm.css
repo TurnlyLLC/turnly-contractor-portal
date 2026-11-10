@@ -11,3 +11,19 @@ body.sales-portal-body .sales-topbar{margin:0!important;width:100%!important}.sa
 @media(max-width:760px){.sales-metric-card{grid-template-columns:minmax(0,1fr)!important}.sales-metric-card>div{min-width:0}.sales-metric-card span:not(.sales-metric-icon){display:block}.sales-metric-card small{display:block}}
 
 .crm-operator-options{border:1px solid var(--crm-border,#e2e8f0);border-radius:12px;padding:16px;margin:20px 0}.crm-operator-options label{display:flex;gap:12px;align-items:center;padding:12px 0}.crm-operator-options small{display:block;color:#64748b;margin-top:5px}.crm-preserve-owner{display:flex;gap:10px;align-items:center;margin-top:16px}.sales-bulk-toolbar{flex-wrap:wrap;gap:16px}
+
+/* Keep every admin section reachable independently of the page's height. */
+@media(min-width:761px){
+ body.sales-portal-body .sales-sidebar{position:fixed!important;inset:0 auto 0 0;width:228px;height:100dvh!important;padding:18px 14px!important;gap:12px!important;overflow:hidden!important;z-index:30}
+ body.sales-portal-body .sales-sidebar>.sales-brand,body.sales-portal-body .sales-sidebar>.sales-side-kicker,body.sales-portal-body .sales-sidebar>.sales-sidebar-footer{flex:0 0 auto}
+ body.sales-portal-body .sales-sidebar>.sales-brand{padding-bottom:6px}
+ body.sales-portal-body .sales-sidebar>.sales-nav{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#90afc6 transparent;scrollbar-gutter:stable;align-content:start}
+ body.sales-portal-body .sales-sidebar .sales-nav-link{min-height:36px!important;padding:7px 10px!important}
+ body.sales-portal-body .sales-sidebar-footer{margin-top:0;padding-top:10px;gap:6px}
+ body.sales-portal-body .sales-main{grid-column:2}
+}
+@media(max-width:760px){
+ body.sales-portal-body .sales-sidebar>.sales-nav{display:flex!important;flex-wrap:wrap!important;overflow:visible!important;gap:5px!important}
+ body.sales-portal-body .sales-sidebar .sales-nav-link{min-height:36px!important;padding:7px 10px!important;white-space:normal}
+ body.sales-portal-body .sales-main{grid-column:1}
+}
