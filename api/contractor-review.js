@@ -124,8 +124,10 @@ async function run(db,actor,input,token,transport) {
         if(input.status==='approved'){
           const itemId=input.item_id||(input.auto_match?mobile.matchingRequirement(current.items,doc)?.id:null);
           if(input.item_id&&!current.items.some(i=>i.id===itemId))throw fail('Choose a current onboarding requirement.',409);
-          if(itemId&&current.items.some(i=>i.id===itemId&&background.isBackground(i)))throw fail('Use the background-check controls to approve screening. File approval alone does not approve a background check.',409);
-          if(itemId)portalSync=()=>mobile.approvePortalUpload(call,owner.id,doc,itemId,reason);
+          if(itemId&&current.items.some(i=>i.id===itemId&&background.isBackground(i))){
+            if(doc.updated_at!==input.updated_at)throw fail('This document changed. Refresh before approving.',409);
+            await background.save(db,actor,owner.id,{item_id:itemId,status:'approved',version:input.background_version,reference:input.background_reference,confirm:input.background_confirm===true},call);
+          }else if(itemId)portalSync=()=>mobile.approvePortalUpload(call,owner.id,doc,itemId,reason);
         }else{
           const linked=current.items.filter(i=>i.portalDocumentId===doc.id);
           if(linked.length){

@@ -11,6 +11,8 @@ const DOCUMENT_BUCKET = "contractor-documents";
 const PERFORMANCE_BUCKET = "contractor-performance";
 
 const state = {
+  backgroundReview: null,
+  backgroundError: "",
   profile: null,
   contractor: null,
   invite: null,
@@ -21,7 +23,7 @@ const state = {
   media: [],
   performanceRows: [],
   optionalErrors: [],
-  activeTab: ["overview","documents","availability","access","performance","jobs","schedule","pay"].includes(params.get("tab"))?params.get("tab"):"overview",
+  activeTab: ["overview","onboarding","documents","availability","access","performance","jobs","schedule","pay"].includes(params.get("tab"))?params.get("tab"):"overview",
   editingProfile: false,
   editingDocumentId: "",
   message: "",
@@ -479,6 +481,7 @@ function backgroundDocument() {
 }
 
 function backgroundStatus() {
+  if (state.backgroundReview?.background) return state.backgroundReview.background.status;
   return state.profile?.background_check_status ||
     state.contractor?.background_check_status ||
     backgroundDocument()?.status ||
@@ -499,11 +502,10 @@ function backgroundCompleteDate() {
 }
 
 function backgroundCheckComplete() {
-  const status = token(backgroundStatus());
-  const doc = backgroundDocument();
-  const docStatus = token(doc?.status || doc?.approval_status || "");
-  return ["approved", "complete", "completed", "clear", "cleared", "passed", "uploaded"].includes(status) ||
-    Boolean(doc && !["rejected", "failed", "expired"].includes(docStatus));
+  const item = state.backgroundReview;
+  if (!item) return false;
+  const b = item.background || {};
+  return item.state === 'done' && (b.status === 'existing_complete' || (b.status === 'approved' && b.sync_state === 'synced'));
 }
 
 function message(text, isError = false) {
@@ -851,21 +853,33 @@ function performanceMetricForm() {
 }
 
 function backgroundCheckForm() {
-  const status = token(backgroundStatus()) || "not-started";
-  return `
-    <form class="contractor-file-form contractor-file-nested-form" data-background-check-form>
-      <div class="contractor-file-form-grid">
-        <label><span>Background Check Status</span><select name="backgroundStatus">
-          ${["not_started", "pending", "completed", "approved", "passed", "failed", "expired"].map((option) => `<option value="${esc(option)}" ${token(option) === status ? "selected" : ""}>${esc(title(option))}</option>`).join("")}
-        </select></label>
-        <label><span>Completed Date</span><input name="completedDate" type="date" value="${esc(inputDate(backgroundCompleteDate()))}" /></label>
-        <label class="contractor-file-field-full"><span>Notes</span><textarea name="notes" placeholder="Background check notes">${esc(backgroundNotes())}</textarea></label>
-      </div>
-      <div class="contractor-file-form-actions">
-        <button class="primary-action" type="submit" ${state.savingId === "background" ? "disabled" : ""}><span>${state.savingId === "background" ? "Saving..." : "Save Background Check"}</span></button>
-      </div>
-    </form>
-  `;
+  const item = state.backgroundReview, b = item?.background || {};
+  if (!item) return `<p role="alert">${esc(state.backgroundError || 'Background-check review is unavailable. Refresh to retry.')}</p>`;
+  return `<form class="contractor-file-form contractor-file-nested-form" data-background-check-form>
+    <p>Approval updates this file and the contractor’s onboarding checklist together. A completed report still needs your review before approval.</p>
+    <div class="contractor-file-form-grid">
+      <label><span>Background Check Status</span><select name="backgroundStatus">${[['needs_invitation','Needs invitation'],['invited','Invitation sent'],['in_progress','Screening in progress'],['awaiting_review','Completed — awaiting review'],['approved','Approved'],['on_hold','On hold']].map(([value,label])=>`<option value="${value}" ${b.status===value?'selected':''}>${label}</option>`).join('')}</select></label>
+      <label><span>Report / order reference</span><input name="reference" maxlength="120" value="${esc(b.reference||'')}" /></label>
+      <label class="contractor-file-field-full"><span>Message visible to contractor</span><textarea name="contractorNote" maxlength="180">${esc(b.contractor_note||'')}</textarea></label>
+      <label class="contractor-file-field-full"><span><input type="checkbox" name="confirm" style="width:auto;min-height:0" /> I reviewed the completed report and approve this background-check requirement.</span></label>
+    </div><div class="contractor-file-form-actions"><button class="primary-action" type="submit" ${state.savingId?'disabled':''}>${state.savingId==='background'?'Saving…':'Save Background Check'}</button></div></form>`;
+}
+async function backgroundRequest(input) {
+  const {data} = await supabase.auth.getSession();
+  const response = await fetch('/api/contractor-review',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${data?.session?.access_token||''}`},body:JSON.stringify(input)});
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || 'Background-check review failed.');
+  return result;
+}
+async function loadBackgroundReview() {
+  state.backgroundReview = null;
+  try {
+    if (!state.profile?.id) throw new Error('Link this file to a contractor account before reviewing the background check.');
+    const file = await backgroundRequest({action:'mobile_account',id:state.profile.id});
+    state.backgroundReview = file.items.find(i=>i.kind==='background'||/background\s*(check|screen)/i.test(i.title||''));
+    if (!state.backgroundReview) throw new Error('The contractor’s background-check requirement was not found.');
+    state.backgroundError = '';
+  } catch(error) { state.backgroundError = error.message; }
 }
 
 function renderOverview() {
@@ -1294,6 +1308,7 @@ async function loadData() {
   });
   const performanceRows = await fetchAll("contractor_performance_metrics", "*", "metric_date");
   state.performanceRows = performanceRows.filter(personMatches);
+  await loadBackgroundReview();
   message(state.optionalErrors.length ? "Loaded contractor file. Some optional tables are not available yet." : "Contractor file synced from Supabase.");
   render();
 }
@@ -1503,41 +1518,35 @@ async function saveJobAccess(form) {
 }
 
 async function saveBackgroundCheck(form) {
-  if (state.savingId) return;
-  state.savingId = "background";
-  render();
-  const status = formText(form, "backgroundStatus") || "pending";
-  const completedDate = formText(form, "completedDate");
-  const completeStatuses = new Set(["approved", "passed", "complete", "completed", "cleared"]);
-  const payload = {
-    background_check_status: status,
-    background_check_completed_at: completeStatuses.has(token(status)) ? (completedDate ? new Date(`${completedDate}T12:00:00`).toISOString() : new Date().toISOString()) : null,
-    background_check_notes: formText(form, "notes")
-  };
-  const results = [];
-  if (state.profile?.id) results.push(["profiles", await updateRowWithFallback("profiles", state.profile.id, payload)]);
-  if (state.contractor?.id) results.push(["contractors", await updateRowWithFallback("contractors", state.contractor.id, payload)]);
-  state.savingId = "";
-  const successful = results.filter(([, result]) => !result.error);
-  if (!successful.length) {
-    const firstError = results[0]?.[1]?.error?.message || "No editable contractor record was found.";
-    message(`Unable to save background check: ${firstError}`, true);
-    render();
-    return;
-  }
-  for (const [table, result] of successful) {
-    if (table === "profiles") state.profile = { ...state.profile, ...(result.data || payload) };
-    if (table === "contractors") state.contractor = { ...state.contractor, ...(result.data || payload) };
-  }
-  message("Background check step updated.");
-  render();
+  if (state.savingId || !state.backgroundReview) return;
+  const item = state.backgroundReview;
+  const input = {action:'background_save',id:state.profile.id,item_id:item.id,version:item.background?.version||0,status:formText(form,'backgroundStatus'),reference:formText(form,'reference'),contractor_note:formText(form,'contractorNote'),confirm:form.elements.confirm.checked};
+  if (input.status==='approved' && (!input.reference || !input.confirm)) { message('Enter the report reference and confirm your review before approving.',true); return; }
+  state.savingId = 'background'; render();
+  try {
+    await backgroundRequest(input);
+    await loadBackgroundReview();
+    state.profile = await fetchProfile();
+    message('Background check saved and synchronized with the onboarding checklist.');
+  } catch(error) {
+    await loadBackgroundReview();
+    message(error.message,true);
+  } finally { state.savingId = ''; render(); }
 }
 
 async function syncDocumentApproval(row) {
   const {data:sessionData} = await supabase.auth.getSession();
   const latest = await supabase.from('contractor_documents').select('*').eq('id',row.id).single();
   if(latest.error)throw new Error('File saved. Refresh and retry its approval.');
-  const response = await fetch('/api/contractor-review', {method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${sessionData?.session?.access_token || ''}`},body:JSON.stringify({action:'review_document',id:row.id,status:'approved',updated_at:latest.data.updated_at,reason:row.notes||'',auto_match:true})});
+  let review = {};
+  if (/background/i.test(`${row.document_type} ${row.title}`)) {
+    await loadBackgroundReview();
+    if (!state.backgroundReview) throw new Error(state.backgroundError);
+    const reference = window.prompt('Verified First report / order reference:',state.backgroundReview.background?.reference || row.title?.match(/V\d{6,}/)?.[0] || '');
+    if (!reference?.trim() || !window.confirm('I reviewed the completed report and approve this background-check requirement. Approval will update the onboarding checklist.')) throw new Error('Document saved; background approval was not submitted.');
+    review = {background_confirm:true,background_reference:reference.trim(),background_version:state.backgroundReview.background?.version||0};
+  }
+  const response = await fetch('/api/contractor-review', {method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${sessionData?.session?.access_token || ''}`},body:JSON.stringify({action:'review_document',id:row.id,status:'approved',updated_at:latest.data.updated_at,reason:row.notes||'',auto_match:true,...review})});
   const result=await response.json();if(!response.ok)throw new Error(result.error||'File saved, but onboarding approval needs a retry.');
   return {...latest.data,status:'approved'};
 }

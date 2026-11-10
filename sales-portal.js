@@ -1,3 +1,4 @@
+import {reconcileQueue,adjacentLead} from './crm-focus-queue.mjs?v=20261110';
 import {mountTeamOverview} from './crm-overview.mjs?v=20261109';
 import {FULL_SCRIPTS} from './crm-full-scripts.mjs';
 import {startOnboardingUnlock} from './crm-onboarding-unlock.mjs';
@@ -1250,18 +1251,22 @@ async function loadRows() {
 async function loadReps() {
  const result=await crmTeamRequest('list',{archived:state.teamArchived===true});return result.members||[];
 }
+let refreshGeneration = 0;
 async function refreshData(showLoading = true,accessChecked=false) {
+  const generation = ++refreshGeneration;
   if(["scripts","guide","communications","messages","map","onboarding","earnings"].includes(state.page)){state.loading=false;render();return;}
   if(showLoading){state.loading=true;state.loadFailed=false;state.message='';render();}
   try {
     if(!accessChecked&&!await withCrmTimeout(requireSalesAccess())){state.rows=[];state.leads=[];return;}
     const [collections,reps,salesContext]=await withCrmTimeout(Promise.all([loadRows(),loadReps(),crmSalesRequest('context')]));
+    if(generation!==refreshGeneration || (!showLoading && document.querySelector('[data-outreach-form][data-dirty="yes"]'))) return;
     state.salesContext=salesContext;
     Object.assign(state,collections,{reps,walkthroughs:[],quotes:[],contracts:[],walkthroughAvailability:[]});
     composeSalesRows();
     const ids=new Set(state.rows.map(row=>row.id));state.selectedLeadIds=new Set([...state.selectedLeadIds].filter(id=>ids.has(id)));
     state.loading=false;state.loadFailed=false;state.message='';render();
   } catch(error) {
+    if(generation!==refreshGeneration) return;
     state.loading=false;state.loadFailed=true;state.message='';
     state.loadError=/timeout|abort|took too long/i.test(error.message)?'The connection took too long. Your data is safe. Try loading again.':`We could not load your workspace. ${error.message}`;
     render();
@@ -1499,8 +1504,17 @@ function baseFilteredRows(rows = state.rows) {
   });
 }
 
+let focusQueueIds = [], focusQueueKey = '', focusMoving = false;
+function callableLead(row) { return !row.do_not_contact && !['lost','follow_up','active'].includes(stageFor(row)); }
 function leadFocusRows() {
-  return baseFilteredRows().filter(row=>!row.do_not_contact && !['lost','follow_up','active'].includes(stageFor(row)));
+  const key = JSON.stringify([state.search,state.ownerFilter,state.stageFilter,state.statusFilter,state.prospectType,state.cityFilter]);
+  if (key !== focusQueueKey) { focusQueueIds = []; focusQueueKey = key; }
+  const rows = baseFilteredRows().filter(callableLead);
+  const current = recordById(state.selectedId);
+  if (current && (focusQueueIds.includes(current.id) || (state.leadFocusMode && !callableLead(current))) && !rows.some(r=>r.id===current.id)) rows.push(current);
+  focusQueueIds = reconcileQueue(focusQueueIds, rows);
+  const byId = new Map(rows.map(r=>[r.id,r]));
+  return focusQueueIds.map(id=>byId.get(id));
 }
 
 function statusForCurrentPage(row) {
@@ -1942,7 +1956,7 @@ function renderStageTabs() {
 
 function renderLeadsPage() {
  const rows=baseFilteredRows(),focus=leadFocusRows();
- if(state.leadFocusMode){const selected=recordById(state.selectedId);return renderLeadFocusMode(selected&&(selected.do_not_contact||['lost','follow_up','active'].includes(stageFor(selected)))?[selected]:focus);}
+ if(state.leadFocusMode)return renderLeadFocusMode(focus);
  const page=pagedProspects(rows),admin=isSalesAdmin();
  return `<div class="crm-welcome"><div><p class="crm-eyebrow">REALTORS & RESIDENTIAL CLIENTS</p><h2>Your next conversation starts here.</h2><p>Call, understand the opportunity, and offer a useful next step.</p></div><button class="sales-primary-button" data-enter-lead-focus ${focus.length?'':'disabled'}>Start calling</button></div>
  <article class="sales-panel"><div class="sales-panel-header"><div><h2>Prospects</h2><p>${number(rows.length)} matches · realtor and residential contacts in one list</p></div>${admin?'<div class="sales-row-actions"><button class="sales-secondary-button" data-open-import>Import prospects</button><button class="sales-primary-button" data-open-lead>Add prospect</button></div>':''}</div>
@@ -2238,12 +2252,14 @@ function renderFocusWalkthroughWindows(row) {
 }
 
 function renderFocusNavigation(rows, placement = "") {
-  const disabled = rows.length <= 1 ? "disabled" : "";
+  const eligible = new Set(rows.filter(callableLead).map(r=>r.id)), ids = rows.map(r=>r.id);
+  const previousDisabled = !adjacentLead(ids,state.selectedId,-1,eligible) ? 'disabled' : '';
+  const nextDisabled = !adjacentLead(ids,state.selectedId,1,eligible) ? 'disabled' : '';
   const placementClass = placement ? ` sales-focus-nav-${placement}` : "";
   return `
     <nav class="sales-focus-nav${placementClass}" aria-label="Prospect focus navigation">
-      <button class="sales-secondary-button" type="button" data-focus-prev ${disabled}>${icon("left")}Back</button>
-      <button class="sales-secondary-button" type="button" data-focus-next ${disabled}>Next${icon("chevron")}</button>
+      <button class="sales-secondary-button" type="button" data-focus-prev ${previousDisabled}>${icon("left")}Back</button>
+      <button class="sales-secondary-button" type="button" data-focus-next ${nextDisabled}>Next${icon("chevron")}</button>
       <button class="sales-secondary-button" type="button" data-exit-lead-focus>${icon("left")}Return To List</button>
     </nav>
   `;
@@ -4090,16 +4106,18 @@ function toggleFocusConditionalField(form, key, visible) {
 }
 
 async function moveLeadFocus(direction) {
-  const saved = await autosaveFocusLead({ includeNote: true });
-  if (!saved) return;
-  const rows = leadFocusRows();
-  if (!rows.length) return;
-  const currentIndex = rows.findIndex((row) => row.id === state.selectedId);
-  const nextIndex = currentIndex >= 0 ? (currentIndex + direction + rows.length) % rows.length : 0;
-  state.selectedId = rows[nextIndex].id;
-  writeSalesFocusPlace({ leadId: state.selectedId, leadFocusMode: true });
-  render();
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  if (focusMoving) return;
+  focusMoving = true;
+  try {
+    const rows = leadFocusRows(), currentId = state.selectedId;
+    const nextId = adjacentLead(rows.map(r=>r.id),currentId,direction,new Set(rows.filter(callableLead).map(r=>r.id)));
+    if (!nextId || !await autosaveFocusLead({ includeNote: true })) return;
+    if (!recordById(nextId) || state.selectedId !== currentId) return;
+    state.selectedId = nextId;
+    writeSalesFocusPlace({ leadId: nextId, leadFocusMode: true });
+    render();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  } finally { focusMoving = false; }
 }
 
 async function deleteSelectedLeads() {
@@ -4692,7 +4710,7 @@ async function crmMessageRequest(values){
 if (await requireSalesAccess()) {
  startOnboardingUnlock({blocked:()=>!isSalesAdmin()&&!state.adminPreview&&state.onboarding?.ready===false,refresh:requireSalesAccess});
  startMessageBadge(crmMessageRequest);
- installCalling({onStatus:()=>{if(!state.modal)void refreshData(false).catch(()=>{});},request:async values=>{
+ installCalling({onStatus:()=>{if(!state.modal&&!document.querySelector('[data-outreach-form][data-dirty="yes"]'))void refreshData(false).catch(()=>{});},request:async values=>{
   const {data}=await supabase.auth.getSession();
   if(!data.session)throw new Error('Sign in again to call.');
   const r=await fetch('/api/crm-voice',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+data.session.access_token},body:JSON.stringify(values),signal:AbortSignal.timeout(20000)});
