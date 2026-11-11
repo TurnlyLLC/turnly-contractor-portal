@@ -8,6 +8,14 @@ module.exports=async(req,res)=>{
   if(i.action==='config')return S.json(res,200,{ready:G.ready(),terms:G.TERMS});
   if(i.action?.startsWith('admin_')){
    const actor=await S.admin(db,req);
+   if(i.action==='admin_service_area'){
+    if(!uuid(i.id)||!Object.hasOwn(i,'expected_zone'))throw S.fail('Reopen the purchase before saving.');
+    const zone=i.service_zone||null;
+    if(zone&&!require('../lib/contractor-job-zones.cjs').zones.some(z=>z.id===zone))throw S.fail('Choose an available service area.');
+    const r=await db.rpc('gift_assign_service_area',{p_actor:actor,p_order:i.id,p_zone:zone,p_expected_zone:i.expected_zone||null});
+    if(r.error)throw S.fail(r.error.code==='P0001'?r.error.message:'Unable to save the service area.',409);
+    return S.json(res,200,r.data);
+   }
    if(i.action==='admin_list'){
     const page=Math.max(1,Math.floor(Number(i.page)||1));let q=db.from('gift_cards').select('id,order_id,ordinal,code,balance_cents,reserved_cents,status,created_at,gift_orders(email,name,email_status,email_id,stripe_session)',{count:'exact'}).order('created_at',{ascending:false});
     if(i.search){const search=clean(i.search,80).replace(/[^a-zA-Z0-9@. -]/g,'');if(G.valid(G.normalize(search)))q=q.eq('code',G.normalize(search));else q=q.ilike('code','%'+search.replace(/\s/g,'').toUpperCase()+'%');}
@@ -18,13 +26,14 @@ module.exports=async(req,res)=>{
    if(i.action==='admin_history'){if(!uuid(i.id))throw S.fail('Choose a card.');return S.json(res,200,{events:S.checked(await db.from('gift_events').select('*').eq('card_id',i.id).order('created_at',{ascending:false}))});}
    if(i.action==='admin_search'){
     const r=S.checked(await db.rpc('gift_admin_search',{p_mode:i.mode==='orders'?'orders':'cards',p_search:clean(i.search,160),p_status:clean(i.status,30),p_from:i.from||null,p_to:i.to||null,p_page:Math.max(1,Math.floor(Number(i.page)||1)),p_size:[25,50,100].includes(Number(i.size))?Number(i.size):25,p_sort:i.sort==='oldest'?'oldest':'newest'}));
+    if(r.rows?.length){const ids=[...new Set(r.rows.map(x=>i.mode==='orders'?x.id:x.order_id))];const orders=S.checked(await db.from('gift_orders').select('id,service_zone').in('id',ids));r.rows=r.rows.map(x=>({...x,service_zone:orders.find(o=>o.id===(i.mode==='orders'?x.id:x.order_id))?.service_zone||null}));}
     return S.json(res,200,r);
    }
    if(i.action==='admin_detail'){
     if(!uuid(i.id))throw S.fail('Choose a record.');
     let orderId=i.id,card=null;
     if(i.mode!=='orders'){card=S.checked(await db.from('gift_cards').select('*').eq('id',i.id).single());orderId=card.order_id;}
-    const order=S.checked(await db.from('gift_orders').select('id,name,email,quantity,amount_cents,status,email_status,created_at,paid_at').eq('id',orderId).single());
+    const order=S.checked(await db.from('gift_orders').select('id,name,email,quantity,amount_cents,status,email_status,created_at,paid_at,service_zone').eq('id',orderId).single());
     const cards=S.checked(await db.from('gift_cards').select('id,code,status,balance_cents,reserved_cents,ordinal').eq('order_id',orderId).order('ordinal'));
     const page=Math.max(1,Math.floor(Number(i.page)||1));let q=db.from('gift_events').select('*',{count:'exact'}).eq('order_id',orderId);
     if(card)q=q.eq('card_id',card.id);
