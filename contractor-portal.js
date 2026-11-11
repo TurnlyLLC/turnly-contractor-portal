@@ -3119,6 +3119,25 @@ function attachEvents() {
 attachEvents();
 // Refresh only visible assigned residential cleans. A payment change updates the
 // open contractor screen without interrupting it on every polling interval.
+// Refresh only the activity bubble, preserving forms, scroll and open job details.
+let refreshingGiftActivity = false;
+async function refreshGiftActivity() {
+  if (document.hidden || refreshingGiftActivity || !state.user || state.zonesSaving || !root?.querySelector('.cp-gift-coming')) return;
+  refreshingGiftActivity = true;
+  const actor = state.user.id;
+  try {
+    const data = await zoneApi({action:'preferences'});
+    if (state.user?.id !== actor || state.zonesSaving || !Array.isArray(data.gift_activity)) return;
+    state.giftActivity = data.gift_activity;
+    const bubble = root.querySelector('.cp-gift-coming');
+    if (bubble) bubble.outerHTML = renderGiftActivity();
+  } catch { /* Preserve the last successful counts and retry on the next interval. */ }
+  finally { refreshingGiftActivity = false; }
+}
+window.setInterval(refreshGiftActivity, 30000);
+document.addEventListener('visibilitychange', refreshGiftActivity);
+window.addEventListener('focus', refreshGiftActivity);
+window.addEventListener('online', refreshGiftActivity);
 let refreshingPayments = false;
 async function refreshResidentialPayments() {
   if (document.hidden || refreshingPayments || !state.user || state.adminPreview) return;
