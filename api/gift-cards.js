@@ -71,8 +71,10 @@ module.exports=async(req,res)=>{
   const attribution=await C.attribution(db,i.ref,i.contact);delete attribution.representative;
   if(attribution.sales_user_id&&!attribution.sales_lead_id){const matches=S.checked(await db.from('sales_leads').select('id').eq('business_segment','residential').eq('sales_owner_id',attribution.sales_user_id).ilike('contact_email',em.replace(/[\\%_]/g,'\\$&')).limit(2));if(matches.length===1)attribution.sales_lead_id=matches[0].id;}
   const buyer_kind=i.buyer_kind==='realtor'?'realtor':'other',brokerage=clean(i.brokerage,160);
-  const requestHash=S.hash(JSON.stringify({quantity,name,email:em,terms:G.TERMS,ref:i.ref||'',contact:i.contact||'',buyer_kind,brokerage}));
-  S.checked(await db.from('gift_orders').upsert({id:i.id,token_hash:S.hash(i.token),request_hash:requestHash,quantity,name,email:em,amount_cents:quantity*10000,terms_version:G.TERMS,buyer_kind,brokerage,...attribution},{onConflict:'id',ignoreDuplicates:true}));
+  const service_zone=i.service_zone||null;
+  if(service_zone&&!require('../lib/contractor-job-zones.cjs').zones.some(z=>z.id===service_zone))throw S.fail('Choose an available service area.');
+  const requestHash=S.hash(JSON.stringify({quantity,name,email:em,terms:G.TERMS,ref:i.ref||'',contact:i.contact||'',buyer_kind,brokerage,...(service_zone?{service_zone}:{})}));
+  S.checked(await db.from('gift_orders').upsert({id:i.id,token_hash:S.hash(i.token),request_hash:requestHash,quantity,name,email:em,amount_cents:quantity*10000,terms_version:G.TERMS,buyer_kind,brokerage,service_zone,...attribution},{onConflict:'id',ignoreDuplicates:true}));
   const o=S.checked(await db.from('gift_orders').select('*').eq('id',i.id).single());
   if(o.token_hash!==S.hash(i.token)||o.request_hash!==requestHash)throw S.fail('Your order changed. Refresh before purchasing.',409);
   if(o.status!=='pending')throw S.fail('This order is already complete.',409);

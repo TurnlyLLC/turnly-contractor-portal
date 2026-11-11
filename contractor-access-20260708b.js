@@ -210,7 +210,7 @@ async function renderPasswordChangeRequired(user) {
 
 async function loadContractorPortal(user, profile) {
   window.turnlyContractorBootstrap = {client:supabase,user,profile,previewChecked:true};
-  await import("./contractor-portal.js?v=20261102-ratings");
+  await import("./contractor-portal.js?v=20261111-gift-activity");
   await import("./contractor-job-flow-mobile.js?v=20261030-travel-photo");
 }
 

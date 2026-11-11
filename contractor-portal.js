@@ -94,6 +94,7 @@ const state = {
   openAssignments: [],
   jobZones: [],
   selectedZones: [],
+  giftActivity: null,
   zonesEditable: false,
   zonesSaving: false,
   zonesError: "",
@@ -1577,10 +1578,17 @@ function renderChart(rows) {
   return `<div class="cp-chart">${weeks.map((value) => `<span style="height:${Math.max(14, Math.round((value / max) * 130))}px"></span>`).join("")}</div>`;
 }
 
+function renderGiftActivity() {
+ const rows=state.giftActivity;
+ if(!Array.isArray(rows))return '<aside class="cp-gift-coming"><strong>Coming soon · Local gift-card activity</strong><p>Local activity is temporarily unavailable.</p></aside>';
+ const sold=rows.reduce((n,r)=>n+Number(r.sold||0),0),waiting=rows.reduce((n,r)=>n+Number(r.awaiting_redemption||0),0);
+ return '<aside class="cp-gift-coming"><span class="cp-gift-pill">Coming soon</span><h3>'+sold+' gift certificates sold in your service areas</h3><p>'+waiting+' unused certificates awaiting redemption. We’re growing local demand for residential cleans.</p><div>'+rows.map(r=>'<span class="cp-gift-zone">'+esc(r.zone.replace('NC:',''))+': '+Number(r.sold||0)+' sold</span>').join('')+'</div><small>'+(rows.length?'Counts include paid, non-refunded cards with a known intended service area.':'Choose your service areas on the Job Board to see local totals.')+' Gift certificates are not confirmed jobs; bookings appear when scheduled and approved.</small></aside>';
+}
 function renderMyJobs() {
   if (contractorSurface === "pwa" && new URLSearchParams(window.location.search).get("view") === "past") return renderNativePastJobs();
   const rows = filteredMyAssignments();
   return `
+    ${renderGiftActivity()}
     ${renderMetrics()}
     <section class="cp-two-column">
       ${panel("Claimed Work", `
@@ -1680,6 +1688,7 @@ function renderJobBoard() {
   const preferred = rows.filter(isPreferredOffer);
   const selected = selectedBoardJob(rows);
   return `
+    ${renderGiftActivity()}
     <section class="cp-job-board-layout">
       ${panel("Jobs", `
         ${renderJobAreas()}
@@ -2362,6 +2371,7 @@ async function loadData() {
   if (pageKey === 'messages') tasks.push(loadMessageThreads());
   else state.messageLoad = loadMessageThreads().then(refreshMessageBadges).catch(() => {});
   if (pageKey === 'job-board') tasks.push(loadOpenAssignments());
+  if (pageKey === 'my-jobs') tasks.push(zoneApi({action:'preferences'}).then(d=>{state.giftActivity=d.gift_activity;}).catch(()=>{state.giftActivity=null;}));
   if (pageKey === 'dashboard' && contractorSurface === 'desktop') {
     state.boardLoading = true;
     state.boardLoad = loadOpenAssignments().finally(() => {
@@ -2424,7 +2434,7 @@ async function zoneApi(input) {
 async function loadOpenAssignments() {
  try {
   const data=await zoneApi({action:'board'});
-  state.jobZones=data.zones;state.selectedZones=data.selected;state.zonesEditable=data.can_edit;state.zonesError='';
+  state.giftActivity=data.gift_activity;state.jobZones=data.zones;state.selectedZones=data.selected;state.zonesEditable=data.can_edit;state.zonesError='';
   state.openAssignments=(data.jobs||[]).filter(isClaimableBoardAssignment).filter(matchesContractorPreviewProperty);
  }catch(error){state.openAssignments=[];state.zonesError=error.message;state.message=error.message;state.messageError=true;}
 }
