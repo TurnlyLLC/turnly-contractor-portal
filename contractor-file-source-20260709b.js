@@ -1030,7 +1030,23 @@ function renderPay() {
   const rows = payRows();
   const paid = rows.filter(isPaid);
   const owed = completedJobs().filter((row) => Number(row.pay_amount) > 0 && !isPaid(row));
+  const earned = completedJobs();
+  const year = new Intl.DateTimeFormat("en-US", { year: "numeric", timeZone: "America/New_York" }).format(new Date());
+  const yearFormatter = new Intl.DateTimeFormat("en-US", { year: "numeric", timeZone: "America/New_York" });
+  const earnedThisYear = earned.filter((row) => {
+    const value = row.completed_at || row.checklist_completed_at || row.end_window || row.start_window;
+    if (!value) return false;
+    // Keep date-only service dates on their calendar day in North Carolina.
+    const date = new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T12:00:00` : value);
+    return Number.isFinite(date.getTime()) && yearFormatter.format(date) === year;
+  });
+  const earningsUnavailable = state.optionalErrors.some((error) => error.startsWith("assignment_blocks:"));
   return `
+    <section class="metric-strip four" aria-label="Earnings overview">
+      ${metric("Total Earned", earningsUnavailable ? "Unavailable" : money(totalNetPaid(earned)), "all completed work · after fee adjustments", "green")}
+      ${metric(`Earned in ${year}`, earningsUnavailable ? "Unavailable" : money(totalNetPaid(earnedThisYear)), "completed this calendar year · paid and unpaid", "blue")}
+    </section>
+    <p class="muted">Earnings include completed work, added fees, and deductions. Annual totals use completion dates, falling back to scheduled dates for older jobs. Jobs without either date are included only in total earnings.</p>
     <section class="metric-strip four">
       ${metric("Accepted Pay", money(totalPay(activeJobs())), `${activeJobs().length} active job(s)`, "blue")}
       ${metric("Completed Owed", money(totalNetPaid(owed)), "not paid yet", "yellow")}
