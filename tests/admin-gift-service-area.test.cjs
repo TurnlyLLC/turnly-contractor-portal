@@ -22,6 +22,17 @@ test('admin assignment moves existing paid cards between local totals and audits
  await save(null,'NC:Raleigh');assert.equal(await total('NC:Raleigh'),0);
  assert.equal((await db.query('select count(*)::int n from gift_events')).rows[0].n,6);
  assert.equal(Number((await db.query('select sum(balance_cents) n from gift_cards')).rows[0].n),20000);
+ await db.exec("alter table gift_orders add column name text default 'Buyer',add column email text default 'buyer@example.test',add column quantity int default 1,add column amount_cents int default 10000,add column email_status text default 'delivered',add column created_at timestamptz default now();alter table gift_cards add column code text default 'ABCDEFGHIJKLMNOPQRSTUVWX';");
+ await db.exec(fs.readFileSync('supabase/migrations/20261111123320_gift_bulk_service_area.sql','utf8'));
+ const a='00000000-0000-4000-8000-000000000001',b='00000000-0000-4000-8000-000000000002';
+ await db.query("insert into gift_orders(id,status,paid_at,refunded_cents,disputed) values($1,'paid',now(),0,false),($2,'paid',now(),0,false)",[a,b]);
+ const batch=(zone,items)=>db.query('select gift_bulk_assign_service_area($1,$2,$3)',[actor,JSON.stringify(items),zone]);
+ const search=async()=> (await db.query("select gift_admin_search_v2('orders','','',null,null,1,1,'newest',true) r")).rows[0].r;
+ assert.equal((await search()).total,3);assert.equal((await search()).rows.length,1);
+ await batch('NC:Durham',[{id:a,expected_zone:null},{id:b,expected_zone:null}]);assert.equal((await search()).total,1);assert.equal((await search()).summary.paid,10000);
+ await assert.rejects(batch('NC:Raleigh',[{id:a,expected_zone:'NC:Durham'},{id:b,expected_zone:null}]),/changed/);
+ assert.equal((await db.query('select service_zone from gift_orders where id=$1',[a])).rows[0].service_zone,'NC:Durham');
+ await assert.rejects(batch('NC:Raleigh',[{id:a,expected_zone:'NC:Durham'},{id:a,expected_zone:'NC:Durham'}]),/Duplicate/);
  await db.exec('set role authenticated');await assert.rejects(save('NC:Durham'),/permission denied/);
  }finally{await db.close();}
 });
