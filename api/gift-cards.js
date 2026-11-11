@@ -1,3 +1,4 @@
+const Ads=require('../lib/gift-ad-tracking.cjs');
 const S=require('../lib/residential-server.cjs'),G=require('../lib/gift-cards.cjs');
 const C=require('../lib/crm-sales.cjs');
 const {uuid,email,clean}=require('../lib/agent-referrals.cjs');
@@ -5,7 +6,7 @@ module.exports=async(req,res)=>{
  if(req.method!=='POST')return S.json(res,405,{error:'Method not allowed.'});
  try{
   const i=await S.body(req),db=S.database();
-  if(i.action==='config')return S.json(res,200,{ready:G.ready(),terms:G.TERMS});
+  if(i.action==='config')return S.json(res,200,{ready:G.ready(),terms:G.TERMS,ad_tracking:Ads.enabled()});
   if(i.action?.startsWith('admin_')){
    const actor=await S.admin(db,req);
    if(i.action==='admin_bulk_service_area'){
@@ -95,6 +96,7 @@ module.exports=async(req,res)=>{
   const o=S.checked(await db.from('gift_orders').select('*').eq('id',i.id).single());
   if(o.token_hash!==S.hash(i.token)||o.request_hash!==requestHash)throw S.fail('Your order changed. Refresh before purchasing.',409);
   if(o.status!=='pending')throw S.fail('This order is already complete.',409);
+  if(Ads.enabled()){const ad=Ads.attribution(i.ad_attribution,req);if(ad){try{S.checked(await db.from('gift_ad_attribution').upsert({order_id:o.id,...ad},{onConflict:'order_id',ignoreDuplicates:true}));}catch{console.warn('Gift ad attribution unavailable');}}}
   const st=S.stripe();let session;
   if(o.stripe_session){session=await st.checkout.sessions.retrieve(o.stripe_session);if(session.status!=='open')throw S.fail('This checkout ended. Refresh to start a new order.',409);}
   else{

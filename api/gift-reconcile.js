@@ -22,6 +22,7 @@ module.exports=async(req,res)=>{
   }catch{attention++;}}
   const refunds=S.checked(await db.from('gift_cards').select('id,order_id,gift_orders(payment_intent)').eq('status','refund_pending').limit(20));
   for(const c of refunds){try{const list=await st.refunds.list({payment_intent:c.gift_orders.payment_intent,limit:100});const r=list.data.find(r=>r.metadata?.gift_card_id===c.id);if(r?.status==='succeeded'){S.checked(await db.rpc('gift_refund_finish',{p_card:c.id,p_refund:r.id}));processed++;}else attention++;}catch{attention++;}}
+  try{await require('../lib/gift-ad-tracking.cjs').retry(db);}catch{attention++;}
   return S.json(res,200,{processed,attention});
  }catch{return S.json(res,503,{error:'Gift card reconciliation needs attention.'});}
 };
