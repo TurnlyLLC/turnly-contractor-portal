@@ -8,6 +8,14 @@ module.exports=async(req,res)=>{
   if(i.action==='config')return S.json(res,200,{ready:G.ready(),terms:G.TERMS});
   if(i.action?.startsWith('admin_')){
    const actor=await S.admin(db,req);
+   if(i.action==='admin_bulk_service_area'){
+    if(!Array.isArray(i.orders)||!i.orders.length||i.orders.length>100||i.orders.some(o=>!uuid(o?.id)||!Object.hasOwn(o,'expected_zone')))throw S.fail('Select between 1 and 100 purchases.');
+    const zone=i.service_zone||null;
+    if(zone&&!require('../lib/contractor-job-zones.cjs').zones.some(z=>z.id===zone))throw S.fail('Choose an available service area.');
+    const r=await db.rpc('gift_bulk_assign_service_area',{p_actor:actor,p_orders:i.orders.map(o=>({id:o.id,expected_zone:o.expected_zone||null})),p_zone:zone});
+    if(r.error)throw S.fail(r.error.code==='P0001'?r.error.message:'Unable to save these purchases. Refresh and retry.',409);
+    return S.json(res,200,r.data);
+   }
    if(i.action==='admin_service_area'){
     if(!uuid(i.id)||!Object.hasOwn(i,'expected_zone'))throw S.fail('Reopen the purchase before saving.');
     const zone=i.service_zone||null;
@@ -25,7 +33,7 @@ module.exports=async(req,res)=>{
    if(i.action==='admin_orders'){const r=await db.from('gift_orders').select('id,email,name,quantity,amount_cents,status,email_status,created_at').order('created_at',{ascending:false}).limit(100);return S.json(res,200,{orders:S.checked(r)});}
    if(i.action==='admin_history'){if(!uuid(i.id))throw S.fail('Choose a card.');return S.json(res,200,{events:S.checked(await db.from('gift_events').select('*').eq('card_id',i.id).order('created_at',{ascending:false}))});}
    if(i.action==='admin_search'){
-    const r=S.checked(await db.rpc('gift_admin_search',{p_mode:i.mode==='orders'?'orders':'cards',p_search:clean(i.search,160),p_status:clean(i.status,30),p_from:i.from||null,p_to:i.to||null,p_page:Math.max(1,Math.floor(Number(i.page)||1)),p_size:[25,50,100].includes(Number(i.size))?Number(i.size):25,p_sort:i.sort==='oldest'?'oldest':'newest'}));
+    const r=S.checked(await db.rpc('gift_admin_search_v2',{p_mode:i.mode==='orders'?'orders':'cards',p_search:clean(i.search,160),p_status:clean(i.status,30),p_from:i.from||null,p_to:i.to||null,p_page:Math.max(1,Math.floor(Number(i.page)||1)),p_size:[25,50,100].includes(Number(i.size))?Number(i.size):25,p_sort:i.sort==='oldest'?'oldest':'newest',p_unassigned:i.mode==='orders'&&i.unassigned===true}));
     if(r.rows?.length){const ids=[...new Set(r.rows.map(x=>i.mode==='orders'?x.id:x.order_id))];const orders=S.checked(await db.from('gift_orders').select('id,service_zone').in('id',ids));r.rows=r.rows.map(x=>({...x,service_zone:orders.find(o=>o.id===(i.mode==='orders'?x.id:x.order_id))?.service_zone||null}));}
     return S.json(res,200,r);
    }
