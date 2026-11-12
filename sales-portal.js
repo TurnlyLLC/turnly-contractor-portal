@@ -1292,6 +1292,7 @@ function render() {
         </section>
       </section>
       ${renderModal()}
+      ${renderMobileNavigation()}
     </main>
   `;
   const mapRoot=document.getElementById('crmLeadMap');
@@ -1344,6 +1345,25 @@ function renderSidebar() {
     </aside>
   `;
 }
+
+function renderMobileNavigation() {
+  const available = navItems.filter(([key]) => visibleSalesTab(key) && (!['sales','communications','map','team'].includes(key) || isSalesAdmin()));
+  const primaryKeys = ['dashboard','leads','tasks','messages'];
+  const link = ([key,label,href,iconName], compact=false) => `<a href="${href}" ${state.page===key?'aria-current="page"':''}>${icon(iconName)}<span>${compact&&key==='dashboard'?'Home':label}</span>${key==='messages'?'<span data-message-unread class="crm-message-unread" role="status" hidden></span>':''}</a>`;
+  const primary = primaryKeys.map(key=>available.find(item=>item[0]===key)).filter(Boolean);
+  const more = available.filter(([key])=>!primaryKeys.includes(key));
+  return `<nav class="crm-mobile-nav" style="--mobile-tabs:${primary.length+1}" aria-label="Mobile sales navigation">${primary.map(item=>link(item,true)).join('')}<details class="crm-mobile-more"><summary ${more.some(([key])=>key===state.page)?'class="active"':''}>${icon('dashboard')}<span>More</span></summary><div class="crm-mobile-menu"><strong>Sales workspace</strong>${more.map(item=>link(item)).join('')}<button type="button" class="crm-message-sound" data-message-sound aria-pressed="true">Message sound: on</button><button type="button" class="crm-message-sound" data-message-desktop aria-pressed="false">Enable desktop alerts</button></div></details></nav>`;
+}
+
+document.addEventListener('click', event => {
+  const menu = document.querySelector('.crm-mobile-more[open]');
+  if(menu && !menu.contains(event.target)) menu.open=false;
+});
+document.addEventListener('keydown', event => {
+  if(event.key!=='Escape') return;
+  const menu=document.querySelector('.crm-mobile-more[open]');
+  if(menu){menu.open=false;menu.querySelector('summary')?.focus();}
+});
 
 function renderSalesPreviewSelect(label, field, options, selectedValue) {
   return `
@@ -4981,3 +5001,4 @@ function bindSalesOperations(){
   }catch(e){setInlineFormMessage(f,e.message,'error');}finally{b.disabled=false;b.textContent=originalLabel;}
  });
 }
+
