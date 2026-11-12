@@ -1,9 +1,14 @@
 import {installAccountSwitcher} from './linked-account-switch.mjs?v=20261109';
+import {contractorRoute} from './contractor-routing.js?v=20260831-contractor-dashboard-split';
 import {createClient} from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/+esm';
 import {esc,visible,initialFields,SaveQueue,captureForm,validationIssue} from './contractor-onboarding-model.mjs?v=20261112-intake';
 const env=window.__ENV||{},client=createClient(env.SUPABASE_URL,env.SUPABASE_ANON_KEY),root=document.querySelector('#onboarding');
 void installAccountSwitcher(client).catch(() => {});
 let state,editor=null,busy=false;
+const portalTabs=[['dashboard','Dashboard'],['my-jobs','My Jobs'],['job-board','Job Board'],['schedule','Schedule'],['resources','Resources'],['messages','Messages'],['documents','Documents'],['payments','Payments'],['performance','Performance'],['video-library','Video Library']];
+document.querySelector('#onPortalNav').innerHTML=`<a href="contractor-onboarding.html" aria-current="page">Onboarding</a>${portalTabs.map(([key,label])=>`<a href="${contractorRoute(key)}">${label}</a>`).join('')}<a href="contractor-academy/">Turnly Academy</a>`;
+document.querySelector('.on-header .cp-native-wordmark').href=contractorRoute('dashboard');
+document.addEventListener('click',event=>{const link=event.target.closest('.on-sidebar a,.on-header a');if(!link||event.button!==0||event.ctrlKey||event.metaKey||event.shiftKey||event.altKey)return;event.preventDefault();void act(async()=>{if(editor){editor.capture?.();await editor.queue.flush();}location.assign(link.href);});});
 async function api(action,data={}){const {data:{session}}=await client.auth.getSession();if(!session){location.replace('contractor-login.html');throw Error('Sign in to continue.');}const r=await fetch('/api/contractor-onboarding',{method:'POST',headers:{Authorization:'Bearer '+session.access_token,'Content-Type':'application/json'},body:JSON.stringify({action,...data}),signal:AbortSignal.timeout(55000)});const x=await r.json();if(!r.ok)throw Error(x.error||'Please try again.');return x;}
 function error(e){let el=document.querySelector('#onError');if(!el){el=document.createElement('p');el.id='onError';el.className='on-error';el.role='alert';root.prepend(el);}el.textContent=e.message;el.scrollIntoView({block:'nearest'});}
 async function act(fn){if(busy)return;busy=true;const alert=document.querySelector('#onError');if(alert)alert.textContent='';try{await fn();}catch(e){error(e);}finally{busy=false;}}
