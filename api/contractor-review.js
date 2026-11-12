@@ -93,7 +93,7 @@ async function dispatch(db,actor,input,token,transport) {
         if(pause.error)throw fail('Unable to pause job access. The requirement was not changed.',503);
       });
     }
-    if(input.action==='mobile_account')return require('../lib/contractor-draft-status.cjs').attach(db,input.id,await require('../lib/contractor-auto-approval.cjs').verified(db,input.id,await mobile.file(call,input.id)));
+    if(input.action==='mobile_account')return background.attach(db,input.id,await require('../lib/contractor-draft-status.cjs').attach(db,input.id,await require('../lib/contractor-auto-approval.cjs').verified(db,input.id,await mobile.file(call,input.id))),true);
     if(input.action==='mobile_review'){const file=await mobile.file(call,input.id);if(file.items.some(i=>background.isBackground(i)&&i.submission?.id===input.submission_id))throw fail('Use Background check → Review and approve to record this decision.',409);}
     if(input.action==='mobile_file'||input.action==='mobile_review'){
       const result=await mobile.review(call,input.id,input);
