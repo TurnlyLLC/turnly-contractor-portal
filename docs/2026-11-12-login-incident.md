@@ -1,0 +1,9 @@
+# November 12 login slowdown
+
+Supabase project nwnzdoveskthebfyndcs restarted at 16:11:07 UTC. Post-restart SQL completed successfully, with one active query (the diagnostic query) and Maury's contractor profile still active. No user records were changed during diagnosis.
+
+Before recovery, logs show 22,027 auto_approve_completed_contractor calls between 14:00 and 15:00 UTC, alongside approximately 22,000 draft-status, imported-email, and training reads. This matches the contractor onboarding status workflow. The repeated upstream requests used the Node Supabase client. It does not identify the original browser/native caller. Excess requests are a plausible contributor to database timeouts; no CPU/memory evidence conclusively establishes the initial failure. The native Rork client source is outside this repository.
+
+Mitigations: status-only token-hash buckets before database access (burst six, replenishing one per ten seconds), a 45-second shared deadline for onboarding downstream requests, and 15-second network deadlines for portal/Academy login calls. Saves/signatures/uploads do not consume the status bucket. Accepted requests authenticate normally; no identity or approval results are cached. Buckets are bounded and local to each warm serverless instance, so they reduce repeats but are not a distributed or edge-level rate limit. SDK retries may extend the total login time beyond one network deadline.
+
+Four regression tests cover throttling, refill/isolation, bounded bucket storage, preserved authentication and saves, and network cancellation. Existing onboarding tests also passed (14 total). Follow-up diagnosis, if traffic recurs, needs inbound request traces or native client source to identify the repeated status caller. Do not describe this mitigation as a proven permanent root-cause fix. A fresh login on Maury's device still needs confirmation.

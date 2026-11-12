@@ -6,7 +6,8 @@ try { session=JSON.parse(sessionStorage.getItem('turnly_academy_session')); } ca
 const lessonKey=(m,i)=>`M${String(m.number).padStart(2,'0')}_L${String(i+1).padStart(2,'0')}`;
 async function request(path,options={},authenticated=true){
   if(authenticated){if(!session)throw Error('Please sign in to your Turnly account.');if(session.expires_at*1000<Date.now()+60000)await refreshSession();}
-  const response=await fetch(SUPABASE_URL+path,{...options,headers:{apikey:SUPABASE_KEY,...(authenticated?{Authorization:'Bearer '+session.access_token}:{}),'Content-Type':'application/json',...options.headers}});
+  const {fetchWithTimeout}=await import('../request-timeout.mjs');
+  const response=await fetchWithTimeout(SUPABASE_URL+path,{...options,headers:{apikey:SUPABASE_KEY,...(authenticated?{Authorization:'Bearer '+session.access_token}:{}),'Content-Type':'application/json',...options.headers}});
   const body=await response.text();let data;try{data=JSON.parse(body)}catch{data=body}
   if(!response.ok)throw Error(data?.msg||data?.message||data?.error_description||data?.error||'The request could not be completed.');return data;
 }

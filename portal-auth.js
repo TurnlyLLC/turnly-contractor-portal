@@ -1,9 +1,10 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 import { contractorHomeForBrowser } from "./contractor-routing.js?v=20260828-contractor-desktop-split";
+import { fetchWithTimeout } from './request-timeout.mjs';
 
 const env = window.__ENV || {};
 const supabase = env.SUPABASE_URL && env.SUPABASE_ANON_KEY
-  ? createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY)
+  ? createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {global:{fetch:fetchWithTimeout}})
   : null;
 
 const pageRole = document.body.dataset.authRole || "contractor";
@@ -473,7 +474,7 @@ loginForm?.addEventListener("submit", async (event) => {
   let data, error;
   try {
     if ((pageRole === "contractor" || isUnifiedPortal) && !email.includes("@")) {
-      const response = await fetch("/api/contractor-name-login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:email,password})});
+      const response = await fetchWithTimeout("/api/contractor-name-login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:email,password})});
       const session = await response.json();
       if (!response.ok) throw Error(session.error);
       ({data,error}=await supabase.auth.setSession(session));
