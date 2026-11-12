@@ -15,7 +15,7 @@ test('guard bounds memory and recovers after idle entries expire',()=>{
 test('onboarding API throttles status without caching authentication or blocking saves',async()=>{
  const fs=require('node:fs'),vm=require('node:vm');let authenticated=0,executed=0;
  const context={module:{exports:{}},process:{env:{SUPABASE_SERVICE_ROLE_KEY:'test'}},AbortController,AbortSignal,setTimeout,clearTimeout,fetch,
- require:name=>name==='@supabase/supabase-js'?{createClient:()=>({})}:name.includes('request-guard')?{createGuard}: {access:async(db,token)=>{authenticated++;if(token==='invalid')throw Object.assign(Error('Sign in'),{status:401});return {id:token};},run:async()=>{executed++;return {ok:true};}}};
+ require:name=>name==='@supabase/supabase-js'?{createClient:()=>({})}:name.includes('diagnostics')?{createReporter:()=>()=>()=>{}}:name.includes('request-guard')?{createGuard}: {access:async(db,token)=>{authenticated++;if(token==='invalid')throw Object.assign(Error('Sign in'),{status:401});return {id:token};},run:async()=>{executed++;return {ok:true};}}};
  vm.runInNewContext(fs.readFileSync('api/contractor-onboarding.js','utf8'),context);
  async function call(action,token='a'){const headers={};const res={setHeader:(k,v)=>headers[k]=v,end:body=>res.body=JSON.parse(body)};await context.module.exports({method:'POST',headers:{authorization:'Bearer '+token},body:{action}},res);return {...res,headers};}
  for(let i=0;i<6;i++)assert.equal((await call('status')).statusCode,200);
