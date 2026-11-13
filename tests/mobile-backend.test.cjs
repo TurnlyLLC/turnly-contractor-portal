@@ -1,10 +1,17 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const {backendOrigin,fetchDocument}=require('../lib/mobile-backend.cjs');
-test('existing portals keep the old backend until explicit configuration changes',()=>{
- assert.equal(backendOrigin({}),'https://turnly-contractor-app-backend.rork.app');
+const {backendOrigin,fetchDocument,documentURL,OWNED}=require('../lib/mobile-backend.cjs');
+test('portal calls Supabase directly and preserves the function path',()=>{
+ assert.equal(backendOrigin({}),OWNED);
+ assert.equal(backendOrigin({TURNLY_MOBILE_BACKEND_URL:OWNED+'/'}),OWNED);
  assert.equal(backendOrigin({TURNLY_MOBILE_BACKEND_URL:'https://owned.example.test/'}),'https://owned.example.test');
  for(const url of ['http://owned.test','https://u:p@owned.test','https://owned.test/path','https://x.rork.app'])assert.throws(()=>backendOrigin({TURNLY_MOBILE_BACKEND_URL:url}));
+});
+
+test('new and legacy signed document links work without accepting other hosts or paths',()=>{
+ const {safeLink}=require('../lib/contractor-onboarding.cjs');
+ for(const base of [OWNED,'https://turnly-contractor-app-backend.rork.app'])assert.equal(safeLink({url:base+'/onboarding/f/file_1?e=123&s=test'}).url,base+'/onboarding/f/file_1?e=123&s=test');
+ for(const url of [OWNED+'/admin',OWNED+'/onboarding/f/../admin',OWNED+'/onboarding/f/a/b',OWNED+'/onboarding/f/%2fadmin',OWNED.replace('https://','https://user:pass@')+'/onboarding/f/a',OWNED.replace('.supabase.co','.supabase.co.evil.test')+'/onboarding/f/a'])assert.throws(()=>documentURL(url));
 });
 test('file downloads follow only one verified private-storage redirect without login headers',async()=>{
  const env={TURNLY_MOBILE_BACKEND_URL:'https://owned.test',SUPABASE_URL:'https://preview.supabase.co',TURNLY_MOBILE_STORAGE_BUCKET:'turnly-migration-documents'};

@@ -21,8 +21,7 @@ async function inspect(token){
  if(matching.length!==1)throw S.fail('The shared checklist does not have one matching active master agreement.',409);
  const item=matching[0];
  const path='items/'+encodeURIComponent(item.id)+'/';
- const link=new URL((await native(path+'document-link',token)).url);
- if(link.origin!==origin||!link.pathname.startsWith('/onboarding/f/'))throw S.fail('Unexpected template location.',502);
+ let link;try{link=require('../lib/mobile-backend.cjs').documentURL((await native(path+'document-link',token)).url);}catch{throw S.fail('Unexpected template location.',502);}
  const response=await fetchDocument(link);
  if(!response.ok)throw S.fail('Unable to verify the current agreement.',502);
  const hash=digest(Buffer.from(await response.arrayBuffer()));
