@@ -1,7 +1,8 @@
 const {createHash}=require('node:crypto');
 const S=require('../lib/residential-server.cjs');
 const {access}=require('./contractor-review.js');
-const origin='https://turnly-contractor-app-backend.rork.app';
+const {backendOrigin,fetchDocument}=require('../lib/mobile-backend.cjs');
+const origin=backendOrigin();
 const original='e196be03e968109e2e021e5825c44870950994048eedfa055e5a9a7f03b010e3';
 const previous='69b8018059f0ccc5fd718e908891e2ba37f0275f330a890e0c2cc8dd7ebfbed1';
 const revised='69eeb083f73219860d3bfb34130e51a61fef0f75e5d9cb55b036c338ed8f4b0e';
@@ -22,7 +23,7 @@ async function inspect(token){
  const path='items/'+encodeURIComponent(item.id)+'/';
  const link=new URL((await native(path+'document-link',token)).url);
  if(link.origin!==origin||!link.pathname.startsWith('/onboarding/f/'))throw S.fail('Unexpected template location.',502);
- const response=await fetch(link,{redirect:'error',signal:AbortSignal.timeout(20000)});
+ const response=await fetchDocument(link);
  if(!response.ok)throw S.fail('Unable to verify the current agreement.',502);
  const hash=digest(Buffer.from(await response.arrayBuffer()));
  return {title:item.title,version:item.version,pages:item.pageCount,path,hash,
@@ -46,3 +47,4 @@ module.exports=async(req,res)=>{
  }catch(error){return S.json(res,error.status||503,{error:error.status?error.message:'Unable to verify the cleaner agreement release.'});}
 };
 module.exports.inspect=inspect;
+
