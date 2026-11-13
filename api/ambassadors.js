@@ -34,6 +34,11 @@ module.exports=async(req,res)=>{
    }
    return S.json(res,200,{session:{access_token:r.data.session.access_token,refresh_token:r.data.session.refresh_token},must_change_password:reset});
   }
+  if(x.action==='bridge'){
+   await S.rate(db,req,'ba-bridge');
+   const actor=await A.access(db,req,{allowReset:true,bridge:true});
+   return S.json(res,200,{ok:true,admin:actor.admin,must_change_password:!!actor.member?.must_change_password});
+  }
   const actor=await A.access(db,req,{allowReset:x.action==='password'});
   if(x.action==='password'){
    if(actor.admin)throw S.fail('Manage your admin password in your admin account.');
@@ -42,7 +47,9 @@ module.exports=async(req,res)=>{
    const synced=await db.rpc('finish_hire_login_email',{p_user:actor.id,p_email:x.email});
    if(synced.error)throw S.fail('Confirm your personal email before finishing setup.',409);
    const r=await db.auth.admin.updateUserById(actor.id,{password:x.password});if(r.error)throw S.fail('Could not change your password. Try again.',503);
-   const m=S.checked(await db.from('ba_members').update({must_change_password:false}).eq('user_id',actor.id).eq('session_id',actor.member.session_id).eq('enabled',true).select('user_id').maybeSingle());
+   let memberUpdate=db.from('ba_members').update({must_change_password:false}).eq('user_id',actor.id).eq('enabled',true);
+   memberUpdate=actor.member.session_id==null?memberUpdate.is('session_id',null):memberUpdate.eq('session_id',actor.member.session_id);
+   const m=S.checked(await memberUpdate.select('user_id').maybeSingle());
    if(!m)throw S.fail('Your access changed. Please sign in again.',401);
    return S.json(res,200,{ok:true});
   }
@@ -66,8 +73,8 @@ module.exports=async(req,res)=>{
    }
    // No customer email, phone, address, billing details or later bookings leave this endpoint.
    if(!actor.admin)leads=leads.map(l=>({...l,name:l.name.split(/\s+/).map((part,i)=>i===0?part:part[0]+'.').join(' ')}));
-   const safeMember=m=>m?(({user_id,name,email,enabled,onboarding_completed_at,training,agreement_current,referrals_ready})=>({user_id,name,email,enabled,onboarding_completed_at,training,agreement_current,referrals_ready,...(referrals_ready?{code:m.code}:{})}))(m):null;
-   return S.json(res,200,{admin:actor.admin,scope:actor.admin&&!id?'team':'ambassador',onboarding_required:!actor.admin&&!actor.member.onboarding_completed_at,members:members.map(safeMember),member:safeMember(member),sharing:await require('../lib/ba-sharing.cjs').sharingAssets(member),leads,earnings});
+   const safeMember=m=>m?(({user_id,name,email,enabled,onboarding_completed_at,training,agreement_current,referrals_ready,referral_access})=>({user_id,name,email,enabled,onboarding_completed_at,training,agreement_current,referrals_ready,referral_access,...(referrals_ready?{code:m.code}:{})}))(m):null;
+   return S.json(res,200,{admin:actor.admin,scope:actor.admin&&!id?'team':'ambassador',onboarding_required:!actor.admin&&!actor.member.onboarding_completed_at&&member?.referral_access?.basis!=='approved_contractor',members:members.map(safeMember),member:safeMember(member),sharing:await require('../lib/ba-sharing.cjs').sharingAssets(member),leads,earnings});
   }
   if(!actor.admin)throw S.fail('Admin access required.',403);
   if(x.action==='create'){

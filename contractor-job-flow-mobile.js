@@ -1367,11 +1367,12 @@ function resolvedAddress(assignment) {
 }
 
 function resolvedAccessNotes(assignment) {
-  return directoryAccessNotes(activeDirectoryDetails?.contract)
-    || metadataValue(assignment, ["access_notes", "entry_notes", "gate_code", "special_instructions"])
-    || directoryAccessNotes(activeDirectoryDetails?.client)
-    || directoryAccessNotes(activeDirectoryDetails?.portalProperty)
-    || "";
+  const notes = ["access_notes", "entry_notes", "gate_code", "special_instructions"]
+    .map(key => metadataValue(assignment, [key])).filter(Boolean);
+  const directory = directoryAccessNotes(activeDirectoryDetails?.contract)
+    || (!notes.length && (directoryAccessNotes(activeDirectoryDetails?.client)
+      || directoryAccessNotes(activeDirectoryDetails?.portalProperty)));
+  return [...new Set([directory, ...notes].filter(Boolean))].join("\n");
 }
 
 function detailGrid(rows) {
