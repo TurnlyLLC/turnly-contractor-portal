@@ -6,11 +6,13 @@ function functions(file,names,context){
  return vm.runInNewContext(code+';({'+names.join(',')+'})',context);
 }
 test('portal payouts preserve zero and adjusted net amounts like the native app',()=>{
- const {paymentPaidAmount}=functions('contractor-file-source.js',['paymentPaidAmount'],{assignmentPayment:r=>r.metadata?.payment||{},isPaid:r=>r.paid,paymentNetAmount:r=>r.pay_amount});
+ for(const file of ['contractor-file-source.js','contractor-file-source-20260709b.js']){
+ const {paymentPaidAmount}=functions(file,['paymentPaidAmount'],{assignmentPayment:r=>r.metadata?.payment||{},isPaid:r=>r.paid,paymentNetAmount:r=>r.pay_amount});
  assert.equal(paymentPaidAmount({paid:true,pay_amount:100,paid_amount:0}),0);
  assert.equal(paymentPaidAmount({paid:true,pay_amount:100,paid_amount:90,net_paid_amount:80}),80);
  assert.equal(paymentPaidAmount({paid:true,pay_amount:100,metadata:{payment:{paid_amount:'85.50'}}}),85.5);
  assert.equal(paymentPaidAmount({paid:true,pay_amount:100}),100);
+ }
 });
 test('portal access notes preserve special instructions and deduplicate entry notes',()=>{
  const {resolvedAccessNotes}=functions('contractor-job-flow-mobile.js',['resolvedAccessNotes'],{activeDirectoryDetails:null,directoryAccessNotes:r=>r?.access_notes,metadataValue:(r,keys)=>r[keys[0]]||r.metadata?.[keys[0]]});
@@ -22,7 +24,7 @@ test('bridge authorizes stored roles, preserves portal session and enforces pass
  const member={enabled:true,session_id:'portal-session'};
  const db={auth:{getUser:async()=>({data:{user:{id:'member'}}})},from(table){return{select(){return this},eq(){return this},maybeSingle:async()=>({data:table==='profiles'?{status:'active',role:'contractor'}:table==='app_user_access'?{roles}:{...member,must_change_password:reset}})}},rpc:async(name,args)=>{calls.push({name,args});return{data:valid}}};
  const req={headers:{authorization:'Bearer '+token}};
- await A.access(db,req,{bridge:true});assert.equal(calls[0].args.p_register,true);assert.equal(member.session_id,'portal-session');
+ const actor=await A.access(db,req,{bridge:true});assert.equal(calls[0].args.p_register,true);assert.equal(member.session_id,'portal-session');assert.equal(actor.sessionId,'app-session');
  await A.access(db,req);assert.equal(calls[1].args.p_register,false);
  reset=true;await assert.rejects(A.access(db,req),e=>e.status===428);
  valid=false;await assert.rejects(A.access(db,req),e=>e.status===401);

@@ -184,7 +184,7 @@ async function renderPasswordChangeRequired(user) {
 
 async function loadContractorPortal() {
   await import("./contractor-portal.js?v=20261111-gift-auto-refresh");
-  await import("./contractor-job-flow-mobile.js?v=20261030-travel");
+  await import("./contractor-job-flow-mobile.js?v=20261113-consistency");
 }
 
 async function getProfile(userId) {

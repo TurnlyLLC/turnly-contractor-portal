@@ -27,7 +27,7 @@ test('qualification requires active status, approval and both roles',()=>{
 
 test('migration: audited idempotent grant, pause on lost approval, register_ba_lead gate, backfill',async()=>{
  const db=new PGlite();try{
- await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;create schema auth; create table auth.sessions(id uuid primary key,user_id uuid,not_after timestamptz);create schema turnly_private;
+ await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;create schema auth; create table auth.sessions(id uuid primary key,user_id uuid,not_after timestamptz,created_at timestamptz default clock_timestamp());create schema turnly_private;
  create function auth.uid() returns uuid language sql as 'select null::uuid';
  create function public.current_profile_is_admin() returns boolean language sql as 'select false';
  create table profiles(id uuid primary key,status text,contractor_approved boolean);
@@ -74,7 +74,7 @@ test('migration: audited idempotent grant, pause on lost approval, register_ba_l
  // App bridge does not replace the portal session, rejects foreign/expired sessions,
  // and survives a separate portal login while respecting reset/disable/logout.
  const sid=randomUUID(),foreign=randomUUID(),expired=randomUUID();
- await db.query('insert into auth.sessions values($1,$2,null),($3,$4,null),($5,$2,now()-interval \'1 minute\')',[sid,pre,foreign,c,expired]);
+ await db.query('insert into auth.sessions(id,user_id,not_after) values($1,$2,null),($3,$4,null),($5,$2,now()-interval \'1 minute\')',[sid,pre,foreign,c,expired]);
  await db.query("update ba_members set session_id='portal-session' where user_id=$1",[pre]);
  const session=async(s,register=false)=>(await db.query('select ba_app_session($1,$2,$3) ok',[pre,s,register])).rows[0].ok;
  assert.equal(await session(sid),false);assert.equal(await session(sid,true),true);assert.equal(await session(sid,true),true);
@@ -85,10 +85,15 @@ test('migration: audited idempotent grant, pause on lost approval, register_ba_l
  await db.query('update ba_members set enabled=false where user_id=$1',[pre]);
  assert.equal(await session(sid,true),false);
  await db.query('update ba_members set enabled=true where user_id=$1',[pre]);
- assert.equal(await session(sid),false);assert.equal(await session(sid,true),true);
+ assert.equal(await session(sid),false);assert.equal(await session(sid,true),false);
+ // A new login after re-enabling is required, so an old JWT cannot bridge around revocation.
+ await db.query('update auth.sessions set created_at=clock_timestamp() where id=$1',[sid]);
+ assert.equal(await session(sid,true),true);
  await db.query('update ba_members set must_change_password=true where user_id=$1',[pre]);
  assert.equal(await session(sid),false);
  await db.query('update ba_members set must_change_password=false where user_id=$1',[pre]);
+ assert.equal(await session(sid,true),false);
+ await db.query('update auth.sessions set created_at=clock_timestamp() where id=$1',[sid]);
  assert.equal(await session(sid,true),true);
  await db.query('delete from auth.sessions where id=$1',[sid]);
  assert.equal(await session(sid),false);assert.equal(await session(sid,true),false);

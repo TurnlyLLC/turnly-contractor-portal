@@ -212,15 +212,22 @@ function firstMoneyValue(values, allowZero = false) {
 
 function paymentPaidAmount(row = {}) {
   const payment = assignmentPayment(row);
-  const stored = firstMoneyValue([
+  const values = [
+    row.net_paid_amount,
     row.paid_amount,
     row.payout_amount,
     row.amount_paid,
+    payment.net_paid_amount,
     payment.paid_amount,
     payment.payout_amount,
     payment.amount_paid
-  ]);
-  return stored || (isPaid(row) ? paymentNetAmount(row) : 0);
+  ];
+  for (const value of values) {
+    if (value === null || value === undefined || value === "") continue;
+    const amount = Number(value);
+    if (Number.isFinite(amount) && amount >= 0) return amount;
+  }
+  return isPaid(row) ? paymentNetAmount(row) : 0;
 }
 
 function paymentAddedFeeAmount(row = {}) {

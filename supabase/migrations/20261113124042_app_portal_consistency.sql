@@ -129,6 +129,7 @@ revoke all on function public.register_ba_lead(text,text,text,text,text) from pu
 grant execute on function public.register_ba_lead(text,text,text,text,text) to service_role;
 
 -- App logins coexist with the existing portal login. No refresh/access tokens are stored.
+alter table public.ba_members add column if not exists app_session_valid_after timestamptz not null default '-infinity';
 create table if not exists turnly_private.ba_app_sessions (
  session_id uuid primary key references auth.sessions(id) on delete cascade,
  user_id uuid not null references public.ba_members(user_id) on delete cascade,
@@ -146,8 +147,9 @@ begin
  if not found then return false; end if;
  if not exists(select 1 from public.profiles p join public.app_user_access a on a.user_id=p.id
    where p.id=p_user and p.status='active' and a.roles @> array['brand_ambassador']::text[]) then return false; end if;
- if not exists(select 1 from auth.sessions where id=p_session and user_id=p_user
-   and (not_after is null or not_after>now())) then return false; end if;
+ if not exists(select 1 from auth.sessions s join public.ba_members m on m.user_id=s.user_id
+   where s.id=p_session and s.user_id=p_user and s.created_at>=m.app_session_valid_after
+   and (s.not_after is null or s.not_after>now())) then return false; end if;
  if p_register then
   insert into turnly_private.ba_app_sessions(session_id,user_id) values(p_session,p_user) on conflict(session_id) do nothing;
  end if;
@@ -159,12 +161,13 @@ grant execute on function public.ba_app_session(uuid,uuid,boolean) to service_ro
 create or replace function turnly_private.ba_revoke_app_sessions() returns trigger
 language plpgsql security definer set search_path='' as $$
 begin
- if new.enabled is distinct from old.enabled or new.must_change_password is distinct from old.must_change_password then
+ if new.enabled is distinct from old.enabled or (new.must_change_password and not old.must_change_password) then
+  new.app_session_valid_after=clock_timestamp();
   delete from turnly_private.ba_app_sessions where user_id=new.user_id;
  end if;
  return new;
 end $$;
 revoke all on function turnly_private.ba_revoke_app_sessions() from public,anon,authenticated;
 drop trigger if exists ba_revoke_app_sessions on public.ba_members;
-create trigger ba_revoke_app_sessions after update of enabled,must_change_password on public.ba_members
+create trigger ba_revoke_app_sessions before update of enabled,must_change_password on public.ba_members
 for each row execute function turnly_private.ba_revoke_app_sessions();
