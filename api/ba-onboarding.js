@@ -66,7 +66,7 @@ module.exports=async(req,res)=>{
   const data=D.normalize(x.kind,draft.data,true),signedAt=new Date().toISOString();let storage=null;
   if(x.kind==='agreement')Object.assign(data,D.agreementRecord(data,signedAt));
   if(x.kind==='w9'){const bytes=await D.w9Pdf(data,signedAt);storage='w9/'+id+'/'+randomUUID()+'.pdf';S.checked(await db.storage.from(R.BUCKET).upload(storage,bytes,{contentType:'application/pdf',upsert:false}));}
-  const result=await db.rpc('ba_sign_document_version',{p_user:id,p_kind:x.kind,p_revision:x.revision,p_data:data,p_name:data.signature_name,p_version:version,p_hash:S.hash(JSON.stringify(data)),p_path:storage,p_session:actor.member?.session_id||null});
+  const result=await db.rpc('ba_sign_document_version',{p_user:id,p_kind:x.kind,p_revision:x.revision,p_data:data,p_name:data.signature_name,p_version:version,p_hash:S.hash(JSON.stringify(data)),p_path:storage,p_session:actor.sessionId||null});
   if(result.error)throw S.fail('The document changed before signing. Reload and review it again.',409);
   return S.json(res,200,{ok:true,id:result.data});
  }
