@@ -21,3 +21,10 @@ test('API denies unsigned admin actions and rate-limits public requests',async()
  const S={body:async r=>r.body,database:()=>({}),rate:async()=>{rate++;},admin:async()=>{checkedAdmin++;throw Object.assign(Error('Sign in'),{status:401});},json:(res,status,body)=>{res.status=status;res.body=body;}};
  const context={module:{exports:{}},require:n=>n.includes('residential-server')?S:{save:async()=>{submitted=true;return {ok:true};}}};vm.runInNewContext(handler,context);const res={};await context.module.exports({method:'POST',body:{action:'summary'}},res);assert.equal(res.status,401);assert.equal(checkedAdmin,1);assert.equal(submitted,false);await context.module.exports({method:'POST',body:{action:'request'}},res);assert.equal(rate,1);assert.equal(submitted,true);assert.equal(res.status,200);
 });
+test('ZIP mapping uses aggregate requests, keeps contact details private, and tolerates provider failures',async()=>{
+ const M=require('../lib/city-demand-map.cjs');const lookup=async()=>({ok:true,json:async()=>({places:[{'place name':'Durham','state abbreviation':'NC',latitude:'35.99',longitude:'-78.90'}]})});
+ const point=await M.locateZip('27701','NC',lookup);assert.equal(point.result,'matched');assert.equal(point.latitude,35.99);assert.equal((await M.locateZip('27701','GA',lookup)).result,'not_found');
+ const records=M.records([{city:'Durham',city_key:'durham',state:'NC',zip:'27701',requests:12,recurring:8,last_30_days:6}]);assert.equal(records[0].kind,'city_interest');assert.equal(records[0].demand_count,12);assert.match(records[0].url,/zip=27701/);assert.equal(records[0].email,undefined);
+ let stored;await M.remember({from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:null})})}),upsert:async row=>{stored=row;}})}, {zip:'27701',state:'NC'},async()=>point);assert.equal(stored.latitude,35.99);
+ await M.remember({}, {zip:'27701',state:'NC'},async()=>{throw Error('offline');});
+});

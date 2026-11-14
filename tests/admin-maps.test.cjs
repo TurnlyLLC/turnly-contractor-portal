@@ -46,18 +46,18 @@ test('mapping failure cannot fail a saved request, while verified coverage is ca
 test('out-of-range checkout returns a request before any booking RPC, gift reservation, or Stripe operation',async()=>{
  const source=fs.readFileSync(require.resolve('../api/residential-booking.js'),'utf8'),module={exports:{}};let saved=0;
  const input={action:'checkout',id:'fixture',token:'x'.repeat(64),state:'VA',out_of_range_consent:true};
- const S={body:async()=>input,database:()=>({rpc:()=>{throw Error('Must not create booking');}}),rate:async()=>{},validate:v=>v,json:(_r,status,data)=>({status,data})};
+ const S={body:async()=>input,database:()=>({rpc:()=>{throw Error('Must not create booking');}}),rate:async()=>{},validate:v=>({...v,visit_details:{}}),json:(_r,status,data)=>({status,data})};
  vm.runInNewContext(source,{module,require:name=>{
- if(name.includes('residential-server'))return S;if(name.includes('agent-referrals'))return {uuid:()=>true,clean:v=>v};
+ if(name.includes('booking-calendar'))return {load:async()=>({settings:{}}),error:()=>null};if(name.includes('booking-scope'))return {accept:()=>({})};if(name.includes('residential-server'))return S;if(name.includes('agent-referrals'))return {uuid:()=>true,clean:v=>v};
  if(name.includes('service-coverage'))return {verify:async()=>({approved:false})};
  if(name.includes('out-of-area'))return {save:async()=>{saved++;return {out_of_range:true};}};
  return {};
  }});
- const response=await module.exports({method:'POST'},{});assert.equal(response.status,200);assert.equal(response.data.out_of_range,true);assert.equal(saved,1);
+ const response=await module.exports({method:'POST'},{});assert.equal(response.status,200,JSON.stringify(response.data));assert.equal(response.data.out_of_range,true);assert.equal(saved,1);
 });
 test('cleaning map merges assignments without duplicating linked residential bookings',async()=>{
  const data={referral_bookings:[{id:'r1',name:'Home',property_address:'123 Test St',city:'Durham',state:'NC',status:'scheduled'}],out_of_area_requests:[{id:'o1',name:'Outside',property_address:'456 Example St',city:'Reston',state:'VA',status:'out_of_range'}],assignment_blocks:[{id:'r1',status:'pending'},{id:'c1',property_name:'Office',address:'789 Sample St, Raleigh, NC 27601',status:'completed',site_latitude:35.78,site_longitude:-78.64}]};
- const db={from:t=>({select:()=>({order:()=>({range:async()=>({data:data[t]})})})})};
+ const db={rpc:async()=>({data:[]}),from:t=>({select:()=>({order:()=>({range:async()=>({data:data[t]})})})})};
  const rows=await M.records(db,'cleans');assert.equal(rows.length,3);assert.equal(rows.find(r=>r.id==='r1').status,'pending');assert.equal(rows.find(r=>r.id==='c1').category,'commercial');assert.equal(rows.find(r=>r.id==='c1').state,'NC');assert.equal(rows.find(r=>r.id==='o1').status,'out_of_range');
 });
 
