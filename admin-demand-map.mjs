@@ -1,4 +1,4 @@
-import {renderStandaloneAdminSidebar,bindStandaloneAdminNavigation} from './admin-navigation.mjs?v=20261026-map';
+import {renderStandaloneAdminSidebar,bindStandaloneAdminNavigation} from './admin-navigation.mjs?v=20261114-mobile';
 import {createClient} from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/+esm';
 import {mountDemandMap} from './demand-map.mjs?v=20261026';
 document.getElementById('adminNavigation').outerHTML=renderStandaloneAdminSidebar('demand-map');bindStandaloneAdminNavigation();

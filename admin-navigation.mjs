@@ -117,3 +117,25 @@ export function bindStandaloneAdminNavigation(root=document){
     if(links)links.hidden=expanded;
   });
 }
+
+
+function installMobileAdminNavigation(){
+ if(document.querySelector('.admin-mobile-nav'))return;
+ const sidebar=document.querySelector('.admin-shared-sidebar');if(!sidebar)return;
+ const current=sidebar.querySelector('a[aria-current="page"]')?.getAttribute('href');
+ const nav=document.createElement('nav');nav.className='admin-mobile-nav';nav.setAttribute('aria-label','Admin quick navigation');
+ nav.innerHTML=[['admin.html','Home','home'],['directory.html','Contractors','users'],['assignments.html','Jobs','clipboard-list'],['messages.html','Messages','message-square']].map(([href,label,icon])=>`<a href="${href}" ${current===href?'aria-current="page"':''}>${navIcon(icon)}<span>${label}</span></a>`).join('')+'<button type="button" aria-expanded="false" aria-controls="adminMobileMenu">'+navIcon('layout-grid')+'<span>More</span></button>';
+ sidebar.id='adminMobileMenu';const toggle=nav.querySelector('button');
+ const backdrop=document.createElement('button');backdrop.className='admin-mobile-backdrop';backdrop.setAttribute('aria-label','Close admin menu');backdrop.hidden=true;
+ const close=document.createElement('button');close.className='admin-mobile-close';close.type='button';close.textContent='Close menu';sidebar.prepend(close);
+ let previousFocus;
+ const setOpen=open=>{if(open)previousFocus=document.activeElement;document.body.classList.toggle('admin-menu-open',open);toggle.setAttribute('aria-expanded',String(open));backdrop.hidden=!open;if(open)close.focus();else previousFocus?.focus();};
+ toggle.addEventListener('click',()=>setOpen(toggle.getAttribute('aria-expanded')!=='true'));backdrop.addEventListener('click',()=>setOpen(false));close.addEventListener('click',()=>setOpen(false));
+ document.addEventListener('keydown',e=>{if(!document.body.classList.contains('admin-menu-open'))return;if(e.key==='Escape')setOpen(false);if(e.key==='Tab'){const items=[...sidebar.querySelectorAll('a,button')].filter(el=>el.getClientRects().length);const first=items[0],last=items.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}});
+ matchMedia('(max-width: 760px)').addEventListener('change',()=>setOpen(false));
+ document.body.append(backdrop,nav);
+}
+if(typeof document!=='undefined'){
+ const observer=new MutationObserver(()=>{if(document.querySelector('.admin-shared-sidebar')){installMobileAdminNavigation();observer.disconnect();}});
+ observer.observe(document.documentElement,{childList:true,subtree:true});installMobileAdminNavigation();
+}

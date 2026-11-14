@@ -3,7 +3,7 @@ import { propertyManagerNotesHtml } from "./property-manager-notes.mjs?v=2026102
 import { assignmentServiceScope, assignmentAwaitsApproval } from "./assignment-service-scope.mjs?v=20261026-approval";
 import { loadActiveCleaningContractors } from "./contractor-directory-model.mjs?v=20261012-active";
 import { isResidentialAssignment, configureResidentialForm, residentialRecurrence } from "./residential-assignment.mjs?v=20261026-sync";
-import {navSections, renderAdminNavigation} from "./admin-navigation.mjs?v=20261027-payouts";
+import {navSections, renderAdminNavigation} from "./admin-navigation.mjs?v=20261114-mobile";
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 import {
   adminPreviewPortalOptions,

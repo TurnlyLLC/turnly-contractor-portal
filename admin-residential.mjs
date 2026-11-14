@@ -1,4 +1,4 @@
-import {renderStandaloneAdminSidebar,bindStandaloneAdminNavigation} from "./admin-navigation.mjs?v=20261027-calendar";
+import {renderStandaloneAdminSidebar,bindStandaloneAdminNavigation} from "./admin-navigation.mjs?v=20261114-mobile";
 document.getElementById("adminNavigation").outerHTML=renderStandaloneAdminSidebar("residential-schedule");
 bindStandaloneAdminNavigation();
 import {createClient} from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/+esm';

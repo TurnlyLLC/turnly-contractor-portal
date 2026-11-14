@@ -1,5 +1,5 @@
 import './booking-calendar-rules.js?v=20261028';
-import {renderStandaloneAdminSidebar,bindStandaloneAdminNavigation} from './admin-navigation.mjs?v=20261027-calendar';
+import {renderStandaloneAdminSidebar,bindStandaloneAdminNavigation} from './admin-navigation.mjs?v=20261114-mobile';
 import {createClient} from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/+esm';
 document.querySelector('#adminNavigation').outerHTML=renderStandaloneAdminSidebar('residential-schedule');bindStandaloneAdminNavigation();
 const C=globalThis.TurnlyBookingCalendar,$=s=>document.querySelector(s),form=$('#settingsForm'),f=form.elements,env=window.__ENV||{},client=createClient(env.SUPABASE_URL,env.SUPABASE_ANON_KEY);let version;

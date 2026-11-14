@@ -3,7 +3,7 @@ import {addExperienceTab} from './applicant-experience.mjs?v=3';
 import {downloadBatch,headersFromTemplate} from './verified-first-export.mjs?v=mass-invite-phone';
 let exportRows=[], exportHeaders;
 const zonesFor=a=>(a.service_cities||a.answers?.service_cities||[a.service_city]).join(', ');
-import {renderStandaloneAdminSidebar,bindStandaloneAdminNavigation} from './admin-navigation.mjs?v=20261019-applicants';
+import {renderStandaloneAdminSidebar,bindStandaloneAdminNavigation} from './admin-navigation.mjs?v=20261114-mobile';
 import {createClient} from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/+esm';
 document.getElementById('adminNavigation').outerHTML=renderStandaloneAdminSidebar(new URL(location.href).searchParams.get('role')==='brand_ambassador'?'ambassador-applicants':'applicants');bindStandaloneAdminNavigation();document.body.dataset.dashboardTheme='light';
 const $=s=>document.querySelector(s),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
