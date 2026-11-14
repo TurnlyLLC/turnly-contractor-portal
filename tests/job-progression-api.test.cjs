@@ -3,7 +3,7 @@ const fail=(message,status=400)=>Object.assign(new Error(message),{status});
 const S={fail,checked:r=>{if(r.error)throw fail('Database error',503);return r.data;}};
 const onboard={module:{exports:{}},require:n=>n==='node:crypto'?require(n):{},Buffer};
 vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../lib/contractor-onboarding.cjs'),'utf8'),onboard);
-const context={module:{exports:{}},require:n=>n.endsWith('residential-server.cjs')?S:n.endsWith('agent-referrals.cjs')?{uuid:s=>/^[0-9a-f-]{36}$/.test(s)}:n.endsWith('contractor-onboarding.cjs')?onboard.module.exports:{key:s=>s,locate:async()=>({result:'not_found'})}};
+const context={module:{exports:{}},require:n=>n.endsWith('residential-payment-hold.mjs')?require('../residential-payment-hold.mjs'):n.endsWith('residential-server.cjs')?S:n.endsWith('agent-referrals.cjs')?{uuid:s=>/^[0-9a-f-]{36}$/.test(s)}:n.endsWith('contractor-onboarding.cjs')?onboard.module.exports:{key:s=>s,locate:async()=>({result:'not_found'})}};
 vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../api/contractor-job-progress.js'),'utf8'),context);
 const {progress}=context.module.exports;
 test('progress API authenticates ownership and trusts only server-sourced destination coordinates',async()=>{

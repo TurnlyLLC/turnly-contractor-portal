@@ -45,11 +45,14 @@ test('mapping failure cannot fail a saved request, while verified coverage is ca
 });
 test('out-of-range checkout returns a request before any booking RPC, gift reservation, or Stripe operation',async()=>{
  const source=fs.readFileSync(require.resolve('../api/residential-booking.js'),'utf8'),module={exports:{}};let saved=0;
- const input={action:'checkout',id:'fixture',token:'x'.repeat(64),state:'VA',out_of_range_consent:true};
- const S={body:async()=>input,database:()=>({rpc:()=>{throw Error('Must not create booking');}}),rate:async()=>{},validate:v=>v,json:(_r,status,data)=>({status,data})};
+ const scope=require('../lib/booking-scope.cjs');
+ const input={action:'checkout',id:'fixture',token:'x'.repeat(64),state:'VA',out_of_range_consent:true,service:'standard',scope_accepted:true,scope_reviewed:true,scope_service:'standard',scope_version:scope.policy('standard').version};
+ const S={body:async()=>input,database:()=>({rpc:()=>{throw Error('Must not create booking');}}),rate:async()=>{},validate:v=>({...v,visit_details:{}}),json:(_r,status,data)=>({status,data})};
  vm.runInNewContext(source,{module,require:name=>{
  if(name.includes('residential-server'))return S;if(name.includes('agent-referrals'))return {uuid:()=>true,clean:v=>v};
  if(name.includes('service-coverage'))return {verify:async()=>({approved:false})};
+ if(name.includes('booking-scope'))return scope;
+ if(name.includes('booking-calendar'))return {load:async()=>({}),error:()=>''};
  if(name.includes('out-of-area'))return {save:async()=>{saved++;return {out_of_range:true};}};
  return {};
  }});
