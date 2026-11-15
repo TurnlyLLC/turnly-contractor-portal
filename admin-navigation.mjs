@@ -120,6 +120,7 @@ export function bindStandaloneAdminNavigation(root=document){
 
 
 function installMobileAdminNavigation(){
+ if(!document.querySelector('[data-admin-mobile-styles]')){const style=document.createElement('link');style.rel='stylesheet';style.href='/admin-mobile.css?v=20261115';style.dataset.adminMobileStyles='';document.head.append(style);}
  if(document.querySelector('.admin-mobile-nav'))return;
  const sidebar=document.querySelector('.admin-shared-sidebar');if(!sidebar)return;
  const current=sidebar.querySelector('a[aria-current="page"]')?.getAttribute('href');
@@ -132,7 +133,7 @@ function installMobileAdminNavigation(){
  const setOpen=open=>{if(open)previousFocus=document.activeElement;document.body.classList.toggle('admin-menu-open',open);toggle.setAttribute('aria-expanded',String(open));backdrop.hidden=!open;if(open)close.focus();else previousFocus?.focus();};
  toggle.addEventListener('click',()=>setOpen(toggle.getAttribute('aria-expanded')!=='true'));backdrop.addEventListener('click',()=>setOpen(false));close.addEventListener('click',()=>setOpen(false));
  document.addEventListener('keydown',e=>{if(!document.body.classList.contains('admin-menu-open'))return;if(e.key==='Escape')setOpen(false);if(e.key==='Tab'){const items=[...sidebar.querySelectorAll('a,button')].filter(el=>el.getClientRects().length);const first=items[0],last=items.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}});
- matchMedia('(max-width: 760px)').addEventListener('change',()=>setOpen(false));
+ matchMedia('(max-width: 980px)').addEventListener('change',()=>setOpen(false));
  document.body.append(backdrop,nav);
 }
 if(typeof document!=='undefined'){

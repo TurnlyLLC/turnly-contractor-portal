@@ -1,4 +1,4 @@
-import {navSections, renderAdminNavigation} from "./admin-navigation.mjs?v=20261114-mobile";
+import {navSections, renderAdminNavigation} from "./admin-navigation.mjs?v=20261115-mobile-fixes";
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
 const suiteEnv = window.__ENV || {};
