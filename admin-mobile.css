@@ -1,0 +1,78 @@
+/* Loaded after page styles so older desktop rules cannot override phone layouts. */
+@media (max-width: 980px) {
+  body:has(.admin-mobile-nav) { --admin-bottom-space: calc(82px + env(safe-area-inset-bottom)); padding-bottom: var(--admin-bottom-space); }
+  body:has(.admin-mobile-nav) .admin-suite-shell,
+  body:has(.admin-mobile-nav) .layout:has(> .admin-shared-sidebar) { display: block; width: 100%; min-width: 0; }
+  body:has(.admin-mobile-nav) :is(.suite-main, .main, .residential-main) { box-sizing: border-box; width: 100%; max-width: 100%; min-width: 0; margin: 0; padding: 12px; }
+  body:has(.admin-mobile-nav) .suite-content { padding: 0; min-width: 0; }
+  body:has(.admin-mobile-nav) :is(.suite-panel, .table-card, .suite-stack, .span-main, .span-side, .cc-roster, .cc-review) { min-width: 0; max-width: 100%; box-sizing: border-box; }
+  body:has(.admin-mobile-nav) :is(h1,h2,h3,p,small,strong,label,a) { overflow-wrap: anywhere; }
+  body.turnly-admin-suite .page-heading h1 { font-size: 26px; line-height: 1.15; margin: 0 0 8px; letter-spacing: -.5px; }
+  body.turnly-admin-suite .page-heading p { font-size: 14px; line-height: 1.5; margin: 0; }
+  body.turnly-admin-suite .suite-topbar { display: grid; grid-template-columns: minmax(0,1fr); padding: 14px 12px; margin-bottom: 12px; gap: 14px; }
+  body.turnly-admin-suite .topbar-tools { display: flex; flex-wrap: wrap; width: 100%; min-width: 0; gap: 8px; align-items: center; padding: 0; }
+  body.turnly-admin-suite .topbar-search-wrap { order: 0; flex: 1 1 100%; width: 100%; min-width: 0; max-width: none; height: 44px; }
+  body.turnly-admin-suite .global-search input { width: 100%; min-width: 0; font-size: 16px; }
+  body.turnly-admin-suite .global-search kbd { display: none; }
+  body.turnly-admin-suite .admin-preview-wrap { order: 5; flex: 1 1 100%; width: 100%; min-width: 0; max-width: none; }
+  body.turnly-admin-suite .admin-preview-trigger { width: 100%; min-width: 0; max-width: 100%; min-height: 44px; padding: 8px 10px; }
+  body.turnly-admin-suite .admin-preview-trigger :is(span,small) { min-width: 0; max-width: 100%; }
+  body.turnly-admin-suite .admin-preview-trigger small { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  body.turnly-admin-suite .dashboard-theme-toggle { order: 1; flex: 0 0 auto; width: auto; min-width: 44px; min-height: 44px; padding: 6px; gap: 0; }
+  body.turnly-admin-suite .dashboard-theme-toggle .theme-toggle-label { display: none; }
+  body.turnly-admin-suite .topbar-tools > :is(.primary-action,.secondary-action) { order: 2; flex: 1 1 140px; min-width: 0; max-width: 100%; white-space: normal; text-align: center; }
+  body.turnly-admin-suite .topbar-popover-wrap { order: 3; flex: 0 0 44px; }
+  body.turnly-admin-suite .topbar-profile-wrap { order: 4; flex: 0 0 auto; }
+  body.turnly-admin-suite .top-user { min-width: 44px; padding: 2px; gap: 4px; }
+  body.turnly-admin-suite .top-user > span:not(.user-photo) { display: none; }
+  body.turnly-admin-suite .topbar-dropdown { position: fixed; inset: auto 12px auto 12px; top: 100px; width: auto; min-width: 0; max-width: calc(100vw - 24px); max-height: calc(100dvh - 200px); overflow: auto; z-index: 1100; }
+  body.turnly-admin-suite .admin-preview-menu.topbar-dropdown { top: 80px; }
+  body.turnly-admin-suite :is(.command-grid,.directory-layout,.assignment-layout,.message-center-layout) { grid-template-columns: minmax(0,1fr); gap: 12px; }
+  body.turnly-admin-suite :is(.metric-strip,.metric-strip.seven) { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+  body.turnly-admin-suite .metric-card { padding: 12px; min-width: 0; }
+  body.turnly-admin-suite .metric-card :is(strong,.metric-value) { font-size: 24px; }
+  body.turnly-admin-suite .command-grid > .suite-panel > .panel-head { padding: 16px 14px 10px; flex-direction: row; flex-wrap: wrap; align-items: flex-start; gap: 10px; }
+  body.turnly-admin-suite .command-grid .panel-head h2 { font-size: 18px; }
+  body.turnly-admin-suite :is(.panel-actions,.suite-toolbar,.toolbar-left,.toolbar-right,.assignment-bulk-controls,.message-thread-tools,.cc-bulk,.cc-pager) { flex-wrap: wrap; min-width: 0; gap: 8px; }
+  body.turnly-admin-suite :is(.panel-tabs,.view-tabs,.view-switch) { flex-wrap: wrap; gap: 6px; }
+  body.turnly-admin-suite .command-grid .suite-panel .empty-state { min-height: 120px; padding: 20px 12px; }
+  body.turnly-admin-suite .website-inquiries-card { padding: 16px 14px; }
+  body.turnly-admin-suite .message-thread-list { max-height: 320px; }
+  body.turnly-admin-suite :is(.message-conversation,.message-compose-panel,.message-compose-form,.message-recipient-picker) { min-width: 0; }
+  body.turnly-admin-suite :is(.assignment-detail-grid,.assignment-section-grid) { grid-template-columns: minmax(0,1fr); }
+  body.turnly-admin-suite .contractor-crm .cc-hero { padding: 18px; }
+  body.turnly-admin-suite .contractor-crm .cc-hero h2 { font-size: 23px; line-height: 1.2; }
+  body.turnly-admin-suite .contractor-crm :is(.cc-roster,.cc-review) { padding: 12px; }
+  body.turnly-admin-suite .contractor-crm .cc-pipeline { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+  body.turnly-admin-suite .contractor-crm .cc-pipeline button { min-width: 0; padding: 12px; }
+  body.turnly-admin-suite .contractor-crm .cc-tools { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+  body.turnly-admin-suite .contractor-crm .cc-tools label { min-width: 0; }
+  body.turnly-admin-suite .contractor-crm .cc-tools label:first-child { grid-column: 1 / -1; }
+  body.turnly-admin-suite .contractor-crm .cc-tools :is(input,select,button) { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; font-size: 16px; }
+  body.turnly-admin-suite .contractor-crm .cc-roster > .cc-scroll :is(table,tbody,tr,td) { box-sizing: border-box; min-width: 0; max-width: 100%; }
+  body.turnly-admin-suite .contractor-crm .cc-roster > .cc-scroll tr { grid-template-columns: minmax(0,1fr); }
+  body.turnly-admin-suite .contractor-crm .cc-roster > .cc-scroll td { grid-column: 1; grid-row: auto; }
+  body.turnly-admin-suite .contractor-crm .cc-roster > .cc-scroll td:is(:nth-child(3),:nth-child(4),:nth-child(6))::before { display: block; font-size: 12px; font-weight: 700; margin: 8px 0 4px; color: #476573; }
+  body.turnly-admin-suite .contractor-crm .cc-roster > .cc-scroll td:nth-child(3)::before { content: 'Onboarding'; }
+  body.turnly-admin-suite .contractor-crm .cc-roster > .cc-scroll td:nth-child(4)::before { content: 'Academy'; }
+  body.turnly-admin-suite .contractor-crm .cc-roster > .cc-scroll td:nth-child(6)::before { content: 'Access roles'; }
+  body.turnly-admin-suite .contractor-crm .cc-progress-button { min-width: 0; max-width: 100%; width: 100%; }
+  body.turnly-admin-suite .contractor-crm .cc-progress-copy { min-width: 0; }
+  body.turnly-admin-suite .contractor-crm .cc-person { white-space: normal; max-width: 100%; overflow-wrap: anywhere; }
+  body.turnly-admin-suite .contractor-crm .cc-role-badge { white-space: normal; }
+  body:has(.admin-mobile-nav) :is(input,select,textarea) { max-width: 100%; box-sizing: border-box; font-size: 16px; }
+  body:has(.admin-mobile-nav) :is(button,.primary-action,.secondary-action,.button) { min-height: 44px; }
+  body:has(.admin-mobile-nav) :is(.table-scroll,.cc-scroll,.city-demand-scroll) { width: 100%; max-width: 100%; min-width: 0; overflow-x: auto; overscroll-behavior-x: contain; }
+  body:has(.admin-mobile-nav) :is(.residential-header,.detail-head) { flex-wrap: wrap; gap: 12px; }
+  body:has(.admin-mobile-nav) :is(.residential-main .view-switch,.residential-pagination,.toolbar) { flex-wrap: wrap; }
+  body:has(.admin-mobile-nav) .demand-toolbar { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+  body:has(.admin-mobile-nav) .demand-toolbar :is(label,input,select,button) { width: 100%; min-width: 0; }
+  body:has(.admin-mobile-nav) .demand-toolbar label:has([data-search]) { grid-column: 1 / -1; }
+  body:has(.admin-mobile-nav) .demand-map-canvas { height: min(65dvh,470px); min-height: 300px; }
+  body:has(.admin-mobile-nav) #cityDemand label { min-width: 0; width: 100%; margin-right: 0; }
+  body:has(.admin-mobile-nav) .suite-sidebar.admin-shared-sidebar { position: fixed !important; inset: 0 0 0 auto; width: min(88vw,360px) !important; height: 100dvh !important; max-height: none !important; overflow-y: auto; padding: 14px 12px calc(24px + env(safe-area-inset-bottom)); }
+  body:has(.admin-mobile-nav) .property-modal-panel { box-sizing: border-box; width: calc(100vw - 24px); max-width: calc(100vw - 24px); max-height: calc(100dvh - 24px); overflow: auto; margin: 12px; padding: 16px; }
+  body:has(.admin-mobile-nav) .cc-detail { width: calc(100vw - 24px); max-width: calc(100vw - 24px); padding: 16px; }
+  body:has(.admin-mobile-nav) .cc-detail nav { flex-wrap: wrap; }
+  body:has(.admin-mobile-nav) .admin-mobile-nav { box-sizing: border-box; }
+}

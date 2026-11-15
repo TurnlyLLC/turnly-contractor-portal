@@ -1,4 +1,4 @@
-import {renderStandaloneAdminSidebar,bindStandaloneAdminNavigation} from "./admin-navigation.mjs?v=20261114-mobile";
+import {renderStandaloneAdminSidebar,bindStandaloneAdminNavigation} from "./admin-navigation.mjs?v=20261115-mobile-fixes";
 import {createClient} from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/+esm';
 import {parseAgentCsv} from './agent-import.mjs';
 const app=document.querySelector('#agentApp');
