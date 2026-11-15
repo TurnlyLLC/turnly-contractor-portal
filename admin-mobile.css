@@ -76,3 +76,14 @@
   body:has(.admin-mobile-nav) .cc-detail nav { flex-wrap: wrap; }
   body:has(.admin-mobile-nav) .admin-mobile-nav { box-sizing: border-box; }
 }
+@media (max-width: 980px) {
+  body:has(.admin-mobile-nav) .filter-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  body:has(.admin-mobile-nav) :is(.filter-grid > *, .search-label) { min-width: 0; max-width: 100%; }
+  body:has(.admin-mobile-nav) :is(.metrics,.detail-facts) { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  body:has(.admin-mobile-nav) .scroll { width: 100%; min-width: 0; max-width: 100%; overflow-x: auto; }
+  body:has(.admin-mobile-nav) .demand-toolbar label { color: #17384a; }
+}
+@media (max-width: 480px) {
+  body:has(.admin-mobile-nav) .filter-grid { grid-template-columns: minmax(0,1fr); }
+  body:has(.admin-mobile-nav) .filter-grid .search-label { grid-column: auto; }
+}
