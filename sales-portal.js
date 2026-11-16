@@ -6,7 +6,7 @@ import {mountMemberProfile} from './crm-member-profile.mjs?v=20261105-individual
 import {mountBulkPay} from './crm-pay-bulk.mjs?v=20261030-bulk';
 import {mountHourlyPay} from './crm-hourly-pay.mjs?v=20261105-flat';
 import {startActivityClock} from './crm-activity-clock.mjs?v=20261105-flat';
-import {mountProductivity} from './crm-productivity.mjs?v=20261105-flat';
+import {mountProductivity} from './crm-productivity.mjs?v=20261116-weekly';
 let activityClock;
 import {mountOnboardingSettings} from './crm-onboarding-settings.mjs?v=20261105-individual';
 import {mountTraining} from './crm-training.mjs?v=20261105-rules';

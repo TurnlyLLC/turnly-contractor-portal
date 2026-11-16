@@ -1,4 +1,4 @@
-const CACHE_NAME = "turnly-contractor-pwa-v20261112-login-resilience";
+const CACHE_NAME = "turnly-contractor-pwa-v20261116-weekly";
 
 const PRECACHE_URLS = [
   "/linked-account-switch.mjs",
