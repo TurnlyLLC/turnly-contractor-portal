@@ -1,4 +1,4 @@
-import * as developer from './integration-developer.mjs?v=2';
+import * as developer from './integration-developer.mjs?v=3';
 import {renderStandaloneAdminSidebar,bindStandaloneAdminNavigation} from './admin-navigation.mjs?v=20261116-integrations';
 import {createClient} from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/+esm';
 document.querySelector('#adminNavigation').outerHTML=renderStandaloneAdminSidebar('integrations');bindStandaloneAdminNavigation();

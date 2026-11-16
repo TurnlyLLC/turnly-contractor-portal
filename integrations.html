@@ -26,4 +26,4 @@ Idempotency-Key: your-unique-request-123
 <details><summary>Connect n8n</summary><p>Use an HTTP Request node with Header Auth: header name <code>Authorization</code>, value <code>Bearer YOUR_API_KEY</code>. Store the key in n8n credentials. For events, create an n8n Webhook node, activate its workflow, and paste its production HTTPS URL above. Validate webhook signatures before processing events.</p></details>
 </section></div></main>
 <dialog id="secretDialog" aria-labelledby="secretTitle"><h2 id="secretTitle">Save your secret now</h2><p>This secret is shown only once. Store it in your connected system's private credentials.</p><textarea id="secretValue" readonly aria-label="New secret" rows="3"></textarea><div class="actions"><button id="copySecret">Copy secret</button><button id="closeSecret" class="primary">I've saved it</button></div><p id="copyStatus" role="status"></p></dialog>
-<script src="env.js"></script><script type="module" src="integrations.mjs?v=platform-v2"></script></body></html>
+<script src="env.js"></script><script type="module" src="integrations.mjs?v=oauth-v3"></script></body></html>
