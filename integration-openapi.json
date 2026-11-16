@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Turnly Business API",
-    "version": "2.0.0",
+    "version": "2.1.0",
     "description": "Live Turnly workspace. Secrets and database administration are not exposed. Full permission applies to the supported catalog only."
   },
   "servers": [
@@ -87,7 +87,9 @@
                 "sales.send",
                 "ambassadors.dashboard",
                 "ambassadors.toggle",
-                "ambassadors.record_payment"
+                "ambassadors.record_payment",
+                "documents.upload_start",
+                "documents.upload_complete"
               ]
             }
           },
@@ -208,7 +210,9 @@
                 "sales.send",
                 "ambassadors.dashboard",
                 "ambassadors.toggle",
-                "ambassadors.record_payment"
+                "ambassadors.record_payment",
+                "documents.upload_start",
+                "documents.upload_complete"
               ]
             }
           },
@@ -368,7 +372,9 @@
                 "sales.send",
                 "ambassadors.dashboard",
                 "ambassadors.toggle",
-                "ambassadors.record_payment"
+                "ambassadors.record_payment",
+                "documents.upload_start",
+                "documents.upload_complete"
               ]
             }
           },
@@ -949,6 +955,7 @@
           "GET"
         ],
         "filter_fields": [
+          "profile_id",
           "status"
         ]
       },
@@ -1390,6 +1397,39 @@
           "id": "EARNING_UUID",
           "reference": "Payment reference"
         }
+      },
+      "documents.upload_start": {
+        "scope": "documents:upload",
+        "description": "Prepare a private contractor document upload (PDF/JPEG/PNG/WebP, max 20 MB). Read the contractor and existing documents first. SHA-256 deduplicates API uploads per contractor. PUT local file bytes to the returned one-file URL, then call documents.upload_complete. Does not approve reports or complete onboarding.",
+        "required": [
+          "profile_id",
+          "file_name",
+          "content_type",
+          "file_size",
+          "sha256",
+          "document_type"
+        ],
+        "write": true,
+        "example_input": {
+          "profile_id": "CONTRACTOR_UUID",
+          "file_name": "background-check.pdf",
+          "content_type": "application/pdf",
+          "file_size": 123456,
+          "sha256": "LOWERCASE_SHA256_OF_LOCAL_FILE",
+          "document_type": "background_check",
+          "title": "Verified First report"
+        }
+      },
+      "documents.upload_complete": {
+        "scope": "documents:upload",
+        "description": "Verify uploaded bytes and attach the document to its contractor file. Requires the upload_ticket from upload_start and the same saved connection. No approval or checklist changes.",
+        "required": [
+          "upload_ticket"
+        ],
+        "write": true,
+        "example_input": {
+          "upload_ticket": "TICKET_FROM_UPLOAD_START"
+        }
       }
     },
     "scopes": [
@@ -1433,7 +1473,8 @@
       "payments:write",
       "sales:read",
       "communications:write",
-      "ambassadors:write"
+      "ambassadors:write",
+      "documents:upload"
     ],
     "events": [
       "lead.created",

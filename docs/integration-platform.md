@@ -4,9 +4,9 @@ Production MCP endpoint: `https://portal.turnlypros.com/api/turnly-mcp` (statele
 API v2: `https://portal.turnlypros.com/api/integration-v2`.
 Authentication: `Authorization: Bearer YOUR_KEY`. Never put keys in URLs or chat messages.
 
-Create a dedicated connection in `/integrations.html`. Choose restricted permissions or explicitly confirm `platform:full`. Existing keys retain their scopes. Expiration can be 30, 90, 365 days or none; revoke from Integrations. Tokens are hashed at rest. Owners must remain active administrators. No OAuth login, session impersonation token, or Supabase service key is issued to consumers.
+Create a dedicated connection in `/integrations.html`. Choose restricted permissions or explicitly confirm `platform:full`. Existing keys retain their scopes. Expiration can be 30, 90, 365 days or none; revoke from Integrations. Tokens are hashed at rest. Owners must remain active administrators. OAuth access is also supported for ChatGPT; no portal session impersonation token or Supabase service key is issued to consumers.
 
-The private Turnly Business plugin supports API-key credentials in ChatGPT/Codex. Save the key through the host's private credential connection. Codex CLI can alternatively use `codex mcp add turnly --url https://portal.turnlypros.com/api/turnly-mcp --bearer-token-env-var TURNLY_API_KEY`. Configure that environment variable securely on the machine launching Codex. This is a one-time key connection, not repeated portal login. Expiration, revocation, or loss of admin status requires reconnecting with a valid key.
+Codex supports saved API-key credentials. ChatGPT uses the reusable OAuth Turnly Portals connection described in chatgpt-oauth.md. Save the key through the host's private credential connection. Codex CLI can alternatively use `codex mcp add turnly --url https://portal.turnlypros.com/api/turnly-mcp --bearer-token-env-var TURNLY_API_KEY`. Configure that environment variable securely on the machine launching Codex. This is a one-time key connection, not repeated portal login. Expiration, revocation, or loss of admin status requires reconnecting with a valid key.
 
 ## Contract
 
@@ -37,3 +37,7 @@ API history stores connection ID, operation, status, request ID, HTTP result and
 ## Verification
 
 Tests cover scoped MCP discovery, forbidden fields, full-key versus restricted-key permissions, stale writes, atomic idempotency, action reservation/replay, revocation, service-only storage, existing ambassador ownership and CRM consent. Production smoke tests use a short-lived full key for read-only discovery/reads, then revoke it. No payments, messages or hiring decisions are used as smoke tests.
+
+## Contractor documents
+
+Full access now includes `documents:upload`. See [the document upload workflow](contractor-document-api.md) for private direct uploads and verified finalization. Uploading a background check does not approve it or change onboarding status.
