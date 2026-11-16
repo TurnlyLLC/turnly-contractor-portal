@@ -5,6 +5,20 @@ import vm from 'node:vm';
 import {PGlite} from '@electric-sql/pglite';
 import {unitOccupancyBadge} from '../unit-occupancy.mjs';
 
+test('editing occupancy preserves other assignment metadata and supports clearing',()=>{
+ const source=readFileSync(new URL('../admin-suite-20260708g.js',import.meta.url),'utf8');
+ const start=source.indexOf('function assignmentFormMetadata('),end=source.indexOf('function updateAssignmentContractorControls(',start);
+ const control={value:'occupied'};
+ const context={document:{getElementById:()=>control},assignmentMetadata:r=>r.metadata,assignmentState:{properties:[]},assignmentValue:()=>'',assignmentPropertyAccessNotes:()=>''};
+ vm.createContext(context);vm.runInContext(source.slice(start,end),context);
+ const row={metadata:{unit_occupancy:'vacant',property_manager_notes:'Keep notes',admin_approval_status:'approved'}};
+ let result=context.assignmentFormMetadata('one_time',[],row);
+ assert.equal(result.unit_occupancy,'occupied');assert.equal(result.property_manager_notes,'Keep notes');assert.equal(result.admin_approval_status,'approved');assert.equal(row.metadata.unit_occupancy,'vacant');
+ control.value='vacant';assert.equal(context.assignmentFormMetadata('one_time',[],row).unit_occupancy,'vacant');
+ control.value='';assert.equal(context.assignmentFormMetadata('one_time',[],row).unit_occupancy,undefined);
+ context.document.getElementById=()=>null;assert.equal(context.assignmentFormMetadata('one_time',[],row).unit_occupancy,'vacant');
+});
+
 test('badges show only explicitly saved occupancy and tolerate legacy metadata',()=>{
  for(const value of ['occupied','vacant']) assert.match(unitOccupancyBadge({metadata:{unit_occupancy:value}}),new RegExp(value,'i'));
  assert.match(unitOccupancyBadge({metadata:'{"unit_occupancy":"vacant"}'}),/Vacant/);
