@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>Integrations | Turnly Admin</title><link rel="stylesheet" href="admin-navigation.css"><link rel="stylesheet" href="admin-theme.css"><link rel="stylesheet" href="integrations.css"></head>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>Integrations | Turnly Admin</title><link rel="stylesheet" href="admin-navigation.css"><link rel="stylesheet" href="admin-theme.css"><link rel="stylesheet" href="integrations.css?v=20261116-layout2"></head>
 <body data-dashboard-theme="light"><div id="adminNavigation"></div><main>
 <header><div><p class="eyebrow">TURNLY / CONNECTED SYSTEMS</p><h1>Your tools, connected.</h1><p>Give trusted systems permission to work with Turnly without repeated sign-ins.</p></div><button id="refresh">Refresh</button></header>
 <p id="message" role="status" aria-live="polite">Checking admin access…</p>
@@ -27,3 +27,4 @@ Idempotency-Key: your-unique-request-123
 </section></div></main>
 <dialog id="secretDialog" aria-labelledby="secretTitle"><h2 id="secretTitle">Save your secret now</h2><p>This secret is shown only once. Store it in your connected system's private credentials.</p><textarea id="secretValue" readonly aria-label="New secret" rows="3"></textarea><div class="actions"><button id="copySecret">Copy secret</button><button id="closeSecret" class="primary">I've saved it</button></div><p id="copyStatus" role="status"></p></dialog>
 <script src="env.js"></script><script type="module" src="integrations.mjs"></script></body></html>
+
