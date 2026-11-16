@@ -1,3 +1,4 @@
+import { unitOccupancyBadge } from '../unit-occupancy.mjs';
 import {contractorAvatar} from '../admin-contractor-avatar.mjs?v=20261030';
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
@@ -756,6 +757,7 @@ function assignmentCard(row, detailed = false, approval = false, variant = "") {
             <span>${esc(timeText)}</span>
           </div>
           <strong>${esc(assignmentTitle(row))}</strong>
+          ${unitOccupancyBadge(row)}
           <small>${esc(row.property_name || "No property")}${unit ? ` - Unit ${esc(unit)}` : ""}</small>
         </div>
         ${statusBadge(key)}

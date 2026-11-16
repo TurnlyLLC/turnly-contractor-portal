@@ -1,3 +1,4 @@
+import { unitOccupancyBadge } from './unit-occupancy.mjs';
 import { paymentHoldMessage } from "./residential-payment-hold.mjs";
 import { assignmentServiceScope } from "./assignment-service-scope.mjs";
 import {ratingPanel} from './contractor-rating.mjs';
@@ -1020,6 +1021,7 @@ function openJobCard(item, className = "cp-job-row") {
           : `<span>${esc(detail)}</span>`).join("")}
         ${contractorSurface === "pwa" ? `<span>${esc(item.address || "")}</span><strong class="cp-native-job-pay">${esc(money(item.pay_amount))}</strong>` : ""}
       </div>
+      ${unitOccupancyBadge(item)}
       ${propertyManagerNotesHtml(item, true)}
       ${actions ? `<div class="cp-open-job-actions">${actions}</div>` : ""}
     </article>
@@ -1620,7 +1622,8 @@ function filteredMyAssignments() {
 function renderSelectedJobDetail(item) {
   if (!item) return emptyState("Select a job to view details.");
   return `
-    ${propertyManagerNotesHtml(item)}
+    ${unitOccupancyBadge(item)}
+      ${propertyManagerNotesHtml(item)}
     <div class="cp-detail-list">
       <div><span>Property</span><strong>${esc(assignmentTitle(item))}</strong></div>
       <div><span>Address</span><strong>${esc(item.address || "Not set")}</strong></div>

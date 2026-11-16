@@ -1,3 +1,4 @@
+import { unitOccupancyBadge } from './unit-occupancy.mjs';
 import {installAccountSwitcher} from './linked-account-switch.mjs?v=20261109';
 import { propertyManagerNotesHtml } from "./property-manager-notes.mjs?v=20261027-notes";
 import { assignmentServiceScope, assignmentAwaitsApproval } from "./assignment-service-scope.mjs?v=20261026-approval";
@@ -14399,6 +14400,7 @@ function renderAssignmentRow(row) {
           <span class="assignment-short-id">${esc(assignmentShortId(row))}</span>
           <h3>${esc(row.title || "Untitled Assignment")}</h3>
           <div class="assignment-badge-row">
+            ${unitOccupancyBadge(row)}
             ${statusBadge(overdue ? "overdue" : row.status || "open")}
             ${!(row.property_checklist_items?.length || row.checklist_items?.length) ? `<button type="button" class="assignment-checklist-warning" title="No checklist attached. Open this assignment to select one." aria-label="No checklist attached. Open assignment to select a checklist." data-assignment-open="${id}">ⓘ No checklist</button>` : ""}
             <span class="status-badge ${statusClassName(row.priority || "normal")}">${esc(titleCase(row.priority || "Normal"))}</span>
