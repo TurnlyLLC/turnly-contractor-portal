@@ -31,6 +31,9 @@
     }
   ],
   "functions": {
+    "api/owner-voice.js": {
+      "maxDuration": 60
+    },
     "api/admin-map.js": {
       "maxDuration": 60
     },
