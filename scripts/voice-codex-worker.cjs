@@ -9,6 +9,7 @@ function checkChanges(entries){
 }
 function command(bin,args,cwd,opts={}){return new Promise((resolve,reject)=>{
  const env=Object.fromEntries(Object.entries(process.env).filter(([k])=>/^(?:PATH|PATHEXT|SYSTEMROOT|WINDIR|TEMP|TMP|USERPROFILE|APPDATA|LOCALAPPDATA|PROGRAMFILES|PROGRAMFILES\(X86\)|PROGRAMDATA|COMSPEC|HOMEDRIVE|HOMEPATH|NUMBER_OF_PROCESSORS|PROCESSOR_ARCHITECTURE)$/i.test(k)));
+ env.NODE_USE_SYSTEM_CA='1';
  const p=spawn(bin,args,{cwd,env,windowsHide:true,stdio:['pipe','pipe','pipe']});let out='';
  p.stdout.on('data',b=>{out=(out+b).slice(-1000000);});p.stderr.on('data',b=>{out=(out+b).slice(-1000000);});
  const timer=setTimeout(()=>p.kill(),opts.timeout||120000);p.on('error',e=>{clearTimeout(timer);reject(e);});p.on('close',code=>{clearTimeout(timer);code===0?resolve(out):reject(Error('Command failed: '+path.basename(bin)+' (exit '+code+'). '+out.slice(-1200)));});p.stdin.end(opts.input||'');
