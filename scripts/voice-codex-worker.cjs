@@ -2,7 +2,7 @@
 const fs=require('node:fs'),path=require('node:path'),{spawn}=require('node:child_process');
 const REMOTE='https://github.com/TurnlyLLC/turnly-contractor-portal.git';
 const ENDPOINT='https://portal.turnlypros.com/api/coding-worker';
-const protectedPath=p=>/^(?:supabase\/|\.git|\.codex|\.agents|\.env|package(?:-lock)?\.json$|vercel\.json$|scripts\/voice-codex-worker\.cjs$|api\/(?:coding-worker|turnly-mcp|turnly-oauth|integrations|integration-v2|owner-voice)\.js$|lib\/(?:integration-|owner-voice|residential-server|integrations))/i.test(p);
+const protectedPath=p=>/^(?:supabase\/|\.git|\.codex|\.agents|\.env|(?:package(?:-lock)?\.json|pnpm-lock\.yaml|yarn\.lock|AGENTS\.md)$|vercel\.json$|scripts\/voice-codex-worker\.cjs$|api\/(?:coding-worker|turnly-mcp|turnly-oauth|integrations|integration-v2|owner-voice)\.js$|lib\/(?:integration-|owner-voice|residential-server|integrations))/i.test(p);
 function checkChanges(entries){
  if(!entries.length)throw Error('No code changes were produced.');
  for(const [status,file] of entries){if(status==='D'||status.startsWith('R')||protectedPath(file))throw Error('This change touches deletion, authentication, deployment, dependencies, migrations or the control bridge and needs separate review: '+file);}
