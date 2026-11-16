@@ -1,0 +1,1478 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Turnly Business API",
+    "version": "2.0.0",
+    "description": "Live Turnly workspace. Secrets and database administration are not exposed. Full permission applies to the supported catalog only."
+  },
+  "servers": [
+    {
+      "url": "https://portal.turnlypros.com"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  },
+  "paths": {
+    "/api/integration-v2": {
+      "get": {
+        "operationId": "turnly_get",
+        "summary": "Read records or API catalog",
+        "parameters": [
+          {
+            "name": "resource",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "catalog",
+                "leads",
+                "customers",
+                "clients",
+                "properties",
+                "units",
+                "tasks",
+                "quotes",
+                "expenses",
+                "bookings",
+                "assignments",
+                "contractors",
+                "applicants",
+                "documents",
+                "ambassadors",
+                "referrals",
+                "agents",
+                "gift_orders",
+                "payouts",
+                "activities"
+              ]
+            }
+          },
+          {
+            "name": "action",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "bookings.complete",
+                "bookings.cancel",
+                "bookings.approve_job",
+                "bookings.reconcile",
+                "calendar.read",
+                "calendar.save",
+                "applicants.archive",
+                "applicants.restore",
+                "applicants.review",
+                "applicants.hire",
+                "applicants.delete",
+                "gift_cards.search",
+                "gift_cards.service_area",
+                "gift_cards.refund",
+                "contractors.availability",
+                "contractors.detail",
+                "payouts.transfer",
+                "payouts.record_external",
+                "sales.overview",
+                "sales.summary",
+                "sales.send",
+                "ambassadors.dashboard",
+                "ambassadors.toggle",
+                "ambassadors.record_payment"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "filters",
+            "in": "query",
+            "description": "JSON object of documented equality filters",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success; request_id identifies the audit record"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Invalid or expired key"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "Stale version or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          }
+        }
+      },
+      "post": {
+        "operationId": "turnly_post",
+        "summary": "Execute a documented mutation or workflow",
+        "parameters": [
+          {
+            "name": "resource",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "catalog",
+                "leads",
+                "customers",
+                "clients",
+                "properties",
+                "units",
+                "tasks",
+                "quotes",
+                "expenses",
+                "bookings",
+                "assignments",
+                "contractors",
+                "applicants",
+                "documents",
+                "ambassadors",
+                "referrals",
+                "agents",
+                "gift_orders",
+                "payouts",
+                "activities"
+              ]
+            }
+          },
+          {
+            "name": "action",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "bookings.complete",
+                "bookings.cancel",
+                "bookings.approve_job",
+                "bookings.reconcile",
+                "calendar.read",
+                "calendar.save",
+                "applicants.archive",
+                "applicants.restore",
+                "applicants.review",
+                "applicants.hire",
+                "applicants.delete",
+                "gift_cards.search",
+                "gift_cards.service_area",
+                "gift_cards.refund",
+                "contractors.availability",
+                "contractors.detail",
+                "payouts.transfer",
+                "payouts.record_external",
+                "sales.overview",
+                "sales.summary",
+                "sales.send",
+                "ambassadors.dashboard",
+                "ambassadors.toggle",
+                "ambassadors.record_payment"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "filters",
+            "in": "query",
+            "description": "JSON object of documented equality filters",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 100
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "type": "object"
+                  },
+                  "input": {
+                    "type": "object"
+                  },
+                  "id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "expected_updated_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success; request_id identifies the audit record"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Invalid or expired key"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "Stale version or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          }
+        }
+      },
+      "patch": {
+        "operationId": "turnly_patch",
+        "summary": "Execute a documented mutation or workflow",
+        "parameters": [
+          {
+            "name": "resource",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "catalog",
+                "leads",
+                "customers",
+                "clients",
+                "properties",
+                "units",
+                "tasks",
+                "quotes",
+                "expenses",
+                "bookings",
+                "assignments",
+                "contractors",
+                "applicants",
+                "documents",
+                "ambassadors",
+                "referrals",
+                "agents",
+                "gift_orders",
+                "payouts",
+                "activities"
+              ]
+            }
+          },
+          {
+            "name": "action",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "bookings.complete",
+                "bookings.cancel",
+                "bookings.approve_job",
+                "bookings.reconcile",
+                "calendar.read",
+                "calendar.save",
+                "applicants.archive",
+                "applicants.restore",
+                "applicants.review",
+                "applicants.hire",
+                "applicants.delete",
+                "gift_cards.search",
+                "gift_cards.service_area",
+                "gift_cards.refund",
+                "contractors.availability",
+                "contractors.detail",
+                "payouts.transfer",
+                "payouts.record_external",
+                "sales.overview",
+                "sales.summary",
+                "sales.send",
+                "ambassadors.dashboard",
+                "ambassadors.toggle",
+                "ambassadors.record_payment"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "filters",
+            "in": "query",
+            "description": "JSON object of documented equality filters",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 100
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "type": "object"
+                  },
+                  "input": {
+                    "type": "object"
+                  },
+                  "id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "expected_updated_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success; request_id identifies the audit record"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Invalid or expired key"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "Stale version or idempotency conflict"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          }
+        }
+      }
+    }
+  },
+  "x-turnly-catalog": {
+    "version": "2026-11-16",
+    "workspace": "turnly",
+    "resources": {
+      "leads": {
+        "id_field": "id",
+        "fields": [
+          "id",
+          "name",
+          "company_name",
+          "contact_name",
+          "contact_email",
+          "contact_phone",
+          "address",
+          "sales_city",
+          "sales_state",
+          "sales_website",
+          "pipeline_stage",
+          "sales_owner_id",
+          "sales_owner_name",
+          "lead_notes",
+          "next_step",
+          "next_step_due_at",
+          "do_not_contact",
+          "follow_up_due_at",
+          "business_segment",
+          "prospect_type",
+          "created_at",
+          "updated_at"
+        ],
+        "writable_fields": [
+          "name",
+          "company_name",
+          "contact_name",
+          "contact_email",
+          "contact_phone",
+          "address",
+          "sales_city",
+          "sales_state",
+          "sales_website",
+          "pipeline_stage",
+          "sales_owner_id",
+          "sales_owner_name",
+          "lead_notes",
+          "next_step",
+          "next_step_due_at",
+          "do_not_contact",
+          "follow_up_due_at"
+        ],
+        "required_on_create": [
+          "name"
+        ],
+        "methods": [
+          "GET",
+          "PATCH"
+        ],
+        "filter_fields": [
+          "sales_city",
+          "pipeline_stage"
+        ]
+      },
+      "customers": {
+        "id_field": "id",
+        "fields": [
+          "id",
+          "name",
+          "email",
+          "phone",
+          "agent_id",
+          "first_booking_id",
+          "created_at"
+        ],
+        "writable_fields": [
+          "name",
+          "email",
+          "phone"
+        ],
+        "required_on_create": [
+          "name"
+        ],
+        "methods": [
+          "GET",
+          "PATCH"
+        ],
+        "filter_fields": []
+      },
+      "clients": {
+        "id_field": "id",
+        "fields": [
+          "id",
+          "name",
+          "company_name",
+          "primary_contact_name",
+          "primary_contact_email",
+          "primary_contact_phone",
+          "billing_email",
+          "billing_address",
+          "notes",
+          "status",
+          "region",
+          "market",
+          "tags",
+          "created_at",
+          "updated_at"
+        ],
+        "writable_fields": [
+          "name",
+          "company_name",
+          "primary_contact_name",
+          "primary_contact_email",
+          "primary_contact_phone",
+          "billing_email",
+          "billing_address",
+          "notes",
+          "status",
+          "region",
+          "market",
+          "tags"
+        ],
+        "required_on_create": [
+          "company_name"
+        ],
+        "methods": [
+          "GET",
+          "PATCH",
+          "POST"
+        ],
+        "filter_fields": [
+          "status"
+        ]
+      },
+      "properties": {
+        "id_field": "id",
+        "fields": [
+          "id",
+          "client_id",
+          "property_name",
+          "address",
+          "city",
+          "state",
+          "zip",
+          "access_notes",
+          "supply_notes",
+          "service_notes",
+          "is_active",
+          "created_at",
+          "updated_at"
+        ],
+        "writable_fields": [
+          "client_id",
+          "property_name",
+          "address",
+          "city",
+          "state",
+          "zip",
+          "access_notes",
+          "supply_notes",
+          "service_notes",
+          "is_active"
+        ],
+        "required_on_create": [
+          "property_name"
+        ],
+        "methods": [
+          "GET",
+          "PATCH",
+          "POST"
+        ],
+        "filter_fields": [
+          "city"
+        ]
+      },
+      "units": {
+        "id_field": "id",
+        "fields": [
+          "id",
+          "property_id",
+          "unit_name",
+          "square_feet",
+          "customer_price",
+          "contractor_pay",
+          "status",
+          "notes",
+          "bedroom_count",
+          "bathroom_count",
+          "created_at",
+          "updated_at"
+        ],
+        "writable_fields": [
+          "property_id",
+          "unit_name",
+          "square_feet",
+          "customer_price",
+          "contractor_pay",
+          "status",
+          "notes",
+          "bedroom_count",
+          "bathroom_count"
+        ],
+        "required_on_create": [
+          "property_id",
+          "unit_name"
+        ],
+        "methods": [
+          "GET",
+          "PATCH",
+          "POST"
+        ],
+        "filter_fields": [
+          "property_id",
+          "status"
+        ]
+      },
+      "tasks": {
+        "id_field": "id",
+        "fields": [
+          "id",
+          "lead_id",
+          "task_type",
+          "task_priority",
+          "task_status",
+          "task_due_at",
+          "next_step",
+          "created_at",
+          "updated_at"
+        ],
+        "writable_fields": [
+          "lead_id",
+          "task_type",
+          "task_priority",
+          "task_status",
+          "task_due_at",
+          "next_step"
+        ],
+        "required_on_create": [
+          "lead_id",
+          "next_step"
+        ],
+        "methods": [
+          "GET",
+          "PATCH",
+          "POST"
+        ],
+        "filter_fields": [
+          "lead_id"
+        ]
+      },
+      "quotes": {
+        "id_field": "id",
+        "fields": [
+          "id",
+          "lead_id",
+          "quote_amount",
+          "quote_status",
+          "quote_sent_at",
+          "quote_expires_at",
+          "quote_notes",
+          "created_at",
+          "updated_at"
+        ],
+        "writable_fields": [
+          "lead_id",
+          "quote_amount",
+          "quote_status",
+          "quote_expires_at",
+          "quote_notes"
+        ],
+        "required_on_create": [
+          "lead_id",
+          "quote_amount"
+        ],
+        "methods": [
+          "GET",
+          "PATCH",
+          "POST"
+        ],
+        "filter_fields": [
+          "lead_id"
+        ]
+      },
+      "expenses": {
+        "id_field": "id",
+        "fields": [
+          "id",
+          "vendor_name",
+          "category",
+          "description",
+          "amount",
+          "due_day",
+          "due_date",
+          "recurrence",
+          "status",
+          "payment_method",
+          "notes",
+          "paid_at",
+          "created_at",
+          "updated_at"
+        ],
+        "writable_fields": [
+          "vendor_name",
+          "category",
+          "description",
+          "amount",
+          "due_day",
+          "due_date",
+          "recurrence",
+          "status",
+          "payment_method",
+          "notes"
+        ],
+        "required_on_create": [
+          "vendor_name",
+          "amount"
+        ],
+        "methods": [
+          "GET",
+          "PATCH",
+          "POST"
+        ],
+        "filter_fields": [
+          "status"
+        ]
+      },
+      "bookings": {
+        "id_field": "id",
+        "fields": [
+          "id",
+          "customer_id",
+          "agent_id",
+          "name",
+          "email",
+          "phone",
+          "property_address",
+          "city",
+          "state",
+          "zip",
+          "service",
+          "frequency",
+          "amount_cents",
+          "service_date",
+          "arrival_start",
+          "arrival_end",
+          "status",
+          "payment_status",
+          "notes",
+          "visit_details",
+          "completed_at",
+          "created_at"
+        ],
+        "writable_fields": [],
+        "required_on_create": [],
+        "methods": [
+          "GET"
+        ],
+        "filter_fields": [
+          "city",
+          "status"
+        ]
+      },
+      "assignments": {
+        "id_field": "id",
+        "fields": [
+          "id",
+          "title",
+          "property_name",
+          "address",
+          "service_type",
+          "scope",
+          "pay_amount",
+          "start_window",
+          "end_window",
+          "status",
+          "claimed_by",
+          "assigned_to",
+          "completed_at",
+          "completion_notes",
+          "property_id",
+          "unit_id",
+          "payment_status",
+          "paid_at",
+          "created_at",
+          "updated_at"
+        ],
+        "writable_fields": [],
+        "required_on_create": [],
+        "methods": [
+          "GET"
+        ],
+        "filter_fields": [
+          "status",
+          "property_id"
+        ]
+      },
+      "contractors": {
+        "id_field": "id",
+        "fields": [
+          "id",
+          "full_name",
+          "email",
+          "phone",
+          "status",
+          "region",
+          "market",
+          "contractor_approved",
+          "background_check_status",
+          "avatar_url",
+          "created_at",
+          "updated_at"
+        ],
+        "writable_fields": [
+          "full_name",
+          "phone",
+          "region",
+          "market"
+        ],
+        "required_on_create": [
+          "full_name"
+        ],
+        "methods": [
+          "GET",
+          "PATCH"
+        ],
+        "filter_fields": [
+          "status"
+        ]
+      },
+      "applicants": {
+        "id_field": "id",
+        "fields": [
+          "id",
+          "role",
+          "name",
+          "email",
+          "phone",
+          "city",
+          "state",
+          "service_city",
+          "status",
+          "review_note",
+          "version",
+          "hired_user_id",
+          "hired_at",
+          "archived_at",
+          "created_at",
+          "updated_at"
+        ],
+        "writable_fields": [],
+        "required_on_create": [],
+        "methods": [
+          "GET"
+        ],
+        "filter_fields": [
+          "role",
+          "city",
+          "service_city",
+          "status"
+        ]
+      },
+      "documents": {
+        "id_field": "id",
+        "fields": [
+          "id",
+          "profile_id",
+          "contractor_name",
+          "document_type",
+          "title",
+          "status",
+          "expiration_date",
+          "file_name",
+          "review_notes",
+          "reviewed_at",
+          "created_at",
+          "updated_at"
+        ],
+        "writable_fields": [],
+        "required_on_create": [],
+        "methods": [
+          "GET"
+        ],
+        "filter_fields": [
+          "status"
+        ]
+      },
+      "ambassadors": {
+        "id_field": "user_id",
+        "fields": [
+          "user_id",
+          "name",
+          "email",
+          "code",
+          "enabled",
+          "onboarding_completed_at",
+          "created_at"
+        ],
+        "writable_fields": [],
+        "required_on_create": [],
+        "methods": [
+          "GET"
+        ],
+        "filter_fields": []
+      },
+      "referrals": {
+        "id_field": "id",
+        "fields": [
+          "id",
+          "member_id",
+          "name",
+          "email",
+          "phone",
+          "customer_id",
+          "first_booking_id",
+          "stage",
+          "booked_at",
+          "completed_at",
+          "created_at"
+        ],
+        "writable_fields": [],
+        "required_on_create": [],
+        "methods": [
+          "GET"
+        ],
+        "filter_fields": [
+          "member_id"
+        ]
+      },
+      "agents": {
+        "id_field": "id",
+        "fields": [
+          "id",
+          "name",
+          "brokerage",
+          "email",
+          "phone",
+          "city",
+          "state",
+          "website",
+          "status",
+          "notes",
+          "follow_up_on",
+          "referral_code",
+          "created_at",
+          "updated_at"
+        ],
+        "writable_fields": [
+          "name",
+          "brokerage",
+          "email",
+          "phone",
+          "city",
+          "state",
+          "website",
+          "notes",
+          "follow_up_on"
+        ],
+        "required_on_create": [
+          "name"
+        ],
+        "methods": [
+          "GET",
+          "PATCH"
+        ],
+        "filter_fields": [
+          "city",
+          "status"
+        ]
+      },
+      "gift_orders": {
+        "id_field": "id",
+        "fields": [
+          "id",
+          "name",
+          "email",
+          "quantity",
+          "amount_cents",
+          "status",
+          "email_status",
+          "paid_at",
+          "service_zone",
+          "refunded_cents",
+          "created_at"
+        ],
+        "writable_fields": [],
+        "required_on_create": [],
+        "methods": [
+          "GET"
+        ],
+        "filter_fields": [
+          "status"
+        ]
+      },
+      "payouts": {
+        "id_field": "id",
+        "fields": [
+          "id",
+          "assignment_id",
+          "contractor_id",
+          "method",
+          "amount_cents",
+          "status",
+          "reference",
+          "created_at",
+          "completed_at"
+        ],
+        "writable_fields": [],
+        "required_on_create": [],
+        "methods": [
+          "GET"
+        ],
+        "filter_fields": [
+          "contractor_id",
+          "status"
+        ]
+      },
+      "activities": {
+        "id_field": "id",
+        "fields": [
+          "id",
+          "lead_id",
+          "user_id",
+          "user_name",
+          "activity_type",
+          "activity_text",
+          "created_at"
+        ],
+        "writable_fields": [],
+        "required_on_create": [],
+        "methods": [
+          "GET"
+        ],
+        "filter_fields": [
+          "lead_id"
+        ]
+      }
+    },
+    "actions": {
+      "bookings.complete": {
+        "scope": "bookings:write",
+        "description": "Complete a booking and synchronize its assignment.",
+        "required": [
+          "id"
+        ],
+        "write": true,
+        "example_input": {
+          "id": "VALUE"
+        }
+      },
+      "bookings.cancel": {
+        "scope": "bookings:write",
+        "description": "Cancel through the existing booking workflow.",
+        "required": [
+          "id"
+        ],
+        "write": true,
+        "example_input": {
+          "id": "VALUE"
+        }
+      },
+      "bookings.approve_job": {
+        "scope": "assignments:write",
+        "description": "Release a booking to contractors after its checklist review.",
+        "required": [
+          "id"
+        ],
+        "write": true,
+        "example_input": {
+          "id": "UUID",
+          "checklist_reviewed": true
+        }
+      },
+      "bookings.reconcile": {
+        "scope": "bookings:write",
+        "description": "Reconcile payment and assignment state.",
+        "required": [
+          "id"
+        ],
+        "write": true,
+        "example_input": {
+          "id": "VALUE"
+        }
+      },
+      "calendar.read": {
+        "scope": "calendar:read",
+        "description": "Read booking calendar configuration.",
+        "required": [],
+        "write": false,
+        "example_input": {}
+      },
+      "calendar.save": {
+        "scope": "calendar:write",
+        "description": "Save booking calendar configuration.",
+        "required": [],
+        "write": true,
+        "example_input": {
+          "version": 1,
+          "settings": "Use settings returned by calendar.read"
+        }
+      },
+      "applicants.archive": {
+        "scope": "applicants:write",
+        "description": "Run applicant archive using the same workflow as the admin portal.",
+        "required": [
+          "id"
+        ],
+        "write": true,
+        "example_input": {
+          "id": "UUID",
+          "version": 1
+        }
+      },
+      "applicants.restore": {
+        "scope": "applicants:write",
+        "description": "Run applicant restore using the same workflow as the admin portal.",
+        "required": [
+          "id"
+        ],
+        "write": true,
+        "example_input": {
+          "id": "UUID",
+          "version": 1
+        }
+      },
+      "applicants.review": {
+        "scope": "applicants:write",
+        "description": "Run applicant review using the same workflow as the admin portal.",
+        "required": [
+          "id"
+        ],
+        "write": true,
+        "example_input": {
+          "id": "UUID",
+          "version": 1,
+          "status": "shortlisted",
+          "note": "Review note"
+        }
+      },
+      "applicants.hire": {
+        "scope": "applicants:write",
+        "description": "Run applicant hire using the same workflow as the admin portal.",
+        "required": [
+          "id"
+        ],
+        "write": true,
+        "example_input": {
+          "id": "VALUE"
+        }
+      },
+      "applicants.delete": {
+        "scope": "applicants:write",
+        "description": "Run applicant delete using the same workflow as the admin portal.",
+        "required": [
+          "id"
+        ],
+        "write": true,
+        "example_input": {
+          "id": "VALUE"
+        }
+      },
+      "gift_cards.search": {
+        "scope": "gift_orders:read",
+        "description": "Search gift orders or cards.",
+        "required": [],
+        "write": false,
+        "example_input": {}
+      },
+      "gift_cards.service_area": {
+        "scope": "gift_orders:write",
+        "description": "Assign a purchased gift order to a service area.",
+        "required": [
+          "id",
+          "expected_zone"
+        ],
+        "write": true,
+        "example_input": {
+          "id": "VALUE",
+          "expected_zone": null
+        }
+      },
+      "gift_cards.refund": {
+        "scope": "payments:write",
+        "description": "Refund an eligible gift card through Stripe.",
+        "required": [
+          "id",
+          "reason"
+        ],
+        "write": true,
+        "example_input": {
+          "id": "VALUE",
+          "reason": "VALUE"
+        }
+      },
+      "contractors.availability": {
+        "scope": "contractors:write",
+        "description": "Update a contractor availability schedule.",
+        "required": [
+          "id",
+          "status",
+          "days"
+        ],
+        "write": true,
+        "example_input": {
+          "id": "UUID",
+          "status": "available",
+          "days": {
+            "monday": true,
+            "tuesday": true,
+            "wednesday": true,
+            "thursday": true,
+            "friday": true,
+            "saturday": false,
+            "sunday": false
+          },
+          "start": "09:00",
+          "end": "17:00",
+          "notes": ""
+        }
+      },
+      "contractors.detail": {
+        "scope": "contractors:read",
+        "description": "Read contractor jobs, earnings, availability, and feedback.",
+        "required": [
+          "id"
+        ],
+        "write": false,
+        "example_input": {
+          "id": "VALUE"
+        }
+      },
+      "payouts.transfer": {
+        "scope": "payments:write",
+        "description": "Transfer an eligible contractor payout through Stripe.",
+        "required": [
+          "id",
+          "assignment",
+          "expected_amount"
+        ],
+        "write": true,
+        "example_input": {
+          "id": "VALUE",
+          "assignment": "VALUE",
+          "expected_amount": 1000
+        }
+      },
+      "payouts.record_external": {
+        "scope": "payments:write",
+        "description": "Record a contractor payout paid outside Stripe.",
+        "required": [
+          "id",
+          "assignment",
+          "expected_amount",
+          "reference"
+        ],
+        "write": true,
+        "example_input": {
+          "id": "VALUE",
+          "assignment": "VALUE",
+          "expected_amount": 1000,
+          "reference": "VALUE"
+        }
+      },
+      "sales.overview": {
+        "scope": "sales:read",
+        "description": "Daily and weekly team activity, hours, sales, contacts and hourly pay.",
+        "required": [],
+        "write": false,
+        "example_input": {
+          "date": "2026-11-16"
+        }
+      },
+      "sales.summary": {
+        "scope": "sales:read",
+        "description": "Sales, commissions, links, and outstanding notifications.",
+        "required": [],
+        "write": false,
+        "example_input": {}
+      },
+      "sales.send": {
+        "scope": "communications:write",
+        "description": "Send a sales email or SMS using the existing CRM workflow.",
+        "required": [],
+        "write": true,
+        "example_input": {
+          "lead_id": "UUID",
+          "channel": "email",
+          "request_id": "UUID",
+          "consent": true
+        }
+      },
+      "ambassadors.dashboard": {
+        "scope": "ambassadors:read",
+        "description": "Ambassador referrals, readiness, sharing assets, and earnings.",
+        "required": [],
+        "write": false,
+        "example_input": {
+          "member_id": "OPTIONAL_UUID"
+        }
+      },
+      "ambassadors.toggle": {
+        "scope": "ambassadors:write",
+        "description": "Enable or disable ambassador portal access.",
+        "required": [
+          "member_id",
+          "enabled"
+        ],
+        "write": true,
+        "example_input": {
+          "member_id": "UUID",
+          "enabled": true
+        }
+      },
+      "ambassadors.record_payment": {
+        "scope": "payments:write",
+        "description": "Record a paid ambassador earning.",
+        "required": [
+          "id",
+          "reference"
+        ],
+        "write": true,
+        "example_input": {
+          "id": "EARNING_UUID",
+          "reference": "Payment reference"
+        }
+      }
+    },
+    "scopes": [
+      "platform:full",
+      "leads:create",
+      "leads:read",
+      "leads:write",
+      "customers:read",
+      "customers:write",
+      "clients:read",
+      "clients:write",
+      "properties:read",
+      "properties:write",
+      "units:read",
+      "units:write",
+      "tasks:read",
+      "tasks:write",
+      "quotes:read",
+      "quotes:write",
+      "expenses:read",
+      "expenses:write",
+      "bookings:read",
+      "assignments:read",
+      "contractors:read",
+      "contractors:write",
+      "applicants:read",
+      "documents:read",
+      "ambassadors:read",
+      "referrals:read",
+      "agents:read",
+      "agents:write",
+      "gift_orders:read",
+      "payouts:read",
+      "activities:read",
+      "bookings:write",
+      "assignments:write",
+      "calendar:read",
+      "calendar:write",
+      "applicants:write",
+      "gift_orders:write",
+      "payments:write",
+      "sales:read",
+      "communications:write",
+      "ambassadors:write"
+    ],
+    "events": [
+      "lead.created",
+      "lead.updated",
+      "customers.created",
+      "customers.updated",
+      "clients.created",
+      "clients.updated",
+      "properties.created",
+      "properties.updated",
+      "units.created",
+      "units.updated",
+      "tasks.created",
+      "tasks.updated",
+      "quotes.created",
+      "quotes.updated",
+      "expenses.created",
+      "expenses.updated",
+      "booking.created",
+      "booking.updated",
+      "assignments.created",
+      "assignments.updated",
+      "contractors.created",
+      "contractors.updated",
+      "applicants.created",
+      "applicants.updated",
+      "documents.created",
+      "documents.updated",
+      "ambassadors.created",
+      "ambassadors.updated",
+      "referrals.created",
+      "referrals.updated",
+      "agents.created",
+      "agents.updated",
+      "gift_orders.created",
+      "gift_orders.updated",
+      "payouts.created",
+      "payouts.updated",
+      "activities.created",
+      "activities.updated"
+    ]
+  }
+}

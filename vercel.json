@@ -87,6 +87,12 @@
     },
     "api/integration-deliver.js": {
       "maxDuration": 300
+    },
+    "api/turnly-mcp.js": {
+      "maxDuration": 300
+    },
+    "api/integration-v2.js": {
+      "maxDuration": 300
     }
   },
   "routes": [
