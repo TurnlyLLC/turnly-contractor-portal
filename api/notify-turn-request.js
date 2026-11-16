@@ -212,6 +212,7 @@ function truncate(value, maxLength) {
 
 function formatMoveIn(row = {}, fallback = {}) {
   const metadata = readMetadata(row);
+  if (metadata.unit_occupancy === "occupied") return "Not applicable (occupied unit)";
   const dateValue = metadata.move_in_date || fallback.move_in_date || row.start_window || "";
   const timeValue = metadata.move_in_time || fallback.move_in_time || "";
   if (!dateValue) return timeValue || "date pending";

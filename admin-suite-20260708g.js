@@ -1,3 +1,4 @@
+import { unitOccupancy, unitOccupancyBadge } from './unit-occupancy.mjs';
 import {installAccountSwitcher} from './linked-account-switch.mjs?v=20261109';
 import { propertyManagerNotesHtml } from "./property-manager-notes.mjs?v=20261027-notes";
 import { assignmentServiceScope, assignmentAwaitsApproval } from "./assignment-service-scope.mjs?v=20261026-approval";
@@ -12704,6 +12705,7 @@ function assignmentForm() {
       ${assignmentFormSection("Timing & Routing", [
         leadSelectField("assignment_frequency", "Block Type", assignmentFrequencyOptions, { required: true }),
         leadSelectField("priority", "Priority", assignmentPriorityOptions, { required: true }),
+        `<label class="suite-field"><span>Unit occupancy</span><select id="assignment_unit_occupancy"><option value="">Not specified</option><option value="occupied">Occupied</option><option value="vacant">Vacant</option></select></label>`,
         assignmentAssignedContractorField(),
         assignmentWeekdayPickerField(),
         leadInputField("start_window", "Start Window", "datetime-local", { required: true }),
@@ -13461,6 +13463,7 @@ function populateAssignmentFormForEdit(row) {
   setValue("assignment_status", assignmentStatusFormValue(row.status));
   setValue("assignment_frequency", frequency || "one_time");
   setValue("priority", row.priority || "normal");
+  setValue("assignment_unit_occupancy", unitOccupancy(row));
   setAssignmentWeekdays(Array.isArray(metadata.recurrence_weekdays) ? metadata.recurrence_weekdays : []);
   setValue("start_window", toDatetimeInput(row.start_window));
   setValue("end_window", toDatetimeInput(row.end_window));
@@ -14399,6 +14402,7 @@ function renderAssignmentRow(row) {
           <span class="assignment-short-id">${esc(assignmentShortId(row))}</span>
           <h3>${esc(row.title || "Untitled Assignment")}</h3>
           <div class="assignment-badge-row">
+            ${unitOccupancyBadge(row)}
             ${statusBadge(overdue ? "overdue" : row.status || "open")}
             ${!(row.property_checklist_items?.length || row.checklist_items?.length) ? `<button type="button" class="assignment-checklist-warning" title="No checklist attached. Open this assignment to select one." aria-label="No checklist attached. Open assignment to select a checklist." data-assignment-open="${id}">ⓘ No checklist</button>` : ""}
             <span class="status-badge ${statusClassName(row.priority || "normal")}">${esc(titleCase(row.priority || "Normal"))}</span>
@@ -15591,6 +15595,11 @@ function assignmentFormMetadata(frequency, weekdays, currentRow = null, extraMet
     ...(currentRow ? assignmentMetadata(currentRow) : {}),
     ...(extraMetadata && typeof extraMetadata === "object" && !Array.isArray(extraMetadata) ? extraMetadata : {})
   };
+  const occupancyControl = document.getElementById("assignment_unit_occupancy");
+  if (occupancyControl) {
+    if (["occupied", "vacant"].includes(occupancyControl.value)) metadata.unit_occupancy = occupancyControl.value;
+    else delete metadata.unit_occupancy;
+  }
   const selectedProperty = assignmentState.properties.find((item) => item.id === assignmentValue("property_id") || item.id === assignmentValue("propertySelect"));
   if (!currentRow && Number(assignmentValue('clean_customer_price')) > 0) metadata.customer_price = Number(assignmentValue('clean_customer_price'));
   const accessNotes = assignmentValue("special_instructions") || assignmentPropertyAccessNotes(selectedProperty);

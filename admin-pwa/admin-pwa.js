@@ -1,3 +1,4 @@
+import { unitOccupancy, unitOccupancyBadge } from '../unit-occupancy.mjs';
 import {contractorAvatar} from '../admin-contractor-avatar.mjs?v=20261030';
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
@@ -756,6 +757,7 @@ function assignmentCard(row, detailed = false, approval = false, variant = "") {
             <span>${esc(timeText)}</span>
           </div>
           <strong>${esc(assignmentTitle(row))}</strong>
+          ${unitOccupancyBadge(row)}
           <small>${esc(row.property_name || "No property")}${unit ? ` - Unit ${esc(unit)}` : ""}</small>
         </div>
         ${statusBadge(key)}
@@ -991,6 +993,11 @@ function renderAssignmentModal() {
               ${field("unit_number", "Unit Number", unitNumber(current), "text")}
               ${selectField("status", "Status", statusOptions, current.status || "open")}
               ${selectField("priority", "Priority", priorityOptions, current.priority || "normal")}
+              <label class="ap-form-field"><span>Unit occupancy</span><select name="unit_occupancy">
+                <option value="" ${!unitOccupancy(current) ? "selected" : ""}>Not specified</option>
+                <option value="occupied" ${unitOccupancy(current) === "occupied" ? "selected" : ""}>Occupied</option>
+                <option value="vacant" ${unitOccupancy(current) === "vacant" ? "selected" : ""}>Vacant</option>
+              </select></label>
               ${field("start_window", "Start", toDatetimeInput(current.start_window), "datetime-local", true)}
               ${field("end_window", "End", toDatetimeInput(current.end_window), "datetime-local", true)}
               ${field("pay_amount", "Contractor Pay", current.pay_amount ?? "", "number")}
@@ -1327,6 +1334,9 @@ async function saveAssignment(form) {
     unit_number: unit || undefined,
     admin_pwa_updated_at: new Date().toISOString()
   };
+  const occupancy = String(formData.get("unit_occupancy") || "");
+  if (["occupied", "vacant"].includes(occupancy)) metadata.unit_occupancy = occupancy;
+  else delete metadata.unit_occupancy;
   const payload = {
     title: String(formData.get("title") || "").trim() || (unit ? `Unit Cleaning - Unit ${unit}` : "Unit Cleaning"),
     property_name: property ? propertyTitle(property) : current.property_name || "",

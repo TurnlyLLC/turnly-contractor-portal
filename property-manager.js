@@ -1,3 +1,4 @@
+import { unitOccupancyBadge } from './unit-occupancy.mjs';
 import { propertyManagerNotesHtml } from './property-manager-notes.mjs';
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 import {
@@ -70,6 +71,7 @@ const state = {
   requestDraft: {
     unit: "",
     unit_id: "",
+    unit_occupancy: "",
     service_date: "",
     move_in_date: "",
     urgent_notice: "",
@@ -547,6 +549,7 @@ function blankTurnRequestDraft() {
   return {
     unit: "",
     unit_id: "",
+    unit_occupancy: "",
     service_date: "",
     move_in_date: "",
     urgent_notice: "",
@@ -565,6 +568,7 @@ function captureTurnRequestDraft(form = document.getElementById("managerTurnRequ
   state.requestDraft = {
     unit: form.elements.unit?.value || "",
     unit_id: form.elements.unit_id?.value || "",
+    unit_occupancy: form.elements.unit_occupancy?.value || "",
     service_date: form.elements.service_date?.value || "",
     move_in_date: form.elements.move_in_date?.value || "",
     urgent_notice: form.elements.urgent_notice?.value || "",
@@ -2589,6 +2593,7 @@ function renderAssignmentDetailsCard(row, emptyTitle = "No request selected") {
           </div>
         `).join("")}
       </div>
+      ${unitOccupancyBadge(row)}
       ${propertyManagerNotesHtml(row)}
       <h3>Requested Services</h3>
       <div class="pm-chip-row">${compact([row.service_type, meta.checklist_name]).slice(0, 5).map((item) => `<span>${esc(item)}</span>`).join("") || "<span>Standard turn</span>"}</div>
@@ -2932,11 +2937,12 @@ function renderRequestForm() {
           <div class="pm-turn-request-success-icon">${pmIcon("check")}</div>
           <p class="pm-eyebrow">Request Submitted</p>
           <h2 id="pmTurnRequestThanksTitle">Thank you for choosing Turnly.</h2>
-          <p>We received your requested cleaning date and resident move-in details. We will reach out if we have any questions.</p>
+          <p>We received your cleaning request. We will reach out if we have any questions.</p>
           <dl>
             <div><dt>Unit</dt><dd>${esc(state.requestConfirmation.unit || "Not listed")}</dd></div>
             <div><dt>Requested cleaning date</dt><dd>${esc(formatMoveInDate(state.requestConfirmation.serviceDateValue))}</dd></div>
-            <div><dt>Move-In Date</dt><dd>${esc(formatMoveInDate(state.requestConfirmation.moveInDateValue))}</dd></div>
+            ${state.requestConfirmation.moveInDateValue ? `<div><dt>Move-In Date</dt><dd>${esc(formatMoveInDate(state.requestConfirmation.moveInDateValue))}</dd></div>` : ""}
+            <div><dt>Clean type</dt><dd>${state.requestConfirmation.unitOccupancy === "occupied" ? "Occupied" : "Vacant"}</dd></div>
             <div><dt>Property</dt><dd>${esc(propertyTitle())}</dd></div>
           </dl>
           ${state.requestConfirmation.messageWarning ? `<p role="status">${esc(state.requestConfirmation.messageWarning)}</p>` : ""}
@@ -2954,7 +2960,7 @@ function renderRequestForm() {
         <div class="pm-turn-request-header">
           <div>
             <p class="pm-eyebrow">New Turn Request</p>
-            <h2 id="pmTurnRequestTitle">Tell us about the move-in.</h2>
+            <h2 id="pmTurnRequestTitle">Tell us about the clean.</h2>
             <p>${esc(propertyTitle())} turns are sent directly to Turnly operations.</p>
           </div>
           <button class="pm-modal-close" type="button" aria-label="Close turn request form" data-manager-request-close>${pmIcon("x")}</button>
@@ -2966,12 +2972,19 @@ function renderRequestForm() {
           </div>
           <div class="pm-turn-question is-active" data-manager-turn-step="unit">
             <span class="pm-question-copy">
-              <strong>What unit needs to be turned?</strong>
+              <strong>What unit needs cleaning?</strong>
               <small>Search and choose from the units currently attached to this property.</small>
             </span>
             ${unitPicker}
           </div>
-          <div class="pm-turn-question" data-manager-turn-step="date"><label class="pm-date-field">
+          <fieldset class="pm-turn-question" data-manager-turn-step="occupancy">
+            <legend class="pm-question-copy"><strong>Is this an occupied or vacant unit clean?</strong></legend>
+            <div class="pm-choice-row">
+              <label><input type="radio" name="unit_occupancy" value="occupied" ${draft.unit_occupancy === "occupied" ? "checked" : ""} /><span>Occupied</span></label>
+              <label><input type="radio" name="unit_occupancy" value="vacant" ${draft.unit_occupancy === "vacant" ? "checked" : ""} /><span>Vacant</span></label>
+            </div>
+          </fieldset>
+          <div class="pm-turn-question" data-manager-turn-step="date"><label class="pm-date-field" data-manager-move-in-field>
             <span class="pm-question-copy">
               <strong>When does the resident move in?</strong>
               <small>Choose the scheduled move-in date.</small>
@@ -2982,7 +2995,7 @@ function renderRequestForm() {
           </div>
           <fieldset class="pm-turn-question pm-urgent-question is-hidden" data-manager-turn-step="urgent" data-manager-urgent-question>
             <span class="pm-question-copy">
-              <strong>The scheduled resident move-in is less than ${esc(URGENT_TURN_NOTICE_HOURS)} hours away. Is this an urgent request?</strong>
+              <strong>The requested timing is less than ${esc(URGENT_TURN_NOTICE_HOURS)} hours away. Is this an urgent request?</strong>
               <small>Urgent requests are flagged for Turnly operations.</small>
             </span>
             <div class="pm-choice-row">
@@ -3289,15 +3302,18 @@ async function createTurnRequest(form) {
   const unitRecord = selectedTurnRequestUnit(form);
   const unit = unitName(unitRecord) || form.elements.unit?.value?.trim() || "";
   const service = TURN_REQUEST_SERVICE;
-  const moveInDateValue = form.elements.move_in_date?.value || "";
+  const unitOccupancy = form.elements.unit_occupancy?.value || "";
+  if (!["occupied", "vacant"].includes(unitOccupancy)) { setManagerMessageStatus("Choose Occupied or Vacant.", true); return; }
+  const occupied = unitOccupancy === "occupied";
+  const moveInDateValue = occupied ? "" : (form.elements.move_in_date?.value || "");
   const moveInDate = scheduledMoveInDate(moveInDateValue);
-  const urgentRequired = moveInIsWithinUrgentNotice(moveInDateValue);
+  const urgentRequired = moveInIsWithinUrgentNotice(occupied ? form.elements.service_date.value : moveInDateValue);
   const urgentNotice = form.elements.urgent_notice?.value || "";
-  const moveInBefore2 = form.elements.move_in_before_2?.value || "";
+  const moveInBefore2 = occupied ? "" : (form.elements.move_in_before_2?.value || "");
   const serviceDateValue = form.elements.service_date.value;
   if (!form.elements.service_date.checkValidity()) { setManagerMessageStatus("Choose a current or future cleaning date.", true); return; }
   const additionalNotes = form.elements.body?.value?.trim() || "";
-  if (!moveInDate) {
+  if (!occupied && !moveInDate) {
     setManagerMessageStatus("Choose a scheduled move-in date.", true);
     updateTurnRequestTimingPrompts(form);
     return;
@@ -3312,7 +3328,7 @@ async function createTurnRequest(form) {
     updateTurnRequestTimingPrompts(form);
     return;
   }
-  if (!moveInBefore2) {
+  if (!occupied && !moveInBefore2) {
     setManagerMessageStatus("Tell us whether the resident is scheduled to move in before 2 PM local time.", true);
     updateTurnRequestTimingPrompts(form);
     return;
@@ -3320,9 +3336,10 @@ async function createTurnRequest(form) {
 
   const priority = urgentNotice === "Yes" ? "Urgent" : "Normal";
   const notes = [
-    `Resident move-in date: ${formatMoveInDate(moveInDateValue)}`,
+    `Unit occupancy: ${unitOccupancy === "occupied" ? "Occupied" : "Vacant"}`,
+    occupied ? "" : `Resident move-in date: ${formatMoveInDate(moveInDateValue)}`,
     additionalNotes ? `Property manager notes: ${additionalNotes}` : "",
-    `Resident scheduled before 2 PM local time: ${moveInBefore2}`,
+    occupied ? "" : `Resident scheduled before 2 PM local time: ${moveInBefore2}`,
     urgentRequired ? `Less than ${URGENT_TURN_NOTICE_HOURS} hours notice - urgent request: ${urgentNotice}` : ""
   ].filter(Boolean).join("\n");
 
@@ -3336,6 +3353,7 @@ async function createTurnRequest(form) {
     const result = await createAdminPreviewTurnRequest({
       unit,
       service,
+      unitOccupancy,
       priority,
       moveInDateValue,
       serviceDateValue,
@@ -3348,11 +3366,12 @@ async function createTurnRequest(form) {
       request_payload: {
         unit,
         unit_id: unitRecord.id,
+        unit_occupancy: unitOccupancy,
         service_type: service,
         priority,
         service_date: serviceDateValue,
         move_in_date: moveInDateValue,
-        move_in_time: MOVE_IN_TIME_LABEL,
+        move_in_time: moveInDateValue ? MOVE_IN_TIME_LABEL : null,
         notes
       }
     });
@@ -3373,9 +3392,9 @@ async function createTurnRequest(form) {
     `Service: ${service}`,
     `Priority: ${priority}`,
     `Requested cleaning date: ${formatMoveInDate(serviceDateValue)}`,
-    `Scheduled move-in date: ${formatMoveInDate(moveInDateValue)}`,
-    `Move-in time: ${MOVE_IN_TIME_LABEL}`,
-    `Resident scheduled before 2 PM local time: ${moveInBefore2}`,
+    occupied ? "" : `Scheduled move-in date: ${formatMoveInDate(moveInDateValue)}`,
+    occupied ? "" : `Move-in time: ${MOVE_IN_TIME_LABEL}`,
+    occupied ? "" : `Resident scheduled before 2 PM local time: ${moveInBefore2}`,
     urgentRequired ? `Less than ${URGENT_TURN_NOTICE_HOURS} hours notice - urgent request: ${urgentNotice}` : "",
     moveInDate ? `Scheduled move-in timestamp: ${moveInDate.toLocaleString()}` : "",
     assignmentId ? `Assignment request ID: ${assignmentId}` : "",
@@ -3411,7 +3430,7 @@ async function createTurnRequest(form) {
   state.sending = false;
     state.selectedAssignmentId = assignmentId || state.selectedAssignmentId;
     state.requestOpen = false;
-    state.requestConfirmation = { unit, moveInDateValue, serviceDateValue, messageWarning };
+    state.requestConfirmation = { unit, unitOccupancy, moveInDateValue, serviceDateValue, messageWarning };
     resetTurnRequestDraft();
     state.dataMessage = "";
     state.dataError = false;
@@ -3499,7 +3518,7 @@ async function submitPropertyManagerUnit(form) {
   renderManagerPortal();
 }
 
-async function createAdminPreviewTurnRequest({ unit, service, priority, moveInDateValue, serviceDateValue, notes }) {
+async function createAdminPreviewTurnRequest({ unit, service, unitOccupancy, priority, moveInDateValue, serviceDateValue, notes }) {
   const unitRecord = unit ? matchingUnit({ unit_name: unit, unit_number: unit, id: state.requestDraft?.unit_id }) : null;
   const start = scheduledMoveInDate(serviceDateValue);
   const end = start ? new Date(start.getTime() + 2 * 60 * 60 * 1000) : null;
@@ -3514,6 +3533,7 @@ async function createAdminPreviewTurnRequest({ unit, service, priority, moveInDa
   const metadata = {
     source: "property_manager_turn_request",
     admin_preview_source: true,
+    unit_occupancy: unitOccupancy,
     admin_approval_status: "pending",
     requested_by: state.user?.id || "",
     requested_by_name: requesterName,
@@ -3530,7 +3550,7 @@ async function createAdminPreviewTurnRequest({ unit, service, priority, moveInDa
     checklist_template_id: unitRecord?.checklist_template_id || null,
     checklist_item_count: Array.isArray(unitRecord?.checklist_items) ? unitRecord.checklist_items.length : 0,
     move_in_date: moveInDateValue,
-    move_in_time: MOVE_IN_TIME_LABEL,
+    move_in_time: moveInDateValue ? MOVE_IN_TIME_LABEL : null,
     service_date: serviceDateValue,
     property_manager_notes: notes || "",
     admin_only_editable: ["start_window", "end_window"]
@@ -3736,12 +3756,14 @@ function setManagerMessageStatus(message, error = false) {
 }
 
 function turnRequestSteps(form) {
-  const moveInDateValue = form?.elements?.move_in_date?.value || "";
+  const occupied = form?.elements?.unit_occupancy?.value === "occupied";
+  const moveInDateValue = (occupied ? form?.elements?.service_date?.value : form?.elements?.move_in_date?.value) || "";
   return [
     "unit",
+    "occupancy",
     "date",
     ...(moveInIsWithinUrgentNotice(moveInDateValue) ? ["urgent"] : []),
-    "before2",
+    ...(occupied ? [] : ["before2"]),
     "notes"
   ];
 }
@@ -3754,7 +3776,8 @@ function turnRequestStepIndex(form) {
 
 function validateTurnRequestStep(form, step) {
   if (step === "unit" && !selectedTurnRequestUnit(form)?.id) return "Choose a unit from the list, or add the unit first.";
-  if (step === "date" && !scheduledMoveInDate(form.elements.move_in_date?.value || "")) return "Choose the resident move-in date.";
+  if (step === "occupancy" && !["occupied", "vacant"].includes(form.elements.unit_occupancy?.value)) return "Choose Occupied or Vacant.";
+  if (step === "date" && form.elements.unit_occupancy?.value !== "occupied" && !scheduledMoveInDate(form.elements.move_in_date?.value || "")) return "Choose the resident move-in date.";
   if (step === "date" && !form.elements.service_date.checkValidity()) return "Choose a current or future cleaning date.";
   if (step === "urgent" && !form.elements.urgent_notice?.value) return `Tell us whether this less-than-${URGENT_TURN_NOTICE_HOURS}-hour turn is urgent.`;
   if (step === "before2" && !form.elements.move_in_before_2?.value) return "Tell us whether the resident is scheduled to move in before 2 PM local time.";
@@ -3812,7 +3835,12 @@ function moveTurnRequestStep(form, direction) {
 
 function updateTurnRequestTimingPrompts(form = document.getElementById("managerTurnRequestForm")) {
   if (!form) return;
-  const moveInDateValue = form.elements.move_in_date?.value || "";
+  const occupied = form.elements.unit_occupancy?.value === "occupied";
+  const moveInInput = form.elements.move_in_date;
+  if (moveInInput) { moveInInput.disabled = occupied; moveInInput.required = !occupied; }
+  const moveInField = form.querySelector("[data-manager-move-in-field]");
+  if (moveInField) { moveInField.hidden = occupied; moveInField.style.display = occupied ? "none" : ""; }
+  const moveInDateValue = (occupied ? form.elements.service_date?.value : form.elements.move_in_date?.value) || "";
   const dateLabel = form.querySelector("[data-manager-move-in-date-label]");
   if (dateLabel) dateLabel.textContent = moveInDateValue ? formatMoveInDate(moveInDateValue) : "the selected date";
   const urgentQuestion = form.querySelector("[data-manager-urgent-question]");
@@ -4132,7 +4160,7 @@ document.addEventListener("input", (event) => {
     if (event.target.matches("[data-manager-unit-search]")) refreshTurnRequestUnitResults(turnRequestForm);
   }
 
-  if (event.target.matches("[data-manager-move-in-date]")) {
+  if (event.target.matches("[data-manager-move-in-date], [name=service_date], [name=unit_occupancy]")) {
     updateTurnRequestTimingPrompts(event.target.form);
     return;
   }
@@ -4182,7 +4210,7 @@ document.addEventListener("change", (event) => {
   const turnRequestForm = event.target.closest("[data-manager-turn-form]");
   if (turnRequestForm) captureTurnRequestDraft(turnRequestForm);
 
-  if (event.target.matches("[data-manager-move-in-date]")) {
+  if (event.target.matches("[data-manager-move-in-date], [name=service_date], [name=unit_occupancy]")) {
     updateTurnRequestTimingPrompts(event.target.form);
     return;
   }
