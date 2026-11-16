@@ -1,8 +1,9 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),{PGlite}=require('@electric-sql/pglite');
 test('integration database enforces permissions, idempotency, insert-only writes, and queued events',async()=>{
  const db=new PGlite();try{
- await db.exec("create role anon;create role authenticated;create role service_role;create table profiles(id uuid primary key,role text,status text);create table sales_leads(id uuid primary key default gen_random_uuid(),created_by uuid,property_name text,name text,contact_name text,contact_email text,contact_phone text,sales_city text,sales_state text,lead_source text,business_segment text,prospect_type text,pipeline_stage text,sales_owner_id uuid,created_at timestamptz default now());create table referral_bookings(id uuid primary key default gen_random_uuid(),status text);");
+ await db.exec("create role anon;create role authenticated;create role service_role;create type user_role as enum ('admin','contractor');create table profiles(id uuid primary key,role user_role,status text);create table sales_leads(id uuid primary key default gen_random_uuid(),created_by uuid,property_name text,name text,contact_name text,contact_email text,contact_phone text,sales_city text,sales_state text,lead_source text,business_segment text,prospect_type text,pipeline_stage text,sales_owner_id uuid,created_at timestamptz default now());create table referral_bookings(id uuid primary key default gen_random_uuid(),status text);");
  await db.exec(fs.readFileSync('supabase/migrations/20261116130025_turnly_integration_keys_and_webhooks.sql','utf8'));
+ await db.exec(fs.readFileSync('supabase/migrations/20261116131442_integration_role_enum_compatibility.sql','utf8'));
  const owner='11111111-1111-4111-8111-111111111111',key='22222222-2222-4222-8222-222222222222',hook='33333333-3333-4333-8333-333333333333';
  await db.query("insert into profiles values($1,'admin','active')",[owner]);
  await db.query("insert into integration_keys(id,name,secret_hash,prefix,scopes,created_by,expires_at) values($1,'Test','hash','prefix',array['leads:read','leads:create'],$2,now()+interval '1 day')",[key,owner]);
@@ -24,3 +25,4 @@ test('integration database enforces permissions, idempotency, insert-only writes
  await db.exec('set role anon');await assert.rejects(()=>db.query('select * from integration_keys'));await assert.rejects(()=>db.query("select integration_use_key('hash','leads:read')"));await db.exec('reset role');
  }finally{await db.close();}
 });
+
