@@ -629,6 +629,7 @@
           "is_active"
         ],
         "required_on_create": [
+          "client_id",
           "property_name"
         ],
         "methods": [
