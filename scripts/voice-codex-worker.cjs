@@ -46,7 +46,7 @@ async function start(config){
   await command('git',['-c','core.hooksPath=NUL','push','origin','HEAD:main'],cwd);
   for(let n=0;n<40;n++){
    const live=await fetch('https://portal.turnlypros.com/.well-known/turnly-code-release.json?job='+job.id,{signal:AbortSignal.timeout(15000)}).then(r=>r.ok?r.json():null).catch(()=>null);
-   if(live?.job_id===job.id)return {commit_sha:commit,summary:fs.readFileSync(resultFile,'utf8').slice(0,2500)+'\nProduction release verified.'};
+   if(live?.job_id===job.id)return {commit_sha:commit,summary:'Controller: targeted checks passed; commit '+commit+' is verified live. Codex preparation report (written before the controller committed and published):\n'+fs.readFileSync(resultFile,'utf8').slice(0,2400)};
    await pause(15000);
   }
   throw Error('Commit '+commit+' was pushed, but production publication was not confirmed. Inspect Vercel before retrying.');
