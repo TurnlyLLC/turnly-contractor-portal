@@ -36,6 +36,33 @@ Existing files, review statuses and onboarding items are never overwritten.
 Uploading does not approve a report, declare a background check completed, or
 attest that someone reviewed it. The normal admin review workflow remains in place.
 
+## Approving a background check without a portal login
+
+Full access includes `documents:approve`; upload-only and read-only connections
+cannot approve. This records the user's review decision, not an automated screening
+or hiring decision. The user must explicitly confirm they reviewed and approved
+the identified report before the agent sends `reviewed_and_approved: true`.
+
+1. Call `turnly_background_checks_review` with `input.document_id` from the filed
+   report. It returns the current document timestamp, background review version,
+   and checklist submission ID (which may be null).
+2. Call `turnly_background_checks_approve` with `confirm: true`, a unique
+   `idempotency_key`, and input containing `document_id`, `expected_updated_at`,
+   `background_version`, `expected_submission_id`, `reference`, and
+   `reviewed_and_approved: true`. Copy version values exactly from the read.
+3. Confirm the returned document status is `approved`, background sync state is
+   `synced`, and checklist state is `done`. These changes commit together in one
+   database transaction, using the existing background review/history and document
+   review functions and the owned app checklist's admin submission format.
+
+The approval requires an existing unexpired background report in private storage,
+an active contractor, an active admin-owned connection, and current versions.
+Overall contractor approval and unrelated checklist items remain unchanged.
+The action records the reviewer and report reference in the existing audit trail.
+If another review changes the record, read again rather than overwriting it.
+HTTP clients use POST `/api/integration-v2?action=background_checks.approve` with
+the same input and idempotency requirements. No Supabase session is issued.
+
 Retry successful actions with their original idempotency keys. If a request's
 outcome is uncertain, first inspect the contractor's documents. Failed actions
 are blocked from blind replay by the platform; after confirming no record was

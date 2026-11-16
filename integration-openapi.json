@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Turnly Business API",
-    "version": "2.1.0",
+    "version": "2.2.0",
     "description": "Live Turnly workspace. Secrets and database administration are not exposed. Full permission applies to the supported catalog only."
   },
   "servers": [
@@ -89,7 +89,9 @@
                 "ambassadors.toggle",
                 "ambassadors.record_payment",
                 "documents.upload_start",
-                "documents.upload_complete"
+                "documents.upload_complete",
+                "background_checks.review",
+                "background_checks.approve"
               ]
             }
           },
@@ -212,7 +214,9 @@
                 "ambassadors.toggle",
                 "ambassadors.record_payment",
                 "documents.upload_start",
-                "documents.upload_complete"
+                "documents.upload_complete",
+                "background_checks.review",
+                "background_checks.approve"
               ]
             }
           },
@@ -374,7 +378,9 @@
                 "ambassadors.toggle",
                 "ambassadors.record_payment",
                 "documents.upload_start",
-                "documents.upload_complete"
+                "documents.upload_complete",
+                "background_checks.review",
+                "background_checks.approve"
               ]
             }
           },
@@ -1430,6 +1436,38 @@
         "example_input": {
           "upload_ticket": "TICKET_FROM_UPLOAD_START"
         }
+      },
+      "background_checks.review": {
+        "scope": "documents:read",
+        "description": "Read a filed background report, current review version and onboarding checklist submission before approval.",
+        "required": [
+          "document_id"
+        ],
+        "write": false,
+        "example_input": {
+          "document_id": "DOCUMENT_UUID"
+        }
+      },
+      "background_checks.approve": {
+        "scope": "documents:approve",
+        "description": "Record an explicitly authorized human approval of a background report and atomically complete its onboarding checklist. The user must confirm they reviewed and approved this report; do not infer approval from an upload request or report contents. Read background_checks.review first.",
+        "required": [
+          "document_id",
+          "expected_updated_at",
+          "background_version",
+          "expected_submission_id",
+          "reference",
+          "reviewed_and_approved"
+        ],
+        "write": true,
+        "example_input": {
+          "document_id": "DOCUMENT_UUID",
+          "expected_updated_at": "TIMESTAMP_FROM_REVIEW",
+          "background_version": 0,
+          "expected_submission_id": null,
+          "reference": "VERIFIED_FIRST_REFERENCE",
+          "reviewed_and_approved": true
+        }
       }
     },
     "scopes": [
@@ -1474,7 +1512,8 @@
       "sales:read",
       "communications:write",
       "ambassadors:write",
-      "documents:upload"
+      "documents:upload",
+      "documents:approve"
     ],
     "events": [
       "lead.created",
