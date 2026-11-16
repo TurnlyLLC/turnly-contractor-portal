@@ -50,7 +50,8 @@ module.exports=async(req,res)=>{
     if(b.status!=='scheduled')throw S.fail('Only a confirmed booking can be released to contractors.');
     const job=await J.syncBooking(db,b,actor);if(!job||job.status!=='pending')throw S.fail('This job is no longer awaiting approval.');
     let checklistReview;try{checklistReview=J.approvalChecklistReview(job,input,actor);}catch(e){throw S.fail(e.message,409);}
-    S.checked(await db.from('assignment_blocks').update({pay_amount:pay,status:'open',visibility:'open',metadata:{...job.metadata,...checklistReview,...J.contractorPayMetadata(b),admin_approval_status:'approved',approved_by:actor,approved_at:new Date().toISOString()}}).eq('id',b.id).eq('status','pending'));
+    const released=S.checked(await db.from('assignment_blocks').update(J.approvalAssignmentPatch(b,job,checklistReview,actor)).eq('id',b.id).eq('status','pending').eq('updated_at',job.updated_at).select('id'));
+    if(!released.length)throw S.fail('Assignment changed. Refresh before approving it.',409);
     return S.json(res,200,{ok:true});
    }
    if(input.action==='admin_sync'){

@@ -1,6 +1,12 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const {PGlite}=require('@electric-sql/pglite');
 const policy=require('../lib/integration-policy.cjs'),C=require('../lib/integration-catalog.cjs'),M=require('../api/turnly-mcp.js');
+test('later booking release preserves explicit contractor pay and assignment',()=>{
+ const J=require('../lib/residential-jobs.cjs');
+ const patch=J.approvalAssignmentPatch({amount_cents:20000},{pay_amount:95,assigned_to:'contractor',metadata:{contractor_pay_override:true,unit_contractor_pay:95,cleaner_payout_policy:'admin_assignment_override'}},{},'admin');
+ assert.equal(patch.pay_amount,95);assert.equal(patch.visibility,'preferred');assert.equal(patch.metadata.unit_contractor_pay,95);
+ assert.equal(J.approvalAssignmentPatch({amount_cents:20000},{metadata:{}},{},'admin').pay_amount,72);
+});
 test('voice retains every published non-deletion action and rejects deletion',()=>{
  const p={deny_record_deletion:true},catalog=policy.catalog(C.catalog(),p);
  for(const name of Object.keys(C.actions))assert.equal(!!catalog.actions[name],!policy.deletesRecords(name));
