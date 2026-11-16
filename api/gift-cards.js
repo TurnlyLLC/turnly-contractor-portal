@@ -65,6 +65,11 @@ module.exports=async(req,res)=>{
    throw S.fail('Unknown admin action.');
   }
   await S.rate(db,req,'gift-'+i.action);
+  if(i.action==='coverage')return S.json(res,200,await require('../lib/service-coverage.cjs').verify(i));
+  if(i.action==='estimate'){
+   const q=require('../lib/residential-pricing.cjs').quote({service:i.service,frequency:'once',sqft:i.sqft,pets:i.pets});
+   return S.json(res,200,{amount_cents:q.amount_cents,remaining_cents:Math.max(0,q.amount_cents-10000),pet_fee_cents:q.pet_fee_cents,review_required:q.review_required,version:q.version});
+  }
   if(i.action==='balance'||i.action==='scan'){
    const c=await G.card(db,i.code);if(i.action==='scan')await G.event(db,c,'booking_opened');
    return S.json(res,200,{balance_cents:c.balance_cents,available_cents:c.status==='active'?c.balance_cents-c.reserved_cents:0,status:c.status});
