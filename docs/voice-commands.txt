@@ -1,0 +1,7 @@
+Turnly phone assistant — owner instructions
+
+- Business API actions can update assignments and contractor pay, but cannot delete records.
+- Code changes run as separate Codex jobs and publish after targeted checks.
+- Keep the owner computer awake while coding jobs run.
+- Security, dependency, migration, and control-bridge changes require separate review.
+- Ask for coding job status to verify publication.
