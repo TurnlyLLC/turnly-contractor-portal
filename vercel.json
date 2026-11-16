@@ -24,6 +24,10 @@
     {
       "path": "/api/communication-budget",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/integration-deliver",
+      "schedule": "*/5 * * * *"
     }
   ],
   "functions": {
@@ -80,6 +84,9 @@
     "api/ba-share.js": {
       "maxDuration": 30,
       "includeFiles": "assets/ba-social-template.png"
+    },
+    "api/integration-deliver.js": {
+      "maxDuration": 300
     }
   },
   "routes": [
