@@ -1,9 +1,12 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),{randomUUID}=require('node:crypto');
 const B=require('../lib/integration-background.cjs'),M=require('../api/turnly-mcp.js');
-test('approval requires its own permission and human attestation',async()=>{
+test('approval requires its own permission but no second review attestation',async()=>{
  assert(!M.definitions(['documents:upload','documents:read']).some(t=>t.name==='turnly_background_checks_approve'));
  assert(M.definitions(['platform:full']).some(t=>t.name==='turnly_background_checks_approve'));
- await assert.rejects(B.run({},randomUUID(),'approve',{document_id:randomUUID(),reviewed_and_approved:false}),/confirmation/);
+ const input={document_id:randomUUID(),expected_updated_at:'2026-11-16T12:00:00Z',background_version:0,expected_submission_id:null,reference:'V1234567'};
+ const db={rpc:async(name,args)=>{assert.equal(args.p_approve,true);assert(!Object.hasOwn(args,'p_reviewed'));return {data:{approved:true}};}};
+ assert.equal((await B.run(db,randomUUID(),'approve',input)).approved,true);
+ assert.equal((await B.run(db,randomUUID(),'approve',{...input,reviewed_and_approved:false})).approved,true);
 });
 test('transactional approval synchronizes the actual checklist schema and rolls back partial failures',async()=>{
  const {PGlite}=require('@electric-sql/pglite'),db=new PGlite(),actor=randomUUID(),owner=randomUUID(),key=randomUUID(),doc=randomUUID();
@@ -27,7 +30,7 @@ test('transactional approval synchronizes the actual checklist schema and rolls 
  await db.exec("insert into storage.objects values('contractor-documents','report.pdf');insert into turnly_backend.items values('bg','background','Background Check',1,1,0,0)");
  const read=async()=> (await db.query('select integration_background_review($1,$2) r',[key,doc])).rows[0].r;
  const approve=(r,confirmed=true)=>db.query('select integration_background_review($1,$2,true,$3,$4,$5,$6,$7) r',[key,doc,r.document.updated_at,r.background.version,r.checklist.submission_id,'V1234567',confirmed]);
- const before=await read();await assert.rejects(approve(before,false),/Confirm/);
+ const before=await read();
  await db.query("update integration_keys set scopes=array['documents:read','documents:upload'] where id=$1",[key]);await assert.rejects(approve(before),/authorized/);
  await db.query("update integration_keys set scopes=array['platform:full'] where id=$1",[key]);
  // Force failure after background and checklist writes, proving they roll back together.
@@ -36,7 +39,7 @@ test('transactional approval synchronizes the actual checklist schema and rolls 
  assert.equal((await db.query('select count(*)::int n from turnly_backend.submissions')).rows[0].n,0);
  assert.equal((await read()).document.status,'uploaded');
  await db.exec('alter table admin_audit_log drop constraint test_failure;set role service_role');
- const done=(await approve(before)).rows[0].r;assert.equal(done.document.status,'approved');assert.equal(done.background.sync_state,'synced');assert.equal(done.checklist.state,'done');
+ const done=(await approve(before,false)).rows[0].r;assert.equal(done.document.status,'approved');assert.equal(done.background.sync_state,'synced');assert.equal(done.checklist.state,'done');
  assert.equal((await db.query('select contractor_approved from profiles where id=$1',[owner])).rows[0].contractor_approved,true);
  await assert.rejects(approve(before),/changed/);
  await db.exec('reset role');await db.query("update integration_keys set revoked_at=now() where id=$1",[key]);await assert.rejects(read,/authorized/);

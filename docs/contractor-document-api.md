@@ -39,17 +39,20 @@ attest that someone reviewed it. The normal admin review workflow remains in pla
 ## Approving a background check without a portal login
 
 Full access includes `documents:approve`; upload-only and read-only connections
-cannot approve. This records the user's review decision, not an automated screening
-or hiring decision. The user must explicitly confirm they reviewed and approved
-the identified report before the agent sends `reviewed_and_approved: true`.
+cannot approve. This records the user's approval decision, not an automated screening
+or hiring decision. An instruction such as "approve these background checks" is
+sufficient authorization for the identified reports. Do not ask a second time
+whether the user reviewed them. An upload request alone is not approval.
 
 1. Call `turnly_background_checks_review` with `input.document_id` from the filed
    report. It returns the current document timestamp, background review version,
    and checklist submission ID (which may be null).
 2. Call `turnly_background_checks_approve` with `confirm: true`, a unique
    `idempotency_key`, and input containing `document_id`, `expected_updated_at`,
-   `background_version`, `expected_submission_id`, `reference`, and
-   `reviewed_and_approved: true`. Copy version values exactly from the read.
+   `background_version`, `expected_submission_id`, and `reference`. Copy version
+   values exactly from the read. Set the ordinary API `confirm: true` from the
+   user's approval instruction; it does not require another question. The legacy
+   `reviewed_and_approved` input is optional and ignored for compatibility.
 3. Confirm the returned document status is `approved`, background sync state is
    `synced`, and checklist state is `done`. These changes commit together in one
    database transaction, using the existing background review/history and document

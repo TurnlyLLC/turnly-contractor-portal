@@ -35,7 +35,8 @@ begin
  select * into prior from turnly_backend.submissions where user_id=owner.id::text and item_id=item.id order by created_at desc,id desc limit 1;
  select * into bg from public.contractor_background_checks where profile_id=owner.id;
  if p_approve then
-  if p_reviewed is distinct from true or length(trim(coalesce(p_reference,''))) not between 1 and 120 then raise exception 'Confirm that you reviewed and approved the report and provide its reference'; end if;
+  -- p_reviewed is retained only for older callers; explicit approval is sufficient.
+  if length(trim(coalesce(p_reference,''))) not between 1 and 120 then raise exception 'Provide the report reference'; end if;
   if p_expected_updated_at is null or doc.updated_at is distinct from p_expected_updated_at
    or p_version is distinct from coalesce(bg.version,0) or p_expected_submission_id is distinct from prior.id
   then raise exception 'This review changed. Refresh the background review before approving'; end if;
@@ -47,7 +48,7 @@ begin
   insert into turnly_backend.submissions(id,user_id,item_id,item_title,kind,version,status,fields_json,source,reviewer_note,reviewed_by,reviewed_at,created_at)
    values(submission_id,owner.id::text,item.id,item.title,item.kind,item.version,'approved','{}','admin',note,k.created_by::text,stamped,stamped);
   perform public.finish_contractor_background_review(owner.id,decision.operation_id);
-  perform public.review_contractor_document(k.created_by,doc.id,'approved','Reviewed and approved via Turnly integration. Report reference: '||trim(p_reference),p_expected_updated_at);
+  perform public.review_contractor_document(k.created_by,doc.id,'approved','Approved as instructed via Turnly integration. Report reference: '||trim(p_reference),p_expected_updated_at);
   -- A synchronized background approval neither grants nor revokes overall contractor approval.
   update public.profiles set contractor_approved=owner.contractor_approved where id=owner.id;
   select * into doc from public.contractor_documents where id=p_document;
