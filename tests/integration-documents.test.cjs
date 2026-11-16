@@ -46,3 +46,18 @@ test('format verification rejects disguised files',()=>{
  assert(D.signatureMatches(Buffer.from([255,216,255]),'image/jpeg'));
  assert(D.signatureMatches(Buffer.from('RIFF0000WEBP'),'image/webp'));
 });
+
+test('Verified First envelopes are accepted without changing signed bytes',async()=>{
+ const wrapped=Buffer.concat([Buffer.from('-----BEGIN VF TRANSACTION ID-----\r\n'+'a'.repeat(32)+'\r\n-----END VF TRANSACTION ID-----\r\n'),bytes,Buffer.from('\r\n-----BEGIN VF SIGNATURE-----\r\nsignature\r\n-----END VF SIGNATURE-----\r\n')]);
+ assert(D.signatureMatches(wrapped,'application/pdf'));
+ assert(!D.signatureMatches(Buffer.concat([Buffer.from('junk'),wrapped]),'application/pdf'));
+ assert(!D.signatureMatches(wrapped.subarray(0,-30),'application/pdf'));
+ assert(!D.signatureMatches(Buffer.from(wrapped.toString().replace('%PDF-','<html')),'application/pdf'));
+ const f=fixture();f.state.bytes=wrapped;f.state.uploaded=true;
+ const signedSpec={...spec,file_size:wrapped.length,sha256:crypto.createHash('sha256').update(wrapped).digest('hex')};
+ const start=await D.run(f.db,actor,key,'upload_start',signedSpec);
+ const result=await D.run(f.db,actor,key,'upload_complete',{upload_ticket:start.upload_ticket});
+ assert.equal(result.uploaded,true);assert.equal([...f.rows.values()][0].metadata.sha256,signedSpec.sha256);
+ assert.equal(result.approval_changed,false);
+});
+
