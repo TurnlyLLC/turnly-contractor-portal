@@ -5,20 +5,21 @@ export function installCalling({request,onStatus=()=>{}}) {
  dock.innerHTML=`<h2>Call lead</h2><p data-name></p><p role="status" aria-live="polite" data-status></p><p data-time></p><div class="crm-phone-buttons"><button class="dial" data-dial>Start call</button><button data-mute hidden aria-pressed="false">Mute</button><button class="hangup" data-end hidden>Hang up</button><button data-close>Close</button></div><div class="crm-phone-keypad" hidden>${'123456789*0#'.split('').map(n=>`<button data-digit="${n}" aria-label="Dial ${n}">${n}</button>`).join('')}</div><p data-training-gate hidden><a href="crm-onboarding.html">Complete onboarding to unlock calling →</a></p><p><small>Calls use your Turnly number and this device’s microphone. Calls are not recorded.</small></p><details><summary>Recent calls to this lead</summary><ol data-history></ol></details>`;
  document.body.append(dock);
  const el=s=>dock.querySelector(s),say=t=>el('[data-status]').textContent=t;
- let leadId,trainingReady=false;
+ let leadId,trainingReady=false,focusedId;
+ document.addEventListener('crm-lead-focus',e=>{focusedId=e.detail.id;if(!busy&&leadId&&focusedId!==leadId){generation++;leadId=null;trainingReady=false;dock.hidden=true;el('[data-dial]').disabled=true;}});
  function controls(active){el('[data-dial]').hidden=active;el('[data-mute]').hidden=!active;el('[data-end]').hidden=!active;el('.crm-phone-keypad').hidden=!active;el('[data-close]').disabled=active;if(!active){el('[data-mute]').textContent='Mute';el('[data-mute]').setAttribute('aria-pressed','false');}}
- function finish(message){if(busy){setTimeout(()=>{void history();onStatus();},2000);setTimeout(()=>onStatus(),6000);}generation++;clearInterval(timer);call=null;busy=false;controls(false);el('[data-dial]').disabled=false;say(message);const old=device;device=null;if(old)old.destroy();}
+ function finish(message){if(call){setTimeout(()=>{void history();onStatus();},2000);setTimeout(()=>onStatus(),6000);}generation++;clearInterval(timer);call=null;busy=false;controls(false);el('[data-dial]').disabled=false;say(message);const old=device;device=null;if(old)old.destroy();}
  async function history(){
-  const id=leadId;try{const data=await request({action:'history',lead_id:id});if(id!==leadId)return;
+  const id=leadId,version=generation;if(!id)return;try{const data=await request({action:'history',lead_id:id});if(id!==leadId||version!==generation||busy)return;
    el('[data-history]').replaceChildren();for(const c of data.calls){const li=document.createElement('li');li.textContent=`${new Date(c.created_at).toLocaleString()} · ${c.status} · ${c.duration_seconds}s`;el('[data-history]').append(li);}
    if(!data.calls.length)el('[data-history]').textContent='No calls yet.';
    trainingReady=data.training_ready===true;el('[data-dial]').disabled=!trainingReady||!data.ready||data.calling_hours?.allowed===false;el('[data-training-gate]').hidden=trainingReady;if(!trainingReady)say('Complete the short introduction, playbook review, and seller agreement in Onboarding before making calls.');else if(!data.ready)say('Calling is awaiting Twilio activation.');else if(data.calling_hours?.allowed===false)say(data.calling_hours.message);else say('Ready to call · Monday–Friday 8 AM–8 PM, Saturday 8 AM–5 PM Eastern Time.');
-  }catch(e){say(e.message);}
+  }catch(e){if(id===leadId&&version===generation&&!busy)say(e.message);}
  }
- document.addEventListener('click',e=>{const button=e.target.closest('[data-call-lead]');if(!button)return;e.preventDefault();dock.hidden=false;if(busy){say('Finish your current call before starting another.');return;}trainingReady=false;el('[data-dial]').disabled=true;leadId=button.dataset.callLead;el('[data-name]').textContent=button.dataset.callLabel||'Selected lead';el('[data-time]').textContent='';say('Ready to call');void history();});
+ document.addEventListener('click',e=>{const button=e.target.closest('[data-call-lead]');if(!button)return;e.preventDefault();dock.hidden=false;if(busy){say('Finish your current call before starting another.');return;}trainingReady=false;el('[data-dial]').disabled=true;generation++;leadId=button.dataset.callLead;focusedId=leadId;el('[data-name]').textContent=button.dataset.callLabel||'Selected lead';el('[data-time]').textContent='';say('Ready to call');void history();});
  el('[data-close]').onclick=()=>{if(!busy)dock.hidden=true;};
  el('[data-dial]').onclick=async()=>{
-  if(busy)return;if(!trainingReady){say('Complete your sales onboarding first.');return;}busy=true;const attempt=++generation;controls(true);el('[data-dial]').disabled=true;say('Connecting your microphone…');
+  if(busy)return;if(focusedId&&focusedId!==leadId){dock.hidden=true;say('Select Call lead on the current prospect.');return;}if(!trainingReady){say('Complete your sales onboarding first.');return;}busy=true;const attempt=++generation;controls(true);el('[data-dial]').disabled=true;say('Connecting your microphone…');
   try{
    if(!window.Twilio?.Device)await new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='/assets/vendor/twilio-voice-2.18.5.min.js';script.onload=resolve;script.onerror=()=>{script.remove();reject(Error('Unable to load calling. Please refresh and try again.'));};document.head.append(script);});
    if(attempt!==generation)return;

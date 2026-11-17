@@ -13,5 +13,5 @@ module.exports=async(req,res)=>{
    return S.json(res,200,{calls:S.checked(await q),ready:V.ready(),training_ready:await T.ready(db,user),calling_hours:H.status()});
   }
   throw S.fail('Unknown calling action.');
- }catch(e){return S.json(res,e.status||503,{error:e.status?e.message:'Calling is temporarily unavailable. Please try again.'});}
+ }catch(e){if(e.retryAfter)res.setHeader('Retry-After',String(e.retryAfter));return S.json(res,e.status||503,{error:e.status?e.message:'Calling is temporarily unavailable. Please try again.'});}
 };
