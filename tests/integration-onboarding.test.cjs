@@ -20,3 +20,8 @@ test('unknown operations and malformed IDs fail before accessing the database',a
  await assert.rejects(run({},'actor','delete',{profile_id:'not-id'},'key'),/Choose a contractor/);
  await assert.rejects(run({},'actor','delete',{profile_id:'a9f7d5cb-3b26-4300-aea5-caa3cfd18765'},'key'),/Unknown onboarding/);
 });
+test('intake detail exposes ordinary submitted answers while preserving sensitive masking',()=>{
+ const {details}=require('../lib/integration-contractor-review.cjs');
+ const r=details({contact:{name:'Example'},items:[{id:'intake',title:'Intake',kind:'form',submission:{id:'s',fields:[{id:'name',label:'Name',value:'Example'},{id:'tax',label:'Tax ID',value:'SECRET',sensitive:true,masked:'***1234'}]}}]});
+ assert.equal(r.contact.name,'Example');assert.equal(r.items[0].submission.fields[0].value,'Example');assert.equal(r.items[0].submission.fields[1].value,null);assert.ok(!JSON.stringify(r).includes('SECRET'));
+});
