@@ -1,0 +1,2 @@
+const S=require('../lib/residential-server.cjs'),Email=require('../lib/owner-email.cjs');
+module.exports=async(req,res)=>{res.setHeader('Cache-Control','no-store');try{if(req.method!=='POST')throw S.fail('Use POST.',405);const body=typeof req.body==='string'?JSON.parse(req.body):req.body;if(!body||JSON.stringify(body).length>17000)throw S.fail('Invalid request.',400);return S.json(res,200,await Email.verify(S.database(),body));}catch(e){return S.json(res,e.status||503,{error:'Email request unavailable or unauthorized.'});}};

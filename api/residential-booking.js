@@ -82,6 +82,7 @@ module.exports=async(req,res)=>{
    if(!/^BA-[A-Z0-9]{16}$/.test(String(input.ba)))throw S.fail('Use the complete ambassador referral link.');
    ambassador=await require('../lib/ambassadors.cjs').referralMember(db,input.ba);
    if(!ambassador)throw S.fail('This ambassador referral link is unavailable.',404);
+   input.ba=ambassador.code;
   }
   if(input.action==='context')return S.json(res,200,{scopes:Scope.policies,calendar:(await Calendar.load(db)).settings,agent:{name:a.name,code:a.referral_code},ambassador,direct,payments_ready:S.ready(),property_lookup:!!process.env.RENTCAST_API_KEY,gift:gift?{balance_cents:gift.balance_cents,available_cents:gift.balance_cents-gift.reserved_cents}:null,consent:gift?CONSENT+' I authorize application of my gift card to this visit; only the remaining amount will be charged to my saved card.':CONSENT});
   if(input.action==='property'){await S.rate(db,req,'property');return S.json(res,200,await require('../lib/residential-property.cjs').lookup(input));}
