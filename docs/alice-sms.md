@@ -13,3 +13,7 @@ Budget: $25 per Eastern calendar month shared with voice. $5 is reserved for num
 Activation: set owner_sms_settings.enabled=true only once number routing and carrier registration are prepared. Opt-out stays true until START. Carrier verification is checked at runtime before executing commands. Twilio number incoming-message POST URL is https://portal.turnlypros.com/api/owner-sms. Status callback is the same URL with ?kind=status. Leave business-number routing unchanged.
 
 Verification: node --test --test-isolation=none tests/owner-sms.test.cjs tests/owner-voice-retry.test.cjs tests/owner-voice.test.cjs tests/owner-voice-elevenlabs.test.cjs
+
+## Provider-cost reconciliation
+
+Completed calls and texts now replace their temporary holds with provider-reported USD once all applicable components are known. The minute worker reads Twilio prices for inbound/callback/child legs and ElevenLabs `cost_fiat`, matches voice conversations by exact Twilio call SID, and records a billing timestamp. Unknown charges retain their holds; active calls retain at least their hold. Media Streams usage is separately counted from Twilio account usage records. The legacy OpenAI call remains pending until its AI charge is independently verified. The $25 cap and fixed/setup allowances are unchanged.

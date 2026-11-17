@@ -5,9 +5,9 @@ module.exports=async(req,res)=>{
   const c=V.config();
   if(req.method==='GET'){
    if(!process.env.CRON_SECRET||!V.constant(req.headers.authorization,'Bearer '+process.env.CRON_SECRET))return S.json(res,401,{error:'Unauthorized.'});
-   const db=S.database();let processed=0;
+   const db=S.database();const billing=await require('../lib/owner-assistant-costs.cjs').reconcile(db,c);let processed=0;
    for(let n=0;n<3;n++){const r=await M.processNext(db,c);if(!r.processed)break;processed++;}
-   return S.json(res,200,{processed});
+   return S.json(res,200,{processed,billing});
   }
   if(req.method!=='POST')return S.json(res,405,{error:'Use POST.'});
   const chunks=[];let size=0;for await(const chunk of req){size+=Buffer.byteLength(chunk);if(size>16000)throw S.fail('Too large.',413);chunks.push(Buffer.from(chunk));}
