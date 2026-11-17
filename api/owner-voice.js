@@ -2,7 +2,7 @@ const S = require('../lib/residential-server.cjs');
 const V = require('../lib/owner-voice.cjs');
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
-  if (req.method === 'GET') {const c=V.config();return S.json(res,200,{service:'Turnly private voice',ready:!!V.ready(c),twilio_account_matches:!!c.account&&c.account===c.expectedAccount});}
+  if (req.method === 'GET') {const c=V.config();return S.json(res,200,{service:'A.L.I.C.E. private Turnly voice',provider:c.provider,ready:!!V.ready(c),twilio_account_matches:!!c.account&&c.account===c.expectedAccount});}
   if (req.method !== 'POST') return S.json(res, 405, {error: 'Use POST.'});
   const kind = req.query?.kind;
   if (!['incoming', 'callback', 'authorize', 'status', 'openai'].includes(kind)) return S.json(res, 404, {error: 'Not found.'});
