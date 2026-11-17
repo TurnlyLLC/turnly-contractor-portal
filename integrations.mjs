@@ -20,4 +20,4 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-action]');
 $('#refresh').onclick=()=>run(async()=>'Up to date.');
 $('#copySecret').onclick=async()=>{try{await navigator.clipboard.writeText($('#secretValue').value);$('#copyStatus').textContent='Copied.';}catch{$('#copyStatus').textContent='Copy the secret manually from the field.';}};
 $('#closeSecret').onclick=()=>$('#secretDialog').close();$('#secretDialog').addEventListener('close',()=>{$('#secretValue').value='';});
-run(async()=>'Connected to the Turnly workspace.');
+run(async()=>{const match=location.hash.match(/^#handoff=([0-9a-f-]{36})$/i);if(match){const r=await api('reveal_handoff',{id:match[1]});history.replaceState(null,'',location.pathname);showSecret(r.secret);return 'Credential ready. Copy it to the intended system; it is shown once.';}return 'Connected to the Turnly workspace.';});

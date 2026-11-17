@@ -49,3 +49,11 @@ Inventory: current `admin-navigation.mjs` pages and their loaded admin-suite var
 - Live rollback-only tests confirmed quote pipeline synchronization, preservation of notes/owner, stale-write rejection, region soft-delete blocking, assignment configuration, manual residential creation at 36% pay, recurring commercial creation, QA-job linkage and duplicate-safe QA attachment. No test customers, messages, payments or uploads were retained.
 - Found and fixed shared sales revision timestamps using transaction time; each write now receives a distinct clock timestamp.
 - All 39 resource reads and seven additional read workflows passed against production (46 checks). Alice voice/SMS configuration verification follows deployment. A real end-to-end phone conversation is not covered by server tests.
+
+## Remaining-control closure (November17)
+
+Added business communication settings/actual usage and call history; regional/selected lead allocation and bounded unassignment; parsed expense imports and checksum-matched imported resumes; connection/webhook administration with one-time authenticated secret retrieval and inherited deletion restrictions; free-form customer email/SMS previews, send deduplication and provider receipts; atomic booking address/scope repricing with gift reservation, scheduled charge and contractor/assignment synchronization. Saved review IDs work across calls and texts.
+
+Sixty-eight regression tests passed, including provider-timeout and cross-session message tests. Live rollback tests confirmed data preservation, inherited deletion blocking, one-time credential retrieval, protected-table permissions and atomic repricing. Test sends use mocked providers; no customer was contacted or charged during these tests. Operational provider settings and protected paid history still enforce their existing constraints.
+
+Recurring visits retain maintenance pricing. Amending the latest visit of an active plan pauses automatic renewal for review, avoiding unintended changes to the next generated visit. Provider diagnostic sessions are charged to the same $25 ledger and settled from reported USD costs.

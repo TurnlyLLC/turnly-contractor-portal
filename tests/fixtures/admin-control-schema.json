@@ -1,0 +1,2067 @@
+[
+  {
+    "table_name": "assignment_blocks",
+    "columns": {
+      "id": {
+        "type": "uuid",
+        "default": "gen_random_uuid()",
+        "nullable": "NO"
+      },
+      "scope": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "title": {
+        "type": "text",
+        "default": null,
+        "nullable": "NO"
+      },
+      "status": {
+        "type": "text",
+        "default": "'open'::text",
+        "nullable": "YES"
+      },
+      "address": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "paid_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      },
+      "paid_by": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "YES"
+      },
+      "unit_id": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "YES"
+      },
+      "metadata": {
+        "type": "jsonb",
+        "default": "'{}'::jsonb",
+        "nullable": "NO"
+      },
+      "paid_out": {
+        "type": "bool",
+        "default": "false",
+        "nullable": "NO"
+      },
+      "priority": {
+        "type": "text",
+        "default": "'normal'::text",
+        "nullable": "NO"
+      },
+      "unit_name": {
+        "type": "text",
+        "default": "''::text",
+        "nullable": "NO"
+      },
+      "claimed_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      },
+      "claimed_by": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "YES"
+      },
+      "created_at": {
+        "type": "timestamptz",
+        "default": "now()",
+        "nullable": "YES"
+      },
+      "created_by": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "YES"
+      },
+      "end_window": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      },
+      "paid_notes": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "pay_amount": {
+        "type": "numeric",
+        "default": null,
+        "nullable": "YES"
+      },
+      "pay_status": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "started_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      },
+      "started_by": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "YES"
+      },
+      "updated_at": {
+        "type": "timestamptz",
+        "default": "now()",
+        "nullable": "NO"
+      },
+      "visibility": {
+        "type": "text",
+        "default": "'open'::text",
+        "nullable": "NO"
+      },
+      "accepted_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      },
+      "assigned_to": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "YES"
+      },
+      "en_route_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      },
+      "paid_amount": {
+        "type": "numeric",
+        "default": null,
+        "nullable": "YES"
+      },
+      "property_id": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "YES"
+      },
+      "start_notes": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "unit_number": {
+        "type": "text",
+        "default": "''::text",
+        "nullable": "NO"
+      },
+      "auto_renewal": {
+        "type": "bool",
+        "default": "false",
+        "nullable": "NO"
+      },
+      "completed_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      },
+      "completed_by": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "YES"
+      },
+      "service_type": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "start_window": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      },
+      "payout_status": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "property_name": {
+        "type": "text",
+        "default": null,
+        "nullable": "NO"
+      },
+      "qr_tracker_id": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "site_latitude": {
+        "type": "float8",
+        "default": null,
+        "nullable": "YES"
+      },
+      "materials_list": {
+        "type": "jsonb",
+        "default": null,
+        "nullable": "YES"
+      },
+      "payment_status": {
+        "type": "text",
+        "default": "'unpaid'::text",
+        "nullable": "NO"
+      },
+      "qa_approved_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      },
+      "qa_approved_by": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "YES"
+      },
+      "site_longitude": {
+        "type": "float8",
+        "default": null,
+        "nullable": "YES"
+      },
+      "start_latitude": {
+        "type": "float8",
+        "default": null,
+        "nullable": "YES"
+      },
+      "supplies_notes": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "assignment_type": {
+        "type": "text",
+        "default": "'one_time'::text",
+        "nullable": "NO"
+      },
+      "claimed_by_name": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "preferred_first": {
+        "type": "bool",
+        "default": "false",
+        "nullable": "NO"
+      },
+      "preferred_until": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      },
+      "start_longitude": {
+        "type": "float8",
+        "default": null,
+        "nullable": "YES"
+      },
+      "assigned_to_name": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "claimed_by_email": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "completion_notes": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "recurring_due_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      },
+      "assigned_to_email": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "assignment_source": {
+        "type": "text",
+        "default": "'manual'::text",
+        "nullable": "NO"
+      },
+      "qa_reviewer_notes": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "portal_property_id": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "YES"
+      },
+      "recurring_group_id": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "YES"
+      },
+      "checklist_responses": {
+        "type": "jsonb",
+        "default": "'[]'::jsonb",
+        "nullable": "NO"
+      },
+      "recurrence_end_date": {
+        "type": "date",
+        "default": null,
+        "nullable": "YES"
+      },
+      "recurrence_interval": {
+        "type": "int4",
+        "default": "1",
+        "nullable": "NO"
+      },
+      "recurrence_frequency": {
+        "type": "text",
+        "default": "'one_time'::text",
+        "nullable": "NO"
+      },
+      "source_assignment_id": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "YES"
+      },
+      "special_instructions": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "start_distance_miles": {
+        "type": "float8",
+        "default": null,
+        "nullable": "YES"
+      },
+      "materials_template_id": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "YES"
+      },
+      "payment_status_source": {
+        "type": "text",
+        "default": "'turnly'::text",
+        "nullable": "NO"
+      },
+      "quickbooks_invoice_id": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "recurring_property_id": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "YES"
+      },
+      "checklist_completed_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      },
+      "declined_contractor_ids": {
+        "type": "_uuid",
+        "default": "'{}'::uuid[]",
+        "nullable": "NO"
+      },
+      "payment_status_override": {
+        "type": "bool",
+        "default": "false",
+        "nullable": "NO"
+      },
+      "start_location_accuracy": {
+        "type": "float8",
+        "default": null,
+        "nullable": "YES"
+      },
+      "preferred_contractor_ids": {
+        "type": "_uuid",
+        "default": "'{}'::uuid[]",
+        "nullable": "NO"
+      },
+      "property_checklist_items": {
+        "type": "jsonb",
+        "default": "'[]'::jsonb",
+        "nullable": "NO"
+      },
+      "quickbooks_invoice_status": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "quickbooks_payment_status": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "quickbooks_payment_txn_id": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "residential_payment_state": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "payment_status_override_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      },
+      "payment_status_override_by": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "YES"
+      },
+      "preferred_contractor_names": {
+        "type": "_text",
+        "default": "'{}'::text[]",
+        "nullable": "NO"
+      },
+      "quickbooks_invoice_link_id": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "YES"
+      },
+      "quickbooks_payment_txn_type": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "admin_completion_override_by": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "YES"
+      },
+      "quickbooks_invoice_synced_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      },
+      "quickbooks_payment_synced_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      },
+      "recurring_portal_property_id": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "YES"
+      }
+    }
+  },
+  {
+    "table_name": "communication_audit",
+    "columns": {
+      "id": {
+        "type": "uuid",
+        "default": "gen_random_uuid()",
+        "nullable": "NO"
+      },
+      "details": {
+        "type": "jsonb",
+        "default": null,
+        "nullable": "NO"
+      },
+      "user_id": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "YES"
+      },
+      "created_at": {
+        "type": "timestamptz",
+        "default": "now()",
+        "nullable": "NO"
+      }
+    }
+  },
+  {
+    "table_name": "communication_rep_limits",
+    "columns": {
+      "paused": {
+        "type": "bool",
+        "default": "false",
+        "nullable": "NO"
+      },
+      "user_id": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "NO"
+      },
+      "daily_cents": {
+        "type": "int4",
+        "default": null,
+        "nullable": "NO"
+      },
+      "monthly_cents": {
+        "type": "int4",
+        "default": null,
+        "nullable": "NO"
+      }
+    }
+  },
+  {
+    "table_name": "communication_settings",
+    "columns": {
+      "id": {
+        "type": "bool",
+        "default": "true",
+        "nullable": "NO"
+      },
+      "paused": {
+        "type": "bool",
+        "default": "false",
+        "nullable": "NO"
+      },
+      "updated_at": {
+        "type": "timestamptz",
+        "default": "now()",
+        "nullable": "NO"
+      },
+      "daily_cents": {
+        "type": "int4",
+        "default": "1000",
+        "nullable": "NO"
+      },
+      "calls_paused": {
+        "type": "bool",
+        "default": "false",
+        "nullable": "NO"
+      },
+      "texts_paused": {
+        "type": "bool",
+        "default": "false",
+        "nullable": "NO"
+      },
+      "monthly_cents": {
+        "type": "int4",
+        "default": "10000",
+        "nullable": "NO"
+      },
+      "max_call_minutes": {
+        "type": "int4",
+        "default": "20",
+        "nullable": "NO"
+      },
+      "sms_cents_per_segment": {
+        "type": "int4",
+        "default": "5",
+        "nullable": "NO"
+      },
+      "voice_cents_per_minute": {
+        "type": "int4",
+        "default": "5",
+        "nullable": "NO"
+      },
+      "default_rep_daily_cents": {
+        "type": "int4",
+        "default": "1000",
+        "nullable": "NO"
+      },
+      "default_rep_monthly_cents": {
+        "type": "int4",
+        "default": "10000",
+        "nullable": "NO"
+      }
+    }
+  },
+  {
+    "table_name": "communication_usage",
+    "columns": {
+      "id": {
+        "type": "text",
+        "default": null,
+        "nullable": "NO"
+      },
+      "state": {
+        "type": "text",
+        "default": "'reserved'::text",
+        "nullable": "NO"
+      },
+      "units": {
+        "type": "int4",
+        "default": "0",
+        "nullable": "NO"
+      },
+      "source": {
+        "type": "text",
+        "default": null,
+        "nullable": "NO"
+      },
+      "channel": {
+        "type": "text",
+        "default": null,
+        "nullable": "NO"
+      },
+      "user_id": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "YES"
+      },
+      "created_at": {
+        "type": "timestamptz",
+        "default": "now()",
+        "nullable": "NO"
+      },
+      "parent_sid": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "rate_cents": {
+        "type": "int4",
+        "default": null,
+        "nullable": "NO"
+      },
+      "finished_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      },
+      "max_seconds": {
+        "type": "int4",
+        "default": null,
+        "nullable": "YES"
+      },
+      "provider_id": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "actual_cents": {
+        "type": "numeric",
+        "default": null,
+        "nullable": "YES"
+      },
+      "charged_cents": {
+        "type": "int4",
+        "default": "0",
+        "nullable": "NO"
+      },
+      "reserved_cents": {
+        "type": "int4",
+        "default": null,
+        "nullable": "NO"
+      },
+      "provider_status": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "actual_checked_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      }
+    }
+  },
+  {
+    "table_name": "contractor_payouts",
+    "columns": {
+      "id": {
+        "type": "uuid",
+        "default": "gen_random_uuid()",
+        "nullable": "NO"
+      },
+      "method": {
+        "type": "text",
+        "default": null,
+        "nullable": "NO"
+      },
+      "status": {
+        "type": "text",
+        "default": "'reserved'::text",
+        "nullable": "NO"
+      },
+      "actor_id": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "NO"
+      },
+      "reference": {
+        "type": "text",
+        "default": "''::text",
+        "nullable": "NO"
+      },
+      "created_at": {
+        "type": "timestamptz",
+        "default": "now()",
+        "nullable": "NO"
+      },
+      "destination": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "amount_cents": {
+        "type": "int8",
+        "default": null,
+        "nullable": "NO"
+      },
+      "completed_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      },
+      "assignment_id": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "NO"
+      },
+      "contractor_id": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "NO"
+      },
+      "stripe_transfer_id": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      }
+    }
+  },
+  {
+    "table_name": "customer_portal_events",
+    "columns": {
+      "id": {
+        "type": "uuid",
+        "default": "gen_random_uuid()",
+        "nullable": "NO"
+      },
+      "data": {
+        "type": "jsonb",
+        "default": "'{}'::jsonb",
+        "nullable": "NO"
+      },
+      "actor": {
+        "type": "text",
+        "default": null,
+        "nullable": "NO"
+      },
+      "action": {
+        "type": "text",
+        "default": null,
+        "nullable": "NO"
+      },
+      "booking_id": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "NO"
+      },
+      "created_at": {
+        "type": "timestamptz",
+        "default": "now()",
+        "nullable": "NO"
+      }
+    }
+  },
+  {
+    "table_name": "gift_cards",
+    "columns": {
+      "id": {
+        "type": "uuid",
+        "default": "gen_random_uuid()",
+        "nullable": "NO"
+      },
+      "code": {
+        "type": "text",
+        "default": null,
+        "nullable": "NO"
+      },
+      "status": {
+        "type": "text",
+        "default": "'active'::text",
+        "nullable": "NO"
+      },
+      "ordinal": {
+        "type": "int4",
+        "default": null,
+        "nullable": "NO"
+      },
+      "order_id": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "NO"
+      },
+      "refund_id": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "created_at": {
+        "type": "timestamptz",
+        "default": "now()",
+        "nullable": "NO"
+      },
+      "balance_cents": {
+        "type": "int4",
+        "default": "10000",
+        "nullable": "NO"
+      },
+      "reserved_cents": {
+        "type": "int4",
+        "default": "0",
+        "nullable": "NO"
+      }
+    }
+  },
+  {
+    "table_name": "gift_reservations",
+    "columns": {
+      "status": {
+        "type": "text",
+        "default": null,
+        "nullable": "NO"
+      },
+      "card_id": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "NO"
+      },
+      "booking_id": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "NO"
+      },
+      "created_at": {
+        "type": "timestamptz",
+        "default": "now()",
+        "nullable": "NO"
+      },
+      "amount_cents": {
+        "type": "int4",
+        "default": null,
+        "nullable": "NO"
+      }
+    }
+  },
+  {
+    "table_name": "global_payout_requests",
+    "columns": {
+      "id": {
+        "type": "uuid",
+        "default": "gen_random_uuid()",
+        "nullable": "NO"
+      },
+      "status": {
+        "type": "text",
+        "default": "'draft'::text",
+        "nullable": "NO"
+      },
+      "currency": {
+        "type": "text",
+        "default": null,
+        "nullable": "NO"
+      },
+      "ledger_id": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "YES"
+      },
+      "reference": {
+        "type": "text",
+        "default": null,
+        "nullable": "NO"
+      },
+      "created_at": {
+        "type": "timestamptz",
+        "default": "now()",
+        "nullable": "NO"
+      },
+      "created_by": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "NO"
+      },
+      "updated_at": {
+        "type": "timestamptz",
+        "default": "now()",
+        "nullable": "NO"
+      },
+      "approved_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      },
+      "approved_by": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "YES"
+      },
+      "prepared_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      },
+      "amount_cents": {
+        "type": "int8",
+        "default": null,
+        "nullable": "NO"
+      },
+      "recipient_id": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "NO"
+      },
+      "assignment_id": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "YES"
+      },
+      "status_detail": {
+        "type": "jsonb",
+        "default": null,
+        "nullable": "YES"
+      },
+      "stripe_intent": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "approval_snapshot": {
+        "type": "jsonb",
+        "default": null,
+        "nullable": "YES"
+      },
+      "financial_account": {
+        "type": "text",
+        "default": null,
+        "nullable": "NO"
+      },
+      "recipient_account": {
+        "type": "text",
+        "default": null,
+        "nullable": "NO"
+      }
+    }
+  },
+  {
+    "table_name": "integration_hooks",
+    "columns": {
+      "id": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "NO"
+      },
+      "url": {
+        "type": "text",
+        "default": null,
+        "nullable": "NO"
+      },
+      "name": {
+        "type": "text",
+        "default": null,
+        "nullable": "NO"
+      },
+      "events": {
+        "type": "_text",
+        "default": null,
+        "nullable": "NO"
+      },
+      "enabled": {
+        "type": "bool",
+        "default": "true",
+        "nullable": "NO"
+      },
+      "created_at": {
+        "type": "timestamptz",
+        "default": "now()",
+        "nullable": "NO"
+      },
+      "created_by": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "NO"
+      },
+      "secret_encrypted": {
+        "type": "text",
+        "default": null,
+        "nullable": "NO"
+      }
+    }
+  },
+  {
+    "table_name": "integration_keys",
+    "columns": {
+      "id": {
+        "type": "uuid",
+        "default": "gen_random_uuid()",
+        "nullable": "NO"
+      },
+      "name": {
+        "type": "text",
+        "default": null,
+        "nullable": "NO"
+      },
+      "prefix": {
+        "type": "text",
+        "default": null,
+        "nullable": "NO"
+      },
+      "scopes": {
+        "type": "_text",
+        "default": null,
+        "nullable": "NO"
+      },
+      "workspace": {
+        "type": "text",
+        "default": "'turnly'::text",
+        "nullable": "NO"
+      },
+      "created_at": {
+        "type": "timestamptz",
+        "default": "now()",
+        "nullable": "NO"
+      },
+      "created_by": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "NO"
+      },
+      "expires_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      },
+      "revoked_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      },
+      "secret_hash": {
+        "type": "text",
+        "default": null,
+        "nullable": "NO"
+      },
+      "last_used_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      },
+      "deny_record_deletion": {
+        "type": "bool",
+        "default": "false",
+        "nullable": "NO"
+      }
+    }
+  },
+  {
+    "table_name": "owner_sms_messages",
+    "columns": {
+      "id": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "NO"
+      },
+      "state": {
+        "type": "text",
+        "default": "'queued'::text",
+        "nullable": "NO"
+      },
+      "key_id": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "YES"
+      },
+      "ai_cents": {
+        "type": "numeric",
+        "default": null,
+        "nullable": "YES"
+      },
+      "owner_id": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "NO"
+      },
+      "created_at": {
+        "type": "timestamptz",
+        "default": "now()",
+        "nullable": "NO"
+      },
+      "started_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      },
+      "body_sealed": {
+        "type": "text",
+        "default": null,
+        "nullable": "NO"
+      },
+      "finished_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      },
+      "message_sid": {
+        "type": "text",
+        "default": null,
+        "nullable": "NO"
+      },
+      "actual_cents": {
+        "type": "numeric",
+        "default": null,
+        "nullable": "YES"
+      },
+      "outbound_sid": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "reply_sealed": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "twilio_cents": {
+        "type": "numeric",
+        "default": null,
+        "nullable": "YES"
+      },
+      "reserved_cents": {
+        "type": "int4",
+        "default": "50",
+        "nullable": "NO"
+      },
+      "conversation_id": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "delivery_status": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "billing_checked_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      }
+    }
+  },
+  {
+    "table_name": "owner_sms_settings",
+    "columns": {
+      "id": {
+        "type": "bool",
+        "default": "true",
+        "nullable": "NO"
+      },
+      "enabled": {
+        "type": "bool",
+        "default": "false",
+        "nullable": "NO"
+      },
+      "agent_id": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "opted_out": {
+        "type": "bool",
+        "default": "true",
+        "nullable": "NO"
+      },
+      "fixed_cents": {
+        "type": "int4",
+        "default": "500",
+        "nullable": "NO"
+      },
+      "setup_cents": {
+        "type": "int4",
+        "default": "0",
+        "nullable": "NO"
+      },
+      "setup_month": {
+        "type": "date",
+        "default": null,
+        "nullable": "YES"
+      },
+      "stream_cents": {
+        "type": "numeric",
+        "default": "0",
+        "nullable": "NO"
+      },
+      "stream_month": {
+        "type": "date",
+        "default": null,
+        "nullable": "YES"
+      }
+    }
+  },
+  {
+    "table_name": "owner_voice_sessions",
+    "columns": {
+      "id": {
+        "type": "uuid",
+        "default": "gen_random_uuid()",
+        "nullable": "NO"
+      },
+      "state": {
+        "type": "text",
+        "default": "'reserved'::text",
+        "nullable": "NO"
+      },
+      "key_id": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "YES"
+      },
+      "ai_cents": {
+        "type": "numeric",
+        "default": null,
+        "nullable": "YES"
+      },
+      "owner_id": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "NO"
+      },
+      "created_at": {
+        "type": "timestamptz",
+        "default": "now()",
+        "nullable": "NO"
+      },
+      "expires_at": {
+        "type": "timestamptz",
+        "default": "(now() + '00:08:00'::interval)",
+        "nullable": "NO"
+      },
+      "key_sealed": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "direct_call": {
+        "type": "bool",
+        "default": "false",
+        "nullable": "NO"
+      },
+      "actual_cents": {
+        "type": "numeric",
+        "default": null,
+        "nullable": "YES"
+      },
+      "callback_sid": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "completed_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      },
+      "incoming_sid": {
+        "type": "text",
+        "default": null,
+        "nullable": "NO"
+      },
+      "twilio_cents": {
+        "type": "numeric",
+        "default": null,
+        "nullable": "YES"
+      },
+      "auth_attempts": {
+        "type": "int4",
+        "default": "0",
+        "nullable": "NO"
+      },
+      "openai_call_id": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "reserved_cents": {
+        "type": "int4",
+        "default": "200",
+        "nullable": "NO"
+      },
+      "conversation_id": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "provider_status": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "duration_seconds": {
+        "type": "int4",
+        "default": null,
+        "nullable": "YES"
+      },
+      "billing_checked_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      }
+    }
+  },
+  {
+    "table_name": "profiles",
+    "columns": {
+      "id": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "NO"
+      },
+      "role": {
+        "type": "user_role",
+        "default": "'contractor'::user_role",
+        "nullable": "YES"
+      },
+      "team": {
+        "type": "text",
+        "default": "''::text",
+        "nullable": "NO"
+      },
+      "email": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "notes": {
+        "type": "text",
+        "default": "''::text",
+        "nullable": "NO"
+      },
+      "phone": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "title": {
+        "type": "text",
+        "default": "''::text",
+        "nullable": "NO"
+      },
+      "market": {
+        "type": "text",
+        "default": "''::text",
+        "nullable": "NO"
+      },
+      "region": {
+        "type": "text",
+        "default": "''::text",
+        "nullable": "NO"
+      },
+      "status": {
+        "type": "text",
+        "default": "'pending'::text",
+        "nullable": "NO"
+      },
+      "location": {
+        "type": "text",
+        "default": "''::text",
+        "nullable": "NO"
+      },
+      "full_name": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "avatar_url": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "created_at": {
+        "type": "timestamptz",
+        "default": "now()",
+        "nullable": "YES"
+      },
+      "department": {
+        "type": "text",
+        "default": "''::text",
+        "nullable": "NO"
+      },
+      "invited_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      },
+      "updated_at": {
+        "type": "timestamptz",
+        "default": "now()",
+        "nullable": "NO"
+      },
+      "avatar_path": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "company_name": {
+        "type": "text",
+        "default": "''::text",
+        "nullable": "NO"
+      },
+      "service_type": {
+        "type": "text",
+        "default": "''::text",
+        "nullable": "NO"
+      },
+      "service_types": {
+        "type": "_text",
+        "default": "'{}'::text[]",
+        "nullable": "NO"
+      },
+      "allowed_regions": {
+        "type": "_text",
+        "default": "'{}'::text[]",
+        "nullable": "NO"
+      },
+      "approval_status": {
+        "type": "text",
+        "default": "'pending'::text",
+        "nullable": "NO"
+      },
+      "invited_by_admin": {
+        "type": "bool",
+        "default": "false",
+        "nullable": "NO"
+      },
+      "contractor_approved": {
+        "type": "bool",
+        "default": "false",
+        "nullable": "NO"
+      },
+      "onboarding_override": {
+        "type": "bool",
+        "default": "false",
+        "nullable": "NO"
+      },
+      "allowed_property_ids": {
+        "type": "_uuid",
+        "default": "'{}'::uuid[]",
+        "nullable": "NO"
+      },
+      "allowed_property_names": {
+        "type": "_text",
+        "default": "'{}'::text[]",
+        "nullable": "NO"
+      },
+      "background_check_notes": {
+        "type": "text",
+        "default": "''::text",
+        "nullable": "NO"
+      },
+      "contractor_approved_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      },
+      "contractor_approved_by": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "YES"
+      },
+      "onboarding_override_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      },
+      "onboarding_override_by": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "YES"
+      },
+      "background_check_status": {
+        "type": "text",
+        "default": "'not_started'::text",
+        "nullable": "NO"
+      },
+      "requested_property_name": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "sales_member_deleted_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      },
+      "onboarding_override_reason": {
+        "type": "text",
+        "default": "''::text",
+        "nullable": "NO"
+      },
+      "property_manager_property_id": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "YES"
+      },
+      "background_check_completed_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      }
+    }
+  },
+  {
+    "table_name": "referral_bookings",
+    "columns": {
+      "id": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "NO"
+      },
+      "zip": {
+        "type": "text",
+        "default": null,
+        "nullable": "NO"
+      },
+      "beds": {
+        "type": "int4",
+        "default": null,
+        "nullable": "NO"
+      },
+      "city": {
+        "type": "text",
+        "default": null,
+        "nullable": "NO"
+      },
+      "name": {
+        "type": "text",
+        "default": null,
+        "nullable": "NO"
+      },
+      "sqft": {
+        "type": "int4",
+        "default": null,
+        "nullable": "NO"
+      },
+      "baths": {
+        "type": "numeric",
+        "default": null,
+        "nullable": "NO"
+      },
+      "email": {
+        "type": "text",
+        "default": null,
+        "nullable": "NO"
+      },
+      "notes": {
+        "type": "text",
+        "default": "''::text",
+        "nullable": "NO"
+      },
+      "phone": {
+        "type": "text",
+        "default": null,
+        "nullable": "NO"
+      },
+      "quote": {
+        "type": "jsonb",
+        "default": null,
+        "nullable": "NO"
+      },
+      "state": {
+        "type": "text",
+        "default": null,
+        "nullable": "NO"
+      },
+      "status": {
+        "type": "text",
+        "default": null,
+        "nullable": "NO"
+      },
+      "paid_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      },
+      "service": {
+        "type": "text",
+        "default": null,
+        "nullable": "NO"
+      },
+      "agent_id": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "YES"
+      },
+      "charge_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "NO"
+      },
+      "frequency": {
+        "type": "text",
+        "default": null,
+        "nullable": "NO"
+      },
+      "agent_name": {
+        "type": "text",
+        "default": null,
+        "nullable": "NO"
+      },
+      "charge_key": {
+        "type": "uuid",
+        "default": "gen_random_uuid()",
+        "nullable": "NO"
+      },
+      "consent_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      },
+      "created_at": {
+        "type": "timestamptz",
+        "default": "now()",
+        "nullable": "NO"
+      },
+      "token_hash": {
+        "type": "text",
+        "default": null,
+        "nullable": "NO"
+      },
+      "arrival_end": {
+        "type": "time",
+        "default": null,
+        "nullable": "NO"
+      },
+      "customer_id": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "NO"
+      },
+      "amount_cents": {
+        "type": "int4",
+        "default": null,
+        "nullable": "NO"
+      },
+      "cancelled_by": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "YES"
+      },
+      "completed_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      },
+      "completed_by": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "YES"
+      },
+      "consent_text": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "request_hash": {
+        "type": "text",
+        "default": null,
+        "nullable": "NO"
+      },
+      "service_date": {
+        "type": "date",
+        "default": null,
+        "nullable": "NO"
+      },
+      "arrival_start": {
+        "type": "time",
+        "default": null,
+        "nullable": "NO"
+      },
+      "referral_code": {
+        "type": "text",
+        "default": null,
+        "nullable": "NO"
+      },
+      "visit_details": {
+        "type": "jsonb",
+        "default": "'{}'::jsonb",
+        "nullable": "NO"
+      },
+      "payment_status": {
+        "type": "text",
+        "default": "'not_collected'::text",
+        "nullable": "NO"
+      },
+      "stripe_session": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "profile_address": {
+        "type": "text",
+        "default": null,
+        "nullable": "NO"
+      },
+      "stripe_customer": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "charge_locked_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      },
+      "property_address": {
+        "type": "text",
+        "default": null,
+        "nullable": "NO"
+      },
+      "charge_started_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      },
+      "recurring_plan_id": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "YES"
+      },
+      "gift_applied_cents": {
+        "type": "int4",
+        "default": "0",
+        "nullable": "NO"
+      },
+      "cleaner_payout_rate": {
+        "type": "numeric",
+        "default": "0.36",
+        "nullable": "YES"
+      },
+      "assignment_created_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      },
+      "assignment_deleted_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      },
+      "stripe_payment_intent": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      },
+      "stripe_payment_method": {
+        "type": "text",
+        "default": null,
+        "nullable": "YES"
+      }
+    }
+  },
+  {
+    "table_name": "sales_activities",
+    "columns": {
+      "id": {
+        "type": "uuid",
+        "default": "extensions.gen_random_uuid()",
+        "nullable": "NO"
+      },
+      "lead_id": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "NO"
+      },
+      "user_id": {
+        "type": "uuid",
+        "default": "auth.uid()",
+        "nullable": "YES"
+      },
+      "metadata": {
+        "type": "jsonb",
+        "default": "'{}'::jsonb",
+        "nullable": "NO"
+      },
+      "user_name": {
+        "type": "text",
+        "default": "''::text",
+        "nullable": "NO"
+      },
+      "created_at": {
+        "type": "timestamptz",
+        "default": "now()",
+        "nullable": "NO"
+      },
+      "activity_text": {
+        "type": "text",
+        "default": null,
+        "nullable": "NO"
+      },
+      "activity_type": {
+        "type": "text",
+        "default": "'note'::text",
+        "nullable": "NO"
+      }
+    }
+  },
+  {
+    "table_name": "sales_leads",
+    "columns": {
+      "id": {
+        "type": "uuid",
+        "default": "extensions.gen_random_uuid()",
+        "nullable": "NO"
+      },
+      "name": {
+        "type": "text",
+        "default": "''::text",
+        "nullable": "NO"
+      },
+      "address": {
+        "type": "text",
+        "default": "''::text",
+        "nullable": "NO"
+      },
+      "client_id": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "YES"
+      },
+      "next_step": {
+        "type": "text",
+        "default": "''::text",
+        "nullable": "NO"
+      },
+      "created_at": {
+        "type": "timestamptz",
+        "default": "now()",
+        "nullable": "NO"
+      },
+      "created_by": {
+        "type": "uuid",
+        "default": "auth.uid()",
+        "nullable": "YES"
+      },
+      "lead_notes": {
+        "type": "text",
+        "default": "''::text",
+        "nullable": "NO"
+      },
+      "lead_value": {
+        "type": "numeric",
+        "default": null,
+        "nullable": "YES"
+      },
+      "sales_city": {
+        "type": "text",
+        "default": "''::text",
+        "nullable": "NO"
+      },
+      "updated_at": {
+        "type": "timestamptz",
+        "default": "now()",
+        "nullable": "NO"
+      },
+      "lead_source": {
+        "type": "text",
+        "default": "''::text",
+        "nullable": "NO"
+      },
+      "sales_state": {
+        "type": "text",
+        "default": "''::text",
+        "nullable": "NO"
+      },
+      "task_due_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      },
+      "task_status": {
+        "type": "text",
+        "default": "'open'::text",
+        "nullable": "NO"
+      },
+      "budget_range": {
+        "type": "text",
+        "default": "''::text",
+        "nullable": "NO"
+      },
+      "company_name": {
+        "type": "text",
+        "default": "''::text",
+        "nullable": "NO"
+      },
+      "contact_name": {
+        "type": "text",
+        "default": "''::text",
+        "nullable": "NO"
+      },
+      "sales_county": {
+        "type": "text",
+        "default": "''::text",
+        "nullable": "NO"
+      },
+      "sales_region": {
+        "type": "text",
+        "default": "''::text",
+        "nullable": "NO"
+      },
+      "contact_email": {
+        "type": "text",
+        "default": "''::text",
+        "nullable": "NO"
+      },
+      "contact_phone": {
+        "type": "text",
+        "default": "''::text",
+        "nullable": "NO"
+      },
+      "default_scope": {
+        "type": "text",
+        "default": "''::text",
+        "nullable": "NO"
+      },
+      "property_name": {
+        "type": "text",
+        "default": null,
+        "nullable": "NO"
+      },
+      "prospect_type": {
+        "type": "text",
+        "default": "'residential'::text",
+        "nullable": "NO"
+      },
+      "sales_website": {
+        "type": "text",
+        "default": "''::text",
+        "nullable": "NO"
+      },
+      "service_needs": {
+        "type": "jsonb",
+        "default": "'[]'::jsonb",
+        "nullable": "NO"
+      },
+      "task_priority": {
+        "type": "text",
+        "default": "'medium'::text",
+        "nullable": "NO"
+      },
+      "current_vendor": {
+        "type": "text",
+        "default": "''::text",
+        "nullable": "NO"
+      },
+      "do_not_contact": {
+        "type": "bool",
+        "default": "false",
+        "nullable": "NO"
+      },
+      "pipeline_stage": {
+        "type": "text",
+        "default": "'new_leads'::text",
+        "nullable": "NO"
+      },
+      "property_class": {
+        "type": "text",
+        "default": "''::text",
+        "nullable": "NO"
+      },
+      "sales_owner_id": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "YES"
+      },
+      "source_contact": {
+        "type": "jsonb",
+        "default": "'{}'::jsonb",
+        "nullable": "NO"
+      },
+      "business_segment": {
+        "type": "text",
+        "default": "'commercial'::text",
+        "nullable": "NO"
+      },
+      "follow_up_due_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      },
+      "last_activity_at": {
+        "type": "timestamptz",
+        "default": "now()",
+        "nullable": "NO"
+      },
+      "next_step_due_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      },
+      "sales_owner_name": {
+        "type": "text",
+        "default": "''::text",
+        "nullable": "NO"
+      },
+      "opportunity_score": {
+        "type": "int4",
+        "default": null,
+        "nullable": "YES"
+      },
+      "referral_agent_id": {
+        "type": "uuid",
+        "default": null,
+        "nullable": "YES"
+      },
+      "sales_pain_points": {
+        "type": "jsonb",
+        "default": "'[]'::jsonb",
+        "nullable": "NO"
+      },
+      "desired_start_date": {
+        "type": "date",
+        "default": null,
+        "nullable": "YES"
+      },
+      "gift_card_quantity": {
+        "type": "int4",
+        "default": "0",
+        "nullable": "NO"
+      },
+      "prospect_unit_count": {
+        "type": "int4",
+        "default": null,
+        "nullable": "YES"
+      },
+      "qualification_notes": {
+        "type": "text",
+        "default": "''::text",
+        "nullable": "NO"
+      },
+      "default_service_type": {
+        "type": "text",
+        "default": "''::text",
+        "nullable": "NO"
+      },
+      "follow_up_started_at": {
+        "type": "timestamptz",
+        "default": null,
+        "nullable": "YES"
+      },
+      "decision_maker_status": {
+        "type": "text",
+        "default": "''::text",
+        "nullable": "NO"
+      },
+      "sales_confirmation_ref": {
+        "type": "text",
+        "default": "''::text",
+        "nullable": "NO"
+      },
+      "average_turns_per_month": {
+        "type": "text",
+        "default": "''::text",
+        "nullable": "NO"
+      }
+    }
+  }
+]
