@@ -18,10 +18,12 @@ test('new SQL uses real column types; atomic sales workflow preserves other lead
   const columns=Object.entries(schema[table]).map(([f,t])=>{const type=t.startsWith('_')?t.slice(1)+'[]':['user_role','qa_status','contract_status','quote_status','lead_status'].includes(t)?'text':t;return '"'+f+'" '+type+(f==='id'?' primary key default gen_random_uuid()':['created_at','updated_at'].includes(f)?' default now()':'');});
   await db.exec('create table '+table+'('+columns.join(',')+')');
  }
+ await db.exec("alter table assignment_blocks alter column unit_number set default '';alter table assignment_blocks alter column unit_number set not null;alter table assignment_blocks alter column unit_name set default '';alter table assignment_blocks alter column unit_name set not null;");
  await db.exec(fs.readFileSync('docs/integration-admin-resources-expanded.sql','utf8'));
  await db.exec(fs.readFileSync('docs/integration-admin-extended.sql','utf8'));
  await db.exec(fs.readFileSync('docs/integration-booking-admin.sql','utf8'));
  await db.exec(fs.readFileSync('docs/integration-admin-batch.sql','utf8'));
+ await db.exec(fs.readFileSync('docs/integration-manual-calendar.sql','utf8'));
  await db.query("insert into profiles(id,role,status) values($1,'admin','active')",[actor]);
  await db.query("insert into integration_keys(id,created_by,scopes,deny_record_deletion)values($1,$2,array['platform:full'],true)",[key,actor]);
  const mutate=(resource,data,id=null,expected=null,request=crypto.randomUUID())=>db.query('select integration_mutate($1,$2,$3,$4,$5,$6) r',[key,request,resource,id,JSON.stringify(data),expected]);
@@ -41,6 +43,8 @@ test('new SQL uses real column types; atomic sales workflow preserves other lead
  assert.equal((await db.query('select notes from property_regions where id=$1',[region.id])).rows[0].notes,'Preserve history');
  const prop=(await mutate('portal_properties',{property_name:'Test property'})).rows[0].r;
  const series=(await db.query('select integration_assignment_series($1,$2) r',[actor,JSON.stringify({title:'Test series',property_id:prop.id,address:'Test address',scope:'Test scope',pay_amount:50,reason:'Test transaction',windows:[{start_window:'2026-12-01T10:00:00-05:00',end_window:'2026-12-01T11:00:00-05:00'},{start_window:'2026-12-08T10:00:00-05:00',end_window:'2026-12-08T11:00:00-05:00'}]})])).rows[0].r;
+ const manual=(await db.query('select integration_manual_assignment($1,$2) r',[actor,JSON.stringify({calendar:'residential',title:'Manual test',property_name:'Test home',address:'Test address',scope:'Standard clean',pay_amount:36,customer_price:100,start_window:'2026-12-02T10:00:00-05:00',end_window:'2026-12-02T12:00:00-05:00',reason:'Owner requested manual calendar entry'})])).rows[0].r;
+ assert.equal(manual.calendar,'residential');assert.equal(manual.customer_charged,false);assert.equal((await db.query('select metadata from assignment_blocks where id=$1',[manual.id])).rows[0].metadata.scope_type,'residential');
  assert.equal(series.assignments.length,2);assert.equal(series.status,'pending');
  const job=(await db.query('select id,updated_at::text revision from assignment_blocks limit 1')).rows[0];
  await db.query("select integration_admin_extended($1,'assignment_configure',$2)",[actor,JSON.stringify({id:job.id,expected_updated_at:job.revision,reason:'Configure test',data:{priority:'high',materials_list:[]}})]);

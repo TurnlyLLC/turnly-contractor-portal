@@ -8,14 +8,18 @@ begin
   if a.id is null then raise exception 'assignment_not_found';end if;
   if a.updated_at is distinct from (p_input->>'expected_updated_at')::timestamptz then raise exception 'version_conflict';end if;
   if a.payment_status in ('paid','processing') or a.paid_at is not null or exists(select 1 from contractor_payouts where assignment_id=a.id and status in ('pending','processing','paid','succeeded','completed')) or exists(select 1 from global_payout_requests where assignment_id=a.id) then raise exception 'reconcile_payment_first';end if;
-  allowed:=array['priority','property_id','unit_id','preferred_first','preferred_contractor_ids','preferred_until','recurrence_frequency','recurrence_interval','recurrence_end_date','auto_renewal','property_checklist_items','materials_list','materials_template_id'];
+  allowed:=array['priority','property_name','unit_number','unit_name','qr_tracker_id','property_id','unit_id','preferred_first','preferred_contractor_ids','preferred_until','recurrence_frequency','recurrence_interval','recurrence_end_date','auto_renewal','property_checklist_items','materials_list','materials_template_id'];
   if length(coalesce(p_input->>'reason',''))<5 then raise exception 'reason_required';end if;
   for k in select jsonb_object_keys(d) loop if not k=any(allowed) then raise exception 'unsupported_field';end if;end loop;
   if exists(select 1 from referral_bookings where id=a.id) and (d ?| array['property_id','unit_id','recurrence_frequency','auto_renewal']) then raise exception 'use_residential_booking_workflow';end if;
+  if d?'unit_number' and d->>'unit_number' is null then d:=d||jsonb_build_object('unit_number','');end if;
+  if d?'unit_name' and d->>'unit_name' is null then d:=d||jsonb_build_object('unit_name','');end if;
   if d?'property_id' then
+   if not d?'unit_id' and (d->>'property_id')::uuid is distinct from a.property_id then d:=d||jsonb_build_object('unit_id',null,'unit_name','','unit_number','');end if;
    if not exists(select 1 from portal_properties where id=(d->>'property_id')::uuid) then raise exception 'choose_existing_portal_property';end if;
    d:=d||jsonb_build_object('property_name',(select property_name from portal_properties where id=(d->>'property_id')::uuid),'portal_property_id',(d->>'property_id')::uuid);
   end if;
+  if d?'unit_id' and d->>'unit_id' is null then d:=d||jsonb_build_object('unit_name','','unit_number','');end if;
   if d->>'unit_id' is not null then
    if not exists(select 1 from property_units where id=(d->>'unit_id')::uuid and property_id=coalesce((d->>'property_id')::uuid,a.property_id)) then raise exception 'unit_does_not_belong_to_property';end if;
    d:=d||jsonb_build_object('unit_name',(select unit_name from property_units where id=(d->>'unit_id')::uuid),'unit_number',(select unit_name from property_units where id=(d->>'unit_id')::uuid));

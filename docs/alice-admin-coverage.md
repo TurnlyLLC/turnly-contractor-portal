@@ -18,6 +18,7 @@ Inventory: current `admin-navigation.mjs` pages and their loaded admin-suite var
 | Commercial / residential assignment calendars | Existing combined calendar and resource reads with precise ID/date search |
 | Assignments: worker, job status, pay, dates, notes | Dedicated reassign/set_status/set_pay/reschedule/edit_details; payment and completion protections retained |
 | Assignment preferences, priority, unit/property, recurrence, materials and checklist plan | `assignments.configure`; these do not rewrite completed-work answers |
+| Manual residential/commercial calendar entries | `assignments.create_manual`; matches manual schedule editor and does not create checkout or charge customer |
 | Multiple recurring commercial jobs | `assignments.create_series`: explicit date windows, atomic pending creation; authorize release separately |
 | Residential bookings and calendar settings | Existing complete/cancel/approve/reconcile, reschedule, notes and calendar configuration; customer/client/inquiry reads |
 | Client Directory, contracts, contacts, units, projections | Explicit read/create/update resources, including revenue and account-manager fields |
@@ -45,6 +46,6 @@ Inventory: current `admin-navigation.mjs` pages and their loaded admin-suite var
 
 - 40 targeted regression tests passed across integration permissions, documents, onboarding, background approval, assignments/calendars, counts, referral delivery and new admin workflows.
 - New tests check actual catalog columns, structured field validation, no-deletion bypasses, atomic quote/lead changes, stale edits, bulk rollback, recurring creation, and API body parsing without a browser.
-- Live rollback-only tests confirmed quote pipeline synchronization, preservation of notes/owner, stale-write rejection, region soft-delete blocking, assignment configuration, QA-job linkage and duplicate-safe QA attachment. No test customers, messages, payments or uploads were retained.
+- Live rollback-only tests confirmed quote pipeline synchronization, preservation of notes/owner, stale-write rejection, region soft-delete blocking, assignment configuration, manual residential creation at 36% pay, recurring commercial creation, QA-job linkage and duplicate-safe QA attachment. No test customers, messages, payments or uploads were retained.
 - Found and fixed shared sales revision timestamps using transaction time; each write now receives a distinct clock timestamp.
-- Production read probes and Alice voice/SMS configuration verification are performed after deployment. A real end-to-end phone conversation is not covered by server tests.
+- All 39 resource reads and seven additional read workflows passed against production (46 checks). Alice voice/SMS configuration verification follows deployment. A real end-to-end phone conversation is not covered by server tests.
