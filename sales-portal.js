@@ -16,7 +16,7 @@ import {startMessageBadge,paintMessageBadge,refreshMessageBadge} from './crm-mes
 import {mountDemandMap} from "./demand-map.mjs?v=20261027-status-rings";
 import {mountMessages} from './crm-messages.mjs?v=20261021-alerts';
 import {mountBudget} from './crm-budget.mjs?v=20261112-twilio-actual';
-import { installCalling } from './crm-calling.mjs?v=20261106-call-hours';
+import { installCalling } from './crm-calling.mjs?v=20261117-call-limits';
 import {GIFT_CARD_URL,RESIDENTIAL_URL,PRODUCT_FACTS,PLAYBOOK,SALES_SCRIPTS,SALES_OBJECTIONS} from './crm-sales-content.mjs?v=20261021-training';
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/+esm";
 import {
@@ -1279,6 +1279,7 @@ function pageTitle() {
 }
 
 function render() {
+ document.dispatchEvent(new CustomEvent('crm-lead-focus',{detail:{id:state.selectedId}}));
   if (!app) return;
   const focusId=document.activeElement?.id,caret=document.activeElement?.selectionStart;
   app.innerHTML = `
