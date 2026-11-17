@@ -1,6 +1,11 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const A=require('../lib/integration-assignments.cjs'),C=require('../lib/integration-catalog.cjs'),M=require('../api/turnly-mcp.js');
 const id='11111111-1111-4111-8111-111111111111',base={id,expected_updated_at:'2026-11-17T12:00:00Z',reason:'Owner requested change'};
+test('pay plan rejects invalid report range before any mutation',async()=>{
+ const P=require('../lib/integration-platform.cjs');
+ await assert.rejects(()=>P.invoke(null,id,C.actions['sales.set_pay_plan'],{user_id:id,mode:'hourly',hourly_rate:10},'key'),/from\/to/);
+ assert.ok(C.actions['sales.productivity'].required.includes('from'));
+});
 test('job status cannot be used for payment or arbitrary fields',async()=>{
  let calls=0;const db={rpc:async()=>{calls++;return {data:{status:'completed'}};}};
  await assert.rejects(()=>A.run(db,id,'set_status',{...base,status:'paid'}),/payouts.record_external/);
