@@ -235,14 +235,17 @@ async function onboarding(request: Request, env: Env, url: URL, path: string): P
 async function integrationOnboardingCaller(request: Request, sub: string) {
   const keyId=request.headers.get("X-Turnly-Integration-Id");
   if(!keyId) return null;
-  const secret=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if(!secret || request.headers.get("X-Supabase-Auth")!==secret || !/^[0-9a-f-]{36}$/i.test(keyId)) return null;
+  const secret=request.headers.get("X-Supabase-Auth");
+  if(!secret || !/^[0-9a-f-]{36}$/i.test(keyId)) return null;
   // No deletion, sensitive-answer reveal, signatures, or arbitrary backend routes.
   const allowed=/^\/admin\/contractors\/[0-9a-f-]{36}(?:\/items\/[\w-]+\/(mark|reset|progress))?$/.test(sub)
     || /^\/admin\/submissions\/[\w-]+\/(link|review)$/.test(sub);
   if(!allowed || !["GET","POST"].includes(request.method)) return null;
-  const row=(await db().exec<{id:string; email:string; full_name:string}>(
-    "select p.id,p.email,p.full_name from public.integration_keys k join public.profiles p on p.id=k.created_by where k.id=?::uuid and k.revoked_at is null and (k.expires_at is null or k.expires_at>now()) and 'platform:full'=any(k.scopes) and p.role::text='admin' and p.status='active'",keyId)).toArray()[0];
+  // PostgREST authenticates either legacy or rotated server keys. This RPC grants
+  // EXECUTE only to service_role; a browser/admin JWT or guessed key ID cannot call it.
+  const response=await fetch(`${env.SUPABASE_URL||DEFAULT_SUPABASE_URL}/rest/v1/rpc/integration_onboarding_actor`,{method:'POST',headers:{apikey:secret,Authorization:'Bearer '+secret,'Content-Type':'application/json'},body:JSON.stringify({p_key:keyId}),signal:AbortSignal.timeout(10000)});
+  if(!response.ok)return null;
+  const row=await response.json();
   return row?{userId:row.id,role:"admin" as const,email:row.email,name:row.full_name,approved:null,createdAt:null}:null;
 }
 

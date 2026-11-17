@@ -23,7 +23,7 @@ begin
   update assignment_blocks set title=coalesce(p_data->>'title',title),address=coalesce(p_data->>'address',address),service_type=coalesce(p_data->>'service_type',service_type),scope=coalesce(p_data->>'scope',scope),supplies_notes=coalesce(p_data->>'supplies_notes',supplies_notes),special_instructions=coalesce(p_data->>'special_instructions',special_instructions),completion_notes=coalesce(p_data->>'completion_notes',completion_notes),metadata=m,updated_at=clock_timestamp() where id=j.id;
  else
   next_status=p_data->>'status';
-  if next_status is null or next_status not in ('pending','open','preferred_pending','claimed','in_progress','qa_pending','completed','cancelled','declined') or exists(select 1 from jsonb_object_keys(p_data) k where k<>'status') then raise exception 'Invalid job status; paid is a payout operation';end if;
+  if next_status is null or next_status not in ('pending','open','preferred_pending','claimed','in_progress','qa_pending','completed','cancelled','declined','draft') or exists(select 1 from jsonb_object_keys(p_data) k where k<>'status') then raise exception 'Invalid job status; paid is a payout operation';end if;
   if b.id is not null and j.status is distinct from next_status then
    if next_status in ('cancelled','declined') and b.status<>'cancelled' then perform finish_residential_booking(b.id,p_actor,true);
    elsif next_status='completed' and b.status<>'completed' then perform finish_residential_booking(b.id,p_actor,false);
