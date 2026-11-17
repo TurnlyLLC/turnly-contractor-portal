@@ -28,6 +28,10 @@
     {
       "path": "/api/integration-deliver",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/owner-sms",
+      "schedule": "* * * * *"
     }
   ],
   "functions": {
@@ -96,6 +100,9 @@
     },
     "api/integration-v2.js": {
       "maxDuration": 300
+    },
+    "api/owner-sms.js": {
+      "maxDuration": 300
     }
   },
   "routes": [
@@ -109,7 +116,12 @@
     },
     {
       "src": "^/oauth-authorize\\.(html|mjs)$",
-      "headers": {"Cache-Control":"no-store","Referrer-Policy":"no-referrer","X-Frame-Options":"DENY","Content-Security-Policy":"frame-ancestors 'none'"},
+      "headers": {
+        "Cache-Control": "no-store",
+        "Referrer-Policy": "no-referrer",
+        "X-Frame-Options": "DENY",
+        "Content-Security-Policy": "frame-ancestors 'none'"
+      },
       "continue": true
     },
     {
