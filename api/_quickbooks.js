@@ -58,6 +58,10 @@ function getSupabaseAdmin() {
 }
 
 async function requireAdmin(supabase, req) {
+  if(require('../lib/integration-principal.cjs').get(req)){
+    try{return {user:{id:await require('../lib/residential-server.cjs').admin(supabase,req)}};}
+    catch(e){return {error:e.message,status:e.status||403};}
+  }
   const token = bearerToken(req);
   if (!token) return { error: "Missing admin session.", status: 401 };
 

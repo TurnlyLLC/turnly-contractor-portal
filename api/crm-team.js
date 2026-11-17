@@ -40,11 +40,13 @@ function createHandler(makeClient=createClient){return async(req,res)=>{
    if(!access.must_change_password)checked(await db.rpc('crm_track_activity',{p_user:user.id,p_session:require('../lib/crm-productivity.cjs').sessionId(session.access_token),p_action:'start',p_active:false,p_work:false}));
    return send(200,{session:{access_token:session.access_token,refresh_token:session.refresh_token},must_change_password:access.must_change_password});
   }
-  const jwt=token(req);const auth=await db.auth.getUser(jwt);if(auth.error||!auth.data?.user)throw fail('Sign in to continue.',401);
+  const principal=require('../lib/integration-principal.cjs').get(req);
+  if(principal&&!['list','profile','create','edit','reset','deactivate','reactivate'].includes(b.action))throw fail('Unsupported integration team action.',403);
+  const jwt=token(req);const auth=principal?{data:{user:{id:await require('../lib/residential-server.cjs').admin(db,req)}}}:await db.auth.getUser(jwt);if(auth.error||!auth.data?.user)throw fail('Sign in to continue.',401);
   const user=auth.data.user;
   const profile=checked(await db.from('profiles').select('id,full_name,role,status,email').eq('id',user.id).single());
   const scoped=makeClient(url,process.env.SUPABASE_ANON_KEY,{...options,global:{headers:{Authorization:'Bearer '+jwt}}});
-  const access=checked(await scoped.rpc('crm_access_state'));
+  const access=principal?{active:true,session_valid:true,must_change_password:false}:checked(await scoped.rpc('crm_access_state'));
   if(!access?.active||!access.session_valid||!roles.includes(profile.role))throw fail('Your access has changed. Sign in again or contact your administrator.',403);
   if(b.action==='change_password'){
    if(!access.must_change_password)throw fail('This password setup session is no longer active. Contact your administrator for a reset.',403);
