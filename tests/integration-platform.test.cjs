@@ -13,10 +13,15 @@ test('platform SQL authorizes full keys, preserves restricted keys, prevents sta
   await db.exec('create table '+table+'('+[...fields].map(f=>f+' '+type(f)+(f===pk?' primary key default gen_random_uuid()':f==='created_at'||f==='updated_at'?' default now()':'')).join(',')+')');
  }
  for(const file of ['supabase/migrations/20261116130025_turnly_integration_keys_and_webhooks.sql','supabase/migrations/20261116131442_integration_role_enum_compatibility.sql','supabase/migrations/20261116141241_integration_platform_mcp.sql'])await db.exec(fs.readFileSync(file,'utf8'));
+ await db.exec(fs.readFileSync('docs/owner-email-read-scope.sql','utf8'));
  const actor='11111111-1111-4111-8111-111111111111',key='22222222-2222-4222-8222-222222222222',limited='33333333-3333-4333-8333-333333333333';
  await db.query("insert into profiles(id,role,status) values($1,'admin','active')",[actor]);
  await db.query("insert into integration_keys(id,name,secret_hash,prefix,scopes,created_by,expires_at) values($1,'full','full','prefix',array['platform:full'],$3,null),($2,'limited','limited','prefix',array['leads:read'],$3,now()+interval '1 day')",[key,limited,actor]);
  assert.equal((await db.query("select integration_use_key('full','payments:write') k")).rows[0].k,key);await assert.rejects(()=>db.query("select integration_use_key('limited','clients:write')"));
+ await db.query("insert into integration_keys(name,secret_hash,prefix,scopes,created_by,expires_at) values('email test','mail-hash','prefix',array['email:read'],$1,now()+interval '10 minutes')",[actor]);
+ assert.ok((await db.query("select integration_use_key('mail-hash','email:read') k")).rows[0].k);
+ await assert.rejects(()=>db.query("select integration_use_key('mail-hash','clients:write')"));
+ await assert.rejects(()=>db.query("select integration_use_key('mail-hash','platform:full')"));
  const mutate=(id,data,expected,request='request-one')=>db.query("select integration_mutate($1,$2,'clients',$3,$4,$5) r",[key,request,id,JSON.stringify(data),expected]);
  const first=(await mutate(null,{company_name:'Test company'})).rows[0].r;assert.ok(first.created);assert.ok((await mutate(null,{company_name:'Test company'})).rows[0].r.replayed);
  assert.equal((await db.query('select count(*) n from clients')).rows[0].n,1);await assert.rejects(()=>mutate(null,{company_name:'Different'}));
