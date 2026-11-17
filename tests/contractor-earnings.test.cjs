@@ -38,3 +38,23 @@ test('payment panel uses the same precomputed earned and paid totals exposed to 
  const s=E.summarize([{id:'one',status:'completed',pay_amount:100,completed_at:'2026-01-01',paid_at:'2026-02-01',paid_amount:90}],[],[],now);
  const html=earningsOverview([],now,s);assert.match(html,/Earned in 2026/);assert.match(html,/Paid in 2026/);assert.match(html,/\$100\.00/);assert.match(html,/\$90\.00/);assert.match(html,/Through 2026-11-17 Eastern/);
 });
+test('whole-team report includes inactive and zero-earning contractors and totals every page once',()=>{
+ const id=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
+ const profiles=Array.from({length:113},(_,i)=>({id:id(i+1),role:'contractor',full_name:'Worker '+(i+1),status:i===112?'inactive':'active'}));
+ profiles.push({id:id(114),role:'brand_ambassador',full_name:'BA only'});
+ const jobs=[{id:'a',assigned_to:id(1),status:'completed',pay_amount:100,completed_at:'2026-05-01'},
+ {id:'b',claimed_by:id(113),assigned_to:id(1),status:'completed',pay_amount:50,completed_at:'2026-06-01',paid_at:'2026-06-02',paid_amount:50},
+ {id:'c',assigned_to:id(114),status:'completed',pay_amount:999,completed_at:'2026-06-01'}];
+ const first=E.report(profiles,jobs,[],[],{limit:100},now),second=E.report(profiles,jobs,[],[],{limit:100,after:first.next_cursor},now);
+ assert.equal(first.contractor_count,113);assert.equal(first.data.length,100);assert.equal(second.data.length,13);assert.equal(second.next_cursor,null);
+ assert.equal(first.roster_totals.ytd_earnings_cents,15000);assert.equal(first.roster_totals.all_time_paid_cents,5000);assert.equal(first.roster_totals.outstanding_cents,10000);
+ assert.deepEqual(second.roster_totals,first.roster_totals);assert.equal(first.data[1].ytd_earnings_cents,0);assert.equal(second.data.at(-1).status,'inactive');
+ const owed=E.report(profiles,jobs,[],[],{owed_only:true},now);assert.equal(owed.matched_count,1);assert.equal(owed.data[0].id,id(1));assert.deepEqual(owed.roster_totals,first.roster_totals);
+ for(const p of [...first.data,...second.data]){const individual=E.summarize(jobs.filter(j=>(j.claimed_by||j.assigned_to)===p.id),[],[],now);assert.equal(p.ytd_earnings_cents,individual.ytd_earnings_cents);assert.equal(p.all_time_paid_cents,individual.all_time_paid_cents);assert.equal(p.outstanding_cents,individual.outstanding_cents);}
+});
+test('report permissions are read-only and invalid pagination is rejected before database reads',async()=>{
+ const tool=M.definitions(['contractors:read']).find(x=>x.name==='turnly_contractors_earnings_report');assert.equal(tool.annotations.readOnlyHint,true);
+ await assert.rejects(C.run({},'admin',{action:'earnings_report',limit:0}),/page size/);
+ await assert.rejects(C.run({},'admin',{action:'earnings_report',after:'invalid'}),/cursor/);
+ await assert.rejects(C.run({},'admin',{action:'earnings_report',owed_only:'true'}),/true or false/);
+});
