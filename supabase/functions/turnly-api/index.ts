@@ -239,7 +239,8 @@ async function integrationOnboardingCaller(request: Request, sub: string) {
   if(!secret || !/^[0-9a-f-]{36}$/i.test(keyId)) return null;
   // No deletion, sensitive-answer reveal, signatures, or arbitrary backend routes.
   const allowed=/^\/admin\/contractors\/[0-9a-f-]{36}(?:\/items\/[\w-]+\/(mark|reset|progress))?$/.test(sub)
-    || /^\/admin\/submissions\/[\w-]+\/(link|review)$/.test(sub);
+    || /^\/admin\/submissions\/[\w-]+\/(link|review)$/.test(sub)
+    || /^\/admin\/items(?:\/[\w-]+(?:\/(document|document-link))?)?$/.test(sub);
   if(!allowed || !["GET","POST"].includes(request.method)) return null;
   // PostgREST authenticates either legacy or rotated server keys. This RPC grants
   // EXECUTE only to service_role; a browser/admin JWT or guessed key ID cannot call it.
@@ -307,7 +308,7 @@ async function onboardingRoute(request: Request, env: Env, url: URL, path: strin
       if (waived.length > 0) headers["X-Portal-Waived"] = waived.join(",").slice(0, 4000);
     }
   }
-  for (const name of ["Content-Type", "X-File-Name", "X-Expiration-Date", "X-Require-Resign"]) {
+  for (const name of ["Content-Type", "X-File-Name", "X-Expiration-Date", "X-Require-Resign", "X-Expected-Updated-At"]) {
     const value = request.headers.get(name);
     if (value) headers[name] = value;
   }

@@ -53,6 +53,7 @@ function bearerToken(req) {
 }
 
 async function requireAdmin(supabase, req) {
+  if(require('../lib/integration-principal.cjs').get(req)){try{return {user:{id:await require('../lib/residential-server.cjs').admin(supabase,req)}};}catch(e){return {error:e.message,status:e.status||403};}}
   const token = bearerToken(req);
   if (!token) return { error: "Missing admin session.", status: 401 };
 
@@ -76,6 +77,7 @@ async function requireAdmin(supabase, req) {
 }
 
 async function readJsonBody(req) {
+  if(req.body&&typeof req.body==='object')return req.body;
   const chunks = [];
   for await (const chunk of req) chunks.push(chunk);
   const raw = Buffer.concat(chunks).toString("utf8");

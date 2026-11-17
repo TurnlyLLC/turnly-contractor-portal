@@ -27,6 +27,7 @@ function bearerToken(req) {
 function normalizeRole(value) { return String(value || '').trim().toLowerCase().replace(/[\s-]+/g, '_'); }
 
 async function requireAdmin(client, req) {
+  if(require('../lib/integration-principal.cjs').get(req)){try{return {user:{id:await require('../lib/residential-server.cjs').admin(client,req)}};}catch(e){return {error:e.message,status:e.status||403};}}
   const token = bearerToken(req);
   if (!token) return { error: 'Sign in with an admin account to manage QR batches.', status: 401 };
   const { data, error } = await client.auth.getUser(token);

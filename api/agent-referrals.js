@@ -14,6 +14,7 @@ async function readBody(req){
   let raw='';for await(const chunk of req){raw+=chunk.toString();if(Buffer.byteLength(raw)>3600000) throw new Error('Request is too large.');}return JSON.parse(raw||'{}');
 }
 async function access(client,req){
+  if(require('../lib/integration-principal.cjs').get(req))return {id:await require('../lib/residential-server.cjs').admin(client,req),admin:true};
   const token=String(req.headers.authorization||'').replace(/^Bearer\s+/i,'');
   if(!token) throw Object.assign(new Error('Sign in to the sales portal.'),{status:401});
   const auth=await client.auth.getUser(token);

@@ -52,6 +52,7 @@ function bearerToken(req) {
 }
 
 async function requireAdmin(supabase, req) {
+  if(require('../lib/integration-principal.cjs').get(req)){try{return {user:{id:await require('../lib/residential-server.cjs').admin(supabase,req)}};}catch(e){return {error:e.message,status:e.status||403};}}
   const token = bearerToken(req);
   if (!token) return { error: "Missing admin session.", status: 401 };
 
@@ -77,6 +78,7 @@ async function requireAdmin(supabase, req) {
 }
 
 async function readJsonBody(req) {
+  if(req.body&&typeof req.body==='object')return req.body;
   const chunks = [];
   for await (const chunk of req) chunks.push(chunk);
   const raw = Buffer.concat(chunks).toString("utf8");
@@ -189,6 +191,7 @@ async function createOrUpdateAuthUser(supabase, body, adminUserId) {
   const message = String(createResult.error?.message || "").toLowerCase();
   const alreadyExists = message.includes("already") || message.includes("registered") || message.includes("exists");
   if (!alreadyExists) throw createResult.error;
+  if(body._integration_create_only) throw new Error("An auth account already exists. Creation cannot reset an existing login.");
 
   let targetUser = await findAuthUserByEmail(supabase, email);
   if (!targetUser?.id) throw new Error("Auth user already exists, but the account could not be loaded for activation.");
@@ -299,6 +302,7 @@ module.exports = async function handler(req, res) {
   let body = {};
   try {
     body = await readJsonBody(req);
+    if(require('../lib/integration-principal.cjs').get(req))body._integration_create_only=true;
   } catch {
     return sendJson(res, 400, { error: "Invalid JSON body." });
   }

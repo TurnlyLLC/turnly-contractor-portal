@@ -942,6 +942,7 @@ export class OnboardingHub {
       required: item.required === 1,
       active: item.active === 1,
       version: item.version,
+      updatedAt: item.updated_at,
       fields: parseFields(item.fields_json),
       videoUrl: item.kind === "background" ? null : item.video_url,
       requiresExpiration: item.requires_expiration === 1,
@@ -1710,6 +1711,7 @@ export class OnboardingHub {
 
   private async saveItem(id: string | null, body: Record<string, unknown>) {
     const existing = id ? (await this.itemById(id)) : null;
+    if(existing && body.expectedUpdatedAt !== undefined && existing.updated_at !== body.expectedUpdatedAt) throw new HttpError(409, "Template changed; read it again.");
     if (existing?.id === BACKGROUND_ITEM_ID) {
       // The one background step: only its title and instructions can change.
       body = { ...body, kind: "background", required: true, active: true, videoUrl: "" };
@@ -1783,6 +1785,8 @@ export class OnboardingHub {
 
   private async replaceDocument(request: Request, id: string, who: Identity) {
     const item = (await this.itemById(id));
+    const revision = request.headers.get("X-Expected-Updated-At");
+    if(revision !== null && item.updated_at !== Number(revision)) throw new HttpError(409, "Template changed; read it again.");
     const bytes = new Uint8Array(await request.arrayBuffer());
     if (bytes.length > MAX_FILE) throw new HttpError(413, "PDFs must be 15 MB or smaller.");
     let pages: number;
