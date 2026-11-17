@@ -5,7 +5,7 @@ module.exports = async (req, res) => {
   if (req.method === 'GET') {const c=V.config();return S.json(res,200,{service:'A.L.I.C.E. private Turnly voice',provider:c.provider,ready:!!V.ready(c),twilio_account_matches:!!c.account&&c.account===c.expectedAccount});}
   if (req.method !== 'POST') return S.json(res, 405, {error: 'Use POST.'});
   const kind = req.query?.kind;
-  if (!['incoming', 'callback', 'authorize', 'status', 'openai'].includes(kind)) return S.json(res, 404, {error: 'Not found.'});
+  if (!['incoming', 'callback', 'authorize', 'status', 'passphrase', 'openai'].includes(kind)) return S.json(res, 404, {error: 'Not found.'});
   try {
     const chunks=[];let size=0;
     for await (const chunk of req) {const bytes=Buffer.from(chunk);size+=bytes.length;if(size>65536)throw S.fail('Request too large.',413);chunks.push(bytes);}
@@ -19,8 +19,8 @@ module.exports = async (req, res) => {
     const p = Object.fromEntries(new URLSearchParams(raw));
     if (!V.verifyTwilio(req, p, c)) return S.json(res, 403, {error: 'Invalid signature.'});
     const db = S.database();
-    if (kind === 'status') { await V.completed(db, p, req.query.id); return S.json(res, 200, {ok: true}); }
-    const body = kind === 'incoming' ? await V.incoming(db, p, c) : await V.callback(db, p, req.query.id, kind === 'authorize', c);
+    if (kind === 'status') { let id=req.query.id;if(!id){const row=S.checked(await db.from('owner_voice_sessions').select('id').eq('incoming_sid',p.CallSid).maybeSingle());id=row?.id;} if(id)await V.completed(db, p, id); return S.json(res, 200, {ok: true}); }
+    const body = kind === 'passphrase' ? await require('../lib/owner-voice-auth.cjs').authorize(db,p,req.query.id,c) : kind === 'incoming' ? await V.incoming(db, p, c) : await V.callback(db, p, req.query.id, kind === 'authorize', c);
     res.setHeader('Content-Type', 'text/xml'); res.statusCode = 200; res.end(body);
   } catch (e) { return S.json(res, e.status || 503, {error: e.status ? e.message : 'Voice connection unavailable.'}); }
 };

@@ -28,3 +28,6 @@ Initially eleven sessions per Eastern calendar month, each with at most five con
 `node --test --test-isolation=none tests/owner-voice.test.cjs tests/owner-voice-db.test.cjs`
 
 Before declaring ready, confirm the deployed GET readiness response, reject unsigned webhook requests, test a real owner callback and keypad authorization, verify OpenAI call acceptance plus a read-only Turnly tool result, and confirm completion revokes the temporary key. Do not change a real business record just to test write access.
+
+## Direct Alice calls (November 17)
+ElevenLabs incoming calls now play the prerecorded Alice greeting and verify a spoken passphrase on the server before issuing any business token. Only a salted scrypt hash is stored in a service-only table. Three attempts per call and five failed attempts per hour; no SpeechResult logging or forwarding into ElevenLabs. Twilio processes recognition and may retain webhook request diagnostics. The number status callback must POST to /api/owner-voice?kind=status. Cron also reconciles finished calls. Agent queue disabled; silent sessions end after 30 seconds.
