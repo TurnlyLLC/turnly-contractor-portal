@@ -68,3 +68,10 @@ test('identical assignment addresses share known site coordinates without extern
  const conflict=await M.attach(db,[{address:'123 Site St',latitude:35.9,longitude:-78.9},{address:'123 Site St',latitude:36,longitude:-79},{address:'123 Site St'}]);
  assert.equal(conflict[2].latitude,null);
 });
+
+test('city demand map reads only website interest summary, never bookings or assignments',async()=>{
+ const db={rpc:async name=>{assert.equal(name,'city_demand_summary');return {data:[{city:'Durham',city_key:'durham',state:'NC',zip:'27701',requests:12,recurring:8,last_30_days:6}]};},from:()=>{throw Error('Unrelated records must not be queried');}};
+ const rows=await M.records(db,'city_demand');assert.equal(rows.length,1);assert.equal(rows[0].kind,'city_interest');assert.equal(rows[0].demand_count,12);
+ assert.deepEqual(await M.records({rpc:async()=>({data:[]})},'city_demand'),[]);
+ await assert.rejects(()=>M.records({rpc:async()=>({error:{message:'Summary unavailable'}})},'city_demand'));
+});

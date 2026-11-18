@@ -3,7 +3,7 @@ module.exports=async(req,res)=>{
  if(req.method!=='POST')return S.json(res,405,{error:'Method not allowed.'});
  try{
   const input=await S.body(req),db=S.database();
-  if(!['sales','cleans'].includes(input.dataset))throw S.fail('Choose a map.');
+  if(!['sales','cleans','city_demand'].includes(input.dataset))throw S.fail('Choose a map.');
   if(input.dataset==='sales'){const user=await require('../lib/crm-sales.cjs').access(db,req);if(!user.admin)throw S.fail('Administrator access required.',403);}else await S.admin(db,req);
   if(!['list','locate','request_detail'].includes(input.action))throw S.fail('Unknown map action.');
   if(input.action==='request_detail'){
