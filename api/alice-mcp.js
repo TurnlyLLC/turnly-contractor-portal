@@ -13,7 +13,7 @@ module.exports=async(req,res)=>{
   const b=await require('../lib/integration-body.cjs').read(req);id=b?.id;if(!b||b.jsonrpc!=='2.0'||JSON.stringify(b).length>32000)throw S.fail('Invalid request.',400);
   const reply=result=>S.json(res,200,{jsonrpc:'2.0',id,result});
   if(b.method==='notifications/initialized'){res.statusCode=202;return res.end();}
-  if(b.method==='initialize')return reply({protocolVersion:'2025-06-18',capabilities:{tools:{}},serverInfo:{name:'alice-turnly',version:'1.0.0'}});
+  if(b.method==='initialize')return reply({protocolVersion:['2025-03-26','2025-06-18','2025-11-25'].includes(b.params?.protocolVersion)?b.params.protocolVersion:'2025-06-18',capabilities:{tools:{}},serverInfo:{name:'alice-turnly',version:'1.0.0'}});
   if(b.method==='ping')return reply({});
   if(b.method==='tools/list')return reply({tools});
   if(b.method!=='tools/call')throw S.fail('Unknown method.',400);
