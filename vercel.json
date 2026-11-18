@@ -110,7 +110,7 @@
       "maxDuration": 300
     },
     "api/alice-voice.js": {
-      "maxDuration": 60,
+      "maxDuration": 120,
       "includeFiles": "docs/alice-operation-policy.txt"
     },
     "api/alice-check.js": {

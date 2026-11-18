@@ -15,7 +15,7 @@ module.exports=async(req,res)=>{
   const key=I.issueKey();keyId=crypto.randomUUID();S.checked(await db.from('integration_keys').insert({id:keyId,name:'Alice OpenAI read-only verification',secret_hash:key.secret_hash,prefix:key.prefix,scopes:['contractors:read'],created_by:c.ownerId,expires_at:new Date(Date.now()+180000).toISOString(),deny_record_deletion:true}));
   const results=[];
   for(const mode of ['voice','text']){
-   started=true;const r=await O.answer(c,null,key.secret,'Use the live contractor earnings report with limit 1. State the contractor count, YTD earnings, total paid and unpaid completed work. Do not change any records.',[],fetch,null,{mode,onConversation:async response_id=>{S.checked(await db.from('owner_assistant_diagnostics').update({conversation_id:response_id}).eq('id',id));},onCost:async n=>{used+=n;started=false;}});
+   let modeCost=0;started=true;const r=await O.answer(c,null,key.secret,'Use the live contractor earnings report with limit 1. State the contractor count, YTD earnings, total paid and unpaid completed work. Do not change any records.',[],fetch,null,{mode,onPending:async()=>{started=true;},onConversation:async response_id=>{S.checked(await db.from('owner_assistant_diagnostics').update({conversation_id:response_id}).eq('id',id));},onCost:async n=>{used+=n-modeCost;modeCost=n;started=false;}});
    results.push({mode,reply:r.reply,cost_cents:r.aiCents,response_id:r.conversationId});started=false;
   }
   started=true;const audio=await require('../lib/owner-voice-openai.cjs').speech(c,"Thanks. What's up Ryan?");used+=audio.ttsCents;started=false;

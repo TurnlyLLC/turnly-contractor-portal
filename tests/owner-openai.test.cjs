@@ -4,8 +4,17 @@ test('OpenAI receives only compact tools, bounded history and private authorizat
  let payload;const transport=async(url,options)=>{assert.equal(url,'https://api.openai.com/v1/responses');payload=JSON.parse(options.body);return {ok:true,json:async()=>({id:'resp_test',status:'queued'})};};
  await O.start({openaiKey:'provider-secret'},'business-secret','current request',Array.from({length:7},()=>({user:'old request',assistant:'old answer'})),'voice',transport);
  assert.equal(payload.model,O.MODEL);assert.equal(payload.background,true);assert.equal(payload.parallel_tool_calls,false);assert.equal(payload.max_tool_calls,6);assert.equal(payload.max_output_tokens,1600);assert.equal(payload.input.length,9);
- assert.equal(payload.tools.length,1);assert.equal(payload.tools[0].headers.Authorization,'Bearer business-secret');assert(!payload.instructions.includes('business-secret'));assert.match(payload.instructions,/deletion/i);assert.match(payload.instructions,/earnings_report/);
+ assert.equal(payload.tools.length,2);assert(payload.tools.every(t=>t.type==='function'));assert(!JSON.stringify(payload).includes('business-secret'));assert.match(payload.instructions,/deletion/i);assert.match(payload.instructions,/earnings_report/);
  assert.equal(O.cost({input_tokens:1000,input_tokens_details:{cached_tokens:500},output_tokens:100}),0.08625);assert.equal(O.cost(null),null);
+});
+test('OpenAI function calls run through authenticated Turnly and accumulate actual token cost',async()=>{
+ let modelRequests=0,toolRequests=0,charged=0;const transport=async(url,options)=>{
+  const body=JSON.parse(options.body);
+  if(url.endsWith('/api/alice-mcp')){toolRequests++;assert.equal(options.headers.Authorization,'Bearer turnly-secret');assert.equal(body.params.arguments.name,'turnly_count_records');return {ok:true,json:async()=>({result:{content:[{type:'text',text:'{"count":114}'}]}})};}
+  modelRequests++;assert(!options.body.includes('turnly-secret'));if(modelRequests===1)return {ok:true,json:async()=>({id:'resp_1',status:'completed',usage:{input_tokens:100,output_tokens:20},output:[{type:'function_call',name:'turnly_run',call_id:'call_1',arguments:JSON.stringify({name:'turnly_count_records',arguments_json:'{"resource":"contractors"}'})}]})};
+  assert.equal(body.previous_response_id,'resp_1');assert.equal(body.input[0].call_id,'call_1');return {ok:true,json:async()=>({id:'resp_2',status:'completed',usage:{input_tokens:200,output_tokens:10},output:[{type:'message',content:[{type:'output_text',text:'114 contractors.'}]}]})};
+ };
+ const r=await O.answer({openaiKey:'secret'},null,'turnly-secret','Count contractors',[],transport,null,{onCost:async n=>charged=n});assert.equal(r.reply,'114 contractors.');assert.equal(toolRequests,1);assert.equal(modelRequests,2);assert.equal(charged,O.cost({input_tokens:100,output_tokens:20})+O.cost({input_tokens:200,output_tokens:10}));
 });
 test('SMS completes directly through OpenAI and records usage without ElevenLabs',async()=>{
  let charged,endpoint,conversation;const transport=async(url)=>{endpoint=url;return {ok:true,json:async()=>({id:'resp_done',status:'completed',usage:{input_tokens:100,output_tokens:10},output:[{type:'message',content:[{type:'output_text',text:'There are 113 contractor accounts.'}]}]})};};
