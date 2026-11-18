@@ -5,6 +5,12 @@ module.exports=async(req,res)=>{
  const db=S.database();let id,keyId,used=0,started=false;
  try{
   const caller=await I.apiKey(db,req,'platform:full');const k=S.checked(await db.from('integration_keys').select('created_by').eq('id',caller).single()),c=V.config();if(k.created_by!==c.ownerId)throw S.fail('Owner required.',403);
+  if(req.query?.diagnostic){
+   if(!/^[a-f0-9-]{36}$/i.test(req.query.diagnostic))throw S.fail('Invalid diagnostic.');
+   const check=S.checked(await db.from('owner_assistant_diagnostics').select('conversation_id,agent_id').eq('id',req.query.diagnostic).single());
+   if(!check.conversation_id?.startsWith('resp_'))throw S.fail('No OpenAI response for this diagnostic.');
+   const r=await O.read(c,check.conversation_id);return S.json(res,200,{status:r.status,error:r.error,usage:r.usage,output_types:r.output?.map(x=>x.type),output_errors:r.output?.map(x=>x.error).filter(Boolean)});
+  }
   id=crypto.randomUUID();S.checked(await db.rpc('owner_assistant_diagnostic_reserve',{p_id:id,p_agent:'openai-migration-check',p_cents:100}));
   const key=I.issueKey();keyId=crypto.randomUUID();S.checked(await db.from('integration_keys').insert({id:keyId,name:'Alice OpenAI read-only verification',secret_hash:key.secret_hash,prefix:key.prefix,scopes:['contractors:read'],created_by:c.ownerId,expires_at:new Date(Date.now()+180000).toISOString(),deny_record_deletion:true}));
   const results=[];
