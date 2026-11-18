@@ -36,7 +36,8 @@
   ],
   "functions": {
     "api/owner-voice.js": {
-      "maxDuration": 60
+      "maxDuration": 60,
+      "includeFiles": "docs/alice-operation-policy.txt"
     },
     "api/admin-map.js": {
       "maxDuration": 60
@@ -102,7 +103,19 @@
       "maxDuration": 300
     },
     "api/owner-sms.js": {
+      "maxDuration": 300,
+      "includeFiles": "docs/alice-operation-policy.txt"
+    },
+    "api/alice-mcp.js": {
       "maxDuration": 300
+    },
+    "api/alice-voice.js": {
+      "maxDuration": 60,
+      "includeFiles": "docs/alice-operation-policy.txt"
+    },
+    "api/alice-check.js": {
+      "maxDuration": 300,
+      "includeFiles": "docs/alice-operation-policy.txt"
     }
   },
   "routes": [
