@@ -9,8 +9,9 @@ module.exports=async(req,res)=>{
  res.setHeader('Cache-Control','no-store');let id=null;
  try{
   const db=S.database(),key=await I.apiKey(db,req,'catalog:read');
-  if(req.method!=='POST')return S.json(res,405,{error:'Use POST.'});
+  if(req.method!=='POST'){res.setHeader('Allow','POST');return S.json(res,405,{error:'Use POST.'});}
   const b=await require('../lib/integration-body.cjs').read(req);id=b?.id;if(!b||b.jsonrpc!=='2.0'||JSON.stringify(b).length>32000)throw S.fail('Invalid request.',400);
+  console.info(JSON.stringify({event:'alice_mcp_protocol',method:b.method,version:b.params?.protocolVersion||null}));
   const reply=result=>S.json(res,200,{jsonrpc:'2.0',id,result});
   if(b.method==='notifications/initialized'){res.statusCode=202;return res.end();}
   if(b.method==='initialize')return reply({protocolVersion:['2025-03-26','2025-06-18','2025-11-25'].includes(b.params?.protocolVersion)?b.params.protocolVersion:'2025-06-18',capabilities:{tools:{}},serverInfo:{name:'alice-turnly',version:'1.0.0'}});
