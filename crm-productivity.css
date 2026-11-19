@@ -12,3 +12,10 @@
 #crmProductivity [data-plan]{display:grid;gap:12px;max-width:560px;margin-top:18px}
 #crmProductivity .sales-table td,#crmProductivity .sales-table td strong{color:#163447!important}
 #crmProductivity summary{margin:16px 0;cursor:pointer;font-weight:700}
+
+#crmProductivity .flat-lead-controls{display:flex;gap:16px;flex-wrap:wrap;margin:16px 0}
+#crmProductivity .flat-lead-controls label{flex:1;min-width:180px}
+#crmProductivity [data-flat-lead] a{color:#006d77;font-weight:700;text-decoration:underline}
+#crmProductivity [data-flat-batch] progress{accent-color:#008b80;height:14px}
+#crmProductivity [data-flat-batch] .sales-table-wrap{max-height:480px;overflow:auto}
+#crmProductivity [data-flat-batch] thead{position:sticky;top:0;background:#f4fafb}
