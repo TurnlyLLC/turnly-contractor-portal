@@ -1,4 +1,5 @@
-import {mountFlatOverview} from './crm-flat-overview.mjs?v=20261119-overview';
+import {notifyOutreach} from './crm-progress-live.mjs?v=20261119-live';
+import {mountFlatOverview} from './crm-flat-overview.mjs?v=20261119-live';
 import {reconcileQueue,adjacentLead} from './crm-focus-queue.mjs?v=20261110';
 import {mountTeamOverview} from './crm-overview.mjs?v=20261109';
 import {FULL_SCRIPTS} from './crm-full-scripts.mjs';
@@ -7,7 +8,7 @@ import {mountMemberProfile} from './crm-member-profile.mjs?v=20261105-individual
 import {mountBulkPay} from './crm-pay-bulk.mjs?v=20261030-bulk';
 import {mountHourlyPay} from './crm-hourly-pay.mjs?v=20261105-flat';
 import {startActivityClock} from './crm-activity-clock.mjs?v=20261105-flat';
-import {mountProductivity} from './crm-productivity.mjs?v=20261119-progress';
+import {mountProductivity} from './crm-productivity.mjs?v=20261119-live';
 let activityClock;
 import {mountOnboardingSettings} from './crm-onboarding-settings.mjs?v=20261105-individual';
 import {mountTraining} from './crm-training.mjs?v=20261105-rules';
@@ -4733,7 +4734,7 @@ async function crmMessageRequest(values){
 if (await requireSalesAccess()) {
  startOnboardingUnlock({blocked:()=>!isSalesAdmin()&&!state.adminPreview&&state.onboarding?.ready===false,refresh:requireSalesAccess});
  startMessageBadge(crmMessageRequest);
- installCalling({onStatus:()=>{if(!state.modal&&!document.querySelector('[data-outreach-form][data-dirty="yes"]'))void refreshData(false).catch(()=>{});},request:async values=>{
+ installCalling({onStatus:()=>{notifyOutreach();if(!state.modal&&!document.querySelector('[data-outreach-form][data-dirty="yes"]'))void refreshData(false).catch(()=>{});},request:async values=>{
   const {data}=await supabase.auth.getSession();
   if(!data.session)throw new Error('Sign in again to call.');
   const r=await fetch('/api/crm-voice',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+data.session.access_token},body:JSON.stringify(values),signal:AbortSignal.timeout(20000)});
@@ -4958,7 +4959,7 @@ async function submitCheckout(form){
  const r=await crmSalesRequest('send',{lead_id:form.elements.lead_id.value,consent:form.elements.consent.checked,channel,request_id:state.modal.requestId,recipient_override:form.elements.recipient_override?.value});
  if(r.message.status!=='accepted')throw new Error(r.message.error||'This message is still processing. Do not send it again until its status is confirmed.');
  // Show the receipt immediately; a slow or failed workspace reload must not hide a successful send.
- state.modal={type:'sendSuccess',channel,recipient:r.message.recipient};render();
+ notifyOutreach();state.modal={type:'sendSuccess',channel,recipient:r.message.recipient};render();
  document.querySelector('[data-close-modal][autofocus]')?.focus();
  void refreshData(false).catch(()=>{});
 }
